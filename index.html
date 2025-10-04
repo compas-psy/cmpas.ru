@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cmpas.ru — Платформа для специалистов помогающих профессий</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            color: white;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+        .card {
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+        .status {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 4px;
+        }
+        .status h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .features {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+        .features li {
+            padding: 0.5rem 0;
+            color: #555;
+        }
+        .features li:before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            text-decoration: none;
+            margin-top: 1rem;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .footer {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            color: white;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>cmpas.ru</h2>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h1>🧭 Платформа для специалистов помогающих профессий</h1>
+            <p class="subtitle">Для психологов, коучей, менторов и профориентаторов</p>
+            
+            <div class="status">
+                <h3>📊 Статус проекта</h3>
+                <p><strong>Версия:</strong> 0.1.0 (MVP в разработке)</p>
+                <p><strong>Обновлено:</strong> <span id="datetime"></span></p>
+            </div>
+            
+            <h3>Возможности платформы:</h3>
+            <ul class="features">
+                <li>Безопасная аутентификация через Telegram и Яндекс ID</li>
+                <li>Управление клиентской базой</li>
+                <li>Запись на приём с интеграцией календаря</li>
+                <li>Ведение профессионального дневника</li>
+                <li>Telegram Mini App для мобильных устройств</li>
+            </ul>
+            
+            <a href="/docs" class="btn">📚 API Документация</a>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Разработано с использованием FastAPI, Python 3.10+, PostgreSQL</p>
+    </div>
+    
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('datetime').textContent = now.toLocaleString('ru-RU');
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>
