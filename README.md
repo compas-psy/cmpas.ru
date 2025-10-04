@@ -34,7 +34,6 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Сервер будет доступен по адресу: http://localhost:8000. Перед запуском тестов убедитесь, что `.env` создан и заполнен на основе `.env.example`.
 ## Текущий статус
 
 **Версия:** 0.1.0 (MVP в разработке)
@@ -45,11 +44,10 @@ uvicorn app.main:app --reload
 - Конфигурация окружения и rate limiting (SlowAPI)
 - Аутентификация через Telegram OTP (инициация и верификация)
 - База данных с миграциями (SQLite/PostgreSQL)
+- Telegram MiniApp с авторизацией по номеру телефона
 
 **В разработке:**
 - Аутентификация через Яндекс ID
-{{ ... }}
-{{ ... }}
 
 ---
 
@@ -120,21 +118,30 @@ cmpas.ru/
 │   │   └── v1/
 │   │       ├── __init__.py
 │   │       ├── router.py
+│   │       ├── auth.py         # Telegram OTP аутентификация
+│   │       ├── phone_auth.py   # Телефонная аутентификация
 │   │       └── system.py       # Системные эндпоинты (ping)
 │   ├── models/
 │   │   ├── __init__.py
 │   │   └── user.py
 │   ├── schemas/
 │   │   ├── __init__.py
-│   │   ├── user.py
-│   │   └── auth.py
-│   ├── services/               # Бизнес-логика (планируется)
+│   │   ├── auth.py
+│   │   ├── phone_auth.py
+│   │   └── user.py
+│   ├── services/               # Бизнес-логика
+│   │   ├── __init__.py
+│   │   ├── auth_service.py
+│   │   ├── otp_service.py
+│   │   └── telegram_service.py
 │   └── utils/
 │       ├── __init__.py
 │       └── security.py
+├── static/                     # Статические файлы
+│   └── telegram_auth.html      # Telegram MiniApp
 ├── tests/
 │   ├── __init__.py
-│   └── test_main.py
+│   └── test_auth.py
 ├── docs/
 │   ├── API.md
 │   ├── DEPLOYMENT.md

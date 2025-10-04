@@ -1,54 +1,20 @@
 # API Документация cmpas.ru
 
-## Обзор
-
 REST API для платформы специалистов помогающих профессий.
 
 **Base URL:** `http://localhost:8000/api/v1`
 
-**Аутентификация:** Bearer Token (JWT) или Telegram OTP
+**Аутентификация:** Bearer Token (JWT), Telegram Login Widget или телефонная верификация
 
 ---
 
 ## Endpoints
 
-### Health Check
-
-#### GET /health
-
-Проверка состояния сервера.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "version": "0.1.0",
-  "environment": "development"
-}
-```
-
----
-
-### Системные эндпоинты
-
-#### GET /system/ping
-
-Быстрая проверка доступности API v1.
-
-**Response:**
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
 ### Аутентификация
 
 #### POST /auth/telegram/initiate
 
-Инициировать аутентификацию через Telegram (отправляет OTP код).
+Инициация аутентификации через Telegram (устаревший метод).
 
 **Request Body:**
 ```json
@@ -62,23 +28,15 @@ REST API для платформы специалистов помогающих
 }
 ```
 
-**Response:**
-```json
-{
-  "request_id": "123456789",
-  "message": "OTP sent to Telegram"
-}
-```
-
 #### POST /auth/telegram/verify
 
-Подтвердить аутентификацию через Telegram (проверить OTP код).
+Верификация OTP кода через Telegram (устаревший метод).
 
 **Request Body:**
 ```json
 {
   "telegram_id": "123456789",
-  "otp_code": "123456",
+  "otp_code": "12345",
   "full_name": "Иван Иванов",
   "username": "ivan_ivanov"
 }
@@ -94,24 +52,78 @@ REST API для платформы специалистов помогающих
 }
 ```
 
-#### POST /auth/yandex/callback
+---
 
-Обработка callback от Яндекс ID OAuth (пока не реализован).
+### Телефонная аутентификация
+
+#### POST /auth/phone/initiate
+
+Инициация аутентификации по номеру телефона.
+
+**Request Body:**
+```json
+{
+  "phone_number": "+71234567890"
+}
+```
 
 **Response:**
 ```json
 {
-  "status": "not_implemented",
-  "message": "Yandex auth not yet implemented"
+  "phone_number": "+71234567890",
+  "message": "OTP will be sent to your phone number",
+  "note": "Integration with Telegram API needed"
 }
 ```
 
----
+#### POST /auth/phone/verify
 
-## Rate limiting
+Верификация OTP кода по номеру телефона.
 
-- Лимит по умолчанию: 60 запросов в минуту на IP.
-- При превышении возвращается статус `429 Too Many Requests` с описанием ошибки.
+**Request Body:**
+```json
+{
+  "phone_number": "+71234567890",
+  "otp_code": "12345"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "bearer",
+  "phone_number": "+71234567890"
+}
+```
+
+#### POST /auth/phone/telegram/callback
+
+Обработка callback от Telegram Login Widget.
+
+**Request Body:**
+```json
+{
+  "id": 123456789,
+  "first_name": "Иван",
+  "last_name": "Иванов",
+  "username": "ivan_ivanov",
+  "photo_url": "https://...",
+  "auth_date": 1234567890,
+  "hash": "abc123..."
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "bearer",
+  "user_id": 1
+}
+```
 
 ---
 
@@ -119,3 +131,9 @@ REST API для платформы специалистов помогающих
 
 - **Swagger UI:** http://localhost:8000/docs
 - **ReDoc:** http://localhost:8000/redoc
+
+---
+
+## Telegram MiniApp
+
+Для тестирования аутентификации используйте файл `static/telegram_auth.html`. Откройте его в браузере для тестирования интерфейса аутентификации.

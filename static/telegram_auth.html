@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cmpas.ru - Авторизация</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .logo h1 {
+            color: #333;
+            margin: 0;
+            font-size: 28px;
+        }
+        .telegram-login {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>cmpas.ru</h1>
+            <p>Авторизация специалиста</p>
+        </div>
+
+        <!-- Telegram Login Widget -->
+        <div class="telegram-login">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="cmpas_auth_bot" data-size="large" data-auth-url="https://your-domain.com/api/v1/auth/phone/telegram/callback" data-request-access="write"></script>
+        </div>
+
+        <div id="phoneAuthSection">
+            <form id="phoneAuthForm">
+                <div class="form-group">
+                    <label for="phone">Номер телефона:</label>
+                    <input
+                        type="tel"
+                        id="phone"
+                        placeholder="+7 (999) 123-45-67"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="btn" id="phoneSubmitBtn">
+                    Получить код подтверждения
+                </button>
+            </form>
+
+            <div id="otpSection" class="hidden">
+                <div class="form-group">
+                    <label for="otpCode">Код из SMS:</label>
+                    <input
+                        type="text"
+                        id="otpCode"
+                        placeholder="12345"
+                        maxlength="5"
+                        required
+                    >
+                </div>
+
+                <button type="button" class="btn" id="verifyBtn">
+                    Подтвердить
+                </button>
+            </div>
+        </div>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Элементы формы
+        const phoneAuthSection = document.getElementById('phoneAuthSection');
+        const phoneAuthForm = document.getElementById('phoneAuthForm');
+        const otpSection = document.getElementById('otpSection');
+        const phoneInput = document.getElementById('phone');
+        const otpInput = document.getElementById('otpCode');
+        const phoneSubmitBtn = document.getElementById('phoneSubmitBtn');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const statusDiv = document.getElementById('status');
+
+        let currentPhone = '';
+
+        // Функция показа статуса
+        function showStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        // Функция очистки статуса
+        function clearStatus() {
+            statusDiv.style.display = 'none';
+        }
+
+        // Валидация номера телефона
+        function validatePhone(phone) {
+            const phoneRegex = /^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/;
+            return phoneRegex.test(phone);
+        }
+
+        // Форматирование номера телефона
+        function formatPhone(phone) {
+            const cleaned = phone.replace(/\D/g, '');
+            if (cleaned.length === 11 && cleaned.startsWith('7')) {
+                return `+7 (${cleaned.slice(1,4)}) ${cleaned.slice(4,7)}-${cleaned.slice(7,9)}-${cleaned.slice(9,11)}`;
+            }
+            return phone;
+        }
+
+        // Автоматическое форматирование при вводе
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.startsWith('7')) value = value.substring(1);
+            if (value.length <= 10) {
+                let formatted = '+7 ';
+                if (value.length >= 3) formatted += `(${value.substring(0,3)}) `;
+                if (value.length >= 6) formatted += `${value.substring(3,6)}-`;
+                if (value.length >= 8) formatted += `${value.substring(6,8)}-`;
+                if (value.length >= 10) formatted += value.substring(8,10);
+                e.target.value = formatted;
+            }
+        });
+
+        // Обработка Telegram Login Widget callback
+        function onTelegramAuth(user) {
+            // Скрываем форму телефонной аутентификации
+            phoneAuthSection.classList.add('hidden');
+
+            showStatus('Авторизация через Telegram...', 'loading');
+
+            // Отправляем данные пользователя на наш сервер
+            fetch('/api/v1/auth/phone/telegram/callback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(user)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.access_token) {
+                    showStatus('Авторизация успешна! Добро пожаловать в cmpas.ru!', 'success');
+
+                    // Показываем главную кнопку для завершения
+                    tg.MainButton.setText('Готово');
+                    tg.MainButton.show();
+
+                    // Сохраняем токены (в реальном приложении)
+                    console.log('Tokens:', data);
+                } else {
+                    throw new Error('No access token received');
+                }
+            })
+            .catch(error => {
+                console.error('Auth error:', error);
+                showStatus('Ошибка авторизации. Попробуйте еще раз.', 'error');
+                phoneAuthSection.classList.remove('hidden');
+            });
+        }
+
+        // Делаем функцию доступной глобально для Telegram Widget
+        window.onTelegramAuth = onTelegramAuth;
+
+        // Отправка формы телефонной аутентификации
+        phoneAuthForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            clearStatus();
+
+            const phone = phoneInput.value.trim();
+            if (!validatePhone(phone)) {
+                showStatus('Введите корректный номер телефона', 'error');
+                return;
+            }
+
+            currentPhone = phone.replace(/\D/g, '');
+            phoneSubmitBtn.disabled = true;
+            phoneSubmitBtn.textContent = 'Отправка...';
+
+            try {
+                const response = await fetch('/api/v1/auth/phone/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phone_number: phone })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus('Код подтверждения отправлен на ваш номер!', 'success');
+                    phoneAuthForm.style.display = 'none';
+                    otpSection.classList.remove('hidden');
+                } else {
+                    throw new Error(data.detail || 'Ошибка при отправке');
+                }
+
+            } catch (error) {
+                showStatus('Ошибка при отправке запроса. Попробуйте еще раз.', 'error');
+            } finally {
+                phoneSubmitBtn.disabled = false;
+                phoneSubmitBtn.textContent = 'Получить код подтверждения';
+            }
+        });
+
+        // Верификация OTP кода
+        verifyBtn.addEventListener('click', async function() {
+            const otpCode = otpInput.value.trim();
+            if (otpCode.length !== 5) {
+                showStatus('Введите 5-значный код подтверждения', 'error');
+                return;
+            }
+
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Проверка...';
+
+            try {
+                const response = await fetch('/api/v1/auth/phone/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone_number: currentPhone,
+                        otp_code: otpCode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus('Авторизация успешна! Добро пожаловать в cmpas.ru!', 'success');
+
+                    tg.MainButton.setText('Готово');
+                    tg.MainButton.show();
+
+                    console.log('Tokens:', data);
+                } else {
+                    throw new Error(data.detail || 'Ошибка верификации');
+                }
+
+            } catch (error) {
+                showStatus('Неверный код подтверждения. Попробуйте еще раз.', 'error');
+            } finally {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Подтвердить';
+            }
+        });
+
+        // Обработка главной кнопки Telegram
+        tg.MainButton.onClick(function() {
+            tg.close();
+        });
+
+        // Закрытие приложения по кнопке "Назад"
+        tg.BackButton.show();
+        tg.BackButton.onClick(function() {
+            if (!otpSection.classList.contains('hidden')) {
+                otpSection.classList.add('hidden');
+                phoneAuthForm.style.display = 'block';
+                clearStatus();
+            } else if (phoneAuthSection.classList.contains('hidden')) {
+                phoneAuthSection.classList.remove('hidden');
+                clearStatus();
+            } else {
+                tg.close();
+            }
+        });
+    </script>
+</body>
+</html>
