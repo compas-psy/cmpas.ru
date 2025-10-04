@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Авторизация - cmpas.ru</title>
+    <title>Вход в систему - cmpas.ru</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -14,37 +13,15 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #ffffff;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
-            position: relative;
-            overflow: hidden;
         }
 
-        /* Анимированный фон */
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background:
-                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(120, 119, 255, 0.2) 0%, transparent 50%);
-            animation: backgroundMove 20s ease-in-out infinite;
-        }
-
-        @keyframes backgroundMove {
-            0%, 100% { transform: rotate(0deg) scale(1); }
-            50% { transform: rotate(2deg) scale(1.05); }
-        }
-
+        
         .auth-container {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(20px);
@@ -350,81 +327,209 @@
             color: #92400e;
             text-align: center;
         }
+        
+        /* ===== Design CSS from provided layout ===== */
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            gap: 60px;
+            padding: 40px;
+            align-items: center;
+        }
+
+        .left-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .title {
+            font-size: 64px;
+            font-weight: 300;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: #4a4a4a;
+            margin-bottom: 60px;
+            text-align: center;
+        }
+
+        .auth-form {
+            background-color: #2d5f4f;
+            border-radius: 24px;
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .yandex-btn {
+            width: 100%;
+            padding: 16px;
+            background-color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            color: #1a1a1a;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            transition: background-color 0.2s;
+        }
+
+        .yandex-btn:hover {
+            background-color: #f5f5f5;
+        }
+
+        .yandex-icon {
+            width: 20px;
+            height: 20px;
+            background-color: #ff0000;
+            border-radius: 50%;
+        }
+
+        .divider {
+            text-align: center;
+            color: #ffffff;
+            font-size: 14px;
+            margin: 24px 0;
+            position: relative;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40%;
+            height: 1px;
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .divider::before { left: 0; }
+        .divider::after { right: 0; }
+
+        .phone-input {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-bottom: 16px;
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            outline: none;
+        }
+
+        .phone-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background-color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            color: #2d5f4f;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .submit-btn:hover { background-color: #f0f0f0; }
+
+        .privacy-text {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .privacy-text a { color: #ffffff; text-decoration: underline; }
+
+        .right-section {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-container {
+            width: 100%;
+            max-width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 300;
+            overflow: hidden;
+        }
+
+        .placeholder-image { width: 100%; height: 100%; object-fit: cover; }
+
+        @media (max-width: 1024px) {
+            .container { flex-direction: column; }
+            .title { font-size: 48px; }
+            .image-container { height: 400px; }
+        }
+        /* ===== End design CSS ===== */
     </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="header">
-            <div class="logo">
-                <div class="logo-icon"></div>
-                <div class="logo-text">cmpas.ru</div>
-            </div>
-            <div class="subtitle">Платформа специалистов</div>
-            <div class="description">помогающих профессий</div>
-        </div>
+    <div class="container">
+        <div class="left-section">
+            <h1 class="title">Невозможное?<br>Возможно.</h1>
+            <p class="subtitle">ИИ для решения задач</p>
 
-        <div class="demo-notice">
-            🔧 Демо-режим: Используйте номер +7 (999) 123-45-67
-        </div>
+            <div class="auth-form">
+                <button class="yandex-btn" type="button" id="yandexBtn">
+                    <div class="yandex-icon"></div>
+                    Продолжить с Яндекс
+                </button>
+                <div class="divider">ИЛИ</div>
+                
+                <form id="emailAuthForm">
+                    <input type="email" class="phone-input" id="email" placeholder="Введите email" required>
+                    <button class="submit-btn" type="submit" id="submitBtn">Продолжить по email</button>
+                </form>
 
-        <div class="form-section">
-            <h2 class="form-title">Вход в систему</h2>
-
-            <form id="phoneAuthForm">
-                <div class="input-group">
-                    <label class="input-label">Номер телефона</label>
-                    <div class="input-wrapper">
-                        <div class="input-icon">📱</div>
-                        <input
-                            type="tel"
-                            class="phone-input"
-                            id="phone"
-                            placeholder="+7 (999) 123-45-67"
-                            required
-                        >
+                <div id="otpSection" style="display: none; margin-top: 16px;">
+                    <input type="text" class="phone-input" id="otpCode" placeholder="123456" maxlength="6" required>
+                    <div style="display: flex; gap: 12px; margin-top: 12px;">
+                        <button type="button" class="submit-btn" id="backBtn">Назад</button>
+                        <button type="button" class="submit-btn" id="verifyBtn">Войти</button>
                     </div>
                 </div>
 
-                <div class="button-group">
-                    <button type="submit" class="btn btn-primary" id="submitBtn">
-                        Получить код
-                    </button>
-                </div>
-            </form>
+                <div id="statusMessage" class="privacy-text" style="display: none; margin-top: 12px;"></div>
 
-            <div id="otpSection" style="display: none;">
-                <div class="input-group">
-                    <label class="input-label">Код подтверждения</label>
-                    <div class="input-wrapper">
-                        <div class="input-icon">🔐</div>
-                        <input
-                            type="text"
-                            class="phone-input"
-                            id="otpCode"
-                            placeholder="12345"
-                            maxlength="5"
-                            required
-                        >
-                    </div>
-                </div>
-
-                <div class="button-group">
-                    <button type="button" class="btn btn-secondary" id="backBtn">
-                        Назад
-                    </button>
-                    <button type="button" class="btn btn-primary" id="verifyBtn">
-                        Войти
-                    </button>
-                </div>
+                <p class="privacy-text">
+                    Продолжая, вы соглашаетесь с <a href="#">Политикой конфиденциальности</a>
+                </p>
             </div>
         </div>
 
-        <div id="statusMessage" class="status-message"></div>
-
-        <div class="footer">
-            <div class="footer-text">
-                Нет аккаунта?
-                <a href="#" class="footer-link">Зарегистрироваться</a>
+        <div class="right-section">
+            <div class="image-container">
+                <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=800&fit=crop" alt="Placeholder" class="placeholder-image">
             </div>
         </div>
     </div>
@@ -436,16 +541,16 @@
         tg.MainButton.hide();
 
         // Элементы DOM
-        const phoneAuthForm = document.getElementById('phoneAuthForm');
+        const emailAuthForm = document.getElementById('emailAuthForm');
         const otpSection = document.getElementById('otpSection');
-        const phoneInput = document.getElementById('phone');
+        const emailInput = document.getElementById('email');
         const otpInput = document.getElementById('otpCode');
         const submitBtn = document.getElementById('submitBtn');
         const verifyBtn = document.getElementById('verifyBtn');
         const backBtn = document.getElementById('backBtn');
         const statusMessage = document.getElementById('statusMessage');
 
-        let currentPhone = '';
+        let currentEmail = '';
 
         // Функции показа/скрытия статусов
         function showStatus(message, type = 'info') {
@@ -463,68 +568,44 @@
             statusMessage.style.display = 'none';
         }
 
-        // Валидация номера телефона
-        function validatePhone(phone) {
-            const phoneRegex = /^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/;
-            return phoneRegex.test(phone);
+        // Валидация email
+        function validateEmail(email) {
+            return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
         }
 
-        // Форматирование номера телефона
-        function formatPhone(phone) {
-            const cleaned = phone.replace(/\D/g, '');
-            if (cleaned.length === 11 && cleaned.startsWith('7')) {
-                return `+7 (${cleaned.slice(1,4)}) ${cleaned.slice(4,7)}-${cleaned.slice(7,9)}-${cleaned.slice(9,11)}`;
-            }
-            return phone;
-        }
-
-        // Автоматическое форматирование при вводе
-        phoneInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.startsWith('7')) value = value.substring(1);
-            if (value.length <= 10) {
-                let formatted = '+7 ';
-                if (value.length >= 3) formatted += `(${value.substring(0,3)}) `;
-                if (value.length >= 6) formatted += `${value.substring(3,6)}-`;
-                if (value.length >= 8) formatted += `${value.substring(6,8)}-`;
-                if (value.length >= 10) formatted += value.substring(8,10);
-                e.target.value = formatted;
-            }
-        });
-
-        // Обработка формы телефонной аутентификации
-        phoneAuthForm.addEventListener('submit', async function(e) {
+        // Обработка формы email аутентификации
+        emailAuthForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             clearStatus();
 
-            const phone = phoneInput.value.trim();
-            if (!validatePhone(phone)) {
-                showStatus('Введите корректный номер телефона в формате +7 (999) 123-45-67', 'error');
+            const email = emailInput.value.trim().toLowerCase();
+            if (!validateEmail(email)) {
+                showStatus('Введите корректный email', 'error');
                 return;
             }
 
-            currentPhone = phone.replace(/\D/g, '');
+            currentEmail = email;
             submitBtn.disabled = true;
             submitBtn.textContent = 'Отправляем...';
 
             try {
                 // Отправляем запрос на сервер
-                const response = await fetch('/api/v1/auth/phone/initiate', {
+                const response = await fetch('/api/v1/auth/email/initiate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ phone_number: phone })
+                    body: JSON.stringify({ email })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    showStatus('Код подтверждения отправлен на ваш номер!', 'success');
-                    phoneAuthForm.style.display = 'none';
+                    showStatus('Код подтверждения отправлен на ваш email!', 'success');
+                    emailAuthForm.style.display = 'none';
                     otpSection.style.display = 'block';
                     submitBtn.disabled = false;
-                    submitBtn.textContent = 'Получить код';
+                    submitBtn.textContent = 'Отправить снова';
                 } else {
                     throw new Error(data.detail || 'Ошибка при отправке');
                 }
@@ -540,8 +621,8 @@
         // Верификация OTP кода
         verifyBtn.addEventListener('click', async function() {
             const otpCode = otpInput.value.trim();
-            if (otpCode.length !== 5) {
-                showStatus('Введите 5-значный код подтверждения', 'error');
+            if (otpCode.length !== 6) {
+                showStatus('Введите 6-значный код подтверждения', 'error');
                 return;
             }
 
@@ -549,13 +630,13 @@
             verifyBtn.textContent = 'Проверяем...';
 
             try {
-                const response = await fetch('/api/v1/auth/phone/verify', {
+                const response = await fetch('/api/v1/auth/email/verify', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        phone_number: currentPhone,
+                        email: currentEmail,
                         otp_code: otpCode
                     })
                 });
@@ -564,6 +645,10 @@
 
                 if (response.ok) {
                     showStatus('Авторизация успешна! Добро пожаловать в cmpas.ru!', 'success');
+                    try {
+                        localStorage.setItem('access_token', data.access_token);
+                        localStorage.setItem('refresh_token', data.refresh_token);
+                    } catch (e) { /* no-op if storage unavailable */ }
 
                     // Показываем кнопку завершения в Telegram
                     tg.MainButton.setText('Готово');
@@ -585,7 +670,7 @@
         // Кнопка назад
         backBtn.addEventListener('click', function() {
             otpSection.style.display = 'none';
-            phoneAuthForm.style.display = 'block';
+            emailAuthForm.style.display = 'block';
             clearStatus();
             otpInput.value = '';
         });
