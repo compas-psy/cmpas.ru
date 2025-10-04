@@ -36,5 +36,3 @@ httpx==0.25.2  # для тестирования API
 # Rate limiting
 slowapi==0.1.9
 
-# CORS
-python-cors==1.0.0
