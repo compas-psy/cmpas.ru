@@ -3,186 +3,464 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cmpas.ru - Авторизация</title>
+    <title>Авторизация - cmpas.ru</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        * {
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
         }
-        .container {
-            background: white;
-            border-radius: 16px;
-            padding: 32px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            max-width: 400px;
+
+        /* Анимированный фон */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(120, 119, 255, 0.2) 0%, transparent 50%);
+            animation: backgroundMove 20s ease-in-out infinite;
+        }
+
+        @keyframes backgroundMove {
+            0%, 100% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(2deg) scale(1.05); }
+        }
+
+        .auth-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 48px 40px;
+            box-shadow:
+                0 32px 64px rgba(0, 0, 0, 0.1),
+                0 16px 32px rgba(0, 0, 0, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            max-width: 440px;
             width: 100%;
+            position: relative;
+            z-index: 1;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: containerFadeIn 0.8s ease-out;
         }
-        .logo {
+
+        @keyframes containerFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .header {
             text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        .logo-icon::before {
+            content: '💬';
+            font-size: 24px;
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 16px;
+            font-weight: 400;
+            margin-bottom: 8px;
+        }
+
+        .description {
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        .form-section {
             margin-bottom: 32px;
         }
-        .logo h1 {
-            color: #333;
-            margin: 0;
-            font-size: 28px;
-        }
-        .telegram-login {
+
+        .form-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 24px;
             text-align: center;
+        }
+
+        .input-group {
             margin-bottom: 24px;
         }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
+
+        .input-label {
             display: block;
-            margin-bottom: 8px;
-            color: #555;
+            font-size: 14px;
             font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
         }
-        .form-group input {
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 18px;
+        }
+
+        .phone-input {
             width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e1e5e9;
-            border-radius: 8px;
+            padding: 16px 16px 16px 48px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
             font-size: 16px;
-            transition: border-color 0.3s;
-            box-sizing: border-box;
-        }
-        .form-group input:focus {
+            font-family: 'Inter', sans-serif;
+            background: #fafafa;
+            transition: all 0.3s ease;
             outline: none;
-            border-color: #667eea;
         }
+
+        .phone-input:focus {
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .phone-input:valid {
+            border-color: #10b981;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
         .btn {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            flex: 1;
+            padding: 16px 24px;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
+            font-family: 'Inter', sans-serif;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
-        .btn:hover {
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
             transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
         }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 2px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+            color: #374151;
+            transform: translateY(-1px);
+        }
+
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-            transform: none;
+            transform: none !important;
         }
-        .status {
-            margin-top: 16px;
-            padding: 12px;
-            border-radius: 8px;
+
+        .status-message {
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
             text-align: center;
             display: none;
+            animation: statusSlideIn 0.3s ease-out;
         }
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+
+        @keyframes statusSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+
+        .status-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
         }
-        .status.loading {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
+
+        .status-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
         }
-        .hidden {
-            display: none;
+
+        .status-loading {
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #dbeafe;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .footer-text {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .footer-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .footer-link:hover {
+            color: #5a67d8;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 480px) {
+            .auth-container {
+                padding: 32px 24px;
+                margin: 16px;
+                border-radius: 20px;
+            }
+
+            .logo-text {
+                font-size: 20px;
+            }
+
+            .form-title {
+                font-size: 16px;
+            }
+        }
+
+        /* Анимации для интерактивности */
+        .phone-input {
+            animation: inputFocus 0.3s ease-out;
+        }
+
+        .btn {
+            animation: buttonIdle 2s ease-in-out infinite;
+        }
+
+        @keyframes buttonIdle {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        /* Заглушки для демо */
+        .demo-notice {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #92400e;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <h1>cmpas.ru</h1>
-            <p>Авторизация специалиста</p>
+    <div class="auth-container">
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <div class="logo-text">cmpas.ru</div>
+            </div>
+            <div class="subtitle">Платформа специалистов</div>
+            <div class="description">помогающих профессий</div>
         </div>
 
-        <!-- Telegram Login Widget -->
-        <div class="telegram-login">
-            <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="cmpas_auth_bot" data-size="large" data-auth-url="https://your-domain.com/api/v1/auth/phone/telegram/callback" data-request-access="write"></script>
+        <div class="demo-notice">
+            🔧 Демо-режим: Используйте номер +7 (999) 123-45-67
         </div>
 
-        <div id="phoneAuthSection">
+        <div class="form-section">
+            <h2 class="form-title">Вход в систему</h2>
+
             <form id="phoneAuthForm">
-                <div class="form-group">
-                    <label for="phone">Номер телефона:</label>
-                    <input
-                        type="tel"
-                        id="phone"
-                        placeholder="+7 (999) 123-45-67"
-                        required
-                    >
+                <div class="input-group">
+                    <label class="input-label">Номер телефона</label>
+                    <div class="input-wrapper">
+                        <div class="input-icon">📱</div>
+                        <input
+                            type="tel"
+                            class="phone-input"
+                            id="phone"
+                            placeholder="+7 (999) 123-45-67"
+                            required
+                        >
+                    </div>
                 </div>
 
-                <button type="submit" class="btn" id="phoneSubmitBtn">
-                    Получить код подтверждения
-                </button>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        Получить код
+                    </button>
+                </div>
             </form>
 
-            <div id="otpSection" class="hidden">
-                <div class="form-group">
-                    <label for="otpCode">Код из SMS:</label>
-                    <input
-                        type="text"
-                        id="otpCode"
-                        placeholder="12345"
-                        maxlength="5"
-                        required
-                    >
+            <div id="otpSection" style="display: none;">
+                <div class="input-group">
+                    <label class="input-label">Код подтверждения</label>
+                    <div class="input-wrapper">
+                        <div class="input-icon">🔐</div>
+                        <input
+                            type="text"
+                            class="phone-input"
+                            id="otpCode"
+                            placeholder="12345"
+                            maxlength="5"
+                            required
+                        >
+                    </div>
                 </div>
 
-                <button type="button" class="btn" id="verifyBtn">
-                    Подтвердить
-                </button>
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" id="backBtn">
+                        Назад
+                    </button>
+                    <button type="button" class="btn btn-primary" id="verifyBtn">
+                        Войти
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div id="status" class="status"></div>
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="footer">
+            <div class="footer-text">
+                Нет аккаунта?
+                <a href="#" class="footer-link">Зарегистрироваться</a>
+            </div>
+        </div>
     </div>
 
     <script>
         // Инициализация Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.expand();
+        tg.MainButton.hide();
 
-        // Элементы формы
-        const phoneAuthSection = document.getElementById('phoneAuthSection');
+        // Элементы DOM
         const phoneAuthForm = document.getElementById('phoneAuthForm');
         const otpSection = document.getElementById('otpSection');
         const phoneInput = document.getElementById('phone');
         const otpInput = document.getElementById('otpCode');
-        const phoneSubmitBtn = document.getElementById('phoneSubmitBtn');
+        const submitBtn = document.getElementById('submitBtn');
         const verifyBtn = document.getElementById('verifyBtn');
-        const statusDiv = document.getElementById('status');
+        const backBtn = document.getElementById('backBtn');
+        const statusMessage = document.getElementById('statusMessage');
 
         let currentPhone = '';
 
-        // Функция показа статуса
+        // Функции показа/скрытия статусов
         function showStatus(message, type = 'info') {
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-            statusDiv.style.display = 'block';
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message status-${type}`;
+            statusMessage.style.display = 'block';
+
+            // Автоматически скрываем через 5 секунд
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
         }
 
-        // Функция очистки статуса
         function clearStatus() {
-            statusDiv.style.display = 'none';
+            statusMessage.style.display = 'none';
         }
 
         // Валидация номера телефона
@@ -214,62 +492,23 @@
             }
         });
 
-        // Обработка Telegram Login Widget callback
-        function onTelegramAuth(user) {
-            // Скрываем форму телефонной аутентификации
-            phoneAuthSection.classList.add('hidden');
-
-            showStatus('Авторизация через Telegram...', 'loading');
-
-            // Отправляем данные пользователя на наш сервер
-            fetch('/api/v1/auth/phone/telegram/callback', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(user)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.access_token) {
-                    showStatus('Авторизация успешна! Добро пожаловать в cmpas.ru!', 'success');
-
-                    // Показываем главную кнопку для завершения
-                    tg.MainButton.setText('Готово');
-                    tg.MainButton.show();
-
-                    // Сохраняем токены (в реальном приложении)
-                    console.log('Tokens:', data);
-                } else {
-                    throw new Error('No access token received');
-                }
-            })
-            .catch(error => {
-                console.error('Auth error:', error);
-                showStatus('Ошибка авторизации. Попробуйте еще раз.', 'error');
-                phoneAuthSection.classList.remove('hidden');
-            });
-        }
-
-        // Делаем функцию доступной глобально для Telegram Widget
-        window.onTelegramAuth = onTelegramAuth;
-
-        // Отправка формы телефонной аутентификации
+        // Обработка формы телефонной аутентификации
         phoneAuthForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             clearStatus();
 
             const phone = phoneInput.value.trim();
             if (!validatePhone(phone)) {
-                showStatus('Введите корректный номер телефона', 'error');
+                showStatus('Введите корректный номер телефона в формате +7 (999) 123-45-67', 'error');
                 return;
             }
 
             currentPhone = phone.replace(/\D/g, '');
-            phoneSubmitBtn.disabled = true;
-            phoneSubmitBtn.textContent = 'Отправка...';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Отправляем...';
 
             try {
+                // Отправляем запрос на сервер
                 const response = await fetch('/api/v1/auth/phone/initiate', {
                     method: 'POST',
                     headers: {
@@ -283,16 +522,18 @@
                 if (response.ok) {
                     showStatus('Код подтверждения отправлен на ваш номер!', 'success');
                     phoneAuthForm.style.display = 'none';
-                    otpSection.classList.remove('hidden');
+                    otpSection.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Получить код';
                 } else {
                     throw new Error(data.detail || 'Ошибка при отправке');
                 }
 
             } catch (error) {
+                console.error('Auth error:', error);
                 showStatus('Ошибка при отправке запроса. Попробуйте еще раз.', 'error');
-            } finally {
-                phoneSubmitBtn.disabled = false;
-                phoneSubmitBtn.textContent = 'Получить код подтверждения';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Получить код';
             }
         });
 
@@ -305,7 +546,7 @@
             }
 
             verifyBtn.disabled = true;
-            verifyBtn.textContent = 'Проверка...';
+            verifyBtn.textContent = 'Проверяем...';
 
             try {
                 const response = await fetch('/api/v1/auth/phone/verify', {
@@ -324,20 +565,29 @@
                 if (response.ok) {
                     showStatus('Авторизация успешна! Добро пожаловать в cmpas.ru!', 'success');
 
+                    // Показываем кнопку завершения в Telegram
                     tg.MainButton.setText('Готово');
                     tg.MainButton.show();
 
-                    console.log('Tokens:', data);
+                    console.log('Успешная авторизация:', data);
                 } else {
                     throw new Error(data.detail || 'Ошибка верификации');
                 }
 
             } catch (error) {
+                console.error('Verification error:', error);
                 showStatus('Неверный код подтверждения. Попробуйте еще раз.', 'error');
-            } finally {
                 verifyBtn.disabled = false;
-                verifyBtn.textContent = 'Подтвердить';
+                verifyBtn.textContent = 'Войти';
             }
+        });
+
+        // Кнопка назад
+        backBtn.addEventListener('click', function() {
+            otpSection.style.display = 'none';
+            phoneAuthForm.style.display = 'block';
+            clearStatus();
+            otpInput.value = '';
         });
 
         // Обработка главной кнопки Telegram
@@ -348,16 +598,23 @@
         // Закрытие приложения по кнопке "Назад"
         tg.BackButton.show();
         tg.BackButton.onClick(function() {
-            if (!otpSection.classList.contains('hidden')) {
-                otpSection.classList.add('hidden');
+            if (otpSection.style.display !== 'none') {
+                otpSection.style.display = 'none';
                 phoneAuthForm.style.display = 'block';
-                clearStatus();
-            } else if (phoneAuthSection.classList.contains('hidden')) {
-                phoneAuthSection.classList.remove('hidden');
                 clearStatus();
             } else {
                 tg.close();
             }
+        });
+
+        // Добавляем плавные анимации для интерактивности
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                this.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            });
         });
     </script>
 </body>
