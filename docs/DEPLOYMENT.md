@@ -51,7 +51,7 @@ GRANT ALL PRIVILEGES ON DATABASE cmpas TO cmpas_user;
 
 ```bash
 cd /var/www
-sudo git clone https://github.com/yourusername/cmpas.ru.git
+sudo git clone https://github.com/compas-psy/cmpas.ru.git
 cd cmpas.ru
 ```
 

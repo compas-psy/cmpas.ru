@@ -36,9 +36,14 @@ class Settings(BaseSettings):
     YANDEX_CLIENT_ID: str = ""
     YANDEX_CLIENT_SECRET: str = ""
     YANDEX_REDIRECT_URI: str = "http://localhost:8000/api/auth/yandex/callback"
+    YANDEX_TOKEN_URL: str = "https://oauth.yandex.ru/token"
+    YANDEX_USERINFO_URL: str = "https://login.yandex.ru/info"
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
+    OTP_TTL_SECONDS: int = 300
+    OTP_MAX_ATTEMPTS: int = 3
+    OTP_CODE_LENGTH: int = 6
     
     # Email
     SMTP_HOST: str = ""

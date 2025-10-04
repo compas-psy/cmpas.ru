@@ -12,6 +12,10 @@ import logging
 
 from app.config import settings
 from app.database import init_db, close_db
+from app.api import api_router
+from app.core import limiter, rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 # Настройка логирования
 logging.basicConfig(
@@ -58,6 +62,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Настройка rate limiting
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
 # Монтируем статические файлы (если папка существует)
 try:
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -102,11 +111,8 @@ async def api_info():
     }
 
 
-# TODO: Подключить роутеры когда они будут созданы
-# from app.api import auth, users, appointments
-# app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-# app.include_router(users.router, prefix="/api/users", tags=["users"])
-# app.include_router(appointments.router, prefix="/api/appointments", tags=["appointments"])
+# Подключаем версионированные API роутеры
+app.include_router(api_router, prefix="/api")
 
 
 if __name__ == "__main__":

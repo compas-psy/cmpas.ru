@@ -1,6 +1,4 @@
-"""
-Pydantic схемы для аутентификации
-"""
+"""Pydantic схемы для аутентификации"""
 
 from pydantic import BaseModel
 from typing import Optional
@@ -28,6 +26,14 @@ class TelegramAuthRequest(BaseModel):
     photo_url: Optional[str] = None
     auth_date: int
     hash: str
+
+
+class TelegramOTPVerifyRequest(BaseModel):
+    """Запрос для верификации OTP кода"""
+    telegram_id: str
+    otp_code: str
+    full_name: str
+    username: Optional[str] = None
 
 
 class YandexAuthRequest(BaseModel):

@@ -16,17 +16,25 @@ cd cmpas.ru
 # Установка зависимостей
 pip install -r requirements.txt
 
-# Настройка окружения
+# Настройка окружения (Linux/macOS)
 cp .env.example .env
-# Отредактируйте .env файл с вашими настройками
 
 # Запуск сервера разработки
 uvicorn app.main:app --reload
 ```
 
-Сервер будет доступен по адресу: http://localhost:8000
+```powershell
+# Windows PowerShell
+git clone https://github.com/yourusername/cmpas.ru.git
+Set-Location cmpas.ru
+Copy-Item .env.example .env
+python -m venv venv
+./venv/Scripts/Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
----
+Сервер будет доступен по адресу: http://localhost:8000. Перед запуском тестов убедитесь, что `.env` создан и заполнен на основе `.env.example`.
 
 ## Текущий статус
 
@@ -34,13 +42,14 @@ uvicorn app.main:app --reload
 
 **Реализовано:**
 - Базовая структура проекта
-- FastAPI backend setup
-- Конфигурация окружения
+- FastAPI backend с базовым роутером `/api/v1/system/ping`
+- Конфигурация окружения и rate limiting (SlowAPI)
+- Аутентификация через Telegram OTP (инициация и верификация)
 
 **В разработке:**
-- Аутентификация через Telegram OTP
 - Аутентификация через Яндекс ID
 - Базовая структура БД
+{{ ... }}
 
 ---
 
@@ -100,45 +109,39 @@ uvicorn app.main:app --reload
 cmpas.ru/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py              # Точка входа FastAPI
-│   ├── config.py            # Конфигурация из .env
-│   ├── database.py          # Подключение к БД
-│   ├── models/              # SQLAlchemy модели
+│   ├── main.py                 # Точка входа FastAPI
+│   ├── config.py               # Конфигурация из .env
+│   ├── database.py             # Подключение к БД
+│   ├── core/                   # Общие компоненты (лимитер и др.)
 │   │   ├── __init__.py
-│   │   ├── user.py
-│   │   └── session.py
-│   ├── schemas/             # Pydantic схемы
+│   │   └── limiter.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── router.py
+│   │       └── system.py       # Системные эндпоинты (ping)
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── user.py
+│   ├── schemas/
 │   │   ├── __init__.py
 │   │   ├── user.py
 │   │   └── auth.py
-│   ├── api/                 # API endpoints
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   ├── users.py
-│   │   └── appointments.py
-│   ├── services/            # Бизнес-логика
-│   │   ├── __init__.py
-│   │   ├── auth_service.py
-│   │   └── telegram_service.py
-│   └── utils/               # Утилиты
+│   ├── services/               # Бизнес-логика (планируется)
+│   └── utils/
 │       ├── __init__.py
-│       ├── security.py
-│       └── validators.py
-├── tests/                   # Тесты
+│       └── security.py
+├── tests/
 │   ├── __init__.py
-│   ├── test_auth.py
-│   └── test_api.py
-├── alembic/                 # Миграции БД
-├── static/                  # Статические файлы
-├── templates/               # HTML шаблоны
-├── docs/                    # Документация
+│   └── test_main.py
+├── docs/
 │   ├── API.md
 │   ├── DEPLOYMENT.md
 │   └── SECURITY.md
-├── .env.example             # Пример конфигурации
-├── .gitignore
-├── requirements.txt         # Python зависимости
-├── setup.sh                 # Скрипт установки
+├── .env.example
+├── requirements.txt
+├── setup.sh
 └── README.md
 ```
 
