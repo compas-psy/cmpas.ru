@@ -16,6 +16,7 @@ from app.api import api_router
 from app.core import limiter, rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from app import models as _models  # Ensure all SQLAlchemy models are imported and registered
 
 # Настройка логирования
 logging.basicConfig(
