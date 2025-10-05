@@ -39,7 +39,14 @@ class Settings(BaseSettings):
     YANDEX_AUTHORIZE_URL: str = "https://oauth.yandex.ru/authorize"
     YANDEX_TOKEN_URL: str = "https://oauth.yandex.ru/token"
     YANDEX_USERINFO_URL: str = "https://login.yandex.ru/info"
-    YANDEX_SCOPE: str = "login:email login:info"
+    YANDEX_SCOPE: str = "login:email login:info login:phone"
+
+    # UI: как показывать кнопку Яндекс ID на странице аутентификации
+    # Допустимые значения: "native" (виджет Яндекс) или "custom" (наша кнопка "Продолжить с Яндекс")
+    YANDEX_BUTTON_MODE: str = "native"
+
+    # URL главной страницы для кнопки "Продолжить"
+    APP_MAIN_URL: str = "/"
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

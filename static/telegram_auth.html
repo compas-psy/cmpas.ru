@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Вход в систему - cmpas.ru</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Yandex ID Suggest Button SDK (recommended: with polyfills, latest) -->
+    <script src="https://yastatic.net/s3/passport-sdk/autofill/v1/sdk-suggest-with-polyfills-latest.js"></script>
     <style>
         * {
             margin: 0;
@@ -392,12 +394,12 @@
         .yandex-btn:hover {
             background-color: #f5f5f5;
         }
-
-        .yandex-icon {
-            width: 20px;
-            height: 20px;
-            background-color: #ff0000;
-            border-radius: 50%;
+        /* Иконка Яндекса внутри нашей кнопки (используйте <img class="yandex-logo">) */
+        .yandex-logo {
+            width: 32px;
+            height: 32px;
+            display: inline-block;
+            object-fit: contain;
         }
 
         .divider {
@@ -424,17 +426,17 @@
         .phone-input {
             width: 100%;
             padding: 16px;
-            border: none;
+            border: 1px solid #d1d5db;
             border-radius: 12px;
             font-size: 16px;
             margin-bottom: 16px;
-            background-color: rgba(255, 255, 255, 0.15);
-            color: #ffffff;
+            background-color: #ffffff;
+            color: #1a1a1a;
             outline: none;
         }
 
         .phone-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(26, 26, 26, 0.5);
         }
 
         .submit-btn {
@@ -491,17 +493,18 @@
             .image-container { height: 400px; }
         }
         /* ===== End design CSS ===== */
+        /* Минимальная высота контейнера кнопки Яндекса, чтобы избежать скачков верстки */
+        #buttonContainerId { min-height: 44px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="left-section">
-            <h1 class="title">Невозможное?<br>Возможно.</h1>
-            <p class="subtitle">ИИ для решения задач</p>
-
-            <div class="auth-form">
+            <h1 class="title">Компас</h1>
+                    <div class="auth-form">
+                <div id="buttonContainerId" style="margin-bottom: 12px;"></div>
                 <button class="yandex-btn" type="button" id="yandexBtn">
-                    <div class="yandex-icon"></div>
+                    <img id="yandexLogoImg" class="yandex-logo" alt="Yandex" data-src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Yandex_icon.svg/2048px-Yandex_icon.svg.png">
                     Продолжить с Яндекс
                 </button>
                 <div class="divider">ИЛИ</div>
@@ -520,6 +523,9 @@
                 </div>
 
                 <div id="statusMessage" class="privacy-text" style="display: none; margin-top: 12px;"></div>
+
+                <!-- Временная кнопка "Продолжить" при активной локальной сессии -->
+                <button type="button" class="submit-btn" id="continueBtn" style="display:none; margin-top: 12px;">Продолжить</button>
 
                 <p class="privacy-text">
                     Продолжая, вы соглашаетесь с <a href="#">Политикой конфиденциальности</a>
@@ -550,6 +556,86 @@
         const backBtn = document.getElementById('backBtn');
         const statusMessage = document.getElementById('statusMessage');
         const yandexBtn = document.getElementById('yandexBtn');
+        const buttonContainer = document.getElementById('buttonContainerId');
+        const continueBtn = document.getElementById('continueBtn');
+        let yaRemovalObserver = null;
+
+        // UI config from backend
+        let uiConfig = { yandex_button_mode: 'native', app_main_url: '/' };
+        async function fetchUiConfig() {
+            try {
+                const resp = await fetch('/api/v1/system/ui-config');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && typeof data === 'object') uiConfig = data;
+                }
+            } catch (_) { /* ignore */ }
+        }
+
+        // Suitable environment for native Yandex widget in dev
+        function isSuitableForNative() {
+            // В деве Яндекс требует именно https://localhost без порта (443)
+            const isHttps = window.location.protocol === 'https:';
+            const isLocalhost = window.location.hostname === 'localhost';
+            const isDefaultPort = window.location.port === '' || window.location.port === '443';
+            return isHttps && isLocalhost && isDefaultPort;
+        }
+
+        // Set Yandex logo image if provided via data-src
+        function setupYandexLogo() {
+            const img = document.getElementById('yandexLogoImg');
+            if (img) {
+                const src = img.getAttribute('data-src');
+                if (src) img.src = src;
+            }
+        }
+
+        function hasLocalSession() {
+            try {
+                return !!(localStorage.getItem('access_token') || localStorage.getItem('refresh_token'));
+            } catch (_) {
+                return false;
+            }
+        }
+
+        function hasYaWidget() {
+            return !!(buttonContainer && buttonContainer.children && buttonContainer.children.length > 0);
+        }
+
+        function hideFallback() { if (yandexBtn) yandexBtn.style.display = 'none'; }
+        function showFallback() { if (yandexBtn) yandexBtn.style.display = ''; }
+
+        // Ждем рендера виджета ограниченное время
+        function waitForYaWidget(timeoutMs = 2000) {
+            return new Promise(resolve => {
+                if (hasYaWidget()) return resolve(true);
+                const obs = new MutationObserver(() => {
+                    if (hasYaWidget()) {
+                        obs.disconnect();
+                        resolve(true);
+                    }
+                });
+                if (buttonContainer) {
+                    obs.observe(buttonContainer, { childList: true, subtree: true });
+                }
+                setTimeout(() => {
+                    try { obs.disconnect(); } catch(_) {}
+                    resolve(hasYaWidget());
+                }, timeoutMs);
+            });
+        }
+
+        function attachYaRemovalObserver() {
+            if (!buttonContainer) return;
+            if (yaRemovalObserver) return;
+            yaRemovalObserver = new MutationObserver(() => {
+                if (!hasYaWidget()) {
+                    console.debug('[YaAuthSuggest] widget removed, showing fallback');
+                    showFallback();
+                }
+            });
+            yaRemovalObserver.observe(buttonContainer, { childList: true, subtree: true });
+        }
 
         let currentEmail = '';
 
@@ -565,6 +651,128 @@
                 }
             });
         }
+
+        // Инициализация кнопки Яндекс ID (YaAuthSuggest)
+        async function initYaAuthButton() {
+            try {
+                const resp = await fetch('/api/v1/auth/yandex/login');
+                const data = await resp.json();
+                const authorizeUrl = data && data.authorize_url ? data.authorize_url : null;
+                if (!authorizeUrl) {
+                    console.warn('authorize_url не получен; используем резервную кнопку.');
+                    return;
+                }
+
+                const u = new URL(authorizeUrl);
+                const rawScope = u.searchParams.get('scope') || '';
+                const normalizedScope = rawScope.replace(/\+/g, ' ');
+                const oauthQueryParams = {
+                    response_type: u.searchParams.get('response_type') || 'code',
+                    client_id: u.searchParams.get('client_id') || '',
+                    redirect_uri: u.searchParams.get('redirect_uri') || '',
+                    scope: normalizedScope,
+                };
+                const tokenPageOrigin = window.location.origin;
+                console.debug('[YaAuthSuggest] oauthQueryParams:', oauthQueryParams, 'origin:', tokenPageOrigin);
+
+                if (window.YaAuthSuggest && typeof window.YaAuthSuggest.init === 'function') {
+                    window.YaAuthSuggest
+                        .init(
+                            oauthQueryParams,
+                            tokenPageOrigin,
+                            {
+                                view: "button",
+                                parentId: "buttonContainerId",
+                                buttonSize: 'xs',
+                                buttonView: 'main',
+                                buttonTheme: 'light',
+                                buttonBorderRadius: 12,
+                                buttonIcon: 'ya',
+                            }
+                        )
+                        .then(() => waitForYaWidget(2000))
+                        .then(rendered => {
+                            if (rendered) {
+                                console.debug('[YaAuthSuggest] widget rendered');
+                                hideFallback();
+                                attachYaRemovalObserver();
+                            } else {
+                                console.debug('[YaAuthSuggest] widget not rendered in time, show fallback');
+                                showFallback();
+                            }
+                        })
+                        .then(data => {
+                            console.log('Сообщение с токеном', data);
+                        })
+                        .catch(error => {
+                            console.log('Обработка ошибки', error);
+                            // Если что-то пошло не так — показываем резервную кнопку
+                            showFallback();
+                        });
+                } else {
+                    console.warn('YaAuthSuggest не найден; используем резервную кнопку.');
+                    showFallback();
+                }
+            } catch (err) {
+                console.error('Ошибка инициализации YaAuthSuggest:', err);
+                showFallback();
+            }
+        }
+
+        // Дождёмся загрузки страницы и SDK, чтобы виджет гарантированно инициализировался
+        function whenYaAuthReady(timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                const ready = () => (window.YaAuthSuggest && typeof window.YaAuthSuggest.init === 'function');
+                if (ready()) return resolve();
+                const start = Date.now();
+                const iv = setInterval(() => {
+                    if (ready()) {
+                        clearInterval(iv);
+                        resolve();
+                    } else if (Date.now() - start > timeoutMs) {
+                        clearInterval(iv);
+                        reject(new Error('YaAuthSuggest not loaded in time'));
+                    }
+                }, 100);
+            });
+        }
+
+        window.addEventListener('load', async () => {
+            setupYandexLogo();
+            await fetchUiConfig();
+
+            // Показать кнопку "Продолжить", если локально есть токены
+            if (continueBtn && hasLocalSession()) {
+                continueBtn.style.display = '';
+                continueBtn.onclick = () => {
+                    const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
+                    window.location.href = url;
+                };
+            }
+
+            const preferNative = (uiConfig && uiConfig.yandex_button_mode || 'native') === 'native';
+            const suitableEnv = isSuitableForNative();
+
+            if (preferNative && suitableEnv) {
+                // На старте скрываем резервную кнопку, ждём рендера виджета
+                hideFallback();
+                try {
+                    await whenYaAuthReady();
+                } catch (e) {
+                    console.warn('YaAuthSuggest не загрузился вовремя:', e);
+                } finally {
+                    initYaAuthButton();
+                }
+                // Если виджет так и не появится — покажем резервную кнопку чуть позже
+                setTimeout(async () => {
+                    if (!hasYaWidget()) showFallback();
+                }, 1500);
+            } else {
+                // Используем только кастомную кнопку
+                showFallback();
+                if (buttonContainer) buttonContainer.style.display = 'none';
+            }
+        });
 
         // Функции показа/скрытия статусов
         function showStatus(message, type = 'info') {
