@@ -36,9 +36,9 @@ async def initiate_email_auth(payload: EmailAuthRequest) -> dict:
     status_code=status.HTTP_200_OK,
 )
 async def verify_email_auth(
+    raw_request: Request,
     request: EmailOTPVerifyRequest,
     db: AsyncSession = Depends(get_db),
-    http_request: Request | None = None,
 ) -> dict:
     """Complete email OTP authentication and return token pair."""
     try:
@@ -46,11 +46,11 @@ async def verify_email_auth(
     except HTTPException as exc:
         # Login audit (failure)
         try:
-            meta = get_request_meta(http_request) if http_request else {}
+            meta = get_request_meta(raw_request)
             audit = LoginAudit(
                 user_id=None,
                 provider=AuthProvider.EMAIL,
-                path=str(http_request.url.path) if http_request else "/api/v1/auth/email/verify",
+                path=str(raw_request.url.path),
                 **meta,
                 success=False,
                 error=str(exc.detail) if hasattr(exc, "detail") else str(exc),
@@ -62,11 +62,11 @@ async def verify_email_auth(
 
     # Login audit (success)
     try:
-        meta = get_request_meta(http_request) if http_request else {}
+        meta = get_request_meta(raw_request)
         audit = LoginAudit(
             user_id=result.get("user_id"),
             provider=AuthProvider.EMAIL,
-            path=str(http_request.url.path) if http_request else "/api/v1/auth/email/verify",
+            path=str(raw_request.url.path),
             **meta,
             success=True,
         )

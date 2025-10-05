@@ -50,9 +50,9 @@ async def initiate_telegram_auth(
     status_code=status.HTTP_200_OK,
 )
 async def verify_telegram_auth(
+    raw_request: Request,
     request: TelegramOTPVerifyRequest,
     db: AsyncSession = Depends(get_db),
-    http_request: Request | None = None,
 ) -> dict:
     """Complete Telegram OTP authentication."""
     try:
@@ -66,11 +66,11 @@ async def verify_telegram_auth(
     except HTTPException as exc:
         # Login audit (failure)
         try:
-            meta = get_request_meta(http_request) if http_request else {}
+            meta = get_request_meta(raw_request)
             audit = LoginAudit(
                 user_id=None,
                 provider=AuthProvider.TELEGRAM,
-                path=str(http_request.url.path) if http_request else "/api/v1/auth/telegram/verify",
+                path=str(raw_request.url.path),
                 **meta,
                 success=False,
                 error=str(exc.detail) if hasattr(exc, "detail") else str(exc),
@@ -81,11 +81,11 @@ async def verify_telegram_auth(
         raise
     # Login audit (success)
     try:
-        meta = get_request_meta(http_request) if http_request else {}
+        meta = get_request_meta(raw_request)
         audit = LoginAudit(
             user_id=result.get("user_id"),
             provider=AuthProvider.TELEGRAM,
-            path=str(http_request.url.path) if http_request else "/api/v1/auth/telegram/verify",
+            path=str(raw_request.url.path),
             **meta,
             success=True,
         )
@@ -102,10 +102,10 @@ async def verify_telegram_auth(
     status_code=status.HTTP_200_OK,
 )
 async def yandex_auth_callback(
+    raw_request: Request,
     code: str,
     state: str | None = None,
     db: AsyncSession = Depends(get_db),
-    http_request: Request | None = None,
 ) -> dict:
     """Обработка колбэка Яндекс ID. Обменивает code на токен, получает профиль, создает/обновляет пользователя."""
     # 1-2) Обмен кода и получение профиля с логированием ошибок
@@ -121,11 +121,11 @@ async def yandex_auth_callback(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Yandex user id is missing")
     except HTTPException as exc:
         try:
-            meta = get_request_meta(http_request) if http_request else {}
+            meta = get_request_meta(raw_request)
             audit = LoginAudit(
                 user_id=None,
                 provider=AuthProvider.YANDEX,
-                path=str(http_request.url.path) if http_request else "/api/auth/yandex/callback",
+                path=str(raw_request.url.path),
                 **meta,
                 success=False,
                 error=str(exc.detail) if hasattr(exc, "detail") else str(exc),
@@ -178,11 +178,11 @@ async def yandex_auth_callback(
 
     # Login audit (success)
     try:
-        meta = get_request_meta(http_request) if http_request else {}
+        meta = get_request_meta(raw_request)
         audit = LoginAudit(
             user_id=user.id,
             provider=AuthProvider.YANDEX,
-            path=str(http_request.url.path) if http_request else "/api/auth/yandex/callback",
+            path=str(raw_request.url.path),
             **meta,
             success=True,
         )
