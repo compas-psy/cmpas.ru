@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.user import AuthProvider, User
+from app.models.user import AuthProvider, User, UserRole
 from app.schemas.auth import TelegramAuthRequest, YandexAuthRequest
 from app.services.otp_service import (
     OTPAttemptsExceededError,
@@ -49,7 +49,7 @@ async def get_or_create_telegram_user(
         telegram_id=telegram_id,
         full_name=full_name,
         auth_provider=AuthProvider.TELEGRAM,
-        role=user.role if 'user' in locals() and user else None,
+        role=UserRole.CLIENT,
         is_verified=True,
     )
     db.add(user)
@@ -74,12 +74,23 @@ async def get_or_create_or_update_yandex_user(
             user.email = email
         return user
 
+    # If no user with given yandex_id, try to link by email to avoid UNIQUE(email) violation
+    if email:
+        stmt = select(User).where(User.email == email)
+        result = await db.execute(stmt)
+        existing_by_email = result.scalar_one_or_none()
+        if existing_by_email:
+            existing_by_email.yandex_id = yandex_id
+            existing_by_email.full_name = full_name
+            existing_by_email.is_verified = True
+            return existing_by_email
+
     user = User(
         yandex_id=yandex_id,
         full_name=full_name,
         email=email,
         auth_provider=AuthProvider.YANDEX,
-        role=user.role if 'user' in locals() and user else None,
+        role=UserRole.CLIENT,
         is_verified=True,
     )
     db.add(user)
@@ -100,6 +111,7 @@ class YandexOAuthService:
             "code": request.code,
             "client_id": settings.YANDEX_CLIENT_ID,
             "client_secret": settings.YANDEX_CLIENT_SECRET,
+            "redirect_uri": settings.YANDEX_REDIRECT_URI,
         }
 
         async with httpx.AsyncClient(timeout=10.0) as client:

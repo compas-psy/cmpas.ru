@@ -549,8 +549,22 @@
         const verifyBtn = document.getElementById('verifyBtn');
         const backBtn = document.getElementById('backBtn');
         const statusMessage = document.getElementById('statusMessage');
+        const yandexBtn = document.getElementById('yandexBtn');
 
         let currentEmail = '';
+
+        // Запуск авторизации через Яндекс ID по кнопке
+        if (yandexBtn) {
+            yandexBtn.addEventListener('click', async function () {
+                try {
+                    // Редиректим на эндпоинт, который сформирует URL и отправит на Яндекс
+                    window.location.href = '/api/v1/auth/yandex/authorize';
+                } catch (e) {
+                    console.error('Yandex auth start error:', e);
+                    showStatus('Не удалось начать авторизацию через Яндекс', 'error');
+                }
+            });
+        }
 
         // Функции показа/скрытия статусов
         function showStatus(message, type = 'info') {
