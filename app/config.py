@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@cmpas.ru"
+    SMTP_USE_SSL: bool = False
+    SMTP_USE_STARTTLS: bool = True
     
     # Логирование
     LOG_LEVEL: str = "INFO"

@@ -42,11 +42,21 @@ class EmailService:
         return msg
 
     def _send(self, to_addr: str, message: EmailMessage) -> None:
-        with smtplib.SMTP(self.host, self.port, timeout=10) as server:
-            server.starttls()
-            if self.user and self.password:
-                server.login(self.user, self.password)
-            server.send_message(message)
+        if settings.SMTP_USE_SSL:
+            with smtplib.SMTP_SSL(self.host, self.port, timeout=15) as server:
+                server.ehlo()
+                if self.user and self.password:
+                    server.login(self.user, self.password)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(self.host, self.port, timeout=15) as server:
+                server.ehlo()
+                if settings.SMTP_USE_STARTTLS:
+                    server.starttls()
+                    server.ehlo()
+                if self.user and self.password:
+                    server.login(self.user, self.password)
+                server.send_message(message)
 
     async def send_otp(self, to_addr: str, code: str) -> None:
         """Send OTP code to email. Falls back to logging if SMTP not configured."""
@@ -54,11 +64,21 @@ class EmailService:
             logger.info("SMTP is not configured. OTP for %s: %s", to_addr, code)
             return
 
+        # Ensure From header is set (fallback to SMTP_USER if SMTP_FROM missing)
+        from_addr = self.from_addr or self.user
         msg = self._build_otp_message(to_addr, code)
+        if from_addr:
+            msg.replace_header("From", from_addr)
+        logger.info(
+            "Sending OTP email: to=%s host=%s port=%s ssl=%s starttls=%s",
+            to_addr, self.host, self.port, settings.SMTP_USE_SSL, settings.SMTP_USE_STARTTLS
+        )
         try:
             await asyncio.to_thread(self._send, to_addr, msg)
+            logger.info("OTP email sent to %s", to_addr)
         except Exception as exc:  # pragma: no cover - external network
             logger.error("Failed to send OTP email to %s: %s", to_addr, exc)
+            raise
 
 
 email_service = EmailService()

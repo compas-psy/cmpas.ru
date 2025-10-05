@@ -31,7 +31,7 @@ Copy-Item .env.example .env
 python -m venv venv
 ./venv/Scripts/Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload
 ```
 
 ## Текущий статус
@@ -220,6 +220,24 @@ pytest --cov=app tests/
 # Конкретный модуль
 pytest tests/test_auth.py
 ```
+
+---
+
+## Устранение неполадок
+
+- **ModuleNotFoundError: No module named 'pydantic_settings'**
+  - **Причина:** сервер запущен глобальным Python без установленных зависимостей проекта.
+  - **Решение:**
+    1. Установите зависимости через Python из виртуального окружения:
+       ```powershell
+       .\venv\Scripts\python.exe -m pip install -r requirements.txt
+       ```
+    2. Запускайте сервер с явным указанием Python из venv (или после активации окружения):
+       ```powershell
+       .\venv\Scripts\python.exe -m uvicorn app.main:app --reload
+       # или, если venv активирован
+       python -m uvicorn app.main:app --reload
+       ```
 
 ---
 
