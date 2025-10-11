@@ -403,10 +403,10 @@
         }
 
         .cmpas-logo{
-            width: 64px;
             height: 64px;
             display:inline;
             object-fit: contain;
+            margin-bottom: 20px;
         }
 
         .divider {
@@ -507,8 +507,8 @@
 <body>
     <div class="container">
         <div class="left-section">
-            <img src="/static/images/cmpas_logo.svg" class="cmpas-logo" alt="Logo" >
-            <h1 class="title">Компас</h1>
+            <img src="/static/images/cmpas_logo_.svg" class="cmpas-logo" alt="Logo" >
+            <!-- <h1 class="title">Компас</h1> -->
                     <div class="auth-form">
                 <div id="buttonContainerId" style="margin-bottom: 12px;"></div>
                 <button class="yandex-btn" type="button" id="yandexBtn">
@@ -532,13 +532,11 @@
 
                 <div id="statusMessage" class="privacy-text" style="display: none; margin-top: 12px;"></div>
 
-                <div class="privacy-text" style="margin-top:8px; text-align:center;">
-                    <span id="marketingConsentRow" style="display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <input type="checkbox" id="marketingConsent" style="margin-top:2px;">
-                        <label for="marketingConsent" style="cursor:pointer; margin:0;">
-                            Даю&nbsp;<a href="/static/legal/advertising.pdf" target="_blank" rel="noopener">согласие</a>&nbsp;на получение рекламных и информационных материалов
-                        </label>
-                    </span>
+                <div class="privacy-text" style="margin-top:8px; display:flex; justify-content:center;">
+                    <label id="marketingConsentRow" for="marketingConsent" style="display:none; align-items:center; gap:6px; cursor:pointer; text-align:left; margin-left: 12px;">
+                        <input type="checkbox" id="marketingConsent" style="margin-left:-6px; flex-shrink:0; transform: scale(1.2);">
+                        <span style="text-align:left;">Даю&nbsp;<a href="/static/legal/advertising.pdf" target="_blank" rel="noopener">согласие</a>&nbsp;на получение рекламных и информационных материалов</span>
+                    </label>
                 </div>
 
                 <p class="privacy-text">
@@ -633,24 +631,24 @@
             if (!marketingConsentRow) return;
             let token = '';
             try { token = localStorage.getItem('access_token') || ''; } catch (_) {}
-            if (!token) { marketingConsentRow.style.display = ''; return; }
+            if (!postAuthMode || !token) { marketingConsentRow.style.display = 'none'; return; }
             try {
                 const resp = await fetch('/api/v1/consents/', { headers: { 'Authorization': `Bearer ${token}` } });
-                if (!resp.ok) { marketingConsentRow.style.display = ''; return; }
+                if (!resp.ok) { marketingConsentRow.style.display = 'none'; return; }
                 const list = await resp.json();
                 const adv = Array.isArray(list) ? list.find(x => x && (x.type === 'advertising' || (x.type && String(x.type).toLowerCase() === 'advertising'))) : null;
                 if (adv && adv.accepted) {
                     marketingConsentRow.style.display = 'none';
                 } else {
-                    marketingConsentRow.style.display = '';
+                    marketingConsentRow.style.display = 'inline-flex';
                 }
             } catch (_) {
-                marketingConsentRow.style.display = '';
+                marketingConsentRow.style.display = 'none';
             }
         }
 
         if (marketingConsentCheckbox) {
-            marketingConsentCheckbox.checked = getStoredMarketingPref();
+            marketingConsentCheckbox.checked = false;
             marketingConsentCheckbox.addEventListener('change', async () => {
                 storeMarketingPref(marketingConsentCheckbox.checked);
                 await ensureMarketingPreferenceSynced();
@@ -880,14 +878,13 @@
                         localStorage.setItem('access_token', frag.access_token);
                         localStorage.setItem('refresh_token', frag.refresh_token);
                     } catch (_) { /* ignore storage issues */ }
-                    await processMarketingConsent();
+                    enterPostAuthMode();
                     await hideMarketingRowIfAlreadyConsented();
 
                     showStatus('Авторизация через Яндекс успешна! Добро пожаловать в cmpas.ru!', 'success');
                     tg.MainButton.setText('Готово');
                     tg.MainButton.show();
 
-                    enterPostAuthMode();
                     if (continueBtn) {
                         const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
                         continueBtn.onclick = async () => {
@@ -1025,6 +1022,8 @@
                         localStorage.setItem('access_token', data.access_token);
                         localStorage.setItem('refresh_token', data.refresh_token);
                     } catch (e) { /* no-op if storage unavailable */ }
+
+                    enterPostAuthMode();
                     await processMarketingConsent();
                     await hideMarketingRowIfAlreadyConsented();
 
@@ -1032,8 +1031,6 @@
                     tg.MainButton.setText('Готово');
                     tg.MainButton.show();
 
-                    // Включаем пост-авторизационный режим и кнопку "Продолжить"
-                    enterPostAuthMode();
                     if (continueBtn) {
                         const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
                         continueBtn.onclick = async () => {
