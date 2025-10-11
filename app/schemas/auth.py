@@ -17,6 +17,10 @@ class TokenData(BaseModel):
     email: Optional[str] = None
 
 
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class TelegramAuthRequest(BaseModel):
     """Запрос на аутентификацию через Telegram"""
     telegram_id: str

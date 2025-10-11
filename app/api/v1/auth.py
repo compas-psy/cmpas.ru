@@ -12,7 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
 from app.database import get_db
-from app.schemas.auth import TelegramAuthRequest, TelegramOTPVerifyRequest, YandexAuthRequest
+from app.schemas.auth import (
+    TelegramAuthRequest,
+    TelegramOTPVerifyRequest,
+    YandexAuthRequest,
+    TokenRefreshRequest,
+    Token,
+)
 from app.services.auth_service import (
     initiate_telegram_login,
     verify_telegram_otp,
@@ -20,9 +26,14 @@ from app.services.auth_service import (
     get_or_create_or_update_yandex_user,
 )
 from app.config import settings
-from app.utils.security import create_access_token, create_refresh_token
+from app.utils.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
 from app.utils.request_meta import get_request_meta
-from app.models import LoginAudit, AuthProvider
+from app.models import LoginAudit, AuthProvider, User
+from jose import JWTError
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +104,38 @@ async def verify_telegram_auth(
     except Exception:
         pass
     return result
+
+
+@router.post(
+    "/refresh",
+    summary="Refresh access token",
+    response_model=Token,
+    status_code=status.HTTP_200_OK,
+)
+async def refresh_tokens(
+    request: TokenRefreshRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    """Issue new access token using a refresh token."""
+    try:
+        payload = decode_token(request.refresh_token)
+    except JWTError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+
+    user = await db.get(User, int(sub))
+    if not user or not user.is_active:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User is inactive or not found")
+
+    access_token = create_access_token({"sub": sub})
+    refresh_token = create_refresh_token({"sub": sub})
+    return Token(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.get(
@@ -190,7 +233,18 @@ async def yandex_auth_callback(
     except Exception:
         pass
 
-    return payload
+    # Instead of returning JSON, redirect back to the static auth page with tokens in URL fragment.
+    # Frontend will parse the fragment, persist tokens to localStorage and show success UI.
+    fragment = urlencode(
+        {
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "bearer",
+            "state": state or "",
+        }
+    )
+    success_url = f"/static/telegram_auth.html#{fragment}"
+    return RedirectResponse(success_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get(

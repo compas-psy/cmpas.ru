@@ -56,6 +56,7 @@ def create_access_token(
         str: JWT токен
     """
     to_encode = data.copy()
+    to_encode["type"] = "access"
     
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -85,6 +86,7 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
         str: JWT refresh токен
     """
     to_encode = data.copy()
+    to_encode["type"] = "refresh"
     expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire})
     

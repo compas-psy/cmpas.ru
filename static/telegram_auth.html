@@ -402,6 +402,13 @@
             object-fit: contain;
         }
 
+        .cmpas-logo{
+            width: 64px;
+            height: 64px;
+            display:inline;
+            object-fit: contain;
+        }
+
         .divider {
             text-align: center;
             color: #ffffff;
@@ -500,6 +507,7 @@
 <body>
     <div class="container">
         <div class="left-section">
+            <img src="/static/images/cmpas_logo.svg" class="cmpas-logo" alt="Logo" >
             <h1 class="title">Компас</h1>
                     <div class="auth-form">
                 <div id="buttonContainerId" style="margin-bottom: 12px;"></div>
@@ -535,7 +543,7 @@
 
         <div class="right-section">
             <div class="image-container">
-                <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=800&fit=crop" alt="Placeholder" class="placeholder-image">
+                <img src="/static/images/login_back_3.png" alt="Placeholder" class="placeholder-image">
             </div>
         </div>
     </div>
@@ -595,6 +603,22 @@
                 return !!(localStorage.getItem('access_token') || localStorage.getItem('refresh_token'));
             } catch (_) {
                 return false;
+            }
+        }
+
+        // Parse URL fragment (after '#') to extract tokens returned from Yandex OAuth callback
+        function parseHashParams() {
+            try {
+                const hash = window.location.hash ? window.location.hash.substring(1) : '';
+                const sp = new URLSearchParams(hash);
+                return {
+                    access_token: sp.get('access_token') || '',
+                    refresh_token: sp.get('refresh_token') || '',
+                    token_type: sp.get('token_type') || '',
+                    state: sp.get('state') || ''
+                };
+            } catch (_) {
+                return { access_token: '', refresh_token: '', token_type: '', state: '' };
             }
         }
 
@@ -740,6 +764,30 @@
         window.addEventListener('load', async () => {
             setupYandexLogo();
             await fetchUiConfig();
+
+            // Handle success return from Yandex OAuth (tokens in URL fragment)
+            try {
+                const frag = parseHashParams();
+                if (frag.access_token && frag.refresh_token) {
+                    try {
+                        localStorage.setItem('access_token', frag.access_token);
+                        localStorage.setItem('refresh_token', frag.refresh_token);
+                    } catch (_) { /* ignore storage issues */ }
+
+                    showStatus('Авторизация через Яндекс успешна! Добро пожаловать в cmpas.ru!', 'success');
+                    tg.MainButton.setText('Готово');
+                    tg.MainButton.show();
+
+                    if (continueBtn) {
+                        continueBtn.style.display = '';
+                        const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
+                        continueBtn.onclick = () => { window.location.href = url; };
+                    }
+
+                    // Clear URL fragment to avoid re-processing on refresh
+                    try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (_) {}
+                }
+            } catch (_) { /* ignore */ }
 
             // Показать кнопку "Продолжить", если локально есть токены
             if (continueBtn && hasLocalSession()) {

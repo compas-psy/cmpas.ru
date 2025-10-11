@@ -43,12 +43,15 @@ python -m uvicorn app.main:app --reload
 - FastAPI backend с базовым роутером `/api/v1/system/ping`
 - Конфигурация окружения и rate limiting (SlowAPI)
 - Аутентификация через Telegram OTP (инициация и верификация)
+- Аутентификация через Яндекс ID (логин, callback с редиректом и выдачей токенов)
 - База данных с миграциями (SQLite/PostgreSQL)
 - Telegram MiniApp с авторизацией по номеру телефона
+- Сессионные эндпоинты `POST /api/v1/auth/refresh` и `GET /api/v1/users/me`
 
 **В разработке:**
-- Аутентификация через Яндекс ID
-
+- Расширение автоматических тестов для auth flow
+- API согласий и журналирование
+- Уточнение rate limiting для критичных эндпоинтов
 ---
 
 ## Backlog
@@ -115,12 +118,14 @@ cmpas.ru/
 │   │   └── limiter.py
 │   ├── api/
 │   │   ├── __init__.py
+│   │   ├── deps.py             # Зависимости FastAPI (JWT-пользователь)
 │   │   └── v1/
 │   │       ├── __init__.py
 │   │       ├── router.py
-│   │       ├── auth.py         # Telegram OTP аутентификация
+│   │       ├── auth.py         # Telegram OTP + Яндекс ID + refresh
 │   │       ├── phone_auth.py   # Телефонная аутентификация
-│   │       └── system.py       # Системные эндпоинты (ping)
+│   │       ├── system.py       # Системные эндпоинты (ping)
+│   │       └── users.py        # Текущий пользователь (/users/me)
 │   ├── models/
 │   │   ├── __init__.py
 │   │   └── user.py
