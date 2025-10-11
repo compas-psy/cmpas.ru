@@ -25,3 +25,14 @@ def rate_limit_exceeded_handler(_: Request, exc: RateLimitExceeded) -> JSONRespo
             "limit": _default_limit,
         },
     )
+
+
+def ip_and_identity_key(identity_getter: Callable[[Request], str | None]) -> Callable[[Request], str]:
+    """Compose limiter key using client IP and additional identity (email/telegram_id/etc)."""
+
+    def _key(request: Request) -> str:
+        base = get_remote_address(request)
+        identity = identity_getter(request) or "anonymous"
+        return f"{base}:{identity}" if base is not None else identity
+
+    return _key

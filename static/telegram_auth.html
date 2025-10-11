@@ -532,16 +532,27 @@
 
                 <div id="statusMessage" class="privacy-text" style="display: none; margin-top: 12px;"></div>
 
-                <!-- Временная кнопка "Продолжить" при активной локальной сессии -->
-                <button type="button" class="submit-btn" id="continueBtn" style="display:none; margin-top: 12px;">Продолжить</button>
+                <div class="privacy-text" style="margin-top:8px; text-align:center;">
+                    <span id="marketingConsentRow" style="display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <input type="checkbox" id="marketingConsent" style="margin-top:2px;">
+                        <label for="marketingConsent" style="cursor:pointer; margin:0;">
+                            Даю&nbsp;<a href="/static/legal/advertising.pdf" target="_blank" rel="noopener">согласие</a>&nbsp;на получение рекламных и информационных материалов
+                        </label>
+                    </span>
+                </div>
 
                 <p class="privacy-text">
-                    Продолжая, вы соглашаетесь с <a href="#">Политикой конфиденциальности</a>
+                    Продолжая, вы соглашаетесь с <a href="/static/legal/terms.pdf" target="_blank" rel="noopener">Пользовательским соглашением</a>
+                    и <a href="/static/legal/privacy.pdf" target="_blank" rel="noopener">Политикой конфиденциальности</a>
                 </p>
+
+                <!-- Кнопка "Продолжить" под согласиями -->
+                <button type="button" class="submit-btn" id="continueBtn" style="display:none; margin-top: 12px;">Продолжить</button>
+
             </div>
         </div>
 
-        <div class="right-section">
+         <div class="right-section">
             <div class="image-container">
                 <img src="/static/images/login_back_3.png" alt="Placeholder" class="placeholder-image">
             </div>
@@ -567,6 +578,100 @@
         const buttonContainer = document.getElementById('buttonContainerId');
         const continueBtn = document.getElementById('continueBtn');
         let yaRemovalObserver = null;
+        let postAuthMode = false;
+        const CONSENT_PREF_KEY = 'marketing_consent_pref';
+        const marketingConsentCheckbox = document.getElementById('marketingConsent');
+        const marketingConsentRow = document.getElementById('marketingConsentRow');
+
+        function getStoredMarketingPref() {
+            try { return localStorage.getItem(CONSENT_PREF_KEY) === 'true'; } catch (_) { return false; }
+        }
+        function storeMarketingPref(value) {
+            try { localStorage.setItem(CONSENT_PREF_KEY, value ? 'true' : 'false'); } catch (_) {}
+        }
+
+        async function ensureMarketingPreferenceSynced() {
+            let token = '';
+            try { token = localStorage.getItem('access_token') || ''; } catch (_) {}
+            if (!token || !marketingConsentCheckbox) return;
+            try {
+                if (marketingConsentCheckbox.checked) {
+                    await fetch('/api/v1/consents/advertising/accept', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document_id: null })
+                    });
+                } else {
+                    await fetch('/api/v1/consents/advertising/withdraw', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                }
+            } catch (_) { /* ignore */ }
+        }
+
+        function enterPostAuthMode() {
+            postAuthMode = true;
+            if (yaRemovalObserver) { try { yaRemovalObserver.disconnect(); } catch(_) {} yaRemovalObserver = null; }
+            if (buttonContainer) { buttonContainer.style.display = 'none'; try { buttonContainer.innerHTML = ''; } catch(_) {} }
+            if (yandexBtn) yandexBtn.style.display = 'none';
+            const dividerEl = document.querySelector('.divider');
+            if (dividerEl) dividerEl.style.display = 'none';
+            if (emailAuthForm) emailAuthForm.style.display = 'none';
+            if (otpSection) otpSection.style.display = 'none';
+            if (continueBtn) continueBtn.style.display = '';
+            try {
+                if (marketingConsentRow && marketingConsentRow.style.display !== 'none') {
+                    marketingConsentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else if (continueBtn) {
+                    continueBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } catch (_) {}
+        }
+
+        async function hideMarketingRowIfAlreadyConsented() {
+            if (!marketingConsentRow) return;
+            let token = '';
+            try { token = localStorage.getItem('access_token') || ''; } catch (_) {}
+            if (!token) { marketingConsentRow.style.display = ''; return; }
+            try {
+                const resp = await fetch('/api/v1/consents/', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!resp.ok) { marketingConsentRow.style.display = ''; return; }
+                const list = await resp.json();
+                const adv = Array.isArray(list) ? list.find(x => x && (x.type === 'advertising' || (x.type && String(x.type).toLowerCase() === 'advertising'))) : null;
+                if (adv && adv.accepted) {
+                    marketingConsentRow.style.display = 'none';
+                } else {
+                    marketingConsentRow.style.display = '';
+                }
+            } catch (_) {
+                marketingConsentRow.style.display = '';
+            }
+        }
+
+        if (marketingConsentCheckbox) {
+            marketingConsentCheckbox.checked = getStoredMarketingPref();
+            marketingConsentCheckbox.addEventListener('change', async () => {
+                storeMarketingPref(marketingConsentCheckbox.checked);
+                await ensureMarketingPreferenceSynced();
+                await hideMarketingRowIfAlreadyConsented();
+            });
+        }
+
+        async function processMarketingConsent() {
+            const want = getStoredMarketingPref();
+            if (!want) return;
+            let token = '';
+            try { token = localStorage.getItem('access_token') || ''; } catch (_) {}
+            if (!token) return;
+            try {
+                await fetch('/api/v1/consents/advertising/accept', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ document_id: null })
+                });
+            } catch (_) { /* ignore opt-in errors */ }
+        }
 
         // UI config from backend
         let uiConfig = { yandex_button_mode: 'native', app_main_url: '/' };
@@ -627,7 +732,7 @@
         }
 
         function hideFallback() { if (yandexBtn) yandexBtn.style.display = 'none'; }
-        function showFallback() { if (yandexBtn) yandexBtn.style.display = ''; }
+        function showFallback() { if (postAuthMode) return; if (yandexBtn) yandexBtn.style.display = ''; }
 
         // Ждем рендера виджета ограниченное время
         function waitForYaWidget(timeoutMs = 2000) {
@@ -654,6 +759,7 @@
             if (yaRemovalObserver) return;
             yaRemovalObserver = new MutationObserver(() => {
                 if (!hasYaWidget()) {
+                    if (postAuthMode) return;
                     console.debug('[YaAuthSuggest] widget removed, showing fallback');
                     showFallback();
                 }
@@ -764,6 +870,7 @@
         window.addEventListener('load', async () => {
             setupYandexLogo();
             await fetchUiConfig();
+            await hideMarketingRowIfAlreadyConsented();
 
             // Handle success return from Yandex OAuth (tokens in URL fragment)
             try {
@@ -773,15 +880,20 @@
                         localStorage.setItem('access_token', frag.access_token);
                         localStorage.setItem('refresh_token', frag.refresh_token);
                     } catch (_) { /* ignore storage issues */ }
+                    await processMarketingConsent();
+                    await hideMarketingRowIfAlreadyConsented();
 
                     showStatus('Авторизация через Яндекс успешна! Добро пожаловать в cmpas.ru!', 'success');
                     tg.MainButton.setText('Готово');
                     tg.MainButton.show();
 
+                    enterPostAuthMode();
                     if (continueBtn) {
-                        continueBtn.style.display = '';
                         const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
-                        continueBtn.onclick = () => { window.location.href = url; };
+                        continueBtn.onclick = async () => {
+                            await ensureMarketingPreferenceSynced();
+                            window.location.href = url;
+                        };
                     }
 
                     // Clear URL fragment to avoid re-processing on refresh
@@ -789,14 +901,8 @@
                 }
             } catch (_) { /* ignore */ }
 
-            // Показать кнопку "Продолжить", если локально есть токены
-            if (continueBtn && hasLocalSession()) {
-                continueBtn.style.display = '';
-                continueBtn.onclick = () => {
-                    const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
-                    window.location.href = url;
-                };
-            }
+            // Не показываем "Продолжить" на основании локальных токенов.
+            // Кнопка появится только после успешной авторизации (Яндекс/Email).
 
             const preferNative = (uiConfig && uiConfig.yandex_button_mode || 'native') === 'native';
             const suitableEnv = isSuitableForNative();
@@ -919,10 +1025,22 @@
                         localStorage.setItem('access_token', data.access_token);
                         localStorage.setItem('refresh_token', data.refresh_token);
                     } catch (e) { /* no-op if storage unavailable */ }
+                    await processMarketingConsent();
+                    await hideMarketingRowIfAlreadyConsented();
 
                     // Показываем кнопку завершения в Telegram
                     tg.MainButton.setText('Готово');
                     tg.MainButton.show();
+
+                    // Включаем пост-авторизационный режим и кнопку "Продолжить"
+                    enterPostAuthMode();
+                    if (continueBtn) {
+                        const url = (uiConfig && uiConfig.app_main_url) ? uiConfig.app_main_url : '/';
+                        continueBtn.onclick = async () => {
+                            await ensureMarketingPreferenceSynced();
+                            window.location.href = url;
+                        };
+                    }
 
                     console.log('Успешная авторизация:', data);
                 } else {

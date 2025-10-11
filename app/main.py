@@ -6,7 +6,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from contextlib import asynccontextmanager
 import logging
 
@@ -81,6 +81,40 @@ async def root():
     Главная страница - отдаем index.html
     """
     return FileResponse("index.html")
+
+
+@app.get("/legal", include_in_schema=False)
+async def legal_index() -> HTMLResponse:
+    """
+    Раздел с юридическими документами (PDF): политика, пользовательское соглашение, рекламное согласие.
+    """
+    html = """
+    <!DOCTYPE html>
+    <html lang=\"ru\">
+    <head>
+      <meta charset=\"UTF-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+      <title>Юридическая информация — cmpas.ru</title>
+      <style>
+        body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; padding: 24px; line-height: 1.6; }
+        h1 { font-size: 24px; margin-bottom: 16px; }
+        ul { list-style: none; padding-left: 0; }
+        li { margin: 8px 0; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+      </style>
+    </head>
+    <body>
+      <h1>Юридическая информация</h1>
+      <ul>
+        <li><a href=\"/static/legal/privacy.pdf\" target=\"_blank\" rel=\"noopener\">Политика конфиденциальности (PDF)</a></li>
+        <li><a href=\"/static/legal/terms.pdf\" target=\"_blank\" rel=\"noopener\">Пользовательское соглашение (PDF)</a></li>
+        <li><a href=\"/static/legal/advertising.pdf\" target=\"_blank\" rel=\"noopener\">Согласие на рекламные и информационные материалы (PDF)</a></li>
+      </ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html, status_code=200)
 
 
 @app.get("/health")

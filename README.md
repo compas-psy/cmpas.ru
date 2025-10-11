@@ -47,6 +47,7 @@ python -m uvicorn app.main:app --reload
 - База данных с миграциями (SQLite/PostgreSQL)
 - Telegram MiniApp с авторизацией по номеру телефона
 - Сессионные эндпоинты `POST /api/v1/auth/refresh` и `GET /api/v1/users/me`
+- Точечные rate limit'ы для `/api/v1/auth/*` (5–10 запросов в минуту)
 
 **В разработке:**
 - Расширение автоматических тестов для auth flow

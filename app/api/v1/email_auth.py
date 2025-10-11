@@ -1,5 +1,4 @@
 """Email authentication endpoints."""
-from __future__ import annotations
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -10,6 +9,7 @@ from app.models import LoginAudit, AuthProvider
 from app.utils.request_meta import get_request_meta
 from app.schemas.email_auth import EmailAuthRequest, EmailOTPVerifyRequest
 from app.services.auth_service import initiate_email_login, verify_email_otp
+from app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,8 @@ router = APIRouter(prefix="/auth/email", tags=["email_auth"])
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
-async def initiate_email_auth(payload: EmailAuthRequest) -> dict:
+@limiter.limit("5/minute")
+async def initiate_email_auth(request: Request, payload: EmailAuthRequest) -> dict:
     """Start email OTP authentication flow: generate and send code."""
     identity = await initiate_email_login(payload.email)
     logger.info("Email auth initiated for %s", identity)
@@ -35,22 +36,23 @@ async def initiate_email_auth(payload: EmailAuthRequest) -> dict:
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("5/minute")
 async def verify_email_auth(
-    raw_request: Request,
-    request: EmailOTPVerifyRequest,
+    request: Request,
+    payload: EmailOTPVerifyRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Complete email OTP authentication and return token pair."""
     try:
-        result = await verify_email_otp(db=db, email=request.email, code=request.otp_code)
+        result = await verify_email_otp(db=db, email=payload.email, code=payload.otp_code)
     except HTTPException as exc:
         # Login audit (failure)
         try:
-            meta = get_request_meta(raw_request)
+            meta = get_request_meta(request)
             audit = LoginAudit(
                 user_id=None,
                 provider=AuthProvider.EMAIL,
-                path=str(raw_request.url.path),
+                path=str(request.url.path),
                 **meta,
                 success=False,
                 error=str(exc.detail) if hasattr(exc, "detail") else str(exc),
@@ -62,11 +64,11 @@ async def verify_email_auth(
 
     # Login audit (success)
     try:
-        meta = get_request_meta(raw_request)
+        meta = get_request_meta(request)
         audit = LoginAudit(
             user_id=result.get("user_id"),
             provider=AuthProvider.EMAIL,
-            path=str(raw_request.url.path),
+            path=str(request.url.path),
             **meta,
             success=True,
         )

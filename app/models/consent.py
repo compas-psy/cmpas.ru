@@ -4,12 +4,12 @@ User consent models to store advertising consent and accepted versions of legal 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 import enum
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -34,6 +34,9 @@ class ConsentDocument(Base):
     effective_from = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    consents = relationship("UserConsent", back_populates="document")
+    logs = relationship("UserConsentLog", back_populates="document")
+
 
 class UserConsent(Base):
     """Current consent state per user and consent type.
@@ -53,6 +56,8 @@ class UserConsent(Base):
     accepted_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    document = relationship("ConsentDocument", back_populates="consents")
 
 
 class ConsentAction(str, enum.Enum):
@@ -83,3 +88,5 @@ class UserConsentLog(Base):
     os = Column(String, nullable=True)
     referer = Column(String, nullable=True)
     accept_language = Column(String, nullable=True)
+
+    document = relationship("ConsentDocument", back_populates="logs")

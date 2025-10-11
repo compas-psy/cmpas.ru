@@ -1,11 +1,9 @@
 """Phone number authentication endpoints."""
 
-from __future__ import annotations
-
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -14,6 +12,7 @@ from app.services.auth_service import (
     get_or_create_telegram_user,
     verify_telegram_otp,
 )
+from app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,9 @@ router = APIRouter(prefix="/auth/phone", tags=["phone_auth"])
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("5/minute")
 async def initiate_phone_auth(
+    request: Request,
     payload: PhoneAuthRequest,
 ) -> dict:
     """Start phone number OTP authentication flow."""
@@ -46,14 +47,16 @@ async def initiate_phone_auth(
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("5/minute")
 async def verify_phone_otp(
-    request: PhoneOTPVerifyRequest,
+    request: Request,
+    payload: PhoneOTPVerifyRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Complete phone OTP authentication."""
     # Здесь будет верификация OTP кода
     # Пока заглушка для демонстрации flow
-    logger.info("Phone OTP verification for %s", request.phone_number)
+    logger.info("Phone OTP verification for %s", payload.phone_number)
 
     # В реальности здесь будет проверка OTP через Telegram API
     # Пока возвращаем mock токены для демонстрации
@@ -61,7 +64,7 @@ async def verify_phone_otp(
         "access_token": "mock_access_token",
         "refresh_token": "mock_refresh_token",
         "token_type": "bearer",
-        "phone_number": request.phone_number,
+        "phone_number": payload.phone_number,
         "note": "Mock response - needs Telegram API integration"
     }
 
@@ -72,7 +75,9 @@ async def verify_phone_otp(
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("5/minute")
 async def telegram_login_callback(
+    request: Request,
     login_data: TelegramLoginData,
     db: AsyncSession = Depends(get_db),
 ) -> dict:

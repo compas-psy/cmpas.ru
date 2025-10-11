@@ -1,7 +1,5 @@
 """Authentication API endpoints."""
 
-from __future__ import annotations
-
 import logging
 from typing import Optional
 
@@ -12,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
 from app.database import get_db
+from app.core.limiter import limiter, ip_and_identity_key
 from app.schemas.auth import (
     TelegramAuthRequest,
     TelegramOTPVerifyRequest,
@@ -46,7 +45,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("5/minute")
 async def initiate_telegram_auth(
+    request: Request,
     payload: TelegramAuthRequest,
 ) -> dict:
     """Start Telegram OTP authentication flow."""
@@ -60,28 +61,29 @@ async def initiate_telegram_auth(
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("5/minute")
 async def verify_telegram_auth(
-    raw_request: Request,
-    request: TelegramOTPVerifyRequest,
+    request: Request,
+    payload: TelegramOTPVerifyRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Complete Telegram OTP authentication."""
     try:
         result = await verify_telegram_otp(
             db=db,
-            identity=request.telegram_id,
-            code=request.otp_code,
-            full_name=request.full_name,
-            username=request.username,
+            identity=payload.telegram_id,
+            code=payload.otp_code,
+            full_name=payload.full_name,
+            username=payload.username,
         )
     except HTTPException as exc:
         # Login audit (failure)
         try:
-            meta = get_request_meta(raw_request)
+            meta = get_request_meta(request)
             audit = LoginAudit(
                 user_id=None,
                 provider=AuthProvider.TELEGRAM,
-                path=str(raw_request.url.path),
+                path=str(request.url.path),
                 **meta,
                 success=False,
                 error=str(exc.detail) if hasattr(exc, "detail") else str(exc),
@@ -92,11 +94,11 @@ async def verify_telegram_auth(
         raise
     # Login audit (success)
     try:
-        meta = get_request_meta(raw_request)
+        meta = get_request_meta(request)
         audit = LoginAudit(
             user_id=result.get("user_id"),
             provider=AuthProvider.TELEGRAM,
-            path=str(raw_request.url.path),
+            path=str(request.url.path),
             **meta,
             success=True,
         )
@@ -112,20 +114,22 @@ async def verify_telegram_auth(
     response_model=Token,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("10/minute")
 async def refresh_tokens(
-    request: TokenRefreshRequest,
+    request: Request,
+    payload: TokenRefreshRequest,
     db: AsyncSession = Depends(get_db),
 ) -> Token:
     """Issue new access token using a refresh token."""
     try:
-        payload = decode_token(request.refresh_token)
+        payload_data = decode_token(payload.refresh_token)
     except JWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
-    if payload.get("type") != "refresh":
+    if payload_data.get("type") != "refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
-    sub = payload.get("sub")
+    sub = payload_data.get("sub")
     if not sub:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
@@ -144,8 +148,9 @@ async def refresh_tokens(
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("10/minute")
 async def yandex_auth_callback(
-    raw_request: Request,
+    request: Request,
     code: str,
     state: str | None = None,
     db: AsyncSession = Depends(get_db),
@@ -164,11 +169,11 @@ async def yandex_auth_callback(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Yandex user id is missing")
     except HTTPException as exc:
         try:
-            meta = get_request_meta(raw_request)
+            meta = get_request_meta(request)
             audit = LoginAudit(
                 user_id=None,
                 provider=AuthProvider.YANDEX,
-                path=str(raw_request.url.path),
+                path=str(request.url.path),
                 **meta,
                 success=False,
                 error=str(exc.detail) if hasattr(exc, "detail") else str(exc),
@@ -221,11 +226,11 @@ async def yandex_auth_callback(
 
     # Login audit (success)
     try:
-        meta = get_request_meta(raw_request)
+        meta = get_request_meta(request)
         audit = LoginAudit(
             user_id=user.id,
             provider=AuthProvider.YANDEX,
-            path=str(raw_request.url.path),
+            path=str(request.url.path),
             **meta,
             success=True,
         )
@@ -253,7 +258,8 @@ async def yandex_auth_callback(
     response_model=dict,
     status_code=status.HTTP_200_OK,
 )
-async def yandex_login_url() -> dict:
+@limiter.limit("10/minute")
+async def yandex_login_url(request: Request) -> dict:
     """Возвращает URL авторизации Яндекс ID (для клиентского редиректа)."""
     params = {
         "response_type": "code",
@@ -269,7 +275,8 @@ async def yandex_login_url() -> dict:
     "/yandex/authorize",
     include_in_schema=False,
 )
-async def yandex_authorize_redirect() -> RedirectResponse:
+@limiter.limit("10/minute")
+async def yandex_authorize_redirect(request: Request) -> RedirectResponse:
     """Прямой редирект на Яндекс (удобно вызывать из браузера)."""
     params = {
         "response_type": "code",
