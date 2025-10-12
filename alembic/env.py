@@ -27,9 +27,25 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+def _to_sync_url(url: str) -> str:
+    """Convert async SQLAlchemy URLs to sync for Alembic.
+
+    Examples:
+    - sqlite+aiosqlite:///path.db -> sqlite:///path.db
+    - postgresql+asyncpg://...    -> postgresql://...
+    - mysql+aiomysql://...        -> mysql://...
+    """
+    if url.startswith("sqlite+aiosqlite:"):
+        return url.replace("sqlite+aiosqlite", "sqlite", 1)
+    if url.startswith("postgresql+asyncpg:"):
+        return url.replace("postgresql+asyncpg", "postgresql", 1)
+    if url.startswith("mysql+aiomysql:"):
+        return url.replace("mysql+aiomysql", "mysql", 1)
+    return url
+
 def run_migrations_offline():
     """Run migrations in 'offline' mode."""
-    url = settings.DATABASE_URL
+    url = _to_sync_url(settings.DATABASE_URL)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -46,7 +62,7 @@ def run_migrations_online():
     section = config.get_section(config.config_ini_section)
     if section is None:
         section = {}
-    section["sqlalchemy.url"] = settings.DATABASE_URL
+    section["sqlalchemy.url"] = _to_sync_url(settings.DATABASE_URL)
     connectable = engine_from_config(
         section,
         prefix="sqlalchemy.",

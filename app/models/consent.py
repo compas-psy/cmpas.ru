@@ -28,7 +28,7 @@ class ConsentDocument(Base):
     __tablename__ = "consent_documents"
 
     id = Column(Integer, primary_key=True)
-    type = Column(SQLEnum(ConsentType), nullable=False, index=True)
+    type = Column(SQLEnum(ConsentType, native_enum=False, create_constraint=False, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
     version = Column(String, nullable=False)  # e.g., "2025-10-01" or semantic
     url = Column(String, nullable=False)      # link to the public document
     effective_from = Column(DateTime(timezone=True), nullable=True)
@@ -48,7 +48,7 @@ class UserConsent(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    type = Column(SQLEnum(ConsentType), nullable=False, index=True)
+    type = Column(SQLEnum(ConsentType, native_enum=False, create_constraint=False, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
 
     accepted = Column(Boolean, default=False, nullable=False)
     document_id = Column(Integer, ForeignKey("consent_documents.id"), nullable=True)
@@ -72,8 +72,8 @@ class UserConsentLog(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    type = Column(SQLEnum(ConsentType), nullable=False, index=True)
-    action = Column(SQLEnum(ConsentAction), nullable=False)
+    type = Column(SQLEnum(ConsentType, native_enum=False, create_constraint=False, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
+    action = Column(SQLEnum(ConsentAction, native_enum=False, create_constraint=False, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     document_id = Column(Integer, ForeignKey("consent_documents.id"), nullable=True)
     document_version = Column(String, nullable=True)

@@ -123,6 +123,16 @@ async def accept_consent(
     request_meta: dict,
 ) -> dict:
     document = await _get_document(db, document_id, consent_type)
+    # If no explicit document provided, try to attach the latest document version of this type
+    if document is None:
+        latest_stmt = (
+            select(ConsentDocument)
+            .where(ConsentDocument.type == consent_type)
+            .order_by(ConsentDocument.created_at.desc())
+            .limit(1)
+        )
+        res = await db.execute(latest_stmt)
+        document = res.scalars().first() or None
     consent = await _get_consent(db, user_id, consent_type)
     now = datetime.now(timezone.utc)
 
@@ -149,6 +159,8 @@ async def accept_consent(
         **request_meta,
     )
     db.add(log)
+    await db.flush()
+    await db.refresh(consent)
 
     return _build_status(consent)
 
@@ -231,5 +243,7 @@ async def withdraw_consent(
         **request_meta,
     )
     db.add(log)
+    await db.flush()
+    await db.refresh(consent)
 
     return _build_status(consent)

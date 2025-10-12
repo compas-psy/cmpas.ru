@@ -83,6 +83,14 @@ async def root():
     return FileResponse("index.html")
 
 
+@app.get("/auth", include_in_schema=False)
+async def auth_page():
+    """
+    Страница авторизации — отдаём static/telegram_auth.html
+    """
+    return FileResponse("static/telegram_auth.html")
+
+
 @app.get("/legal", include_in_schema=False)
 async def legal_index() -> HTMLResponse:
     """
@@ -107,10 +115,81 @@ async def legal_index() -> HTMLResponse:
     <body>
       <h1>Юридическая информация</h1>
       <ul>
-        <li><a href=\"/static/legal/privacy.pdf\" target=\"_blank\" rel=\"noopener\">Политика конфиденциальности (PDF)</a></li>
-        <li><a href=\"/static/legal/terms.pdf\" target=\"_blank\" rel=\"noopener\">Пользовательское соглашение (PDF)</a></li>
-        <li><a href=\"/static/legal/advertising.pdf\" target=\"_blank\" rel=\"noopener\">Согласие на рекламные и информационные материалы (PDF)</a></li>
+        <li><a href=\"/legal/privacy\">Политика конфиденциальности</a></li>
+        <li><a href=\"/legal/terms\">Пользовательское соглашение</a></li>
       </ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html, status_code=200)
+
+
+@app.get("/legal/advertising", include_in_schema=False)
+async def legal_advertising() -> HTMLResponse:
+    """
+    Публичная версия Согласия на рекламные/информационные материалы (временная HTML-заглушка).
+    В проде заменить на статический документ/рендер шаблона и версионность.
+    """
+    html = """
+    <!DOCTYPE html>
+    <html lang=\"ru\">
+    <head>
+      <meta charset=\"UTF-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+      <title>Согласие на рекламные материалы — cmpas.ru</title>
+      <style> body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; padding: 24px; line-height: 1.6; } h1{font-size:24px;margin-bottom:16px;} </style>
+    </head>
+    <body>
+      <h1>Согласие на рекламные и информационные материалы</h1>
+      <p>Эта страница — временная заглушка согласия для целей MVP. Полная версия документа и его версия будут опубликованы позднее.</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html, status_code=200)
+
+
+@app.get("/legal/terms", include_in_schema=False)
+async def legal_terms() -> HTMLResponse:
+    """
+    Публичная версия Пользовательского соглашения (временная HTML-заглушка).
+    В проде заменить на статический документ/рендер шаблона и версионность.
+    """
+    html = """
+    <!DOCTYPE html>
+    <html lang=\"ru\">
+    <head>
+      <meta charset=\"UTF-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+      <title>Пользовательское соглашение — cmpas.ru</title>
+      <style> body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; padding: 24px; line-height: 1.6; } h1{font-size:24px;margin-bottom:16px;} </style>
+    </head>
+    <body>
+      <h1>Пользовательское соглашение</h1>
+      <p>Эта страница — временная заглушка Пользовательского соглашения для целей MVP. Полная версия документа и его версия будут опубликованы позднее.</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html, status_code=200)
+
+
+@app.get("/legal/privacy", include_in_schema=False)
+async def legal_privacy() -> HTMLResponse:
+    """
+    Публичная версия Политики конфиденциальности (временная HTML-заглушка).
+    В проде заменить на статический документ/рендер шаблона и версионность.
+    """
+    html = """
+    <!DOCTYPE html>
+    <html lang=\"ru\">
+    <head>
+      <meta charset=\"UTF-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+      <title>Политика конфиденциальности — cmpas.ru</title>
+      <style> body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; padding: 24px; line-height: 1.6; } h1{font-size:24px;margin-bottom:16px;} </style>
+    </head>
+    <body>
+      <h1>Политика конфиденциальности</h1>
+      <p>Эта страница — временная заглушка Политики конфиденциальности для целей MVP. Полная версия документа и его версия будут опубликованы позднее.</p>
     </body>
     </html>
     """

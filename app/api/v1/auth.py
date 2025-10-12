@@ -248,7 +248,7 @@ async def yandex_auth_callback(
             "state": state or "",
         }
     )
-    success_url = f"/static/telegram_auth.html#{fragment}"
+    success_url = f"/auth#{fragment}"
     return RedirectResponse(success_url, status_code=status.HTTP_302_FOUND)
 
 
