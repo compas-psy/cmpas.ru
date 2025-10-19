@@ -10,6 +10,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Route `/auth` serving `static/telegram_auth.html`.
 - Alembic migration `003_seed_consent_documents` to seed ConsentDocument entries (terms/privacy/advertising) with URLs to `/legal/*`.
 - Consent API endpoints: `GET /api/v1/consents/`, `POST /api/v1/consents/{type}/accept`, `POST /api/v1/consents/{type}/withdraw`, `GET /api/v1/consents/{type}/logs`.
+- New landing page `static/home.html` with modern Figma design implementation.
+- Global CSS styles in `static/styles/global.css` for consistent branding across pages.
 
 ### Changed
 - Yandex OAuth callback now redirects to `/auth#...` (was `/static/telegram_auth.html#...`).
