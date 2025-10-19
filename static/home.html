@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Компас — Ваша практика под контролем</title>
+  <link rel="stylesheet" href="/static/styles/global.css" />
+  <style>
+    body { background: linear-gradient(180deg, #fff 0%, rgba(240,249,246,0.2) 50%, #fff 100%); }
+    .hero { padding: 80px 0; }
+    .hero-grid { display: grid; gap: 48px; align-items: center; }
+    @media (min-width: 1000px) { .hero-grid { grid-template-columns: 1.15fr 0.85fr; } }
+    @media (max-width: 999px) { .hero-image-wrapper { display: none; } }
+    .badge { display: inline-block; padding: 6px 12px; background: rgba(45,95,79,0.08); border: 1px solid rgba(45,95,79,0.15); border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--primary); margin-bottom: 20px; }
+    .hero h1 { font-size: 56px; line-height: 1.2; margin-bottom: 24px; font-weight: 400; color: #2d5f4f; background: linear-gradient(135deg, #2d5f4f 0%, #3d7a67 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 20px; line-height: 30px; font-weight: 400; color: #64748b; margin-bottom: 32px; }
+    .hero-actions { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 48px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; max-width: 480px; }
+    .stat-value { font-size: 32px; line-height: 1.2; font-weight: 700; color: var(--primary); }
+    .stat-label { font-size: 14px; line-height: 1.5; font-weight: 400; color: #64748b; }
+    .hero-image-wrapper { position: relative; max-width: 770px; margin-left: auto; }
+    .hero-image { width: 100%; aspect-ratio: 1.2; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.15); position: relative; }
+    .hero-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .notification-card { position: absolute; bottom: 16px; left: 16px; right: 16px; background: rgba(255,255,255,0.98); backdrop-filter: blur(10px); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.8); }
+    .notification-icon { width: 40px; height: 40px; background: linear-gradient(to bottom right, var(--primary), var(--primary-medium)); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; flex-shrink: 0; }
+    .notification-content h4 { font-size: 14px; margin-bottom: 2px; font-weight: 600; color: #1a1a1a; }
+    .notification-content p { font-size: 12px; color: #64748b; margin: 0; }
+    .meeting-badge { position: absolute; top: -12px; right: -12px; background: rgba(255,255,255,0.98); backdrop-filter: blur(10px); padding: 8px 12px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); border: 1px solid rgba(255,255,255,0.8); display: flex; align-items: center; gap: 10px; z-index: 2; }
+    .badge-icon { width: 36px; height: 36px; background: linear-gradient(to bottom right, var(--primary), var(--primary-medium)); display: flex; align-items: center; justify-content: center; color: #fff; border-radius: 10px; }
+    .meeting-badge-number { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 0; line-height: 1.2; }
+    .meeting-badge-text { font-size: 11px; color: #64748b; line-height: 1.2; }
+    .section { padding: 80px 0; }
+    .section-header { text-align: center; max-width: 768px; margin: 0 auto 64px; }
+    .section-header h2 { font-size: 36px; line-height: 48px; font-weight: 400; margin-bottom: 16px; color: #1a1a1a; }
+    .subtitle { font-size: 20px; line-height: 30px; font-weight: 400; color: #64748b; }
+    .cards-grid { display: grid; gap: 24px; }
+    @media (min-width: 640px) { .cards-grid.cols-2 { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 900px) { .cards-grid.cols-3 { grid-template-columns: repeat(3, 1fr); } .cards-grid.cols-4 { grid-template-columns: repeat(4, 1fr); } }
+    .card { background: white; border: 2px solid #f1f5f9; border-radius: 16px; padding: 32px; text-align: center; transition: all 0.2s; }
+    .card:hover { border-color: rgba(45,95,79,0.2); transform: translateY(-2px); }
+    .card-icon { width: 80px; height: 80px; margin: 0 auto 20px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); }
+    .card-icon svg { width: 40px; height: 40px; color: white; }
+    .card-icon img { width: 40px; height: 40px; }
+    .card-title { font-size: 20px; font-weight: 400; line-height: 28px; margin-bottom: 8px; color: #1a1a1a; }
+    .card-text { font-size: 14px; font-weight: 400; line-height: 22.75px; color: #64748b; }
+    .bg-light { background: linear-gradient(180deg, rgba(240,249,246,0.6), rgba(240,249,246,0.2)); }
+    .ps-section { background: linear-gradient(180deg, rgba(240,249,246,0.55), rgba(240,249,246,0.2)); padding: 80px 0; }
+    .ps-grid { display: grid; gap: 64px; }
+    @media (min-width: 900px) { .ps-grid { grid-template-columns: 1fr 1fr; } }
+    .ps-col:first-child h3 { font-size: 28px; line-height: 1.3; margin: 0 0 32px; font-weight: 500; color: #ef4444; text-align: left; }
+    .ps-col:last-child h3 { font-size: 28px; line-height: 1.3; margin: 0 0 32px; font-weight: 500; color: var(--primary); text-align: left; }
+    .ps-list { display: grid; gap: 20px; }
+    .ps-item { display: grid; grid-template-columns: 24px 1fr; gap: 16px; align-items: start; }
+    .ps-icon-x { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(239,68,68,0.1); color: #ef4444; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+    .ps-icon-check { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(45,95,79,0.12); flex-shrink: 0; }
+    .ps-text { font-size: 16px; line-height: 1.5; color: #475569; font-weight: 400; }
+    .cta-section { background: linear-gradient(135deg, #1f4237 0%, #2d5f4f 50%, #3d7a67 100%); position: relative; color: white; padding: 80px 0; text-align: center; }
+    .cta-section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(31,66,55,0.3) 0%, rgba(45,95,79,0.2) 50%, rgba(61,122,103,0.1) 100%); pointer-events: none; }
+    .cta-section h2 { font-size: 40px; line-height: 1.3; font-weight: 300; color: white; margin-bottom: 20px; position: relative; z-index: 1; }
+    .cta-section p { font-size: 18px; line-height: 28px; font-weight: 300; color: rgba(255,255,255,0.95); margin-bottom: 36px; position: relative; z-index: 1; }
+    .cta-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; position: relative; z-index: 1; }
+    .btn-white { background: white; color: var(--primary); padding: 12px 24px; border-radius: 16px; font-weight: 400; font-size: 18px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .btn-white:hover { transform: translateY(-2px); box-shadow: 0 24px 32px -5px rgba(0,0,0,0.15); }
+    .btn-white-outline { background: transparent; color: white; border: 2px solid white; padding: 12px 24px; border-radius: 16px; font-weight: 400; font-size: 18px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .btn-white-outline:hover { background: rgba(255,255,255,0.1); }
+    .cta-note { font-size: 14px; color: rgba(255,255,255,0.8); position: relative; z-index: 1; font-weight: 300; }
+    /* Footer */
+    .footer { background: linear-gradient(135deg, var(--primary-dark), var(--primary)); color: #fff; padding: 60px 0 24px; }
+    .footer-top { display: grid; gap: 48px; margin-bottom: 48px; }
+    @media (min-width: 900px) { .footer-top { grid-template-columns: 1.5fr 1fr 1fr 1fr; } }
+    .footer-brand-section { max-width: 320px; }
+    .footer-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .footer-logo img { height: 32px; filter: brightness(0) invert(1); }
+    .footer-logo-text { font-size: 18px; font-weight: 700; letter-spacing: 0.9px; color: white; }
+    .footer-desc { font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.8); margin-bottom: 20px; }
+    .footer-socials { display: flex; gap: 12px; }
+    .footer-social-icon { width: 40px; height: 40px; border-radius: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; transition: all 0.2s; text-decoration: none; color: white; }
+    .footer-social-icon:hover { background: rgba(255,255,255,0.2); }
+    .footer-column { text-align: left; }
+    .footer-column h4 { font-size: 14px; font-weight: 600; color: white; margin-bottom: 16px; text-align: left; }
+    .footer-column ul { list-style: none; padding: 0; margin: 0; }
+    .footer-column li { margin-bottom: 12px; }
+    .footer-column a { font-size: 14px; line-height: 1.5; color: rgba(255,255,255,0.8); text-decoration: none; transition: color 0.2s; }
+    .footer-column a:hover { color: #fff; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .footer-copyright { font-size: 14px; color: rgba(255,255,255,0.6); }
+    .footer-contact { display: flex; gap: 24px; align-items: center; }
+    .footer-contact a { font-size: 14px; color: rgba(255,255,255,0.8); text-decoration: none; transition: color 0.2s; }
+    .footer-contact a:hover { color: #fff; }
+    details { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; transition: all 0.2s; }
+    summary { font-size: 16px; line-height: 1.5; font-weight: 500; color: #1a1a1a; cursor: pointer; list-style: none; position: relative; padding-right: 32px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%) rotate(0deg); width: 20px; height: 20px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23374151' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-size: contain; transition: transform 0.2s; }
+    details[open] summary::after { transform: translateY(-50%) rotate(180deg); }
+    details[open] summary { margin-bottom: 16px; }
+    details p { font-size: 15px; line-height: 1.6; font-weight: 400; color: #64748b; margin: 0; }
+    .faq-footer { text-align: center; margin-top: 48px; }
+    .faq-footer-text { font-size: 16px; color: #64748b; margin-bottom: 16px; }
+    .faq-footer .btn { display: inline-flex; }
+    .pricing-grid { display: grid; gap: 24px; max-width: 1000px; margin: 0 auto; }
+    @media (min-width: 900px) { .pricing-grid { grid-template-columns: repeat(3, 1fr); } }
+    .pricing-card { background: linear-gradient(to bottom right, white, rgba(249,250,251,0.5)); border: 2px solid #f1f5f9; border-radius: 18px; padding: 32px; transition: all 0.2s; }
+    .pricing-card:hover { border-color: rgba(45,95,79,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.08); transform: translateY(-4px); }
+    .pricing-card.highlight { border-color: var(--primary); box-shadow: 0 20px 60px rgba(45,95,79,0.15); transform: scale(1.02); }
+    .pricing-card.highlight:hover { transform: scale(1.03) translateY(-2px); box-shadow: 0 24px 70px rgba(45,95,79,0.2); }
+    .pricing-badge { display: inline-block; padding: 6px 12px; background: linear-gradient(to right, var(--primary), var(--primary-medium)); color: white; border-radius: 999px; font-size: 12px; line-height: 1.5; margin-bottom: 16px; font-weight: 500; }
+    .pricing-title { font-size: 20px; line-height: 1.5; font-weight: 500; margin-bottom: 8px; color: #1a1a1a; }
+    .pricing-desc { font-size: 14px; line-height: 1.5; font-weight: 400; color: #64748b; margin-bottom: 20px; }
+    .pricing-price { font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+    .pricing-period { font-size: 14px; line-height: 1.5; font-weight: 400; color: #64748b; margin-bottom: 24px; }
+    .pricing-features { list-style: none; padding: 0; margin-bottom: 24px; }
+    .pricing-features li { padding: 8px 0; font-size: 16px; line-height: 1.5; font-weight: 400; color: #475569; position: relative; padding-left: 24px; }
+    .pricing-features li:before { content: "✓"; position: absolute; left: 0; color: var(--primary); font-weight: 700; }
+    .feature-card { background: transparent !important; border: none !important; padding: 0 !important; text-align: left !important; }
+    .feature-icon { width: 56px; height: 56px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+    .feature-icon svg { width: 28px; height: 28px; color: white; }
+    .feature-card h3 { font-size: 18px; line-height: 1.5; font-weight: 500; margin-bottom: 16px; color: #1a1a1a; }
+    .feature-card ul { list-style: none; padding: 0; margin: 0; }
+    .feature-card li { padding: 6px 0; font-size: 15px; line-height: 1.5; font-weight: 400; color: #64748b; position: relative; padding-left: 24px; }
+    .feature-card li:before { content: "✓"; position: absolute; left: 0; color: var(--primary); font-weight: 700; font-size: 14px; }
+    .reviews-section { padding: 80px 0; background: linear-gradient(180deg, rgba(240,249,246,0.3), rgba(240,249,246,0.1)); }
+    .review-card { padding: 32px; text-align: left; background: white; border: 2px solid #f1f5f9; border-radius: 16px; }
+    .stars { color: #fbbf24; font-size: 20px; letter-spacing: 4px; margin-bottom: 16px; }
+    .review-text { font-size: 16px; line-height: 1.6; color: #374151; margin-bottom: 24px; font-style: normal; }
+    .review-footer { display: flex; align-items: center; gap: 12px; }
+    .review-avatar { width: 48px; height: 48px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; flex-shrink: 0; }
+    .review-author-info { flex: 1; }
+    .review-author-name { font-size: 16px; font-weight: 500; color: #1a1a1a; margin-bottom: 2px; }
+    .review-author-role { font-size: 14px; color: #64748b; }
+    .contact-section { padding: 80px 0; background: white; }
+    .contact-cards { display: grid; gap: 24px; max-width: 800px; margin: 0 auto 48px; }
+    @media (min-width: 768px) { .contact-cards { grid-template-columns: 1fr 1fr; } }
+    .contact-card { display: flex; gap: 16px; padding: 24px; border: 2px solid #f1f5f9; border-radius: 16px; transition: all 0.2s; text-decoration: none; color: inherit; }
+    .contact-card:hover { border-color: var(--primary); }
+    .contact-card-icon { width: 56px; height: 56px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
+    .contact-card-content { flex: 1; }
+    .contact-card-title { font-size: 18px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+    .contact-card-desc { font-size: 14px; color: #64748b; margin-bottom: 8px; }
+    .contact-card-link { font-size: 16px; font-weight: 500; color: var(--primary); }
+    .contact-form { max-width: 800px; margin: 0 auto; background: #f9fafb; border-radius: 16px; padding: 40px; }
+    .contact-form h3 { font-size: 24px; font-weight: 500; color: #1a1a1a; margin-bottom: 24px; }
+    .form-row { display: grid; gap: 16px; margin-bottom: 16px; }
+    @media (min-width: 768px) { .form-row.cols-2 { grid-template-columns: 1fr 1fr; } }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px; display: none; }
+    .form-group input, .form-group textarea { width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; font-family: inherit; transition: border-color 0.2s; }
+    .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
+    .form-group textarea { min-height: 120px; resize: vertical; }
+    .form-submit { width: 100%; padding: 14px 24px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .form-submit:hover { background: var(--primary-dark); }
+    .nav-links { font-weight: 500; }
+    .nav-links a { font-weight: 500; }
+    .nav-cta a:first-child { font-weight: 500; color: #1a1a1a; transition: all 0.2s; padding: 8px 16px; border-radius: 8px; }
+    .nav-cta a:first-child:hover { background: rgba(45,95,79,0.08); color: var(--primary); }
+    .ps-text { font-weight: 400; }
+    /* How it works section */
+    .how-works-grid { display: grid; gap: 24px; position: relative; }
+    @media (min-width: 900px) { .how-works-grid { grid-template-columns: repeat(4, 1fr); gap: 32px; } }
+    .how-step { position: relative; text-align: center; background: transparent !important; border: none !important; padding: 0 !important; }
+    .step-number { position: absolute; top: -8px; right: calc(50% - 60px); width: 32px; height: 32px; background: white; border: 2px solid var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: var(--primary); z-index: 2; }
+    .how-step .card-icon { margin: 0 auto 20px; width: 80px !important; height: 80px !important; }
+    .how-step .card-icon img { width: 40px !important; height: 40px !important; }
+    .how-step .card-title { font-size: 18px; margin-bottom: 12px; }
+    .how-step .card-text { font-size: 14px; color: #64748b; line-height: 1.5; }
+    @media (min-width: 900px) { 
+      .how-works-grid::before { content: ''; position: absolute; top: 40px; left: 20%; right: 20%; height: 2px; background: linear-gradient(to right, transparent 0%, #e5e7eb 10%, #e5e7eb 90%, transparent 100%); z-index: 0; }
+    }
+    /* Benefits section */
+    .benefits-grid { display: grid; gap: 32px; max-width: 900px; margin: 0 auto; }
+    @media (min-width: 768px) { .benefits-grid { grid-template-columns: 1fr 1fr; gap: 48px 64px; } }
+    .benefit-item { display: flex; gap: 20px; align-items: flex-start; }
+    .benefit-icon { width: 56px; height: 56px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .benefit-icon svg { width: 28px; height: 28px; color: white; }
+    .benefit-content { flex: 1; }
+    .benefit-title { font-size: 18px; font-weight: 500; color: #1a1a1a; margin-bottom: 8px; }
+    .benefit-text { font-size: 14px; color: #64748b; line-height: 1.6; }
+    /* Security section */
+    .security-card { max-width: 900px; margin: 0 auto; background: white; border: 1px solid #e5e7eb; border-radius: 20px; padding: 56px 48px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .security-icon { width: 64px; height: 64px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; }
+    .security-icon svg { width: 28px; height: 28px; color: white; }
+    .security-title { font-size: 28px; line-height: 1.3; font-weight: 500; color: #1a1a1a; margin-bottom: 8px; }
+    .security-subtitle { font-size: 15px; color: #64748b; margin-bottom: 48px; line-height: 1.5; }
+    .security-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
+    @media (max-width: 768px) { .security-features { grid-template-columns: 1fr; } }
+    .security-feature { text-align: center; }
+    .security-feature-icon { width: 56px; height: 56px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+    .security-feature-icon svg { width: 28px; height: 28px; color: white; }
+    .security-feature-title { font-size: 16px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px; }
+    .security-feature-text { font-size: 13px; color: #6b7280; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container nav">
+      <a href="/" class="brand">
+        <img class="brand-logo" src="/static/images/cmpas_logo.svg" alt="КОМПАС" style="height: 40px;" />
+        <span class="brand-text">КОМПАС</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Возможности</a>
+        <a href="#how">Как работает</a>
+        <a href="#pricing">Тарифы</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contacts">Контакты</a>
+      </nav>
+      <div class="nav-cta">
+        <a href="/auth">Войти</a>
+        <a href="/auth" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px; border-radius: 16px;">Начать бесплатно</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <span class="badge">Для психологов, коучей и консультантов</span>
+        <h1>Ваша практика под контролем</h1>
+        <p>Перестаньте тратить время на рутину. Компас автоматизирует расписание, записи и коммуникацию с клиентами.</p>
+        <div class="hero-actions">
+          <a href="/auth" class="btn btn-primary" style="padding: 12px 24px; font-size: 16px;">Начать бесплатно →</a>
+          <a href="#how" class="btn btn-outline" style="padding: 12px 24px; font-size: 16px;">Как это работает</a>
+        </div>
+        <div class="stats">
+          <div><div class="stat-value">500+</div><div class="stat-label">Специалистов</div></div>
+          <div><div class="stat-value">10,000+</div><div class="stat-label">Консультаций</div></div>
+          <div><div class="stat-value">4.9</div><div class="stat-label">Средняя оценка</div></div>
+        </div>
+      </div>
+      <div class="hero-image-wrapper">
+        <div class="meeting-badge">
+          <div class="badge-icon">
+            <img src="https://www.figma.com/api/mcp/asset/5a5469ce-b215-42cd-a282-b708a250fcb6" alt="Календарь" style="width:18px;height:18px;" />
+          </div>
+          <div>
+            <div class="meeting-badge-number">12 встреч</div>
+            <div class="meeting-badge-text">На этой неделе</div>
+          </div>
+        </div>
+        <div class="hero-image">
+          <img src="https://www.figma.com/api/mcp/asset/c28d9a93-56b4-4735-8b83-63847150b24f" alt="Специалист" />
+        </div>
+        <div class="notification-card">
+          <div class="notification-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="notification-content">
+            <h4>Новая запись подтверждена</h4>
+            <p>Мария Иванова • 15:00, Завтра</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Target Audience -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Компас создан для вас, если вы...</h2>
+        <p class="subtitle">Помогающий специалист, который ценит время и профессионализм</p>
+      </div>
+      <div class="cards-grid cols-4">
+        <div class="card" style="text-align:center;">
+          <div class="card-icon" style="background: linear-gradient(to bottom right, #1f4237, #2d5f4f);">
+            <img src="https://www.figma.com/api/mcp/asset/4470579d-c479-4e12-869c-6f49b1ef0f67" alt="Психолог" style="width:40px;height:40px;" />
+          </div>
+          <div class="card-title">Психолог</div>
+          <div class="card-text">Ведете частную практику или работаете в центре</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div class="card-icon" style="background: linear-gradient(to bottom right, #2d5f4f, #3d7a67);">
+            <img src="https://www.figma.com/api/mcp/asset/6fe9e292-be94-4ccc-84cb-0177bc448958" alt="Коуч" style="width:40px;height:40px;" />
+          </div>
+          <div class="card-title">Коуч</div>
+          <div class="card-text">Работаете с личными или бизнес-целями клиентов</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div class="card-icon" style="background: linear-gradient(to bottom right, #235347, #2d5f4f);">
+            <img src="https://www.figma.com/api/mcp/asset/d0f71eff-96a6-4eec-905b-910ba0bba76d" alt="Консультант" style="width:40px;height:40px;" />
+          </div>
+          <div class="card-title">Консультант</div>
+          <div class="card-text">Бизнес-консалтинг или карьерное развитие</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div class="card-icon" style="background: linear-gradient(to bottom right, #2d5f4f, #4d9680);">
+            <img src="https://www.figma.com/api/mcp/asset/55e7ff6d-b2ee-4323-987b-d80b5f48c1d0" alt="Специалист" style="width:40px;height:40px;" />
+          </div>
+          <div class="card-title">Специалист</div>
+          <div class="card-text">Нутрициолог, йога-терапевт, арт-терапевт</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problems / Solutions -->
+  <section class="ps-section">
+    <div class="container">
+      <div class="ps-grid">
+        <div class="ps-col">
+          <h3>Знакомые проблемы?</h3>
+          <div class="ps-list">
+            <div class="ps-item"><div class="ps-icon-x">✕</div><div class="ps-text">Путаница с записями и двойные бронирования</div></div>
+            <div class="ps-item"><div class="ps-icon-x">✕</div><div class="ps-text">Часа в неделю на переписку и подтверждения</div></div>
+            <div class="ps-item"><div class="ps-icon-x">✕</div><div class="ps-text">Клиенты забывают о встречах и не приходят</div></div>
+            <div class="ps-item"><div class="ps-icon-x">✕</div><div class="ps-text">Сложно отследить историю работы с клиентом</div></div>
+            <div class="ps-item"><div class="ps-icon-x">✕</div><div class="ps-text">Нет понимания динамики и загруженности</div></div>
+          </div>
+        </div>
+        <div class="ps-col">
+          <h3>Компас решает это</h3>
+          <div class="ps-list">
+            <div class="ps-item">
+              <div class="ps-icon-check">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="ps-text">Защита от двойных записей и умное расписание</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-icon-check">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="ps-text">Автоматизация напоминаний и уведомлений</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-icon-check">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="ps-text">Email и SMS-напоминания для клиентов</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-icon-check">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="ps-text">Полная история встреч и заметки по каждому</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-icon-check">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="ps-text">Статистика и аналитика практики</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how" class="section bg-light">
+    <div class="container">
+      <div class="section-header">
+        <h2>Как начать работу</h2>
+        <p class="subtitle">Всего 4 простых шага до вашей первой записи</p>
+      </div>
+      <div class="how-works-grid">
+        <div class="how-step">
+          <div class="step-number">1</div>
+          <div class="card-icon" style="background: var(--primary); border-radius: 16px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="card-title">Создайте профиль</div>
+          <div class="card-text">Укажите специализацию, настройте рабочие часы и тарифы</div>
+        </div>
+        <div class="how-step">
+          <div class="step-number">2</div>
+          <div class="card-icon" style="background: var(--primary); border-radius: 16px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="card-title">Настройте расписание</div>
+          <div class="card-text">Компас автоматически создаст слоты для записи клиентов</div>
+        </div>
+        <div class="how-step">
+          <div class="step-number">3</div>
+          <div class="card-icon" style="background: var(--primary); border-radius: 16px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </div>
+          <div class="card-title">Поделитесь ссылкой</div>
+          <div class="card-text">Отправьте ссылку на запись клиентам любым удобным способом</div>
+        </div>
+        <div class="how-step">
+          <div class="step-number">4</div>
+          <div class="card-icon" style="background: var(--primary); border-radius: 16px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="card-title">Принимайте записи</div>
+          <div class="card-text">Получайте уведомления и управляйте встречами в одном месте</div>
+        </div>
+      </div>
+      <div style="text-align: center; margin-top: 48px;">
+        <a href="/auth" class="btn btn-primary" style="padding: 14px 28px; font-size: 16px;">Попробовать бесплатно</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Benefits / What You Get -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Что вы получите</h2>
+        <p class="subtitle">Измеримые результаты для вашей практики</p>
+      </div>
+      <div class="benefits-grid">
+        <div class="benefit-item">
+          <div class="benefit-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="benefit-content">
+            <div class="benefit-title">Экономьте до 5 часов в неделю</div>
+            <div class="benefit-text">Автоматизация рутинных задач освобождает время для главного — работы с клиентами</div>
+          </div>
+        </div>
+        
+        <div class="benefit-item">
+          <div class="benefit-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="benefit-content">
+            <div class="benefit-title">Полная безопасность данных</div>
+            <div class="benefit-text">Шифрование, соответствие 152-ФЗ и хранение данных на территории РФ</div>
+          </div>
+        </div>
+        
+        <div class="benefit-item">
+          <div class="benefit-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="benefit-content">
+            <div class="benefit-title">Профессиональный имидж</div>
+            <div class="benefit-text">Современные инструменты подчеркивают ваш профессионализм и заботу о клиентах</div>
+          </div>
+        </div>
+        
+        <div class="benefit-item">
+          <div class="benefit-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <div class="benefit-content">
+            <div class="benefit-title">Развивайте практику</div>
+            <div class="benefit-text">Статистика и аналитика помогают видеть динамику и планировать развитие</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Все необходимые инструменты</h2>
+        <p class="subtitle">Компас объединяет все, что нужно для эффективной практики</p>
+      </div>
+      <div class="cards-grid cols-4">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <h3>Умное расписание</h3>
+          <ul><li>Автоматическая генерация слотов</li><li>Управление доступностью</li><li>Интеграция с календарями</li></ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>
+          <h3>Анкеты клиентов</h3>
+          <ul><li>Конструктор форм</li><li>Сбор данных до встречи</li><li>Анализ ответов</li></ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </div>
+          <h3>Напоминания</h3>
+          <ul><li>Email и SMS</li><li>Настройка времени</li><li>Уведомления для вас и клиентов</li></ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>База клиентов</h3>
+          <ul><li>История встреч</li><li>Личные заметки</li><li>Быстрый поиск</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section class="section reviews-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Что говорят специалисты</h2>
+        <p class="subtitle">Реальные отзывы от тех, кто уже использует Компас</p>
+      </div>
+      <div class="cards-grid cols-3">
+        <div class="review-card">
+          <div class="stars" aria-label="5 из 5">★★★★★</div>
+          <div class="review-text">«Компас решил проблему двойных записей и путаницы с расписанием. Теперь все прозрачно и автоматизировано.»</div>
+          <div class="review-footer">
+            <div class="review-avatar">АП</div>
+            <div class="review-author-info">
+              <div class="review-author-name">Анна Петрова</div>
+              <div class="review-author-role">Психолог</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="stars" aria-label="5 из 5">★★★★★</div>
+          <div class="review-text">«Экономлю минимум 3 часа в неделю на рутине. Клиенты оценили удобство записи через ссылку.»</div>
+          <div class="review-footer">
+            <div class="review-avatar">МС</div>
+            <div class="review-author-info">
+              <div class="review-author-name">Михаил Соколов</div>
+              <div class="review-author-role">Коуч</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="stars" aria-label="5 из 5">★★★★★</div>
+          <div class="review-text">«Анкеты перед встречей помогают лучше подготовиться. А уведомления снизили количество пропусков.»</div>
+          <div class="review-footer">
+            <div class="review-avatar">ЕВ</div>
+            <div class="review-author-info">
+              <div class="review-author-name">Елена Волкова</div>
+              <div class="review-author-role">Консультант по питанию</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security -->
+  <section class="section">
+    <div class="container">
+      <div class="security-card">
+        <div class="security-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h2 class="security-title">Безопасность и конфиденциальность</h2>
+        <p class="security-subtitle">Ваши данные и данные клиентов под надежной защитой</p>
+        
+        <div class="security-features">
+          <div class="security-feature">
+            <div class="security-feature-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+            </div>
+            <div class="security-feature-title">Шифрование</div>
+            <div class="security-feature-text">TLS/SSL и AES-256</div>
+          </div>
+          
+          <div class="security-feature">
+            <div class="security-feature-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            </div>
+            <div class="security-feature-title">Серверы в РФ</div>
+            <div class="security-feature-text">Соответствие 152-ФЗ</div>
+          </div>
+          
+          <div class="security-feature">
+            <div class="security-feature-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div class="security-feature-title">Контроль доступа</div>
+            <div class="security-feature-text">Только вы видите данные</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="section bg-light">
+    <div class="container">
+      <div class="section-header">
+        <h2>Прозрачные тарифы</h2>
+        <p class="subtitle">Выберите план, который подходит вашей практике</p>
+      </div>
+      <div class="pricing-grid">
+        <!-- Старт -->
+        <div class="pricing-card">
+          <div class="pricing-title">Старт</div>
+          <div class="pricing-desc">Для начинающих специалистов</div>
+          <div class="pricing-price">0 ₽</div>
+          <div class="pricing-period">навсегда</div>
+          <ul class="pricing-features">
+            <li>До 10 клиентов</li>
+            <li>Базовое расписание</li>
+            <li>Шаблоны сообщений</li>
+            <li>Email поддержка</li>
+          </ul>
+          <a href="/auth" class="btn btn-outline" style="width: 100%; text-align: center;">Начать бесплатно</a>
+        </div>
+        
+        <!-- Профессионал -->
+        <div class="pricing-card highlight">
+          <span class="pricing-badge">Популярный</span>
+          <div class="pricing-title">Профессионал</div>
+          <div class="pricing-desc">Для активной практики</div>
+          <div class="pricing-price">990 ₽</div>
+          <div class="pricing-period">в месяц</div>
+          <ul class="pricing-features">
+            <li>Безлимит клиентов</li>
+            <li>Все возможности</li>
+            <li>Анкеты и формы</li>
+            <li>Приоритетная поддержка</li>
+            <li>Экспорт данных</li>
+          </ul>
+          <a href="/auth" class="btn btn-primary" style="width: 100%; text-align: center;">Попробовать 14 дней</a>
+        </div>
+        
+        <!-- Команда -->
+        <div class="pricing-card">
+          <div class="pricing-title">Команда</div>
+          <div class="pricing-desc">Для центров и клиник</div>
+          <div class="pricing-price">по запросу</div>
+          <ul class="pricing-features" style="margin-top: 10px;">
+            <li>Несколько специалистов</li>
+            <li>Общая база клиентов</li>
+            <li>Корпоративные настройки</li>
+            <li>Персональный менеджер</li>
+            <li>SLA поддержки</li>
+          </ul>
+          <a href="#contacts" class="btn btn-outline" style="width: 100%; text-align: center;">Связаться</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Частые вопросы</h2>
+        <p class="subtitle">Ответы на вопросы о Компасе</p>
+      </div>
+      <div style="max-width: 800px; margin: 0 auto;">
+        <details>
+          <summary>Нужно ли устанавливать программу?</summary>
+          <p>Нет, Компас работает в браузере. Вам не нужно ничего устанавливать — просто откройте сайт и начните работать.</p>
+        </details>
+        <details>
+          <summary>Как защищены данные моих клиентов?</summary>
+          <p>Мы используем современное шифрование данных, регулярное резервное копирование и соблюдаем все требования 152-ФЗ о защите персональных данных.</p>
+        </details>
+        <details>
+          <summary>Можно ли интегрировать с моим календарем?</summary>
+          <p>Да, Компас поддерживает синхронизацию с Google Calendar и другими популярными календарями. Все изменения автоматически отражаются в обоих направлениях.</p>
+        </details>
+        <details>
+          <summary>Что, если я захочу отказаться от сервиса?</summary>
+          <p>Вы можете отменить подписку в любой момент без объяснения причин. Доступ к функциям сохранится до конца оплаченного периода, а ваши данные можно экспортировать.</p>
+        </details>
+        <details>
+          <summary>Есть ли пробный период?</summary>
+          <p>Да, вы можете бесплатно попробовать все возможности тарифа "Профессионал" в течение 14 дней без привязки карты.</p>
+        </details>
+        <details>
+          <summary>Как клиенты будут записываться?</summary>
+          <p>Вы получаете персональную ссылку для записи, которую можно разместить в соцсетях, на сайте или отправить клиентам. Они выбирают удобное время из доступных слотов.</p>
+        </details>
+        
+        <div class="faq-footer">
+          <p class="faq-footer-text">Не нашли ответ на свой вопрос?</p>
+          <a href="#contacts" class="btn btn-outline">Написать нам</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <h2>Начните экономить время уже сегодня</h2>
+      <p>Присоединяйтесь к 500+ специалистам, которые доверяют Компасу</p>
+      <div class="cta-actions">
+        <a href="/auth" class="btn-white">Попробовать бесплатно →</a>
+        <a href="#pricing" class="btn-white-outline">Посмотреть тарифы</a>
+      </div>
+      <p class="cta-note">Кредитная карта не требуется • Отмена в любое время</p>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section class="contact-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Свяжитесь с нами</h2>
+        <p class="subtitle">Мы всегда рады помочь и ответить на ваши вопросы</p>
+      </div>
+      
+      <!-- Contact Cards -->
+      <div class="contact-cards">
+        <a href="mailto:hello@kompas.app" class="contact-card">
+          <div class="contact-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div class="contact-card-content">
+            <div class="contact-card-title">Email</div>
+            <div class="contact-card-desc">Общие вопросы и поддержка</div>
+            <div class="contact-card-link">hello@kompas.app</div>
+          </div>
+        </a>
+        
+        <a href="https://t.me/kompas_support" target="_blank" rel="noopener" class="contact-card">
+          <div class="contact-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.897 8.938c-.143.632-.52.785-.953.489l-2.63-1.937-1.267 1.22c-.14.14-.257.257-.528.257l.188-2.677 4.869-4.397c.211-.188-.046-.293-.328-.105l-6.02 3.79-2.594-.81c-.564-.177-.576-.564.117-.835l10.135-3.907c.47-.176.882.106.728.835z"/></svg>
+          </div>
+          <div class="contact-card-content">
+            <div class="contact-card-title">Telegram</div>
+            <div class="contact-card-desc">Быстрые ответы на вопросы</div>
+            <div class="contact-card-link">@kompas_support</div>
+          </div>
+        </a>
+      </div>
+      
+      <!-- Contact Form -->
+      <div class="contact-form">
+        <h3>Отправить сообщение</h3>
+        <form>
+          <div class="form-row cols-2">
+            <div class="form-group">
+              <input type="text" id="name" name="name" placeholder="Ваше имя" required />
+            </div>
+            <div class="form-group">
+              <input type="email" id="email" name="email" placeholder="Email" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <input type="text" id="subject" name="subject" placeholder="Тема сообщения" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <textarea id="message" name="message" placeholder="Ваше сообщение" required></textarea>
+            </div>
+          </div>
+          <button type="submit" class="form-submit">Отправить сообщение</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer id="contacts" class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <!-- Brand Section -->
+        <div class="footer-brand-section">
+          <div class="footer-logo">
+            <img src="/static/images/cmpas_logo.svg" alt="КОМПАС" />
+            <span class="footer-logo-text">КОМПАС</span>
+          </div>
+          <p class="footer-desc">Платформа для помогающих специалистов. Управляйте практикой легко и профессионально.</p>
+          <div class="footer-socials">
+            <a href="https://t.me/cmpas_ru" target="_blank" rel="noopener" class="footer-social-icon" aria-label="Telegram">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.897 8.938c-.143.632-.52.785-.953.489l-2.63-1.937-1.267 1.22c-.14.14-.257.257-.528.257l.188-2.677 4.869-4.397c.211-.188-.046-.293-.328-.105l-6.02 3.79-2.594-.81c-.564-.177-.576-.564.117-.835l10.135-3.907c.47-.176.882.106.728.835z"/></svg>
+            </a>
+            <a href="https://vk.com/cmpas_ru" target="_blank" rel="noopener" class="footer-social-icon" aria-label="VK">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm6.066 14.122c.454.468.934.906 1.327 1.437.174.234.339.477.456.748.166.385.015.808-.302.831h-1.99c-.512.042-1.005-.156-1.403-.525-.314-.291-.6-.609-.897-.915-.125-.13-.255-.251-.406-.345-.273-.169-.51-.118-.672.147-.165.27-.203.573-.223.873-.03.459-.237.579-.707.6-1.005.042-1.96-.113-2.841-.661-.768-.476-1.36-1.137-1.872-1.877-1.001-1.443-1.77-3.02-2.461-4.641-.146-.343-.04-.528.326-.535.614-.012 1.229-.011 1.843-.001.25.005.414.156.514.387.292.677.644 1.323 1.06 1.932.113.164.228.327.378.454.17.145.303.098.385-.088.052-.118.078-.247.093-.374.055-.469.062-.937.027-1.407-.025-.319-.164-.525-.484-.596-.163-.036-.139-.107-.06-.215.128-.176.249-.287.486-.287h1.79c.282.056.345.182.383.465l.002 1.984c-.003.099.05.393.229.458.143.044.237-.063.323-.156.395-.425.677-.925.929-1.439.264-.538.488-1.097.689-1.667.075-.211.189-.311.422-.307l2.135.002c.063 0 .127.001.189.014.328.069.418.245.315.564-.178.549-.501 1.011-.82 1.476-.338.493-.693.974-1.023 1.475-.307.461-.282.692.096 1.086z"/></svg>
+            </a>
+          </div>
+        </div>
+        
+        <!-- Product Column -->
+        <div class="footer-column">
+          <h4>Продукт</h4>
+          <ul>
+            <li><a href="#features">Возможности</a></li>
+            <li><a href="#pricing">Тарифы</a></li>
+            <li><a href="#security">Безопасность</a></li>
+          </ul>
+        </div>
+        
+        <!-- Company Column -->
+        <div class="footer-column">
+          <h4>Компания</h4>
+          <ul>
+            <li><a href="/about">О нас</a></li>
+            <li><a href="#contacts">Контакты</a></li>
+          </ul>
+        </div>
+        
+        <!-- Documents Column -->
+        <div class="footer-column">
+          <h4>Документы</h4>
+          <ul>
+            <li><a href="/legal/terms">Условия использования</a></li>
+            <li><a href="/legal/privacy">Политика конфиденциальности</a></li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- Footer Bottom -->
+      <div class="footer-bottom">
+        <div class="footer-copyright">© 2025 Компас. Все права защищены.</div>
+        <div class="footer-contact">
+          <a href="mailto:hello@kompas.app">hello@kompas.app</a>
+          <a href="#contacts">Поддержка</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const id = a.getAttribute('href');
+        if (!id || id === '#') return;
+        const target = document.querySelector(id);
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
