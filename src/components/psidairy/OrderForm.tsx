@@ -43,8 +43,8 @@ export default function OrderForm() {
 
     const options = [
         { value: 'telegram', label: 'Telegram' },
-        { value: 'whatsapp', label: 'Max' },
-        { value: 'call', label: 'WhatsApp' }
+        { value: 'max', label: 'Max' },
+        { value: 'whatsapp', label: 'WhatsApp' }
     ];
 
     const selectOption = (value: string) => {
