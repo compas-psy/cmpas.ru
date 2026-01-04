@@ -1,14 +1,16 @@
 {
-  "name": "temp_app",
+  "name": "cmpas.ru",
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "mcp:figma": "node node_modules/figma-developer-mcp/dist/bin.js --stdio",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "figma-developer-mcp": "^0.6.4",
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"

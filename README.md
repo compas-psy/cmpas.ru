@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# cmpas.ru (v2.0)
+[![Deploy to UFO.HOSTING VPS](https://github.com/compas-psy/cmpas.ru/actions/workflows/deploy.yml/badge.svg)](https://github.com/compas-psy/cmpas.ru/actions/workflows/deploy.yml)
+
 
 ## Getting Started
 
