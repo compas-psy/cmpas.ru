@@ -35,3 +35,5 @@ next-env.d.ts
 # vps keys
 gh_deploy_key
 gh_deploy_key.pub
+
+/src/generated/prisma

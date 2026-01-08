@@ -14,5 +14,35 @@ services:
       # Add other env vars here or use env_file
     env_file:
       - .env.local
-    # volumes:
-      # - ./public/uploads:/app/public/uploads # Example for persisting uploads
+    volumes:
+      - ./.next/static:/app/.next/static # Cache static assets
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: cmpas-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cmpas_db}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # Exposed for local dev, should be restricted in prod if possible
+
+  mailer:
+    image: boky/postfix
+    container_name: cmpas-mailer
+    restart: always
+    environment:
+      ALLOWED_SENDER_DOMAINS: cmpas.ru
+    ports:
+      - "25:25"
+    volumes:
+      - mail_queue:/var/spool/postfix
+
+volumes:
+  db_data:
+  mail_queue:
