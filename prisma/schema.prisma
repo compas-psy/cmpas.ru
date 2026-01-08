@@ -63,3 +63,22 @@ model VerificationToken {
  
   @@id([identifier, token])
 }
+
+// OWASP Security Logging: Track all authentication events
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  // null for failed attempts
+  email     String?  // email used in attempt
+  action    String   // "LOGIN_SUCCESS", "LOGIN_FAILED", "LOGOUT", "OTP_SENT", "OTP_VERIFIED"
+  provider  String?  // "yandex", "email", null
+  ipAddress String?
+  userAgent String?
+  metadata  String?  // JSON string for additional context
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([email])
+  @@index([action])
+  @@index([createdAt])
+}

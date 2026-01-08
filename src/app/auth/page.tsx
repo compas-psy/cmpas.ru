@@ -11,38 +11,55 @@ export default function AuthPage() {
     const handleEmailSignIn = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
-        await signIn("email", { email, callbackUrl: "/onboarding" })
+        try {
+            await signIn("nodemailer", { email, callbackUrl: "/psidairy" })
+        } catch (error) {
+            console.error("Email sign-in error:", error)
+        }
         setLoading(false)
     }
 
     const handleYandexSignIn = async () => {
-        await signIn("yandex", { callbackUrl: "/onboarding" })
+        try {
+            await signIn("yandex", { callbackUrl: "/psidairy" })
+        } catch (error) {
+            console.error("Yandex sign-in error:", error)
+        }
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-6">
-            <div className="w-full max-w-[1152px] flex gap-6">
-                {/* Left Side - Auth Card */}
-                <div className="w-[448px] flex flex-col">
-                    {/* Logo */}
-                    <div className="flex items-center gap-2 mb-8">
-                        <div className="w-6 h-6 bg-[#3D5A4D] rounded"></div>
-                        <span className="text-[#1F2937] text-base font-normal" style={{ fontFamily: 'Segoe UI' }}>
-                            КОМПАС
-                        </span>
-                    </div>
+        <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-6">
+            {/* Logo at top */}
+            <div className="mb-8 flex items-center gap-2">
+                <Image
+                    src="/logo-tree.png"
+                    alt="КОМПАС"
+                    width={24}
+                    height={24}
+                    className="object-contain"
+                />
+                <span className="text-[#1F2937] text-base font-normal" style={{ fontFamily: 'sans-serif' }}>
+                    КОМПАС
+                </span>
+            </div>
 
-                    {/* Auth Container */}
-                    <div className="bg-[#3D5A4D] rounded-3xl p-10 shadow-[0px_8px_16px_rgba(0,0,0,0.1)]">
+            <div className="flex gap-6 w-full max-w-[1000px]">
+                {/* Left Side - Auth Card */}
+                <div className="w-[420px]">
+                    <div className="bg-[#3D5A4D] rounded-3xl p-8 shadow-lg">
                         {/* Yandex Button */}
                         <button
                             onClick={handleYandexSignIn}
-                            className="w-full h-12 bg-white rounded-2xl flex items-center justify-center gap-2 mb-6 hover:bg-gray-50 transition-colors"
+                            className="w-full h-12 bg-white rounded-2xl flex items-center justify-center gap-2 mb-4 hover:bg-gray-50 transition-colors"
                         >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M13 3H8V13H10V9.75C10 8.75 10.03 7.37 10.09 5.91H10.2C10.46 6.79 10.74 7.57 11.04 8.25L13.15 13H15L12.89 8.25C12.59 7.57 12.31 6.77 12.05 5.94H11.94C11.88 7.28 11.84 8.57 11.84 9.5V13H14V3H13Z" fill="#FC3F1D" />
-                            </svg>
-                            <span className="text-[#1F2937] text-sm font-medium" style={{ fontFamily: 'Segoe UI' }}>
+                            <Image
+                                src="/yandex-logo.png"
+                                alt="Яндекс"
+                                width={20}
+                                height={20}
+                                className="object-contain"
+                            />
+                            <span className="text-[#1F2937] text-sm font-medium" style={{ fontFamily: 'sans-serif' }}>
                                 Продолжить с Яндекс
                             </span>
                         </button>
@@ -50,42 +67,41 @@ export default function AuthPage() {
                         {/* Divider */}
                         <div className="relative my-6">
                             <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-white/20"></div>
+                                <div className="w-full border-t border-white/30"></div>
                             </div>
                             <div className="relative flex justify-center">
-                                <span className="px-2 bg-[#3D5A4D] text-white/70 text-sm" style={{ fontFamily: 'Segoe UI' }}>
+                                <span className="px-3 bg-[#3D5A4D] text-white/80 text-sm" style={{ fontFamily: 'sans-serif' }}>
                                     или
                                 </span>
                             </div>
                         </div>
 
-                        {/* Email Input */}
-                        <form onSubmit={handleEmailSignIn} className="space-y-4">
+                        {/* Email Form */}
+                        <form onSubmit={handleEmailSignIn} className="space-y-3">
                             <input
                                 type="email"
                                 placeholder="Введите email"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 outline-none focus:border-white/40 transition-colors"
-                                style={{ fontFamily: 'Segoe UI', fontSize: '14px' }}
+                                className="w-full h-12 px-4 bg-white/10 border border-white/30 rounded-2xl text-white placeholder:text-white/60 outline-none focus:border-white/50 transition-colors text-sm"
+                                style={{ fontFamily: 'sans-serif' }}
                             />
 
-                            {/* Submit Button */}
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full h-12 bg-white/90 hover:bg-white rounded-2xl text-[#3D5A4D] text-sm font-medium transition-colors disabled:opacity-50"
-                                style={{ fontFamily: 'Segoe UI' }}
+                                className="w-full h-12 bg-white/10 border border-white/30 hover:bg-white/20 rounded-2xl text-white text-sm font-medium transition-colors disabled:opacity-50"
+                                style={{ fontFamily: 'sans-serif' }}
                             >
                                 {loading ? "Отправляем..." : "Продолжить по email"}
                             </button>
                         </form>
 
                         {/* Footer */}
-                        <div className="mt-8 text-center">
-                            <p className="text-white/70 text-xs" style={{ fontFamily: 'Segoe UI' }}>
-                                Продолжая, вы соглашаетесь с <br />
+                        <div className="mt-6 text-center">
+                            <p className="text-white/70 text-xs leading-relaxed" style={{ fontFamily: 'sans-serif' }}>
+                                Продолжая, вы соглашаетесь с условиями<br />
                                 <a href="/policy" className="underline hover:text-white/90 transition-colors">
                                     политикой конфиденциальности
                                 </a>
@@ -95,7 +111,7 @@ export default function AuthPage() {
                 </div>
 
                 {/* Right Side - Image */}
-                <div className="flex-1 relative rounded-3xl overflow-hidden" style={{ height: '560px' }}>
+                <div className="flex-1 relative rounded-3xl overflow-hidden" style={{ minHeight: '500px' }}>
                     <Image
                         src="/forest.jpg"
                         alt="Forest landscape"
