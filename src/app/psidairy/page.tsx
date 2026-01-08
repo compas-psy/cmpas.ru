@@ -10,11 +10,11 @@ import OrderForm from '@/components/psidairy/OrderForm';
 import Footer from '@/components/psidairy/Footer';
 
 export const metadata: Metadata = {
-    title: "Ежедневник Психолога PsiDairy | Compas",
+    title: "Ежедневник Психолога | Compas",
     description: "Профессиональный ежедневник для психолога. Структурируйте сессии, супервизии и личную практику. Идеальный инструмент для психологов, коучей и терапевтов.",
     keywords: ["ежедневник психолога", "купить ежедневник для психолога", "планер психолога", "блокнот психолога", "супервизия", "психологическая практика", "инструменты психолога"],
     openGraph: {
-        title: "Ежедневник Психолога PsiDairy",
+        title: "Ежедневник Психолога | Compas",
         description: "Ваш профессиональный компас в мире психологии. Структура, рефлексия, баланс.",
         images: ['/images/hero.jpg'],
     }
