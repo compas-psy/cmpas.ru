@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react"
 import { useState } from "react"
-import Link from "next/link"
+import Image from "next/image"
 
 export default function AuthPage() {
     const [email, setEmail] = useState("")
@@ -11,72 +11,85 @@ export default function AuthPage() {
     const handleEmailSignIn = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
-        await signIn("email", { email, callbackUrl: "/psidairy" })
+        await signIn("email", { email, callbackUrl: "/onboarding" })
         setLoading(false)
     }
 
     const handleYandexSignIn = async () => {
-        await signIn("yandex", { callbackUrl: "/psidairy" })
+        await signIn("yandex", { callbackUrl: "/onboarding" })
     }
 
     return (
-        <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-4">
-            <Link href="/psidairy" className="absolute top-8 left-8 text-neutral-500 hover:text-neutral-900 transition-colors">
-                ← На главную
-            </Link>
+        <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-8">
+            <div className="flex gap-8 max-w-5xl w-full">
+                {/* Left Card - Auth Form */}
+                <div className="bg-[#3D5A4D] text-white rounded-3xl p-10 w-[440px] flex flex-col justify-center shadow-2xl">
+                    {/* Logo */}
+                    <div className="flex items-center gap-2 mb-12">
+                        <Image src="/forest.jpg" alt="КОМПАС" width={24} height={24} className="rounded" />
+                        <span className="text-lg font-medium tracking-wide">КОМПАС</span>
+                    </div>
 
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-neutral-100">
-                <div className="text-center mb-8">
-                    <h1 className="text-2xl font-serif text-neutral-900 mb-2">Вход в Compas</h1>
-                    <p className="text-neutral-500 text-sm">Войдите, чтобы управлять заказами</p>
-                </div>
-
-                <div className="space-y-4">
+                    {/* Yandex Button */}
                     <button
                         onClick={handleYandexSignIn}
-                        className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-[#FC3F1D] hover:bg-[#E63411] text-white rounded-xl font-medium transition-all transform hover:scale-[1.01]"
+                        className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-white text-neutral-900 rounded-xl font-medium transition-all hover:scale-[1.02] mb-6"
                     >
-                        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-                            <path d="M10.966 21H18V12.185h-2.188c-3.15 0-3.605 2.193-3.633 4.293L10.966 21zm-7.662 0h4.298l4.47-11.233-1.66-3.79H6.84L2.146 18.06l-.506-1.92H.39l.758 2.65c.348 1.127 1.06 1.77 1.944 1.88.073.007.143.022.214.03l-.002.3z" />
+                        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-red-600">
+                            <path d="M13 3h5v18h-2v-6.25c0-1-.03-2.37-.09-4.09h-.11c-.26.88-.54 1.66-.84 2.34l-3.11 7.59h-1.7L6.98 12.91c-.3-.71-.58-1.51-.84-2.41h-.11c-.05 1.34-.09 2.63-.09 3.84V21H4V3h5l2.37 6.25c.45 1.16.82 2.25 1.11 3.28h.11c.34-1.14.72-2.23 1.16-3.28L16.13 3H13z" />
                         </svg>
-                        Войти через Яндекс ID
+                        Продолжить с Яндекс
                     </button>
 
+                    {/* Divider */}
                     <div className="relative my-6">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-neutral-200"></div>
+                            <div className="w-full border-t border-white/20"></div>
                         </div>
                         <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-white text-neutral-500">или через почту</span>
+                            <span className="px-2 bg-[#3D5A4D] text-white/70">или</span>
                         </div>
                     </div>
 
+                    {/* Email Form */}
                     <form onSubmit={handleEmailSignIn} className="space-y-4">
                         <div>
-                            <label htmlFor="email" className="sr-only">Email</label>
                             <input
                                 id="email"
                                 type="email"
-                                placeholder="name@example.com"
+                                placeholder="Введите email"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] outline-none transition-all placeholder:text-neutral-400 text-neutral-900"
+                                className="w-full px-4 py-3.5 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/30 focus:border-white/30 outline-none transition-all placeholder:text-white/50 text-white"
                             />
                         </div>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full px-6 py-3 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl font-medium transition-all transform hover:scale-[1.01] disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full px-6 py-3.5 bg-white/90 hover:bg-white text-[#3D5A4D] rounded-xl font-medium transition-all hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            {loading ? "Отправляем ссылку..." : "Получить код входа"}
+                            {loading ? "Отправляем..." : "Продолжить по email"}
                         </button>
                     </form>
+
+                    {/* Footer */}
+                    <p className="mt-8 text-center text-xs text-white/60">
+                        Продолжая, вы соглашаетесь с <br />
+                        <a href="/policy" className="underline hover:text-white/80">политикой конфиденциальности</a>
+                    </p>
                 </div>
 
-                <p className="mt-8 text-center text-xs text-neutral-400">
-                    Продолжая, вы соглашаетесь с <Link href="/policy" className="underline hover:text-neutral-600">политикой конфиденциальности</Link>
-                </p>
+                {/* Right Image */}
+                <div className="flex-1 relative rounded-3xl overflow-hidden shadow-2xl min-h-[600px]">
+                    <Image
+                        src="/forest.jpg"
+                        alt="Forest"
+                        fill
+                        className="object-cover"
+                        priority
+                    />
+                </div>
             </div>
         </div>
     )
