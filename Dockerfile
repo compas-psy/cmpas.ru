@@ -21,6 +21,9 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
+# Set dummy DATABASE_URL for build time only (Prisma validation)
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+
 RUN npx prisma generate
 RUN npm run build
 
