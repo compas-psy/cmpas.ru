@@ -20,71 +20,85 @@ export default function AuthPage() {
     }
 
     return (
-        <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-8">
-            <div className="flex gap-8 max-w-5xl w-full">
-                {/* Left Card - Auth Form */}
-                <div className="bg-[#3D5A4D] text-white rounded-3xl p-10 w-[440px] flex flex-col justify-center shadow-2xl">
+        <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-6">
+            <div className="w-full max-w-[1152px] flex gap-6">
+                {/* Left Side - Auth Card */}
+                <div className="w-[448px] flex flex-col">
                     {/* Logo */}
-                    <div className="flex items-center gap-2 mb-12">
-                        <Image src="/forest.jpg" alt="КОМПАС" width={24} height={24} className="rounded" />
-                        <span className="text-lg font-medium tracking-wide">КОМПАС</span>
+                    <div className="flex items-center gap-2 mb-8">
+                        <div className="w-6 h-6 bg-[#3D5A4D] rounded"></div>
+                        <span className="text-[#1F2937] text-base font-normal" style={{ fontFamily: 'Segoe UI' }}>
+                            КОМПАС
+                        </span>
                     </div>
 
-                    {/* Yandex Button */}
-                    <button
-                        onClick={handleYandexSignIn}
-                        className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-white text-neutral-900 rounded-xl font-medium transition-all hover:scale-[1.02] mb-6"
-                    >
-                        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-red-600">
-                            <path d="M13 3h5v18h-2v-6.25c0-1-.03-2.37-.09-4.09h-.11c-.26.88-.54 1.66-.84 2.34l-3.11 7.59h-1.7L6.98 12.91c-.3-.71-.58-1.51-.84-2.41h-.11c-.05 1.34-.09 2.63-.09 3.84V21H4V3h5l2.37 6.25c.45 1.16.82 2.25 1.11 3.28h.11c.34-1.14.72-2.23 1.16-3.28L16.13 3H13z" />
-                        </svg>
-                        Продолжить с Яндекс
-                    </button>
+                    {/* Auth Container */}
+                    <div className="bg-[#3D5A4D] rounded-3xl p-10 shadow-[0px_8px_16px_rgba(0,0,0,0.1)]">
+                        {/* Yandex Button */}
+                        <button
+                            onClick={handleYandexSignIn}
+                            className="w-full h-12 bg-white rounded-2xl flex items-center justify-center gap-2 mb-6 hover:bg-gray-50 transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M13 3H8V13H10V9.75C10 8.75 10.03 7.37 10.09 5.91H10.2C10.46 6.79 10.74 7.57 11.04 8.25L13.15 13H15L12.89 8.25C12.59 7.57 12.31 6.77 12.05 5.94H11.94C11.88 7.28 11.84 8.57 11.84 9.5V13H14V3H13Z" fill="#FC3F1D" />
+                            </svg>
+                            <span className="text-[#1F2937] text-sm font-medium" style={{ fontFamily: 'Segoe UI' }}>
+                                Продолжить с Яндекс
+                            </span>
+                        </button>
 
-                    {/* Divider */}
-                    <div className="relative my-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/20"></div>
+                        {/* Divider */}
+                        <div className="relative my-6">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-white/20"></div>
+                            </div>
+                            <div className="relative flex justify-center">
+                                <span className="px-2 bg-[#3D5A4D] text-white/70 text-sm" style={{ fontFamily: 'Segoe UI' }}>
+                                    или
+                                </span>
+                            </div>
                         </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-[#3D5A4D] text-white/70">или</span>
-                        </div>
-                    </div>
 
-                    {/* Email Form */}
-                    <form onSubmit={handleEmailSignIn} className="space-y-4">
-                        <div>
+                        {/* Email Input */}
+                        <form onSubmit={handleEmailSignIn} className="space-y-4">
                             <input
-                                id="email"
                                 type="email"
                                 placeholder="Введите email"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3.5 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/30 focus:border-white/30 outline-none transition-all placeholder:text-white/50 text-white"
+                                className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 outline-none focus:border-white/40 transition-colors"
+                                style={{ fontFamily: 'Segoe UI', fontSize: '14px' }}
                             />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full px-6 py-3.5 bg-white/90 hover:bg-white text-[#3D5A4D] rounded-xl font-medium transition-all hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            {loading ? "Отправляем..." : "Продолжить по email"}
-                        </button>
-                    </form>
 
-                    {/* Footer */}
-                    <p className="mt-8 text-center text-xs text-white/60">
-                        Продолжая, вы соглашаетесь с <br />
-                        <a href="/policy" className="underline hover:text-white/80">политикой конфиденциальности</a>
-                    </p>
+                            {/* Submit Button */}
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full h-12 bg-white/90 hover:bg-white rounded-2xl text-[#3D5A4D] text-sm font-medium transition-colors disabled:opacity-50"
+                                style={{ fontFamily: 'Segoe UI' }}
+                            >
+                                {loading ? "Отправляем..." : "Продолжить по email"}
+                            </button>
+                        </form>
+
+                        {/* Footer */}
+                        <div className="mt-8 text-center">
+                            <p className="text-white/70 text-xs" style={{ fontFamily: 'Segoe UI' }}>
+                                Продолжая, вы соглашаетесь с <br />
+                                <a href="/policy" className="underline hover:text-white/90 transition-colors">
+                                    политикой конфиденциальности
+                                </a>
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Right Image */}
-                <div className="flex-1 relative rounded-3xl overflow-hidden shadow-2xl min-h-[600px]">
+                {/* Right Side - Image */}
+                <div className="flex-1 relative rounded-3xl overflow-hidden" style={{ height: '560px' }}>
                     <Image
                         src="/forest.jpg"
-                        alt="Forest"
+                        alt="Forest landscape"
                         fill
                         className="object-cover"
                         priority
