@@ -52,11 +52,11 @@ jobs:
             docker compose up -d --build
 
             # Run Database Migrations
-            docker compose exec -T app npx prisma migrate deploy
+            docker compose exec -T app npm exec prisma migrate deploy
             
             # Run Migrations (Critical for DB consistency)
             # Sleep to allow DB to initialize
             sleep 10
-            docker compose exec -T app npx prisma migrate deploy
+            docker compose exec -T app npm exec prisma migrate deploy
             
             docker image prune -f

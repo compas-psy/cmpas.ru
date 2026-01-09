@@ -21,6 +21,7 @@ services:
       - AUTH_TRUST_HOST=true
       - AUTH_URL=https://cmpas.ru
     env_file:
+      - .env
       - .env.local
       - .env
 
