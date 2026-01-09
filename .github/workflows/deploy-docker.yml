@@ -48,8 +48,11 @@ jobs:
             apt-get update && apt-get install -y psmisc
             fuser -k 25/tcp || true
 
-            docker compose down
+            # Rebuild and restart containers
             docker compose up -d --build
+
+            # Run Database Migrations
+            docker compose exec -T app npx prisma migrate deploy
             
             # Run Migrations (Critical for DB consistency)
             # Sleep to allow DB to initialize
