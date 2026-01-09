@@ -43,8 +43,8 @@ jobs:
             
             # Rebuild and restart
             # Ensure port 25 is free (kill conflicting mail process)
-            sudo apt-get update && sudo apt-get install -y psmisc
-            sudo fuser -k 25/tcp || true
+            apt-get update && apt-get install -y psmisc
+            fuser -k 25/tcp || true
 
             docker compose down
             docker compose up -d --build
