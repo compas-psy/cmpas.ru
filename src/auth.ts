@@ -13,11 +13,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }),
         Nodemailer({
             server: {
-                host: process.env.EMAIL_SERVER_HOST || "localhost",
+                host: process.env.EMAIL_SERVER_HOST,
                 port: Number(process.env.EMAIL_SERVER_PORT) || 25,
                 auth: {
-                    user: process.env.EMAIL_SERVER_USER || "noreply@cmpas.ru",
-                    pass: process.env.EMAIL_SERVER_PASSWORD || "",
+                    user: process.env.EMAIL_SERVER_USER,
+                    pass: process.env.EMAIL_SERVER_PASSWORD,
                 },
             },
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
@@ -27,6 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         signIn: "/auth",
         verifyRequest: "/auth/verify",
     },
-    secret: process.env.NEXTAUTH_SECRET,
+    debug: process.env.NODE_ENV === "development",
+    secret: process.env.AUTH_SECRET,
     trustHost: true,
 })

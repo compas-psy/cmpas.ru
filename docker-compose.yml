@@ -15,8 +15,14 @@ services:
       - EMAIL_SERVER_USER=
       - EMAIL_SERVER_PASSWORD=
       - EMAIL_FROM=noreply@cmpas.ru
+      - YANDEX_CLIENT_ID=${YANDEX_CLIENT_ID}
+      - YANDEX_CLIENT_SECRET=${YANDEX_CLIENT_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_TRUST_HOST=true
+      - AUTH_URL=https://cmpas.ru
     env_file:
       - .env.local
+      - .env
 
     depends_on:
       - postgres

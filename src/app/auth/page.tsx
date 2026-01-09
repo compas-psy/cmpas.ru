@@ -28,81 +28,78 @@ export default function AuthPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-6">
-            {/* Logo at top */}
-            <div className="mb-8 flex items-center gap-2">
-                <Image
-                    src="/logo-tree.png"
-                    alt="КОМПАС"
-                    width={24}
-                    height={24}
-                    className="object-contain"
-                />
-                <span className="text-[#1F2937] text-base font-normal" style={{ fontFamily: 'sans-serif' }}>
-                    КОМПАС
-                </span>
-            </div>
+        <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8 bg-white">
+            <div className="flex w-full max-w-[1200px] gap-8 items-center justify-center">
 
-            <div className="flex gap-6 w-full max-w-[1000px]">
                 {/* Left Side - Auth Card */}
-                <div className="w-[420px]">
-                    <div className="bg-[#3D5A4D] rounded-3xl p-8 shadow-lg">
+                <div className="w-full max-w-[420px] flex flex-col gap-6">
+                    {/* Logo */}
+                    <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 text-[#3D5A4D]">
+                            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L2 22H22L12 2Z" /> {/* Placeholder tree/compass icon to be replaced or use Image */}
+                            </svg>
+                        </div>
+                        <span className="text-[#1F2937] text-lg font-semibold tracking-wide">
+                            КОМПАС
+                        </span>
+                    </div>
+
+                    <div className="bg-[#2E453B] rounded-[24px] p-8 shadow-xl">
                         {/* Yandex Button */}
                         <button
                             onClick={handleYandexSignIn}
-                            className="w-full h-12 bg-white rounded-2xl flex items-center justify-center gap-2 mb-4 hover:bg-gray-50 transition-colors"
+                            className="w-full h-14 bg-white rounded-[16px] flex items-center justify-center gap-3 mb-6 hover:bg-gray-50 transition-all active:scale-[0.98]"
                         >
                             <Image
                                 src="/yandex-logo.png"
                                 alt="Яндекс"
-                                width={20}
-                                height={20}
+                                width={24}
+                                height={24}
                                 className="object-contain"
                             />
-                            <span className="text-[#1F2937] text-sm font-medium" style={{ fontFamily: 'sans-serif' }}>
+                            <span className="text-[#1F2937] text-base font-medium">
                                 Продолжить с Яндекс
                             </span>
                         </button>
 
                         {/* Divider */}
-                        <div className="relative my-6">
+                        <div className="relative mb-6">
                             <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-white/30"></div>
+                                <div className="w-full border-t border-white/20"></div>
                             </div>
                             <div className="relative flex justify-center">
-                                <span className="px-3 bg-[#3D5A4D] text-white/80 text-sm" style={{ fontFamily: 'sans-serif' }}>
-                                    или
+                                <span className="px-4 bg-[#2E453B] text-white/60 text-sm uppercase tracking-wider font-medium">
+                                    ИЛИ
                                 </span>
                             </div>
                         </div>
 
                         {/* Email Form */}
-                        <form onSubmit={handleEmailSignIn} className="space-y-3">
+                        <form onSubmit={handleEmailSignIn} className="space-y-4">
                             <input
                                 type="email"
                                 placeholder="Введите email"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-12 px-4 bg-white/10 border border-white/30 rounded-2xl text-white placeholder:text-white/60 outline-none focus:border-white/50 transition-colors text-sm"
-                                style={{ fontFamily: 'sans-serif' }}
+                                className="w-full h-14 px-5 bg-white/5 border border-white/10 rounded-[16px] text-white placeholder:text-white/40 outline-none focus:border-white/30 focus:bg-white/10 transition-all text-base"
                             />
 
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full h-12 bg-white/10 border border-white/30 hover:bg-white/20 rounded-2xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                                style={{ fontFamily: 'sans-serif' }}
+                                className="w-full h-14 bg-white/10 border border-white/10 hover:bg-white/20 rounded-[16px] text-white text-base font-medium transition-all disabled:opacity-50 active:scale-[0.98]"
                             >
                                 {loading ? "Отправляем..." : "Продолжить по email"}
                             </button>
                         </form>
 
                         {/* Footer */}
-                        <div className="mt-6 text-center">
-                            <p className="text-white/70 text-xs leading-relaxed" style={{ fontFamily: 'sans-serif' }}>
-                                Продолжая, вы соглашаетесь с условиями<br />
-                                <a href="/policy" className="underline hover:text-white/90 transition-colors">
+                        <div className="mt-8 text-center px-4">
+                            <p className="text-white/40 text-xs leading-relaxed">
+                                Продолжая, вы соглашаетесь с<br />
+                                <a href="/policy" className="hover:text-white/60 transition-colors border-b border-transparent hover:border-white/60 pb-0.5">
                                     политикой конфиденциальности
                                 </a>
                             </p>
@@ -111,13 +108,14 @@ export default function AuthPage() {
                 </div>
 
                 {/* Right Side - Image */}
-                <div className="flex-1 relative rounded-3xl overflow-hidden" style={{ minHeight: '500px' }}>
+                <div className="hidden lg:block w-[600px] h-[600px] relative rounded-[32px] overflow-hidden shadow-2xl">
                     <Image
                         src="/forest.jpg"
-                        alt="Forest landscape"
+                        alt="Atmospheric forest"
                         fill
                         className="object-cover"
                         priority
+                        sizes="600px"
                     />
                 </div>
             </div>
