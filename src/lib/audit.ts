@@ -7,7 +7,7 @@ interface AuditLogParams {
     provider?: "yandex" | "email"
     ipAddress?: string
     userAgent?: string
-    metadata?: Record\u003cstring, any >
+    metadata?: Record<string, any>
 }
 
 export async function createAuditLog(params: AuditLogParams) {
