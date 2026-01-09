@@ -22,6 +22,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     },
                 }),
             },
+            // @ts-expect-error Nodemailer supports tls, but NextAuth types are strict
+            tls: {
+                rejectUnauthorized: false,
+            },
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
         }),
     ],
