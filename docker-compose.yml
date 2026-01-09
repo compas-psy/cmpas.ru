@@ -22,7 +22,6 @@ services:
       - AUTH_URL=https://cmpas.ru
     env_file:
       - .env
-      - .env.local
       - .env
 
     depends_on:
