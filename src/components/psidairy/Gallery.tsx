@@ -17,27 +17,27 @@ export default function Gallery() {
 
     const images = [
         {
-            src: '/images/main_screen_photo.jpg',
+            src: '/images/main_screen_photo_v2.jpg',
             alt: 'Обложка ежедневника',
             caption: 'Обложка: "Здесь можно быть собой" (тиснение)'
         },
         {
-            src: '/images/private_info.jpg',
+            src: '/images/private_info_v2.jpg',
             alt: 'Личные данные психолога',
             caption: 'Личные данные психолога'
         },
         {
-            src: '/images/client_info.jpg',
+            src: '/images/client_info_v2.jpg',
             alt: 'Анкета клиента правая страница',
             caption: 'Анкета клиента: общие данные, психическое здоровье, цели и ожидания, примечания психолога'
         },
         {
-            src: '/images/client_record.jpg',
+            src: '/images/client_record_v2.jpg',
             alt: 'Записи сессий',
             caption: 'Записи сессий: ФИО / дата / № сессии'
         },
         {
-            src: '/images/supervision.jpg',
+            src: '/images/supervision_v2.jpg',
             alt: 'Раздел супервизии',
             caption: 'Супервизия: случаи'
         }
