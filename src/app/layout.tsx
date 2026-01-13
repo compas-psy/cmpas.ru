@@ -15,9 +15,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Compas - Инструменты для психологов",
   description: "Профессиональные инструменты для психологов и помогающих практиков.",
-  icons: {
-    icon: "/favicon.png",
-  },
 };
 
 export default function RootLayout({
