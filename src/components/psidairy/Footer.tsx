@@ -16,14 +16,14 @@ export default function Footer() {
                 <div className="flex flex-row justify-center items-center gap-16 md:gap-32 w-full mb-10">
                     <div className="flex flex-col gap-2 items-center">
                         <span className="opacity-50 text-[11px] font-bold">Telegram</span>
-                        <a href="https://t.me/psidiary" target="_blank" rel="noopener noreferrer" className="text-accent hover:text-white transition text-sm font-medium">
-                            @psidiary
+                        <a href="https://t.me/psy_notebook" target="_blank" rel="noopener noreferrer" className="text-accent hover:text-white transition text-sm font-medium">
+                            @psy_notebook
                         </a>
                     </div>
                     <div className="flex flex-col gap-2 items-center">
                         <span className="opacity-50 text-[11px] font-bold">Email</span>
-                        <a href="mailto:psidiary@cmpas.ru" className="text-accent hover:text-white transition text-sm font-medium">
-                            psidiary@cmpas.ru
+                        <a href="mailto:psydiary@cmpas.ru" className="text-accent hover:text-white transition text-sm font-medium">
+                            psydiary@cmpas.ru
                         </a>
                     </div>
                 </div>
