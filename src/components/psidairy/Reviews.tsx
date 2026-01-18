@@ -151,17 +151,17 @@ export default function Reviews() {
 
             <div className="container mx-auto px-4 max-w-6xl">
                 {/* Header */}
-                <div className="text-center mb-12">
-                    <h2 className="text-3xl md:text-4xl font-serif text-foreground mb-4">
+                <div className="text-center mb-16 space-y-4">
+                    <h2 className="text-3xl md:text-4xl font-medium text-primary">
                         Отзывы наших клиентов
                     </h2>
-                    <div className="flex items-center justify-center gap-3 mb-2">
+                    <div className="flex items-center justify-center gap-3">
                         <StarRating rating={5} />
                         <span className="text-foreground/70 text-sm">
                             {averageRating.toFixed(1)} из 5 · {reviews.length} отзывов
                         </span>
                     </div>
-                    <p className="text-foreground/60 max-w-lg mx-auto">
+                    <p className="text-foreground/80 text-base md:text-lg">
                         Реальные впечатления от практикующих психологов, коучей и терапевтов
                     </p>
                 </div>
