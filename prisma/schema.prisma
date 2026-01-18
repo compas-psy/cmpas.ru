@@ -88,26 +88,50 @@ model VisitorAnalytics {
   id                   String   @id @default(cuid())
   visitorId            String   @unique // FingerprintJS visitor ID
   ip                   String?
-  // GEO data from IP
+  // GEO data from IP (enhanced with district)
   country              String?
   countryCode          String?
   city                 String?
   region               String?
+  district             String?  // Neighborhood/district within city
+  postalCode           String?
+  lat                  Float?
+  lon                  Float?
   timezone             String?
-  // Browser data
+  isp                  String?  // Internet Service Provider
+  org                  String?  // Organization
+  asn                  String?  // Autonomous System Number
+  // Device details (from ua-parser-js)
   userAgent            String?
+  deviceType           String?  // "mobile", "tablet", "desktop", "console", etc.
+  deviceVendor         String?  // "Apple", "Samsung", "Huawei", etc.
+  deviceModel          String?  // "iPhone", "Galaxy S23", etc.
+  // Browser details
+  browserName          String?  // "Chrome", "Safari", "Firefox", etc.
+  browserVersion       String?  // "120.0.0"
+  browserMajor         String?  // "120"
+  // Engine details
+  engineName           String?  // "Blink", "WebKit", "Gecko"
+  engineVersion        String?
+  // OS details
+  osName               String?  // "Android", "iOS", "Windows", "macOS"
+  osVersion            String?
+  // CPU architecture
+  cpuArchitecture      String?  // "amd64", "arm", etc.
+  // Screen & hardware
   language             String?
   platform             String?
   screenWidth          Int?
   screenHeight         Int?
   devicePixelRatio     Float?
   touchSupport         Boolean?
-  deviceType           String?  // "mobile", "tablet", "desktop"
   deviceMemory         Float?
   hardwareConcurrency  Int?
-  connectionType       String?
+  connectionType       String?  // "4g", "wifi", etc.
+  connectionDownlink   Float?   // Mbps
   // Session data
   referrer             String?
+  referrerDomain       String?  // Extracted domain from referrer
   currentUrl           String?
   pathname             String?
   utmSource            String?
@@ -126,6 +150,10 @@ model VisitorAnalytics {
   @@index([visitorId])
   @@index([deviceType])
   @@index([country])
+  @@index([city])
+  @@index([deviceVendor])
+  @@index([browserName])
+  @@index([osName])
   @@index([utmSource])
   @@index([createdAt])
 }

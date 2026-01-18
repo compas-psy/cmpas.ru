@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getGeoFromIP } from '@/lib/geoip';
+import { parseUserAgent, extractReferrerDomain } from '@/lib/ua-parser';
 
 interface VisitorData {
     visitorId: string;
@@ -53,33 +54,63 @@ export async function POST(request: NextRequest) {
         const realIp = request.headers.get('x-real-ip');
         const ip = forwardedFor?.split(',')[0] || realIp || 'unknown';
 
-        // Get GEO data from IP
+        // Get enhanced GEO data from IP (includes district, ISP, lat/lon)
         const geo = await getGeoFromIP(ip);
 
-        // Prepare analytics record
+        // Parse User-Agent for device/browser/OS details
+        const ua = parseUserAgent(data.browser.userAgent);
+
+        // Extract referrer domain
+        const referrerDomain = extractReferrerDomain(data.session.referrer);
+
+        // Prepare enhanced analytics record
         const analyticsRecord = {
             visitorId: data.visitorId,
             ip: ip,
-            // GEO data
+            // Enhanced GEO data
             country: geo.country,
             countryCode: geo.countryCode,
             city: geo.city,
             region: geo.region,
+            district: geo.district,
+            postalCode: geo.postalCode,
+            lat: geo.lat,
+            lon: geo.lon,
             timezone: geo.timezone || data.browser.timezone,
-            // Browser data
+            isp: geo.isp,
+            org: geo.org,
+            asn: geo.asn,
+            // Device details (from ua-parser-js)
             userAgent: data.browser.userAgent,
+            deviceType: ua.deviceType || data.device.deviceType,
+            deviceVendor: ua.deviceVendor,
+            deviceModel: ua.deviceModel,
+            // Browser details
+            browserName: ua.browserName,
+            browserVersion: ua.browserVersion,
+            browserMajor: ua.browserMajor,
+            // Engine details
+            engineName: ua.engineName,
+            engineVersion: ua.engineVersion,
+            // OS details
+            osName: ua.osName,
+            osVersion: ua.osVersion,
+            // CPU architecture
+            cpuArchitecture: ua.cpuArchitecture,
+            // Screen & hardware
             language: data.browser.language,
             platform: data.browser.platform,
             screenWidth: data.browser.screenWidth,
             screenHeight: data.browser.screenHeight,
             devicePixelRatio: data.browser.devicePixelRatio,
             touchSupport: data.browser.touchSupport,
-            deviceType: data.device.deviceType,
             deviceMemory: data.device.memory || null,
             hardwareConcurrency: data.device.hardwareConcurrency,
             connectionType: data.connection.effectiveType || null,
+            connectionDownlink: data.connection.downlink || null,
             // Session data
             referrer: data.session.referrer || null,
+            referrerDomain: referrerDomain,
             currentUrl: data.session.currentUrl,
             pathname: data.session.pathname,
             utmSource: data.session.searchParams['utm_source'] || null,
@@ -92,7 +123,7 @@ export async function POST(request: NextRequest) {
             fingerprintComponents: JSON.stringify(data.fingerprint.components),
         };
 
-        // Save to database
+        // Save to database with enhanced fields
         await db.visitorAnalytics.upsert({
             where: { visitorId: data.visitorId },
             create: {
@@ -142,3 +173,4 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }
 }
+
