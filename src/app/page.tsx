@@ -3,6 +3,7 @@ import Header from '@/components/psidairy/Header';
 import Hero from '@/components/psidairy/Hero';
 import ValueSection from '@/components/psidairy/ValueSection';
 import Gallery from '@/components/psidairy/Gallery';
+import Reviews from '@/components/psidairy/Reviews';
 import Specifications from '@/components/psidairy/Specifications';
 import PriceDelivery from '@/components/psidairy/PriceDelivery';
 import FAQ from '@/components/psidairy/FAQ';
@@ -66,6 +67,7 @@ export default function Home() {
       <Hero />
       <ValueSection />
       <Gallery />
+      <Reviews />
       <Specifications />
       <PriceDelivery />
       <FAQ />
@@ -74,3 +76,4 @@ export default function Home() {
     </main>
   );
 }
+
