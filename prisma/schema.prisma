@@ -82,3 +82,43 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
 }
+
+// Visitor Analytics for LAL Audience Building
+model VisitorAnalytics {
+  id                   String   @id @default(cuid())
+  visitorId            String   @unique // FingerprintJS visitor ID
+  ip                   String?
+  userAgent            String?
+  language             String?
+  platform             String?
+  screenWidth          Int?
+  screenHeight         Int?
+  devicePixelRatio     Float?
+  timezone             String?
+  touchSupport         Boolean?
+  deviceType           String?  // "mobile", "tablet", "desktop"
+  deviceMemory         Float?
+  hardwareConcurrency  Int?
+  connectionType       String?
+  referrer             String?
+  currentUrl           String?
+  pathname             String?
+  utmSource            String?
+  utmMedium            String?
+  utmCampaign          String?
+  utmContent           String?
+  utmTerm              String?
+  sessionStart         DateTime?
+  timestamp            DateTime?
+  fingerprintComponents String?  // JSON string of all fingerprint components
+  visits               Int      @default(1)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visitorId])
+  @@index([deviceType])
+  @@index([utmSource])
+  @@index([createdAt])
+}
+
