@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getGeoFromIP } from '@/lib/geoip';
 
 interface VisitorData {
     visitorId: string;
@@ -52,22 +53,32 @@ export async function POST(request: NextRequest) {
         const realIp = request.headers.get('x-real-ip');
         const ip = forwardedFor?.split(',')[0] || realIp || 'unknown';
 
+        // Get GEO data from IP
+        const geo = await getGeoFromIP(ip);
+
         // Prepare analytics record
         const analyticsRecord = {
             visitorId: data.visitorId,
             ip: ip,
+            // GEO data
+            country: geo.country,
+            countryCode: geo.countryCode,
+            city: geo.city,
+            region: geo.region,
+            timezone: geo.timezone || data.browser.timezone,
+            // Browser data
             userAgent: data.browser.userAgent,
             language: data.browser.language,
             platform: data.browser.platform,
             screenWidth: data.browser.screenWidth,
             screenHeight: data.browser.screenHeight,
             devicePixelRatio: data.browser.devicePixelRatio,
-            timezone: data.browser.timezone,
             touchSupport: data.browser.touchSupport,
             deviceType: data.device.deviceType,
             deviceMemory: data.device.memory || null,
             hardwareConcurrency: data.device.hardwareConcurrency,
             connectionType: data.connection.effectiveType || null,
+            // Session data
             referrer: data.session.referrer || null,
             currentUrl: data.session.currentUrl,
             pathname: data.session.pathname,

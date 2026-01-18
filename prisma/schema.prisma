@@ -88,18 +88,25 @@ model VisitorAnalytics {
   id                   String   @id @default(cuid())
   visitorId            String   @unique // FingerprintJS visitor ID
   ip                   String?
+  // GEO data from IP
+  country              String?
+  countryCode          String?
+  city                 String?
+  region               String?
+  timezone             String?
+  // Browser data
   userAgent            String?
   language             String?
   platform             String?
   screenWidth          Int?
   screenHeight         Int?
   devicePixelRatio     Float?
-  timezone             String?
   touchSupport         Boolean?
   deviceType           String?  // "mobile", "tablet", "desktop"
   deviceMemory         Float?
   hardwareConcurrency  Int?
   connectionType       String?
+  // Session data
   referrer             String?
   currentUrl           String?
   pathname             String?
@@ -118,7 +125,33 @@ model VisitorAnalytics {
 
   @@index([visitorId])
   @@index([deviceType])
+  @@index([country])
   @@index([utmSource])
   @@index([createdAt])
 }
+
+// Orders from the website
+model Order {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String
+  contactMethod String   // telegram, whatsapp, max
+  status        String   @default("NEW") // NEW, CONTACTED, PROCESSING, COMPLETED, CANCELLED
+  notes         String?
+  // Tracking
+  visitorId     String?  // Link to VisitorAnalytics
+  ipAddress     String?
+  userAgent     String?
+  // GEO
+  country       String?
+  city          String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([visitorId])
+}
+
 
