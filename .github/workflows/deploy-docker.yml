@@ -50,14 +50,11 @@ jobs:
             fuser -k 25/tcp || true
 
             # Rebuild and restart containers
+            rm -rf .next
             docker compose up -d --build
 
-            # Run Database Migrations
-            docker compose exec -T app npm exec prisma migrate deploy
-            
-            # Run Migrations (Critical for DB consistency)
-            # Sleep to allow DB to initialize
+            # Run Database Migrations using local Prisma CLI (v5.22.0)
             sleep 10
-            docker compose exec -T app npm exec prisma migrate deploy
+            docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy
             
             docker image prune -f
