@@ -2,7 +2,7 @@ import { db } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Globe, MapPin, Smartphone, Monitor, Tablet, Link2, Eye, Users } from 'lucide-react';
+import { Globe, MapPin, Smartphone, Monitor, Tablet, Link2, Eye, Users, Chrome, Cpu } from 'lucide-react';
 
 export default async function VisitorsPage({
     searchParams,
@@ -13,7 +13,17 @@ export default async function VisitorsPage({
     const page = parseInt(params.page || '1');
     const perPage = 30;
 
-    const [visitors, totalCount, topCountries, topCities, deviceStats, utmStats] = await Promise.all([
+    const [
+        visitors,
+        totalCount,
+        topCountries,
+        topCities,
+        deviceStats,
+        browserStats,
+        deviceVendorStats,
+        osStats,
+        utmStats
+    ] = await Promise.all([
         db.visitorAnalytics.findMany({
             orderBy: { createdAt: 'desc' },
             skip: (page - 1) * perPage,
@@ -23,9 +33,17 @@ export default async function VisitorsPage({
                 visitorId: true,
                 country: true,
                 city: true,
+                district: true,
                 deviceType: true,
+                deviceVendor: true,
+                deviceModel: true,
+                browserName: true,
+                browserMajor: true,
+                osName: true,
+                osVersion: true,
                 language: true,
                 referrer: true,
+                referrerDomain: true,
                 utmSource: true,
                 visits: true,
                 createdAt: true,
@@ -48,6 +66,27 @@ export default async function VisitorsPage({
             by: ['deviceType'],
             _count: { id: true },
             orderBy: { _count: { id: 'desc' } },
+        }).catch(() => []),
+        db.visitorAnalytics.groupBy({
+            by: ['browserName'],
+            _count: { id: true },
+            where: { browserName: { not: null } },
+            orderBy: { _count: { id: 'desc' } },
+            take: 5,
+        }).catch(() => []),
+        db.visitorAnalytics.groupBy({
+            by: ['deviceVendor'],
+            _count: { id: true },
+            where: { deviceVendor: { not: null } },
+            orderBy: { _count: { id: 'desc' } },
+            take: 5,
+        }).catch(() => []),
+        db.visitorAnalytics.groupBy({
+            by: ['osName'],
+            _count: { id: true },
+            where: { osName: { not: null } },
+            orderBy: { _count: { id: 'desc' } },
+            take: 5,
         }).catch(() => []),
         db.visitorAnalytics.groupBy({
             by: ['utmSource'],
@@ -80,8 +119,9 @@ export default async function VisitorsPage({
 
             {/* Tabs */}
             <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsList className="grid w-full grid-cols-3 max-w-lg">
                     <TabsTrigger value="overview">Обзор</TabsTrigger>
+                    <TabsTrigger value="devices">Устройства</TabsTrigger>
                     <TabsTrigger value="all">Все посетители</TabsTrigger>
                 </TabsList>
 
@@ -185,6 +225,80 @@ export default async function VisitorsPage({
                     )}
                 </TabsContent>
 
+                {/* Tab: Devices */}
+                <TabsContent value="devices" className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {/* Device Vendors */}
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center gap-2">
+                                    <Smartphone className="w-5 h-5 text-primary" />
+                                    <CardTitle className="text-base">Производители</CardTitle>
+                                </div>
+                                <CardDescription>Apple, Samsung, Huawei и др.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {deviceVendorStats.length === 0 ? (
+                                    <p className="text-sm text-foreground/50">Нет данных</p>
+                                ) : (
+                                    deviceVendorStats.map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between">
+                                            <span className="text-sm font-medium">{item.deviceVendor}</span>
+                                            <span className="text-sm text-foreground/60">{item._count.id}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Browsers */}
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center gap-2">
+                                    <Chrome className="w-5 h-5 text-blue-600" />
+                                    <CardTitle className="text-base">Браузеры</CardTitle>
+                                </div>
+                                <CardDescription>Chrome, Safari, Firefox и др.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {browserStats.length === 0 ? (
+                                    <p className="text-sm text-foreground/50">Нет данных</p>
+                                ) : (
+                                    browserStats.map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between">
+                                            <span className="text-sm font-medium">{item.browserName}</span>
+                                            <span className="text-sm text-foreground/60">{item._count.id}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Operating Systems */}
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center gap-2">
+                                    <Cpu className="w-5 h-5 text-[#f59e0b]" />
+                                    <CardTitle className="text-base">ОС</CardTitle>
+                                </div>
+                                <CardDescription>Android, iOS, Windows и др.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {osStats.length === 0 ? (
+                                    <p className="text-sm text-foreground/50">Нет данных</p>
+                                ) : (
+                                    osStats.map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between">
+                                            <span className="text-sm font-medium">{item.osName}</span>
+                                            <span className="text-sm text-foreground/60">{item._count.id}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+
                 {/* Tab: All Visitors */}
                 <TabsContent value="all">
                     <Card>
@@ -192,11 +306,10 @@ export default async function VisitorsPage({
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Дата</TableHead>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Страна</TableHead>
-                                    <TableHead>Город</TableHead>
+                                    <TableHead>Локация</TableHead>
                                     <TableHead>Устройство</TableHead>
-                                    <TableHead>Язык</TableHead>
+                                    <TableHead>Браузер</TableHead>
+                                    <TableHead>ОС</TableHead>
                                     <TableHead>Источник</TableHead>
                                     <TableHead className="text-right">Визиты</TableHead>
                                 </TableRow>
@@ -204,7 +317,7 @@ export default async function VisitorsPage({
                             <TableBody>
                                 {visitors.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="h-32 text-center">
+                                        <TableCell colSpan={7} className="h-32 text-center">
                                             <div className="flex flex-col items-center gap-3 text-foreground/50">
                                                 <Eye className="w-10 h-10" />
                                                 <p>Нет данных о посетителях</p>
@@ -217,20 +330,35 @@ export default async function VisitorsPage({
                                             <TableCell className="text-foreground/70">
                                                 {v.createdAt.toLocaleDateString('ru-RU')}
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs text-foreground/60">
-                                                {v.visitorId.slice(0, 8)}...
+                                            <TableCell>
+                                                <div>
+                                                    <p className="font-medium">
+                                                        {[v.country, v.city, v.district].filter(Boolean).join(' / ') || '—'}
+                                                    </p>
+                                                </div>
                                             </TableCell>
-                                            <TableCell>{v.country || '—'}</TableCell>
-                                            <TableCell>{v.city || '—'}</TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     {getDeviceIcon(v.deviceType)}
-                                                    <span className="capitalize">{v.deviceType || '—'}</span>
+                                                    <span>
+                                                        {v.deviceVendor && v.deviceModel
+                                                            ? `${v.deviceVendor} ${v.deviceModel}`
+                                                            : v.deviceVendor || (v.deviceType ? v.deviceType.charAt(0).toUpperCase() + v.deviceType.slice(1) : '—')}
+                                                    </span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-foreground/70">{v.language || '—'}</TableCell>
+                                            <TableCell>
+                                                {v.browserName && v.browserMajor
+                                                    ? `${v.browserName} ${v.browserMajor}`
+                                                    : v.browserName || '—'}
+                                            </TableCell>
                                             <TableCell className="text-foreground/70">
-                                                {v.utmSource || (v.referrer ? v.referrer.slice(0, 20) + '...' : 'Direct')}
+                                                {v.osName && v.osVersion
+                                                    ? `${v.osName} ${v.osVersion}`
+                                                    : v.osName || '—'}
+                                            </TableCell>
+                                            <TableCell className="text-foreground/70">
+                                                {v.utmSource || v.referrerDomain || 'Direct'}
                                             </TableCell>
                                             <TableCell className="text-right font-medium">{v.visits}</TableCell>
                                         </TableRow>
