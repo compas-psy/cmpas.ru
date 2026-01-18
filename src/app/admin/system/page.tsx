@@ -1,9 +1,11 @@
 import { db } from '@/lib/db';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Database, Server, Clock, CheckCircle, XCircle, Settings } from 'lucide-react';
 
 async function getSystemStats() {
     const startTime = Date.now();
 
-    // Test DB connection
     let dbStatus = 'OK';
     let dbLatency = 0;
     try {
@@ -14,7 +16,6 @@ async function getSystemStats() {
         dbStatus = 'ERROR';
     }
 
-    // Get counts
     const [ordersCount, visitorsCount, usersCount, auditCount] = await Promise.all([
         db.order.count().catch(() => 0),
         db.visitorAnalytics.count().catch(() => 0),
@@ -40,79 +41,126 @@ export default async function SystemPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">⚙️ Мониторинг системы</h1>
-                <p className="text-gray-500 mt-1">Состояние и статистика</p>
+                <h1 className="text-2xl font-semibold text-foreground">Настройки</h1>
+                <p className="text-foreground font-light mt-1">
+                    Мониторинг системы и конфигурация
+                </p>
             </div>
 
             {/* Health Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">База данных</h3>
-                    <div className="flex items-center gap-3">
-                        <span className={`w-3 h-3 rounded-full ${stats.dbStatus === 'OK' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span className="text-2xl font-bold text-gray-900">{stats.dbStatus}</span>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-2">Latency: {stats.dbLatency}ms</p>
-                </div>
+            <div className="grid gap-6 md:grid-cols-3">
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stats.dbStatus === 'OK' ? 'bg-emerald-500/10' : 'bg-destructive/10'}`}>
+                                {stats.dbStatus === 'OK' ? (
+                                    <CheckCircle className="w-6 h-6 text-emerald-600" />
+                                ) : (
+                                    <XCircle className="w-6 h-6 text-destructive" />
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">База данных</p>
+                                <p className="text-xl font-semibold mt-1">{stats.dbStatus}</p>
+                                <p className="text-xs text-foreground/50">{stats.dbLatency}ms latency</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Время сервера</h3>
-                    <span className="text-lg font-mono text-gray-900">{stats.serverTime}</span>
-                    <p className="text-sm text-gray-500 mt-2">Response: {stats.responseTime}ms</p>
-                </div>
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Server className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Ответ сервера</p>
+                                <p className="text-xl font-semibold mt-1">{stats.responseTime}ms</p>
+                                <p className="text-xs text-foreground/50">Next.js 16.1.1</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Версия</h3>
-                    <span className="text-lg font-mono text-gray-900">1.0.0</span>
-                    <p className="text-sm text-gray-500 mt-2">Next.js 16.1.1</p>
-                </div>
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                <Clock className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Время сервера</p>
+                                <p className="text-sm font-mono mt-1">
+                                    {new Date(stats.serverTime).toLocaleString('ru-RU')}
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Database Stats */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Статистика базы данных</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    <div>
-                        <p className="text-sm text-gray-500">Заказы</p>
-                        <p className="text-3xl font-bold text-gray-900">{stats.ordersCount}</p>
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <Database className="w-5 h-5 text-primary" />
+                        <CardTitle className="text-lg">Статистика базы данных</CardTitle>
                     </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Посетители</p>
-                        <p className="text-3xl font-bold text-gray-900">{stats.visitorsCount}</p>
+                    <CardDescription>Количество записей в таблицах</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid gap-4 md:grid-cols-4">
+                        <div className="p-4 rounded-lg border border-border">
+                            <p className="text-sm text-foreground/60 font-light">Заказы</p>
+                            <p className="text-2xl font-semibold mt-1">{stats.ordersCount}</p>
+                        </div>
+                        <div className="p-4 rounded-lg border border-border">
+                            <p className="text-sm text-foreground/60 font-light">Посетители</p>
+                            <p className="text-2xl font-semibold mt-1">{stats.visitorsCount}</p>
+                        </div>
+                        <div className="p-4 rounded-lg border border-border">
+                            <p className="text-sm text-foreground/60 font-light">Пользователи</p>
+                            <p className="text-2xl font-semibold mt-1">{stats.usersCount}</p>
+                        </div>
+                        <div className="p-4 rounded-lg border border-border">
+                            <p className="text-sm text-foreground/60 font-light">Audit логи</p>
+                            <p className="text-2xl font-semibold mt-1">{stats.auditCount}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Пользователи</p>
-                        <p className="text-3xl font-bold text-gray-900">{stats.usersCount}</p>
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Audit логи</p>
-                        <p className="text-3xl font-bold text-gray-900">{stats.auditCount}</p>
-                    </div>
-                </div>
-            </div>
+                </CardContent>
+            </Card>
 
-            {/* Environment Info */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">🔧 Окружение</h3>
-                <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-500">NODE_ENV</span>
-                        <span className="font-mono text-gray-900">{process.env.NODE_ENV}</span>
+            {/* Environment */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <Settings className="w-5 h-5 text-primary" />
+                        <CardTitle className="text-lg">Окружение</CardTitle>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-500">AUTH_URL</span>
-                        <span className="font-mono text-gray-900">{process.env.AUTH_URL || '—'}</span>
+                </CardHeader>
+                <CardContent className="space-y-0">
+                    <div className="flex justify-between py-3">
+                        <span className="text-foreground/60">NODE_ENV</span>
+                        <span className="font-mono text-sm">{process.env.NODE_ENV}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-500">DATABASE_URL</span>
-                        <span className="font-mono text-gray-900">***configured***</span>
+                    <Separator />
+                    <div className="flex justify-between py-3">
+                        <span className="text-foreground/60">AUTH_URL</span>
+                        <span className="font-mono text-sm">{process.env.AUTH_URL || '—'}</span>
                     </div>
-                    <div className="flex justify-between py-2">
-                        <span className="text-gray-500">TELEGRAM_BOT</span>
-                        <span className="font-mono text-gray-900">{process.env.TELEGRAM_BOT_TOKEN ? '✓ Configured' : '✗ Not set'}</span>
+                    <Separator />
+                    <div className="flex justify-between py-3">
+                        <span className="text-foreground/60">DATABASE</span>
+                        <span className="font-mono text-sm">✓ Configured</span>
                     </div>
-                </div>
-            </div>
+                    <Separator />
+                    <div className="flex justify-between py-3">
+                        <span className="text-foreground/60">TELEGRAM</span>
+                        <span className="font-mono text-sm">{process.env.TELEGRAM_BOT_TOKEN ? '✓ Configured' : '✗ Not set'}</span>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

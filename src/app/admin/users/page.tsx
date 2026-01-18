@@ -1,4 +1,8 @@
 import { db } from '@/lib/db';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Users, Shield, UserCheck } from 'lucide-react';
 
 export default async function UsersPage() {
     const users = await db.user.findMany({
@@ -13,67 +17,113 @@ export default async function UsersPage() {
         },
     }).catch(() => []);
 
-    const roleColors: Record<string, string> = {
-        USER: 'bg-gray-100 text-gray-800',
-        ADMIN: 'bg-blue-100 text-blue-800',
-        SUPERADMIN: 'bg-purple-100 text-purple-800',
+    const roleVariants: Record<string, 'default' | 'secondary' | 'new'> = {
+        USER: 'secondary',
+        ADMIN: 'default',
+        SUPERADMIN: 'new',
     };
 
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">👤 Пользователи</h1>
-                <p className="text-gray-500 mt-1">Зарегистрированные пользователи: {users.length}</p>
+                <h1 className="text-2xl font-semibold text-foreground">Пользователи</h1>
+                <p className="text-foreground font-light mt-1">
+                    Управление пользователями и ролями
+                </p>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Имя</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Роль</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Подтверждён</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата регистрации</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {users.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                                        Нет пользователей
-                                    </td>
-                                </tr>
-                            ) : (
-                                users.map((user) => (
-                                    <tr key={user.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                                            {user.name || '—'}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500">{user.email}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`}>
-                                                {user.role}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm">
-                                            {user.emailVerified ? (
-                                                <span className="text-green-600">✓ Да</span>
-                                            ) : (
-                                                <span className="text-gray-400">Нет</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500">
-                                            {user.createdAt.toLocaleDateString('ru-RU')}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+            <div className="grid gap-6 md:grid-cols-3">
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Users className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Всего</p>
+                                <p className="text-2xl font-semibold mt-1">{users.length}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
+                                <Shield className="w-6 h-6 text-[#f59e0b]" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Админы</p>
+                                <p className="text-2xl font-semibold mt-1">{users.filter(u => u.role === 'ADMIN' || u.role === 'SUPERADMIN').length}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                <UserCheck className="w-6 h-6 text-emerald-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Подтверждены</p>
+                                <p className="text-2xl font-semibold mt-1">{users.filter(u => u.emailVerified).length}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg">Список пользователей</CardTitle>
+                </CardHeader>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Имя</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Роль</TableHead>
+                            <TableHead>Статус</TableHead>
+                            <TableHead className="text-right">Регистрация</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {users.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={5} className="h-24 text-center">
+                                    <div className="flex flex-col items-center gap-2 text-foreground/50">
+                                        <Users className="w-8 h-8" />
+                                        <p>Нет пользователей</p>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            users.map((user) => (
+                                <TableRow key={user.id}>
+                                    <TableCell className="font-medium">{user.name || '—'}</TableCell>
+                                    <TableCell className="text-foreground/70">{user.email}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={roleVariants[user.role] || 'secondary'}>
+                                            {user.role}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {user.emailVerified ? (
+                                            <Badge variant="paid">Подтверждён</Badge>
+                                        ) : (
+                                            <Badge variant="secondary">Не подтверждён</Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right text-foreground/70">
+                                        {user.createdAt.toLocaleDateString('ru-RU')}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </Card>
         </div>
     );
 }

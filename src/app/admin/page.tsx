@@ -1,156 +1,52 @@
 import { db } from '@/lib/db';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+    ShoppingCart,
+    Users,
+    Eye,
+    TrendingUp,
+    Clock,
+    Package,
+    CheckCircle2,
+    XCircle,
+    Globe,
+    Smartphone
+} from 'lucide-react';
 
-// Stats Card Component
-function StatCard({ title, value, icon, change }: { title: string; value: string | number; icon: string; change?: string }) {
-    return (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-medium text-gray-500">{title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-                    {change && (
-                        <p className={`text-sm mt-2 ${change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                            {change}
-                        </p>
-                    )}
-                </div>
-                <div className="text-4xl">{icon}</div>
-            </div>
-        </div>
-    );
-}
-
-// Recent Orders Table
-function RecentOrders({ orders }: { orders: { id: string; name: string; phone: string; status: string; createdAt: Date; city: string | null }[] }) {
-    const statusColors: Record<string, string> = {
-        NEW: 'bg-blue-100 text-blue-800',
-        CONTACTED: 'bg-yellow-100 text-yellow-800',
-        PROCESSING: 'bg-purple-100 text-purple-800',
-        COMPLETED: 'bg-green-100 text-green-800',
-        CANCELLED: 'bg-red-100 text-red-800',
-    };
-
-    return (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Последние заказы</h3>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Имя</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Телефон</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Город</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {orders.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                    Заказов пока нет
-                                </td>
-                            </tr>
-                        ) : (
-                            orders.map((order) => (
-                                <tr key={order.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{order.name}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{order.phone}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{order.city || '—'}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                                            {order.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">
-                                        {order.createdAt.toLocaleDateString('ru-RU')}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
-// Top Locations
-function TopLocations({ locations }: { locations: { country: string | null; _count: { id: number } }[] }) {
-    return (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">🌍 География посетителей</h3>
-            <div className="space-y-3">
-                {locations.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Нет данных</p>
-                ) : (
-                    locations.map((loc, i) => (
-                        <div key={i} className="flex items-center justify-between">
-                            <span className="text-sm text-gray-700">{loc.country || 'Неизвестно'}</span>
-                            <span className="text-sm font-medium text-gray-900">{loc._count.id}</span>
-                        </div>
-                    ))
-                )}
-            </div>
-        </div>
-    );
-}
-
-// Device Stats
-function DeviceStats({ devices }: { devices: { deviceType: string | null; _count: { id: number } }[] }) {
-    const deviceIcons: Record<string, string> = {
-        desktop: '🖥️',
-        mobile: '📱',
-        tablet: '📲',
-    };
-
-    return (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">📱 Устройства</h3>
-            <div className="space-y-3">
-                {devices.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Нет данных</p>
-                ) : (
-                    devices.map((device, i) => (
-                        <div key={i} className="flex items-center justify-between">
-                            <span className="text-sm text-gray-700">
-                                {deviceIcons[device.deviceType || ''] || '❓'} {device.deviceType || 'Unknown'}
-                            </span>
-                            <span className="text-sm font-medium text-gray-900">{device._count.id}</span>
-                        </div>
-                    ))
-                )}
-            </div>
-        </div>
-    );
-}
+const statusConfig: Record<string, { label: string; variant: 'new' | 'processing' | 'completed' | 'cancelled'; icon: typeof Clock }> = {
+    NEW: { label: 'Новый', variant: 'new', icon: Clock },
+    CONTACTED: { label: 'В работе', variant: 'processing', icon: Package },
+    PROCESSING: { label: 'В работе', variant: 'processing', icon: Package },
+    COMPLETED: { label: 'Завершено', variant: 'completed', icon: CheckCircle2 },
+    CANCELLED: { label: 'Отменено', variant: 'cancelled', icon: XCircle },
+};
 
 export default async function AdminDashboard() {
-    // Fetch stats
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const [
         totalOrders,
         todayOrders,
+        newOrders,
         totalVisitors,
         todayVisitors,
         recentOrders,
         topCountries,
         deviceStats,
-        totalUsers,
     ] = await Promise.all([
         db.order.count().catch(() => 0),
         db.order.count({ where: { createdAt: { gte: todayStart } } }).catch(() => 0),
+        db.order.count({ where: { status: 'NEW' } }).catch(() => 0),
         db.visitorAnalytics.count().catch(() => 0),
         db.visitorAnalytics.count({ where: { createdAt: { gte: todayStart } } }).catch(() => 0),
         db.order.findMany({
             orderBy: { createdAt: 'desc' },
-            take: 10,
-            select: { id: true, name: true, phone: true, status: true, createdAt: true, city: true },
+            take: 5,
+            select: { id: true, name: true, phone: true, status: true, createdAt: true, city: true, country: true },
         }).catch(() => []),
         db.visitorAnalytics.groupBy({
             by: ['country'],
@@ -163,32 +59,185 @@ export default async function AdminDashboard() {
             _count: { id: true },
             orderBy: { _count: { id: 'desc' } },
         }).catch(() => []),
-        db.user.count().catch(() => 0),
     ]);
 
     return (
         <div className="space-y-8">
+            {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-                <p className="text-gray-500 mt-1">Обзор активности сайта</p>
+                <h1 className="text-2xl font-semibold text-foreground">Главная</h1>
+                <p className="text-foreground font-light mt-1">
+                    Обзор активности и ключевые метрики
+                </p>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Всего заказов" value={totalOrders} icon="📦" />
-                <StatCard title="Заказов сегодня" value={todayOrders} icon="🛒" />
-                <StatCard title="Всего посетителей" value={totalVisitors} icon="👥" />
-                <StatCard title="Посетителей сегодня" value={todayVisitors} icon="📈" />
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
+                                <ShoppingCart className="w-6 h-6 text-[#f59e0b]" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Всего заказов</p>
+                                <p className="text-2xl font-semibold mt-1">{totalOrders}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Clock className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Новых заказов</p>
+                                <p className="text-2xl font-semibold mt-1">{newOrders}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                <Eye className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Посетителей</p>
+                                <p className="text-2xl font-semibold mt-1">{totalVisitors}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                <TrendingUp className="w-6 h-6 text-emerald-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-foreground/60 font-light">Сегодня</p>
+                                <p className="text-2xl font-semibold mt-1">+{todayVisitors}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Recent Orders */}
                 <div className="lg:col-span-2">
-                    <RecentOrders orders={recentOrders} />
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Последние заказы</CardTitle>
+                            <CardDescription>Последняя активность от клиентов</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Клиент</TableHead>
+                                        <TableHead>Город</TableHead>
+                                        <TableHead>Статус</TableHead>
+                                        <TableHead className="text-right">Дата</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {recentOrders.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="h-24 text-center">
+                                                <div className="flex flex-col items-center gap-2 text-foreground/50">
+                                                    <ShoppingCart className="w-8 h-8" />
+                                                    <p>Заказов пока нет</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        recentOrders.map((order) => {
+                                            const config = statusConfig[order.status] || statusConfig.NEW;
+                                            const StatusIcon = config.icon;
+                                            return (
+                                                <TableRow key={order.id}>
+                                                    <TableCell>
+                                                        <div>
+                                                            <p className="font-medium">{order.name}</p>
+                                                            <p className="text-xs text-foreground/60">{order.phone}</p>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-foreground/70">
+                                                        {order.city || '—'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={config.variant}>
+                                                            <StatusIcon className="w-3 h-3 mr-1" />
+                                                            {config.label}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right text-foreground/70">
+                                                        {order.createdAt.toLocaleDateString('ru-RU')}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
                 </div>
+
+                {/* Side Stats */}
                 <div className="space-y-6">
-                    <TopLocations locations={topCountries} />
-                    <DeviceStats devices={deviceStats} />
+                    {/* Geography */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2">
+                                <Globe className="w-5 h-5 text-primary" />
+                                <CardTitle className="text-base">География</CardTitle>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {topCountries.length === 0 ? (
+                                <p className="text-sm text-foreground/50">Нет данных</p>
+                            ) : (
+                                topCountries.map((item, i) => (
+                                    <div key={i} className="flex items-center justify-between">
+                                        <span className="text-sm">{item.country || 'Неизвестно'}</span>
+                                        <span className="text-sm font-medium">{item._count.id}</span>
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Devices */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2">
+                                <Smartphone className="w-5 h-5 text-primary" />
+                                <CardTitle className="text-base">Устройства</CardTitle>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {deviceStats.length === 0 ? (
+                                <p className="text-sm text-foreground/50">Нет данных</p>
+                            ) : (
+                                deviceStats.map((item, i) => (
+                                    <div key={i} className="flex items-center justify-between">
+                                        <span className="text-sm capitalize">{item.deviceType || 'Unknown'}</span>
+                                        <span className="text-sm font-medium">{item._count.id}</span>
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </div>
