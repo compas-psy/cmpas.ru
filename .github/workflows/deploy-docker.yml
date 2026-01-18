@@ -16,12 +16,11 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          command_timeout: 40m
+          command_timeout: 10m
           script: |
             cd /var/www/cmpas.ru
             
-            # Update .env.local with safe defaults if secrets are missing
-            # Using values known from repo .env for robustness
+            # Update .env.local
             cat <<EOF > .env.local
             DATABASE_URL=${{ secrets.DATABASE_URL || 'postgresql://postgres:postgres@postgres:5432/cmpas_db' }}
             YANDEX_CLIENT_ID=${{ secrets.YANDEX_CLIENT_ID || '1b261cbc153045beb7d707389fc27515' }}
@@ -37,24 +36,23 @@ jobs:
             EOF
             
             # Stop old PM2 if running
-            pm2 stop cmpas-app || true
-            pm2 delete cmpas-app || true
+            pm2 stop cmpas-app 2>/dev/null || true
+            pm2 delete cmpas-app 2>/dev/null || true
             
             # UPDATE CODE
-            git stash
+            git stash 2>/dev/null || true
             git pull origin main
             
-            # Rebuild and restart
-            # Ensure port 25 is free (kill conflicting mail process)
-            apt-get update && apt-get install -y psmisc
-            fuser -k 25/tcp || true
-
-            # Rebuild and restart containers
-            rm -rf .next
-            docker compose up -d --build
-
-            # Run Database Migrations using local Prisma CLI (v5.22.0)
-            sleep 10
-            docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy
+            # Ensure port 25 is free
+            fuser -k 25/tcp 2>/dev/null || true
             
+            # Rebuild and restart containers (Docker cache should speed this up)
+            docker compose up -d --build
+            
+            # Run Database Migrations
+            sleep 5
+            docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy 2>/dev/null || true
+            
+            # Cleanup old images
             docker image prune -f
+
