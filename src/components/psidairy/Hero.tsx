@@ -39,7 +39,7 @@ export default function Hero() {
                                 'Поля для записей сессий: ФИО, дата, № сессии + много места под заметки.',
                                 'Отдельный раздел «Супервизия» под случаи.',
                                 'Формат А5, всего 272 страницы.',
-                                'Обложка: глубокий зелёный, тиснение, резинка и лента-закладка.'
+                                'Обложка: глубокий зелёный, тиснение и лента-закладка.'
                             ].map((item, idx) => (
                                 <li key={idx} className="flex items-start gap-3 text-base text-foreground/90">
                                     <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0" />

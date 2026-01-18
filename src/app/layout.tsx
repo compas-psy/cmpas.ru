@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://cmpas.ru'),
   title: "Compas - Инструменты для психологов",
   description: "Профессиональные инструменты для психологов и помогающих практиков.",
   icons: {
