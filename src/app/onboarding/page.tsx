@@ -31,7 +31,7 @@ export default function OnboardingPage() {
                     body: JSON.stringify(formData)
                 })
                 if (res.ok) {
-                    router.push("/psidairy")
+                    router.push("/")
                 }
             } catch (error) {
                 console.error("Profile save error:", error)
@@ -180,8 +180,8 @@ export default function OnboardingPage() {
                                                     type="button"
                                                     onClick={() => toggleWorkDay(idx)}
                                                     className={`h-9 rounded-lg text-xs font-medium transition-colors ${formData.workDays[idx]
-                                                            ? "bg-white/20 text-white"
-                                                            : "bg-white/5 text-white/40 hover:bg-white/10"
+                                                        ? "bg-white/20 text-white"
+                                                        : "bg-white/5 text-white/40 hover:bg-white/10"
                                                         }`}
                                                     style={{ fontFamily: 'Segoe UI' }}
                                                 >

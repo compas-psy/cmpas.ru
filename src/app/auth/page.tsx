@@ -12,7 +12,7 @@ export default function AuthPage() {
         e.preventDefault()
         setLoading(true)
         try {
-            await signIn("nodemailer", { email, callbackUrl: "/psidairy" })
+            await signIn("nodemailer", { email, callbackUrl: "/" })
         } catch (error) {
             console.error("Email sign-in error:", error)
         }
@@ -21,7 +21,7 @@ export default function AuthPage() {
 
     const handleYandexSignIn = async () => {
         try {
-            await signIn("yandex", { callbackUrl: "/psidairy" })
+            await signIn("yandex", { callbackUrl: "/" })
         } catch (error) {
             console.error("Yandex sign-in error:", error)
         }
