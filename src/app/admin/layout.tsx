@@ -75,9 +75,9 @@ export default async function AdminLayout({
                                 <li key={item.href}>
                                     <Link
                                         href={item.href}
-                                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground/70 hover:bg-primary hover:text-white transition-colors text-sm font-medium"
+                                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-primary hover:text-white transition-colors text-sm font-medium"
                                     >
-                                        <Icon className="w-5 h-5" />
+                                        <Icon className="w-5 h-5" strokeWidth={1.5} />
                                         <span>{item.label}</span>
                                     </Link>
                                 </li>

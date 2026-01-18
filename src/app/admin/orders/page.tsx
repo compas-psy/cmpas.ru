@@ -3,8 +3,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ShoppingCart, Clock, CheckCircle2, Package, XCircle, Filter, Download, Eye } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, Package, XCircle, Filter, Download, Eye, Search } from 'lucide-react';
 import Link from 'next/link';
+import { detectGenderFromName, getGenderEmoji } from '@/lib/gender';
 
 const statusConfig: Record<string, { label: string; variant: 'new' | 'processing' | 'paid' | 'completed' | 'cancelled'; icon: typeof Clock }> = {
     NEW: { label: 'Новый', variant: 'new', icon: Clock },
@@ -77,7 +78,7 @@ export default async function OrdersPage({
                                             placeholder="Поиск по имени, email или номеру заказа..."
                                             className="w-full h-10 pl-10 pr-4 rounded-lg border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                                         />
-                                        <ShoppingCart className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
@@ -135,7 +136,10 @@ export default async function OrdersPage({
                                                 </TableCell>
                                                 <TableCell>
                                                     <div>
-                                                        <p className="font-medium">{order.name}</p>
+                                                        <p className="font-medium">
+                                                            {getGenderEmoji(detectGenderFromName(order.name).gender)}{' '}
+                                                            {order.name}
+                                                        </p>
                                                         <p className="text-sm text-foreground/60">{order.phone}</p>
                                                     </div>
                                                 </TableCell>
