@@ -6,10 +6,17 @@ import { db } from "@/lib/db"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(db),
+    session: {
+        strategy: "database",
+    },
     providers: [
         Yandex({
             clientId: process.env.YANDEX_CLIENT_ID,
             clientSecret: process.env.YANDEX_CLIENT_SECRET,
+            authorization: {
+                url: "https://oauth.yandex.ru/authorize",
+                params: { scope: "login:email login:info" },
+            },
         }),
         Nodemailer({
             server: {
@@ -29,6 +36,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
         }),
     ],
+    callbacks: {
+        async session({ session, user }) {
+            if (session.user) {
+                session.user.id = user.id;
+            }
+            return session;
+        },
+    },
     pages: {
         signIn: "/auth",
         verifyRequest: "/auth/verify",
@@ -37,3 +52,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     secret: process.env.AUTH_SECRET,
     trustHost: true,
 })
+
