@@ -61,14 +61,13 @@ export default function AuthPage() {
                             onClick={handleYandexAuth}
                             className="w-full bg-white hover:bg-gray-50 rounded-2xl px-6 py-4 flex items-center justify-center gap-3 transition-colors mb-6"
                         >
-                            {/* Яндекс SVG иконка */}
-                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                                <circle cx="16" cy="16" r="16" fill="#FC3F1D" />
-                                <path
-                                    d="M18.5 9H14.5C11.7 9 10 10.8 10 13.3C10 16.1 11.4 17.5 13.5 18.3L10 25H13.3L16.5 18.7H18.5V25H21.5V9H18.5ZM18.5 15.7H15C13.3 15.7 12.5 14.8 12.5 13.3C12.5 11.8 13.3 11 15 11H18.5V15.7Z"
-                                    fill="white"
-                                />
-                            </svg>
+                            <Image
+                                src="/yandex-logo.png"
+                                alt="Яндекс"
+                                width={28}
+                                height={28}
+                                className="object-contain"
+                            />
                             <span className="text-[#1a1a1a] font-medium">
                                 Продолжить с Яндекс
                             </span>
