@@ -6,6 +6,15 @@ description: deployment workflow for cmpas.ru
 
 // turbo-all
 
+## ⛔ MANDATORY PRE-DEPLOY CHECKLIST (DO NOT SKIP!)
+
+1. **STOP PORT 25 PROCESS** - `fuser -k 25/tcp` - ALWAYS before starting containers
+2. **BACKUP DATABASE** - pg_dump before any docker operations
+3. **NEVER DELETE VOLUMES** - `docker compose down -v` is FORBIDDEN
+4. **VERIFY SERVER AFTER DEPLOY** - Always check site loads after deployment
+
+---
+
 **ALWAYS deploy via GitHub Actions** unless the user explicitly requests manual SSH deployment.
 
 ## Steps:
