@@ -37,6 +37,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
             sendVerificationRequest: async ({ identifier: email, url, provider }) => {
+                // Check if user already exists with this email
+                const existingUser = await db.user.findUnique({
+                    where: { email },
+                    select: { id: true, emailVerified: true }
+                })
+
+                // If user exists and has verified email (logged in via OAuth), don't send magic link
+                if (existingUser?.emailVerified) {
+                    // User already registered - they should use their original auth method
+                    // The email won't be sent, and NextAuth will redirect to verify page
+                    // We'll handle this in the signIn callback instead
+                    console.log(`[auth] User ${email} already exists with verified email, skipping magic link`)
+                    throw new Error("EMAIL_EXISTS")
+                }
+
                 const transport = createTransport(provider.server)
                 const result = await transport.sendMail({
                     to: email,
@@ -63,6 +78,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     pages: {
         signIn: "/auth",
         verifyRequest: "/auth/verify",
+        error: "/auth/error",
     },
     debug: process.env.NODE_ENV === "development",
     secret: process.env.AUTH_SECRET,
