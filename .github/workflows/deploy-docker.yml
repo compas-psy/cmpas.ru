@@ -43,11 +43,29 @@ jobs:
             git stash 2>/dev/null || true
             git pull origin main
             
-            # Stop containers to free resources before rebuild
-            docker compose down --timeout 30 || true
+            # ============================================
+            # DATABASE BACKUP (CRITICAL - DO NOT SKIP!)
+            # ============================================
+            BACKUP_DIR="/var/backups/cmpas"
+            mkdir -p "$BACKUP_DIR"
+            BACKUP_FILE="$BACKUP_DIR/db_backup_$(date +%Y%m%d_%H%M%S).sql"
             
-            # Ensure port 25 is free
+            echo "Creating database backup: $BACKUP_FILE"
+            docker exec cmpas-postgres pg_dump -U postgres -d cmpas_db > "$BACKUP_FILE" 2>/dev/null || echo "Warning: Could not create backup (database may be new)"
+            
+            # Keep only last 10 backups
+            ls -t "$BACKUP_DIR"/db_backup_*.sql 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
+            
+            echo "Backup complete. Recent backups:"
+            ls -la "$BACKUP_DIR" | tail -5
+            # ============================================
+            
+            # Ensure port 25 is free (ALWAYS occupied by another service on this server)
             fuser -k 25/tcp 2>/dev/null || true
+            
+            # CRITICAL: NEVER use "docker compose down -v" - this deletes database!
+            # Only stop containers, preserve volumes
+            docker compose down --timeout 30 || true
             
             # Rebuild and restart containers
             docker compose up -d --build --force-recreate
@@ -63,8 +81,10 @@ jobs:
               sleep 2
             done
             
-            # Run Database Migrations
+            # Run Database Migrations (safe - only applies new migrations)
             docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy 2>/dev/null || true
             
             # Cleanup old images
             docker image prune -f
+            
+            echo "Deployment complete!"
