@@ -3,6 +3,9 @@ import Yandex from "next-auth/providers/yandex"
 import Nodemailer from "next-auth/providers/nodemailer"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { db } from "@/lib/db"
+import { html, text } from "@/lib/email-template"
+// @ts-expect-error - nodemailer types not installed due to peer dep conflict
+import { createTransport } from "nodemailer"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(db),
@@ -28,12 +31,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                         pass: process.env.EMAIL_SERVER_PASSWORD,
                     },
                 }),
-
                 tls: {
                     rejectUnauthorized: false,
                 },
             },
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
+            sendVerificationRequest: async ({ identifier: email, url, provider }) => {
+                const transport = createTransport(provider.server)
+                const result = await transport.sendMail({
+                    to: email,
+                    from: provider.from,
+                    subject: "Вход в Ежедневник Психолога",
+                    text: text({ url, host: new URL(url).host }),
+                    html: html({ url, host: new URL(url).host, theme: {} }),
+                })
+                const failed = result.rejected.concat(result.pending).filter(Boolean)
+                if (failed.length) {
+                    throw new Error(`Email(s) (${failed.join(", ")}) could not be sent`)
+                }
+            },
         }),
     ],
     callbacks: {
