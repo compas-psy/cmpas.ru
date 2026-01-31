@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react"
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 
 export default function AuthPage() {
     const [email, setEmail] = useState("")
@@ -35,12 +36,21 @@ export default function AuthPage() {
 
                 {/* Левая часть: Форма авторизации */}
                 <div className="flex flex-col items-center">
-                    {/* Логотип */}
+                    {/* Логотип с деревом */}
                     <Link
                         href="/"
-                        className="text-2xl font-semibold text-[#1a4d3a] tracking-wide mb-8 hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-3 mb-8 hover:opacity-90 transition-opacity"
                     >
-                        ЕЖЕДНЕВНИК ПСИХОЛОГА
+                        <Image
+                            src="/logo-tree.png"
+                            alt="Compas Logo"
+                            width={40}
+                            height={40}
+                            className="object-contain"
+                        />
+                        <span className="text-2xl font-semibold text-[#1a4d3a] tracking-wide">
+                            ЕЖЕДНЕВНИК ПСИХОЛОГА
+                        </span>
                     </Link>
 
                     {/* Карточка авторизации */}
@@ -147,14 +157,15 @@ export default function AuthPage() {
 
                 {/* Правая часть: Декоративное изображение */}
                 <div className="hidden lg:flex items-center justify-center w-full max-w-[600px]">
-                    <div
-                        className="w-full aspect-square rounded-3xl overflow-hidden shadow-2xl"
-                        style={{
-                            backgroundImage: `linear-gradient(to bottom right, #1a4d3a, #2d6650), url('https://images.unsplash.com/photo-1647559709298-c0e3dcb47092?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwc3ljaG9sb2d5JTIwdGhlcmFweSUyMG5vdGVib29rJTIwam91cm5hbHxlbnwxfHx8fDE3Njk4NTc4NTR8MA&ixlib=rb-4.1.0&q=80&w=1080')`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center'
-                        }}
-                    />
+                    <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl">
+                        <Image
+                            src="/images/auth-side.jpg"
+                            alt="Ежедневник психолога с кофе"
+                            fill
+                            className="object-cover"
+                            sizes="600px"
+                        />
+                    </div>
                 </div>
             </div>
         </div>
