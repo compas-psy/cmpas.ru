@@ -64,6 +64,8 @@ export default function Gallery() {
                                     alt={img.alt}
                                     fill
                                     className="object-cover"
+                                    sizes="(max-width: 768px) 100vw, 33vw"
+                                    loading="lazy"
                                 />
                             </div>
                             <p className="text-sm text-center text-foreground/80 font-medium">
@@ -83,6 +85,8 @@ export default function Gallery() {
                                     alt={img.alt}
                                     fill
                                     className="object-cover"
+                                    sizes="(max-width: 768px) 100vw, 50vw"
+                                    loading="lazy"
                                 />
                             </div>
                             <p className="text-sm text-center text-foreground/80 font-medium">
