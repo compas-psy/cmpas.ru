@@ -37,18 +37,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
             sendVerificationRequest: async ({ identifier: email, url, provider }) => {
-                // Check if user already exists with this email
+                // Check if user already exists with this email AND has OAuth account
                 const existingUser = await db.user.findUnique({
                     where: { email },
-                    select: { id: true, emailVerified: true }
+                    select: {
+                        id: true,
+                        emailVerified: true,
+                        accounts: {
+                            select: { provider: true }
+                        }
+                    }
                 })
 
-                // If user exists and has verified email (logged in via OAuth), don't send magic link
-                if (existingUser?.emailVerified) {
-                    // User already registered - they should use their original auth method
-                    // The email won't be sent, and NextAuth will redirect to verify page
-                    // We'll handle this in the signIn callback instead
-                    console.log(`[auth] User ${email} already exists with verified email, skipping magic link`)
+                // Only block if user has OAuth account (e.g., Yandex)
+                // Allow email login for users who registered via email magic link
+                const hasOAuthAccount = existingUser?.accounts?.some(
+                    acc => acc.provider === "yandex"
+                )
+
+                if (existingUser?.emailVerified && hasOAuthAccount) {
+                    // User registered via OAuth - they should use that method
+                    console.log(`[auth] User ${email} has OAuth account, redirecting to use Yandex login`)
                     throw new Error("EMAIL_EXISTS")
                 }
 
