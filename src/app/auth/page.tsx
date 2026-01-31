@@ -2,24 +2,13 @@
 
 import { signIn } from "next-auth/react"
 import { useState } from "react"
-import Image from "next/image"
+import Link from "next/link"
 
 export default function AuthPage() {
     const [email, setEmail] = useState("")
-    const [loading, setLoading] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
-    const handleEmailSignIn = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        try {
-            await signIn("nodemailer", { email, callbackUrl: "/" })
-        } catch (error) {
-            console.error("Email sign-in error:", error)
-        }
-        setLoading(false)
-    }
-
-    const handleYandexSignIn = async () => {
+    const handleYandexAuth = async () => {
         try {
             await signIn("yandex", { callbackUrl: "/" })
         } catch (error) {
@@ -27,95 +16,144 @@ export default function AuthPage() {
         }
     }
 
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setIsSubmitting(true)
+
+        try {
+            await signIn("nodemailer", { email, callbackUrl: "/" })
+        } catch (error) {
+            console.error("Email sign-in error:", error)
+        }
+
+        setIsSubmitting(false)
+    }
+
     return (
-        <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8 bg-white">
-            <div className="flex w-full max-w-[1200px] gap-8 items-center justify-center">
+        <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center p-4 lg:p-8">
+            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
 
-                {/* Left Side - Auth Card */}
-                <div className="w-full max-w-[420px] flex flex-col gap-6">
-                    {/* Logo */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 text-[#3D5A4D]">
-                            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 2L2 22H22L12 2Z" /> {/* Placeholder tree/compass icon to be replaced or use Image */}
-                            </svg>
-                        </div>
-                        <span className="text-[#1F2937] text-lg font-semibold tracking-wide">
-                            КОМПАС
-                        </span>
-                    </div>
+                {/* Левая часть: Форма авторизации */}
+                <div className="flex flex-col items-center">
+                    {/* Логотип */}
+                    <Link
+                        href="/"
+                        className="text-2xl font-semibold text-[#1a4d3a] tracking-wide mb-8 hover:opacity-90 transition-opacity"
+                    >
+                        ЕЖЕДНЕВНИК ПСИХОЛОГА
+                    </Link>
 
-                    <div className="bg-[#2E453B] rounded-[24px] p-8 shadow-xl">
-                        {/* Yandex Button */}
+                    {/* Карточка авторизации */}
+                    <div className="w-full max-w-[420px] bg-[#1a4d3a] rounded-3xl shadow-xl p-8 lg:p-12">
+
+                        {/* Кнопка Яндекс */}
                         <button
-                            onClick={handleYandexSignIn}
-                            className="w-full h-14 bg-white rounded-[16px] flex items-center justify-center gap-3 mb-6 hover:bg-gray-50 transition-all active:scale-[0.98]"
+                            onClick={handleYandexAuth}
+                            className="w-full bg-white hover:bg-gray-50 rounded-2xl px-6 py-4 flex items-center justify-center gap-3 transition-colors mb-6"
                         >
-                            <Image
-                                src="/yandex-logo.png"
-                                alt="Яндекс"
-                                width={24}
-                                height={24}
-                                className="object-contain"
-                            />
-                            <span className="text-[#1F2937] text-base font-medium">
+                            {/* Яндекс SVG иконка */}
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <circle cx="16" cy="16" r="16" fill="#FC3F1D" />
+                                <path
+                                    d="M18.5 9H14.5C11.7 9 10 10.8 10 13.3C10 16.1 11.4 17.5 13.5 18.3L10 25H13.3L16.5 18.7H18.5V25H21.5V9H18.5ZM18.5 15.7H15C13.3 15.7 12.5 14.8 12.5 13.3C12.5 11.8 13.3 11 15 11H18.5V15.7Z"
+                                    fill="white"
+                                />
+                            </svg>
+                            <span className="text-[#1a1a1a] font-medium">
                                 Продолжить с Яндекс
                             </span>
                         </button>
 
-                        {/* Divider */}
-                        <div className="relative mb-6">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-white/20"></div>
-                            </div>
-                            <div className="relative flex justify-center">
-                                <span className="px-4 bg-[#2E453B] text-white/60 text-sm uppercase tracking-wider font-medium">
-                                    ИЛИ
-                                </span>
+                        {/* Разделитель ИЛИ */}
+                        <div className="relative h-6 mb-6">
+                            <div className="absolute left-0 top-1/2 w-full h-px bg-white/30"></div>
+                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#1a4d3a] px-3">
+                                <span className="text-white text-sm">ИЛИ</span>
                             </div>
                         </div>
 
-                        {/* Email Form */}
-                        <form onSubmit={handleEmailSignIn} className="space-y-4">
-                            <input
-                                type="email"
-                                placeholder="Введите email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-14 px-5 bg-white/5 border border-white/10 rounded-[16px] text-white placeholder:text-white/40 outline-none focus:border-white/30 focus:bg-white/10 transition-all text-base"
-                            />
+                        {/* Форма email */}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="relative">
+                                <input
+                                    type="email"
+                                    placeholder="Введите email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full bg-white rounded-2xl px-5 py-4 text-[#1a1a1a] placeholder:text-[#1a1a1a]/50 outline-none focus:ring-2 focus:ring-[#c9a961] transition-all"
+                                />
+                                {/* Иконка защиты */}
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#1a1a1a]/40">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                    </svg>
+                                </div>
+                            </div>
 
                             <button
                                 type="submit"
-                                disabled={loading}
-                                className="w-full h-14 bg-white/10 border border-white/10 hover:bg-white/20 rounded-[16px] text-white text-base font-medium transition-all disabled:opacity-50 active:scale-[0.98]"
+                                disabled={isSubmitting}
+                                className="w-full bg-[#c9a961] hover:bg-[#d4b56d] text-[#1a4d3a] rounded-2xl px-6 py-4 font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {loading ? "Отправляем..." : "Продолжить по email"}
+                                {isSubmitting ? (
+                                    "Отправка..."
+                                ) : (
+                                    <>
+                                        Продолжить по email
+                                        <svg
+                                            width="20"
+                                            height="20"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <line x1="5" y1="12" x2="19" y2="12" />
+                                            <polyline points="12 5 19 12 12 19" />
+                                        </svg>
+                                    </>
+                                )}
                             </button>
                         </form>
 
-                        {/* Footer */}
-                        <div className="mt-8 text-center px-4">
-                            <p className="text-white/40 text-xs leading-relaxed">
-                                Продолжая, вы соглашаетесь с<br />
-                                <a href="/policy" className="hover:text-white/60 transition-colors border-b border-transparent hover:border-white/60 pb-0.5">
-                                    политикой конфиденциальности
+                        {/* Пользовательское соглашение */}
+                        <div className="mt-6 text-center text-xs text-white/70 leading-relaxed">
+                            <p>
+                                Продолжая, вы соглашаетесь с{" "}
+                                <a href="#" className="text-white underline hover:text-white/90 transition-colors">
+                                    Пользовательским соглашением
+                                </a>
+                            </p>
+                            <p className="mt-1">
+                                и{" "}
+                                <a href="#" className="text-white underline hover:text-white/90 transition-colors">
+                                    Политикой конфиденциальности
                                 </a>
                             </p>
                         </div>
                     </div>
+
+                    {/* Ссылка на главную */}
+                    <Link
+                        href="/"
+                        className="mt-8 text-sm text-[#1a4d3a]/60 hover:text-[#1a4d3a] transition-colors"
+                    >
+                        ← Вернуться на главную
+                    </Link>
                 </div>
 
-                {/* Right Side - Image */}
-                <div className="hidden lg:block w-[600px] h-[600px] relative rounded-[32px] overflow-hidden shadow-2xl">
-                    <Image
-                        src="/forest.jpg"
-                        alt="Atmospheric forest"
-                        fill
-                        className="object-cover"
-                        priority
-                        sizes="600px"
+                {/* Правая часть: Декоративное изображение */}
+                <div className="hidden lg:flex items-center justify-center w-full max-w-[600px]">
+                    <div
+                        className="w-full aspect-square rounded-3xl overflow-hidden shadow-2xl"
+                        style={{
+                            backgroundImage: `linear-gradient(to bottom right, #1a4d3a, #2d6650), url('https://images.unsplash.com/photo-1647559709298-c0e3dcb47092?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwc3ljaG9sb2d5JTIwdGhlcmFweSUyMG5vdGVib29rJTIwam91cm5hbHxlbnwxfHx8fDE3Njk4NTc4NTR8MA&ixlib=rb-4.1.0&q=80&w=1080')`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center'
+                        }}
                     />
                 </div>
             </div>
