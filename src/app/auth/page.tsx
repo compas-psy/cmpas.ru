@@ -5,9 +5,19 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 
+interface EmailCheckResponse {
+    exists: boolean
+    canUseEmail: boolean
+    provider?: string
+    providerName?: string
+    message?: string
+}
+
 export default function AuthPage() {
     const [email, setEmail] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [emailWarning, setEmailWarning] = useState<string | null>(null)
+    const [suggestedProvider, setSuggestedProvider] = useState<string | null>(null)
 
     const handleYandexAuth = async () => {
         try {
@@ -17,11 +27,39 @@ export default function AuthPage() {
         }
     }
 
+    const checkEmail = async (emailToCheck: string): Promise<EmailCheckResponse | null> => {
+        try {
+            const response = await fetch("/api/auth/check-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: emailToCheck })
+            })
+            if (!response.ok) return null
+            return await response.json()
+        } catch {
+            return null
+        }
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsSubmitting(true)
+        setEmailWarning(null)
+        setSuggestedProvider(null)
 
         try {
+            // Check if email has OAuth account
+            const checkResult = await checkEmail(email)
+
+            if (checkResult && !checkResult.canUseEmail) {
+                // User has OAuth account - show warning
+                setEmailWarning(checkResult.message || "Этот email связан с другим способом входа")
+                setSuggestedProvider(checkResult.provider || null)
+                setIsSubmitting(false)
+                return
+            }
+
+            // Proceed with email sign in
             await signIn("nodemailer", { email, callbackUrl: "/" })
         } catch (error) {
             console.error("Email sign-in error:", error)
@@ -81,6 +119,32 @@ export default function AuthPage() {
                             </div>
                         </div>
 
+                        {/* Предупреждение об OAuth аккаунте */}
+                        {emailWarning && (
+                            <div className="mb-4 bg-[#c9a961] rounded-2xl p-4 text-center">
+                                <p className="text-[#1a4d3a] text-sm font-medium mb-3">
+                                    {emailWarning}
+                                </p>
+                                {suggestedProvider === "yandex" && (
+                                    <button
+                                        onClick={handleYandexAuth}
+                                        className="w-full bg-white hover:bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <Image
+                                            src="/yandex-logo.png"
+                                            alt="Яндекс"
+                                            width={20}
+                                            height={20}
+                                            className="object-contain"
+                                        />
+                                        <span className="text-[#1a1a1a] text-sm font-medium">
+                                            Войти через Яндекс
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
                         {/* Форма email */}
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="relative">
@@ -89,7 +153,14 @@ export default function AuthPage() {
                                     placeholder="Введите email"
                                     required
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => {
+                                        setEmail(e.target.value)
+                                        // Clear warning when user changes email
+                                        if (emailWarning) {
+                                            setEmailWarning(null)
+                                            setSuggestedProvider(null)
+                                        }
+                                    }}
                                     className="w-full bg-white rounded-2xl px-5 py-4 text-[#1a1a1a] placeholder:text-[#1a1a1a]/50 outline-none focus:ring-2 focus:ring-[#c9a961] transition-all"
                                 />
                                 {/* Иконка защиты */}
@@ -106,7 +177,7 @@ export default function AuthPage() {
                                 className="w-full bg-[#c9a961] hover:bg-[#d4b56d] text-[#1a4d3a] rounded-2xl px-6 py-4 font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isSubmitting ? (
-                                    "Отправка..."
+                                    "Проверяем..."
                                 ) : (
                                     <>
                                         Продолжить по email
@@ -132,13 +203,13 @@ export default function AuthPage() {
                         <div className="mt-6 text-center text-xs text-white/70 leading-relaxed">
                             <p>
                                 Продолжая, вы соглашаетесь с{" "}
-                                <a href="#" className="text-white underline hover:text-white/90 transition-colors">
+                                <a href="/legal/terms" className="text-white underline hover:text-white/90 transition-colors">
                                     Пользовательским соглашением
                                 </a>
                             </p>
                             <p className="mt-1">
                                 и{" "}
-                                <a href="#" className="text-white underline hover:text-white/90 transition-colors">
+                                <a href="/legal/privacy" className="text-white underline hover:text-white/90 transition-colors">
                                     Политикой конфиденциальности
                                 </a>
                             </p>

@@ -32,9 +32,8 @@ export default function Footer() {
                 <div className="w-full border-t border-white/10 pt-8 flex flex-col items-center gap-4">
                     {/* Legal Links */}
                     <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 px-4 text-center">
-                        <Link href="#" className="text-[11px] opacity-60 hover:text-accent hover:opacity-100 transition whitespace-nowrap">Политика конфиденциальности</Link>
-                        <Link href="#" className="text-[11px] opacity-60 hover:text-accent hover:opacity-100 transition whitespace-nowrap">Согласие на обработку персональных данных</Link>
-                        <Link href="#" className="text-[11px] opacity-60 hover:text-accent hover:opacity-100 transition whitespace-nowrap">Согласие на получение рекламных сообщений</Link>
+                        <Link href="/legal/privacy" className="text-[11px] opacity-60 hover:text-accent hover:opacity-100 transition whitespace-nowrap">Политика конфиденциальности</Link>
+                        <Link href="/legal/terms" className="text-[11px] opacity-60 hover:text-accent hover:opacity-100 transition whitespace-nowrap">Пользовательское соглашение</Link>
                     </div>
 
                     {/* Copyright */}
