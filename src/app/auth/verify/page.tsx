@@ -1,27 +1,35 @@
 "use client"
 
+import Link from "next/link"
 import Image from "next/image"
 
 export default function VerifyRequestPage() {
     return (
-        <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8 bg-white">
-            <div className="flex w-full max-w-[1200px] gap-8 items-center justify-center">
+        <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center p-4 lg:p-8">
+            <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
 
-                {/* Left Side - Message Card */}
-                <div className="w-full max-w-[420px] flex flex-col gap-6">
-                    {/* Logo */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 text-[#3D5A4D]">
-                            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 2L2 22H22L12 2Z" />
-                            </svg>
-                        </div>
-                        <span className="text-[#1F2937] text-lg font-semibold tracking-wide">
-                            КОМПАС
+                {/* Левая часть: Сообщение */}
+                <div className="flex flex-col items-center">
+                    {/* Логотип с деревом */}
+                    <Link
+                        href="/"
+                        className="flex items-center gap-3 mb-8 hover:opacity-90 transition-opacity"
+                    >
+                        <Image
+                            src="/logo-tree.png"
+                            alt="Compas Logo"
+                            width={40}
+                            height={40}
+                            className="object-contain"
+                        />
+                        <span className="text-2xl font-semibold text-[#1a4d3a] tracking-wide">
+                            ЕЖЕДНЕВНИК ПСИХОЛОГА
                         </span>
-                    </div>
+                    </Link>
 
-                    <div className="bg-[#2E453B] rounded-[24px] p-8 shadow-xl text-center">
+                    {/* Карточка */}
+                    <div className="w-full max-w-[420px] bg-[#1a4d3a] rounded-3xl shadow-xl p-8 lg:p-12 text-center">
+                        {/* Иконка письма */}
                         <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
                             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -37,25 +45,35 @@ export default function VerifyRequestPage() {
                             Проверьте свою почту и перейдите по ссылке.
                         </p>
 
-                        <div className="bg-white/5 rounded-[16px] p-4 border border-white/10">
-                            <p className="text-sm text-white/50">
+                        {/* Подсказка */}
+                        <div className="bg-[#c9a961] rounded-2xl px-6 py-4">
+                            <p className="text-sm text-[#1a4d3a] font-medium">
                                 💡 Ссылка действительна 24 часа.<br />
-                                Не пришло? Проверьте папку "Спам".
+                                Не пришло? Проверьте папку «Спам».
                             </p>
                         </div>
                     </div>
+
+                    {/* Ссылка на главную */}
+                    <Link
+                        href="/"
+                        className="mt-8 text-sm text-[#1a4d3a]/60 hover:text-[#1a4d3a] transition-colors"
+                    >
+                        ← Вернуться на главную
+                    </Link>
                 </div>
 
-                {/* Right Side - Image */}
-                <div className="hidden lg:block w-[600px] h-[600px] relative rounded-[32px] overflow-hidden shadow-2xl">
-                    <Image
-                        src="/forest.jpg"
-                        alt="Atmospheric forest"
-                        fill
-                        className="object-cover"
-                        priority
-                        sizes="600px"
-                    />
+                {/* Правая часть: Декоративное изображение */}
+                <div className="hidden lg:flex items-center justify-center w-full max-w-[600px]">
+                    <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl">
+                        <Image
+                            src="/images/auth-side.jpg"
+                            alt="Ежедневник психолога с кофе"
+                            fill
+                            className="object-cover"
+                            sizes="600px"
+                        />
+                    </div>
                 </div>
             </div>
         </div>
