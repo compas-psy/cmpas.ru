@@ -16,11 +16,22 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://cmpas.ru'),
-  title: "Compas - Инструменты для психологов",
-  description: "Профессиональные инструменты для психологов и помогающих практиков.",
+  title: {
+    default: "Ежедневник психолога | Compas — система записей для частной практики",
+    template: "%s | Compas"
+  },
+  description: "Профессиональный ежедневник для психолога: анкеты клиентов, записи сессий, супервизия. Разработан практикующими психологами для частной практики.",
+  keywords: ["ежедневник психолога", "купить ежедневник для психолога", "планер психолога", "блокнот психолога", "записи сессий психолога", "анкета клиента психолога", "супервизия записи"],
   icons: {
     icon: "/icon.png?v=2",
     apple: "/icon.png?v=2",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  verification: {
+    yandex: "yandex_a4dcf0b1028cb8a9",
   },
 };
 

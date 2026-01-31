@@ -39,6 +39,7 @@ export default function Header() {
 
                     {/* Desktop Nav - Closer to Logo, Thin Font */}
                     <nav className="hidden md:flex items-center gap-8 text-sm text-foreground/80 font-normal">
+                        <Link href="/blog" className="hover:text-primary transition-colors">Блог</Link>
                         <Link href="#развороты" className="hover:text-primary transition-colors">Развороты</Link>
                         <Link href="#характеристики" className="hover:text-primary transition-colors">Характеристики</Link>
                         <Link href="#доставка" className="hover:text-primary transition-colors">Доставка</Link>
