@@ -43,6 +43,13 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <head>
+        {/* Preload LCP image for faster mobile loading */}
+        <link
+          rel="preload"
+          as="image"
+          href="/images/hero.jpg"
+          type="image/jpeg"
+        />
         {/* Yandex.Metrika counter */}
         <Script id="yandex-metrika" strategy="afterInteractive">
           {`
