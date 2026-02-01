@@ -22,7 +22,7 @@ jobs:
             
             # Update .env file for Docker build context
             cat <<EOF > .env
-            DATABASE_URL=${{ secrets.DATABASE_URL || 'postgresql://postgres:postgres@postgres:5432/cmpas_db' }}
+            DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db
             YANDEX_CLIENT_ID=${{ secrets.YANDEX_CLIENT_ID || '1b261cbc153045beb7d707389fc27515' }}
             YANDEX_CLIENT_SECRET=${{ secrets.YANDEX_CLIENT_SECRET || 'b3b7316b0f72442485f441c63ba59cba' }}
             AUTH_SECRET=${{ secrets.AUTH_SECRET || 'changeme-in-production-please-secret-key' }}
