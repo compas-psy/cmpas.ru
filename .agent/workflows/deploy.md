@@ -12,6 +12,28 @@ description: deployment workflow for cmpas.ru
 2. **BACKUP DATABASE** - pg_dump before any docker operations
 3. **NEVER DELETE VOLUMES** - `docker compose down -v` is FORBIDDEN
 4. **VERIFY SERVER AFTER DEPLOY** - Always check site loads after deployment
+5. **CHECK DATABASE_URL** - Must use `postgres:5432` NOT `localhost:5432` (Docker network!)
+
+---
+
+## ⚠️ DATABASE CONNECTION FIX (If auth fails with "credentials invalid")
+
+The issue: `.env` file on server has `DATABASE_URL` pointing to `localhost` but Docker containers communicate via service names.
+
+**WRONG:**
+```
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/cmpas_db"
+```
+
+**CORRECT:**
+```
+DATABASE_URL="postgresql://postgres:postgres@postgres:5432/cmpas_db"
+```
+
+**Quick fix:**
+```bash
+ssh root@45.144.30.190 "cd /var/www/cmpas.ru && sed -i 's|localhost:5432|postgres:5432|g' .env && docker compose restart app"
+```
 
 ---
 
