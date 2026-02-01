@@ -18,19 +18,10 @@ description: deployment workflow for cmpas.ru
 
 ## ⚠️ DATABASE CONNECTION FIX (If auth fails with "credentials invalid")
 
-The issue: `.env` file on server has `DATABASE_URL` pointing to `localhost` but Docker containers communicate via service names.
+**Root cause (FIXED):** `.env` file was tracked by git and contained `localhost` instead of `postgres`.
+**Permanent fix applied:** `.env` is now in `.gitignore` and managed only on the server.
 
-**WRONG:**
-```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/cmpas_db"
-```
-
-**CORRECT:**
-```
-DATABASE_URL="postgresql://postgres:postgres@postgres:5432/cmpas_db"
-```
-
-**Quick fix:**
+**If this happens again:**
 ```bash
 ssh root@45.144.30.190 "cd /var/www/cmpas.ru && sed -i 's|localhost:5432|postgres:5432|g' .env && docker compose restart app"
 ```
