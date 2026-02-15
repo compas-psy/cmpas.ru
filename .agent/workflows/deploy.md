@@ -21,9 +21,14 @@ description: deployment workflow for cmpas.ru
 **Root cause (FIXED):** `.env` file was tracked by git and contained `localhost` instead of `postgres`.
 **Permanent fix applied:** `.env` is now in `.gitignore` and managed only on the server.
 
-**If this happens again:**
+**If DATABASE_URL host is wrong:**
 ```bash
 ssh root@45.144.30.190 "cd /var/www/cmpas.ru && sed -i 's|localhost:5432|postgres:5432|g' .env && docker compose restart app"
+```
+
+**If postgres password is wrong (old volume has different password):**
+```bash
+ssh root@45.144.30.190 "docker exec cmpas-postgres psql -U postgres -c \"ALTER USER postgres PASSWORD 'postgres';\" && docker compose -f /var/www/cmpas.ru/docker-compose.yml restart app"
 ```
 
 ---

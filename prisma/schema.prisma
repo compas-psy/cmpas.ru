@@ -19,7 +19,14 @@ model User {
   image         String?
   role          String    @default("USER")
   accounts      Account[]
-  sessions      Session[]
+  authSessions  Session[]
+  // Diary relations
+  clients              DiaryClient[]
+  diarySessions        DiarySession[]
+  availabilitySlots    AvailabilitySlot[]
+  timeBlocks           TimeBlock[]
+  calendarIntegrations CalendarIntegration[]
+  psychologistSettings PsychologistSettings?
  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -182,4 +189,139 @@ model Order {
   @@index([visitorId])
 }
 
+// ============================================
+// Diary (Psychologist Cabinet) Models
+// ============================================
 
+model DiaryClient {
+  id                String    @id @default(cuid())
+  psychologistId    String
+  name              String
+  phone             String?
+  email             String?
+  dateOfBirth       DateTime?
+  age               Int?
+  gender            String?   // male, female, other
+  totalSessions     Int       @default(0)
+  nextSessionDate   DateTime?
+  status            String    @default("active") // active, paused, archived
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  psychologist      User      @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  questionnaire     DiaryQuestionnaire?
+  sessions          DiarySession[]
+
+  @@index([psychologistId])
+  @@index([status])
+}
+
+model DiaryQuestionnaire {
+  id              String   @id @default(cuid())
+  clientId        String   @unique
+  data            Json     // All 7 questionnaire sections stored as JSON
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model DiarySession {
+  id              String   @id @default(cuid())
+  psychologistId  String
+  clientId        String
+  date            DateTime
+  time            String   // "10:00"
+  endTime         String?  // "10:50"
+  duration        Int      @default(50)  // minutes
+  type            String   @default("individual") // individual, couple, family
+  format          String   @default("online") // online, offline
+  status          String   @default("pending") // pending, confirmed, completed, cancelled
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([psychologistId])
+  @@index([clientId])
+  @@index([date])
+  @@index([status])
+}
+
+model AvailabilitySlot {
+  id              String   @id @default(cuid())
+  psychologistId  String
+  dayOfWeek       Int      // 0=Mon ... 6=Sun
+  startTime       String   // "09:00"
+  endTime         String   // "13:00"
+  duration        Int      @default(50)
+  isRecurring     Boolean  @default(true)
+  specificDate    DateTime?
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@index([psychologistId])
+  @@index([dayOfWeek])
+}
+
+model TimeBlock {
+  id              String   @id @default(cuid())
+  psychologistId  String
+  startDate       DateTime
+  endDate         DateTime
+  type            String   // vacation, personal, other
+  reason          String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@index([psychologistId])
+}
+
+model CalendarIntegration {
+  id              String   @id @default(cuid())
+  psychologistId  String
+  provider        String   // google, yandex, apple
+  accountEmail    String?
+  isActive        Boolean  @default(false)
+  lastSynced      DateTime?
+  conflictsCount  Int      @default(0)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@unique([psychologistId, provider])
+  @@index([psychologistId])
+}
+
+model PsychologistSettings {
+  id                    String   @id @default(cuid())
+  psychologistId        String   @unique
+  timezone              String   @default("Europe/Moscow")
+  defaultSessionDuration Int     @default(50)
+  onlineSessionLink     String?
+  officeAddress         String?
+  cancellationHours     Int      @default(24)
+  cancellationFee       Int      @default(50)
+  cancellationText      String?
+  autoSync              Boolean  @default(true)
+  blockConflicts        Boolean  @default(true)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  psychologist          User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+}
