@@ -265,7 +265,8 @@ export default function ClientsPage() {
                                                         { key: 'fullName', label: 'ФИО' },
                                                         { key: 'dateOfBirth', label: 'Дата рождения' },
                                                         { key: 'age', label: 'Возраст', suffix: ' лет' },
-                                                        { key: 'gender', label: 'Пол', transform: (v: unknown) => v === 'male' ? 'Мужской' : v === 'female' ? 'Женский' : 'Другое' },
+                                                        { key: 'age', label: 'Возраст', suffix: ' лет' },
+                                                        { key: 'gender', label: 'Пол', transform: (v: unknown) => v === 'male' ? 'Мужской' : 'Женский' },
                                                     ]} />
                                                 <QuestionnaireSection title="2. Семья и социальный контекст" data={selectedClient.questionnaire.data}
                                                     fields={[
@@ -311,7 +312,7 @@ export default function ClientsPage() {
                                                 <p className="text-muted-foreground text-sm mb-3">Анкета не заполнена</p>
                                             </div>
                                         )}
-                                        <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || { fullName: selectedClient.name }); }}
+                                        <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || { fullName: selectedClient.name, gender: selectedClient.gender || undefined, phone: selectedClient.phone || undefined, email: selectedClient.email || undefined }); }}
                                             className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors">
                                             {selectedClient.questionnaire?.data ? 'Редактировать анкету' : 'Заполнить анкету'}
                                         </button>
@@ -373,7 +374,7 @@ export default function ClientsPage() {
                             <div>
                                 <label className="block text-sm font-medium mb-2">Пол</label>
                                 <div className="flex gap-2">
-                                    {[{ v: 'male', l: 'Мужской' }, { v: 'female', l: 'Женский' }, { v: 'other', l: 'Другое' }].map(g => (
+                                    {[{ v: 'male', l: 'Мужской' }, { v: 'female', l: 'Женский' }].map(g => (
                                         <button key={g.v} type="button" onClick={() => setNewClient(s => ({ ...s, gender: g.v }))}
                                             className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${newClient.gender === g.v ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
                                             {g.l}
@@ -409,12 +410,14 @@ export default function ClientsPage() {
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Пол</label>
                                         <div className="flex gap-2">
-                                            {[{ v: 'male', l: 'М' }, { v: 'female', l: 'Ж' }, { v: 'other', l: 'Другое' }].map(g => (
-                                                <button key={g.v} type="button" onClick={() => setQuestionnaireForm(f => ({ ...f, gender: g.v }))}
-                                                    className={`px-4 py-1.5 rounded-lg border text-sm ${questionnaireForm.gender === g.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>
-                                                    {g.l}
-                                                </button>
-                                            ))}
+                                            <div className="flex gap-2">
+                                                {[{ v: 'male', l: 'М' }, { v: 'female', l: 'Ж' }].map(g => (
+                                                    <button key={g.v} type="button" onClick={() => setQuestionnaireForm(f => ({ ...f, gender: g.v }))}
+                                                        className={`px-4 py-1.5 rounded-lg border text-sm ${questionnaireForm.gender === g.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>
+                                                        {g.l}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -23,7 +23,7 @@ type Client = {
     name: string;
 };
 
-type ViewMode = 'month' | 'week' | 'list';
+type ViewMode = 'month' | 'week' | 'day';
 
 function isSameDay(d1: Date, d2: Date) {
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
@@ -117,8 +117,30 @@ export default function DiaryCalendarPage() {
         }
     };
 
-    const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-    const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    const navigateDate = (direction: 'prev' | 'next') => {
+        const d = new Date(currentDate);
+        if (viewMode === 'month') {
+            d.setMonth(d.getMonth() + (direction === 'next' ? 1 : -1));
+        } else if (viewMode === 'week') {
+            d.setDate(d.getDate() + (direction === 'next' ? 7 : -7));
+        } else {
+            d.setDate(d.getDate() + (direction === 'next' ? 1 : -1));
+        }
+        setCurrentDate(d);
+        if (viewMode === 'day') setSelectedDate(d);
+    };
+
+    const getHeaderText = () => {
+        if (viewMode === 'month') {
+            return currentDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+        }
+        if (viewMode === 'week') {
+            const startStr = getWeekDays()[0].toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+            const endStr = getWeekDays()[6].toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+            return `${startStr} - ${endStr}`;
+        }
+        return currentDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    };
 
     // Calendar grid
     const year = currentDate.getFullYear();
@@ -139,7 +161,7 @@ export default function DiaryCalendarPage() {
 
     // Week view
     const getWeekDays = () => {
-        const start = new Date(selectedDate);
+        const start = new Date(currentDate);
         const dayOfWeek = (start.getDay() + 6) % 7;
         start.setDate(start.getDate() - dayOfWeek);
         const days: Date[] = [];
@@ -178,26 +200,30 @@ export default function DiaryCalendarPage() {
 
             {/* View Mode Tabs */}
             <div className="flex gap-1 bg-muted/50 p-1 rounded-lg w-fit">
-                {(['month', 'week', 'list'] as ViewMode[]).map(mode => (
+                {(['month', 'week', 'day'] as ViewMode[]).map(mode => (
                     <button
                         key={mode}
-                        onClick={() => setViewMode(mode)}
+                        onClick={() => {
+                            setViewMode(mode);
+                            // Sync current date with selected date when switching to day view
+                            if (mode === 'day') setCurrentDate(selectedDate);
+                        }}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === mode ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                     >
-                        {mode === 'month' ? 'Месяц' : mode === 'week' ? 'Неделя' : 'Список'}
+                        {mode === 'month' ? 'Месяц' : mode === 'week' ? 'Неделя' : 'День'}
                     </button>
                 ))}
             </div>
 
-            {/* Month Navigation */}
+            {/* Navigation */}
             <div className="flex items-center gap-4">
-                <button onClick={prevMonth} className="p-2 hover:bg-muted rounded-lg transition-colors">
+                <button onClick={() => navigateDate('prev')} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <ChevronLeft className="w-5 h-5" />
                 </button>
-                <h2 className="text-lg font-semibold capitalize">
-                    {currentDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+                <h2 className="text-lg font-semibold capitalize min-w-[200px] text-center">
+                    {getHeaderText()}
                 </h2>
-                <button onClick={nextMonth} className="p-2 hover:bg-muted rounded-lg transition-colors">
+                <button onClick={() => navigateDate('next')} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <ChevronRight className="w-5 h-5" />
                 </button>
             </div>
@@ -277,12 +303,12 @@ export default function DiaryCalendarPage() {
                         </div>
                     )}
 
-                    {viewMode === 'list' && (
+                    {viewMode === 'day' && (
                         <div className="space-y-3">
                             {selectedSessions.length === 0 ? (
                                 <div className="bg-white rounded-lg border border-border p-12 text-center">
                                     <CalendarIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                                    <p className="text-muted-foreground">Нет записей на {formatDate(selectedDate)}</p>
+                                    <p className="text-muted-foreground">Нет записей на {formatDate(currentDate)}</p>
                                 </div>
                             ) : (
                                 selectedSessions.map(s => (
