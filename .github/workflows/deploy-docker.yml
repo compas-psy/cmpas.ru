@@ -70,6 +70,22 @@ jobs:
             # Rebuild and restart containers
             docker compose up -d --build --force-recreate
             
+            # ============================================
+            # FIX POSTGRES PASSWORD (CRITICAL!)
+            # docker-entrypoint-initdb.d only runs on FIRST init.
+            # If volume already exists, the password is whatever was
+            # set when the volume was first created. This resets it
+            # to match our expected credentials every time.
+            # ============================================
+            echo "Waiting for postgres to be ready..."
+            sleep 5
+            docker exec cmpas-postgres psql -U postgres -c "ALTER USER postgres PASSWORD 'postgres';" || true
+            echo "Postgres password reset complete."
+            
+            # Restart app so Prisma reconnects with correct credentials
+            docker compose restart app
+            sleep 3
+            
             # Wait for app to be healthy
             echo "Waiting for app to start..."
             for i in {1..30}; do
