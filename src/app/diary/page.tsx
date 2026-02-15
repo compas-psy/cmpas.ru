@@ -56,14 +56,7 @@ export default function DiaryCalendarPage() {
     const [showNewSession, setShowNewSession] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    const [newSession, setNewSession] = useState({
-        clientId: '',
-        date: '',
-        time: '10:00',
-        duration: 50,
-        type: 'individual',
-        format: 'online',
-    });
+    const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -89,21 +82,9 @@ export default function DiaryCalendarPage() {
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => { fetchClients(); }, [fetchClients]);
 
-    const handleCreateSession = async () => {
-        if (!newSession.clientId || !newSession.date || !newSession.time) {
-            toast.error('Заполните все обязательные поля');
-            return;
-        }
-        try {
-            const { createSession } = await import('./actions/sessions');
-            await createSession(newSession);
-            toast.success('Запись создана');
-            setShowNewSession(false);
-            setNewSession({ clientId: '', date: '', time: '10:00', duration: 50, type: 'individual', format: 'online' });
-            fetchSessions();
-        } catch {
-            toast.error('Ошибка при создании записи');
-        }
+    const handleSessionSave = () => {
+        fetchSessions();
+        setShowNewSession(false);
     };
 
     const handleStatusChange = async (id: string, status: string) => {
@@ -183,6 +164,46 @@ export default function DiaryCalendarPage() {
 
     return (
         <div className="space-y-6">
+            {/* Widgets */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <CalendarIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <div className="text-2xl font-bold">{sessions.filter(s => {
+                            const d = new Date(s.date);
+                            const now = new Date();
+                            // Check if in current week (approx)
+                            const startOfWeek = new Date(now);
+                            startOfWeek.setDate(now.getDate() - (now.getDay() + 6) % 7);
+                            const endOfWeek = new Date(startOfWeek);
+                            endOfWeek.setDate(startOfWeek.getDate() + 6);
+                            return d >= startOfWeek && d <= endOfWeek;
+                        }).length}</div>
+                        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Записей на неделю</div>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
+                        <User className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <div className="text-2xl font-bold">{clients.length}</div>
+                        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Всего клиентов</div>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center">
+                        <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <div className="text-2xl font-bold">{sessions.filter(s => s.status === 'pending').length}</div>
+                        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ожидают подтверждения</div>
+                    </div>
+                </div>
+            </div>
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
@@ -190,7 +211,7 @@ export default function DiaryCalendarPage() {
                     <p className="text-muted-foreground text-sm mt-1">Управляйте своими записями</p>
                 </div>
                 <button
-                    onClick={() => { setShowNewSession(true); setNewSession(s => ({ ...s, date: selectedDate.toISOString().slice(0, 10) })); }}
+                    onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
                     className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium self-start"
                 >
                     <Plus className="w-4 h-4" />
@@ -371,86 +392,18 @@ export default function DiaryCalendarPage() {
             </div>
 
             {/* New Session Modal */}
-            {showNewSession && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-auto">
-                        <div className="flex items-center justify-between p-6 border-b border-border">
-                            <h2 className="text-xl font-semibold">Новая запись</h2>
-                            <button onClick={() => setShowNewSession(false)} className="p-2 hover:bg-muted rounded-lg transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-2"><User className="w-4 h-4 inline mr-1" />Клиент</label>
-                                <select
-                                    value={newSession.clientId}
-                                    onChange={e => setNewSession(s => ({ ...s, clientId: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                                >
-                                    <option value="">Выберите клиента</option>
-                                    {clients.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2"><CalendarIcon className="w-4 h-4 inline mr-1" />Дата</label>
-                                <input type="date" value={newSession.date} onChange={e => setNewSession(s => ({ ...s, date: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-2"><Clock className="w-4 h-4 inline mr-1" />Время</label>
-                                    <input type="time" value={newSession.time} onChange={e => setNewSession(s => ({ ...s, time: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-2">Длительность</label>
-                                    <select value={newSession.duration} onChange={e => setNewSession(s => ({ ...s, duration: Number(e.target.value) }))}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white">
-                                        <option value={50}>50 мин</option>
-                                        <option value={80}>80 мин</option>
-                                        <option value={90}>90 мин</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">Тип</label>
-                                <div className="flex gap-2">
-                                    {[{ v: 'individual', l: 'Индивид.' }, { v: 'couple', l: 'Парная' }, { v: 'family', l: 'Семейная' }].map(t => (
-                                        <button key={t.v} type="button" onClick={() => setNewSession(s => ({ ...s, type: t.v }))}
-                                            className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${newSession.type === t.v ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
-                                            {t.l}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">Формат</label>
-                                <div className="flex gap-2">
-                                    <button type="button" onClick={() => setNewSession(s => ({ ...s, format: 'online' }))}
-                                        className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors flex items-center justify-center gap-2 ${newSession.format === 'online' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
-                                        <Video className="w-4 h-4" />Онлайн
-                                    </button>
-                                    <button type="button" onClick={() => setNewSession(s => ({ ...s, format: 'offline' }))}
-                                        className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors flex items-center justify-center gap-2 ${newSession.format === 'offline' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
-                                        <MapPin className="w-4 h-4" />Офлайн
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-6 border-t border-border flex gap-3">
-                            <button onClick={() => setShowNewSession(false)} className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
-                                Отмена
-                            </button>
-                            <button onClick={handleCreateSession} className="flex-1 px-4 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">
-                                Создать
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <SessionModal
+                isOpen={showNewSession}
+                onClose={() => setShowNewSession(false)}
+                onSave={handleSessionSave}
+                initialDate={newSessionDefaults.date}
+                clients={clients}
+            />
         </div>
+    );
+}
+
+import { SessionModal } from './components/SessionModal';
+        </div >
     );
 }

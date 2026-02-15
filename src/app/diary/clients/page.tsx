@@ -81,6 +81,8 @@ export default function ClientsPage() {
     const [activeTab, setActiveTab] = useState<'questionnaire' | 'sessions'>('questionnaire');
     const [showNewClient, setShowNewClient] = useState(false);
     const [showEditQuestionnaire, setShowEditQuestionnaire] = useState(false);
+    const [showNewSession, setShowNewSession] = useState(false);
+    const [editingSession, setEditingSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', gender: '' });
@@ -109,6 +111,23 @@ export default function ClientsPage() {
     }, []);
 
     useEffect(() => { fetchClients(); }, [fetchClients]);
+
+    // Auto-calculate age
+    useEffect(() => {
+        if (questionnaireForm.dateOfBirth) {
+            const birthDate = new Date(questionnaireForm.dateOfBirth);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            if (age >= 0 && age !== questionnaireForm.age) {
+                setQuestionnaireForm(f => ({ ...f, age }));
+            }
+        }
+    }, [questionnaireForm.dateOfBirth]);
+
 
     const handleCreateClient = async () => {
         if (!newClient.name.trim()) { toast.error('Введите имя клиента'); return; }
@@ -323,15 +342,19 @@ export default function ClientsPage() {
                                             <p className="text-muted-foreground text-sm text-center py-8">Нет сессий</p>
                                         ) : (
                                             selectedClient.sessions?.map(s => (
-                                                <div key={s.id} className="p-4 bg-[#f5f5f5] rounded-lg flex items-center gap-3">
+                                                <div key={s.id}
+                                                    onClick={() => { setEditingSession(s); setShowNewSession(true); }}
+                                                    className="p-4 bg-[#f5f5f5] rounded-lg flex items-center gap-3 cursor-pointer hover:bg-[#eaeaea] transition-colors"
+                                                >
                                                     <div className={`w-1 h-10 rounded-full ${statusColors[s.status]}`} />
                                                     <div className="flex-1">
                                                         <div className="text-sm font-medium">
-                                                            {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} · {s.time}
+                                                            {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} · {s.time}
                                                         </div>
                                                         <div className="text-xs text-muted-foreground">
                                                             {s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : 'Семейная'} · {s.duration} мин
                                                         </div>
+                                                        {s.notes && <div className="mt-1 text-xs text-muted-foreground line-clamp-1 italic">{s.notes}</div>}
                                                     </div>
                                                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[s.status]}/10`}>
                                                         {statusLabels[s.status]}
