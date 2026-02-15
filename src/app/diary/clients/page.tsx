@@ -404,8 +404,8 @@ export default function ClientsPage() {
                                 <h3 className="text-base font-semibold mb-3 text-primary">1. Персональная информация</h3>
                                 <div className="space-y-3">
                                     <QInput label="ФИО" value={questionnaireForm.fullName || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, fullName: v }))} />
-                                    <QInput label="Дата рождения" value={questionnaireForm.dateOfBirth || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, dateOfBirth: v }))} />
-                                    <QInput label="Возраст" value={String(questionnaireForm.age || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, age: Number(v) || undefined }))} />
+                                    <QInput type="date" label="Дата рождения" value={questionnaireForm.dateOfBirth || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, dateOfBirth: v }))} />
+                                    <QInput type="number" label="Возраст" value={String(questionnaireForm.age || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, age: Number(v) || undefined }))} />
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Пол</label>
                                         <div className="flex gap-2">
@@ -450,7 +450,7 @@ export default function ClientsPage() {
                                 <div className="space-y-3">
                                     <QInput label="Наличие расстройства" value={questionnaireForm.mentalDisorders || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, mentalDisorders: v }))} multiline />
                                     <QInput label="Лекарства" value={questionnaireForm.medications || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, medications: v }))} />
-                                    <QInput label="Сон (часов)" value={String(questionnaireForm.sleepHours || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, sleepHours: Number(v) || undefined }))} />
+                                    <QInput type="number" label="Сон (часов)" value={String(questionnaireForm.sleepHours || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, sleepHours: Number(v) || undefined }))} />
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Качество сна</label>
                                         <div className="flex gap-2">
@@ -515,7 +515,7 @@ export default function ClientsPage() {
 }
 
 // Helper Components
-function QInput({ label, value, onChange, multiline }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean }) {
+function QInput({ label, value, onChange, multiline, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean; type?: string }) {
     return (
         <div>
             <label className="block text-sm font-medium mb-1">{label}</label>
@@ -523,7 +523,7 @@ function QInput({ label, value, onChange, multiline }: { label: string; value: s
                 <textarea value={value} onChange={e => onChange(e.target.value)} rows={3}
                     className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none" />
             ) : (
-                <input type="text" value={value} onChange={e => onChange(e.target.value)}
+                <input type={type} value={value} onChange={e => onChange(e.target.value)}
                     className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
             )}
         </div>
