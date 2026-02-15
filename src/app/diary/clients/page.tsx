@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, X, ChevronRight, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { SessionModal } from '../components/SessionModal';
+import { DatePicker } from '@/components/ui/date-picker';
 
 type QuestionnaireData = {
     fullName?: string;
@@ -438,7 +440,16 @@ export default function ClientsPage() {
                                 <h3 className="text-base font-semibold mb-3 text-primary">1. Персональная информация</h3>
                                 <div className="space-y-3">
                                     <QInput label="ФИО" value={questionnaireForm.fullName || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, fullName: v }))} />
-                                    <QInput type="date" label="Дата рождения" value={questionnaireForm.dateOfBirth || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, dateOfBirth: v }))} />
+                                    <DatePicker
+                                        label="Дата рождения"
+                                        value={questionnaireForm.dateOfBirth}
+                                        onChange={date => {
+                                            // Handle timezone offset for correct date string
+                                            const offset = date.getTimezoneOffset();
+                                            const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+                                            setQuestionnaireForm(f => ({ ...f, dateOfBirth: adjustedDate.toISOString().split('T')[0] }));
+                                        }}
+                                    />
                                     <QInput type="number" label="Возраст" value={String(questionnaireForm.age || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, age: Number(v) || undefined }))} />
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Пол</label>
@@ -546,7 +557,17 @@ export default function ClientsPage() {
                     </div>
                 </div>
             )}
-        </div>
+
+            {/* Session Modal */}
+            <SessionModal
+                isOpen={showNewSession}
+                onClose={() => { setShowNewSession(false); setEditingSession(null); }}
+                onSave={() => { fetchClients(); if (selectedClient) fetchClientDetail(selectedClient.id); }}
+                initialClient={selectedClient ? { id: selectedClient.id, name: selectedClient.name } : undefined}
+                editSession={editingSession}
+                clients={clients.map(c => ({ id: c.id, name: c.name }))}
+            />
+        </div >
     );
 }
 

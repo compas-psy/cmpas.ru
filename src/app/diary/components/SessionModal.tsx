@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { DatePicker } from '@/components/ui/date-picker';
 
 type SessionModalProps = {
     isOpen: boolean;
@@ -117,9 +118,15 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     {/* Read-only info if editing, or editable if new */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className={editSession ? 'opacity-50 pointer-events-none' : ''}>
-                            <label className="block text-sm font-medium mb-2"><CalendarIcon className="w-4 h-4 inline mr-1" />Дата</label>
-                            <input type="date" value={formData.date} onChange={e => setFormData(s => ({ ...s, date: e.target.value }))}
-                                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                            <DatePicker
+                                label="Дата"
+                                value={formData.date}
+                                onChange={date => {
+                                    const offset = date.getTimezoneOffset();
+                                    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+                                    setFormData(s => ({ ...s, date: adjustedDate.toISOString().split('T')[0] }));
+                                }}
+                            />
                         </div>
                         <div className={editSession ? 'opacity-50 pointer-events-none' : ''}>
                             <label className="block text-sm font-medium mb-2"><Clock className="w-4 h-4 inline mr-1" />Время</label>
