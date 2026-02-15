@@ -365,6 +365,16 @@ export default function ClientsPage() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Schedule Footer */}
+                            <div className="p-4 border-t border-border sticky bottom-0 bg-white">
+                                <button
+                                    onClick={() => { setEditingSession(null); setShowNewSession(true); }}
+                                    className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors shadow-sm"
+                                >
+                                    Запланировать следующую сессию
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

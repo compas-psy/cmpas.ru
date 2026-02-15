@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+import { SessionModal } from './components/SessionModal';
 
 type Session = {
     id: string;
@@ -399,11 +400,5 @@ export default function DiaryCalendarPage() {
                 initialDate={newSessionDefaults.date}
                 clients={clients}
             />
-        </div>
-    );
-}
-
-import { SessionModal } from './components/SessionModal';
-        </div >
-    );
+        </div>);
 }
