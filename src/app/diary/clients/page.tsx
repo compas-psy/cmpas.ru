@@ -112,6 +112,7 @@ export default function ClientsPage() {
 
     const handleCreateClient = async () => {
         if (!newClient.name.trim()) { toast.error('Введите имя клиента'); return; }
+        if (newClient.email && !validateEmail(newClient.email)) { toast.error('Некорректный email'); return; }
         try {
             const { createClient } = await import('../actions/clients');
             await createClient(newClient);
@@ -310,7 +311,7 @@ export default function ClientsPage() {
                                                 <p className="text-muted-foreground text-sm mb-3">Анкета не заполнена</p>
                                             </div>
                                         )}
-                                        <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || {}); }}
+                                        <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || { fullName: selectedClient.name }); }}
                                             className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors">
                                             {selectedClient.questionnaire?.data ? 'Редактировать анкету' : 'Заполнить анкету'}
                                         </button>
@@ -361,7 +362,7 @@ export default function ClientsPage() {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-2">Телефон</label>
-                                <input type="tel" value={newClient.phone} onChange={e => setNewClient(s => ({ ...s, phone: e.target.value }))}
+                                <input type="tel" value={newClient.phone} onChange={e => setNewClient(s => ({ ...s, phone: formatPhoneNumber(e.target.value) }))}
                                     className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="+7 (___) ___-__-__" />
                             </div>
                             <div>
@@ -558,3 +559,36 @@ function QuestionnaireSection({ title, data, fields }: {
         </div>
     );
 }
+
+const formatPhoneNumber = (value: string) => {
+    // Remove all non-digit characters
+    let numbers = value.replace(/\D/g, '');
+
+    // Handle empty
+    if (numbers.length === 0) return '';
+
+    // Handle start digits
+    // If starts with 8 -> replace with 7
+    // If starts with not 7 (and not 8) -> prepend 7
+    if (numbers[0] === '8') {
+        numbers = '7' + numbers.slice(1);
+    } else if (numbers[0] !== '7') {
+        numbers = '7' + numbers;
+    }
+
+    // Limit to 11 digits
+    numbers = numbers.slice(0, 11);
+
+    // Format: +7 (xxx) xxx-xx-xx
+    let final = '+7';
+    if (numbers.length > 1) final += ' (' + numbers.slice(1, 4);
+    if (numbers.length > 4) final += ') ' + numbers.slice(4, 7);
+    if (numbers.length > 7) final += '-' + numbers.slice(7, 9);
+    if (numbers.length > 9) final += '-' + numbers.slice(9, 11);
+
+    return final;
+};
+
+const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
