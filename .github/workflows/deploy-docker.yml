@@ -20,7 +20,11 @@ jobs:
           script: |
             cd /var/www/cmpas.ru
             
-            # Update .env file for Docker build context
+            # UPDATE CODE
+            git stash 2>/dev/null || true
+            git pull origin main
+            
+            # Update .env file for Docker build context (Generate AFTER pull to avoid conflicts)
             cat <<EOF > .env
             DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db
             YANDEX_CLIENT_ID=${{ secrets.YANDEX_CLIENT_ID || '1b261cbc153045beb7d707389fc27515' }}
@@ -34,15 +38,7 @@ jobs:
             TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
             TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
             EOF
-            
-            # Stop old PM2 if running
-            pm2 stop cmpas-app 2>/dev/null || true
-            pm2 delete cmpas-app 2>/dev/null || true
-            
-            # UPDATE CODE
-            git stash 2>/dev/null || true
-            git pull origin main
-            
+
             # ============================================
             # DATABASE BACKUP (CRITICAL - DO NOT SKIP!)
             # ============================================
