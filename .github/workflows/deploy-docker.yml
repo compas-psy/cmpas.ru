@@ -74,7 +74,21 @@ jobs:
             # to match our expected credentials every time.
             # ============================================
             echo "Waiting for postgres to be ready..."
-            sleep 5
+            
+            # Use distinct loop to wait for PG readiness
+            RETRIES=30
+            until docker exec cmpas-postgres pg_isready -U postgres || [ $RETRIES -eq 0 ]; do
+              echo "Postgres is unavailable - sleeping... ($RETRIES retries left)"
+              RETRIES=$((RETRIES-1))
+              sleep 2
+            done
+            
+            if [ $RETRIES -eq 0 ]; then
+              echo "Error: Postgres failed to start within timeout."
+              exit 1
+            fi
+
+            echo "Postgres is ready. Resetting password..."
             docker exec cmpas-postgres psql -U postgres -c "ALTER USER postgres PASSWORD 'postgres';" || true
             echo "Postgres password reset complete."
             
