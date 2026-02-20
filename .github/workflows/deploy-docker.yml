@@ -63,6 +63,22 @@ jobs:
                 echo "AUTH_SECRET replaced. NOTE: Existing sessions will be invalidated (one-time fix)."
               fi
               
+              # Fix empty credentials (from previous broken deploys)
+              if [ -z "$(grep '^YANDEX_CLIENT_ID=' .env | cut -d= -f2)" ]; then
+                echo "WARNING: YANDEX_CLIENT_ID is empty! Setting fallback..."
+                sed -i "s|^YANDEX_CLIENT_ID=.*|YANDEX_CLIENT_ID=${{ secrets.YANDEX_CLIENT_ID || '1b261cbc153045beb7d707389fc27515' }}|" .env
+              fi
+              if [ -z "$(grep '^YANDEX_CLIENT_SECRET=' .env | cut -d= -f2)" ]; then
+                echo "WARNING: YANDEX_CLIENT_SECRET is empty! Setting fallback..."
+                sed -i "s|^YANDEX_CLIENT_SECRET=.*|YANDEX_CLIENT_SECRET=${{ secrets.YANDEX_CLIENT_SECRET || 'b3b7316b0f72442485f441c63ba59cba' }}|" .env
+              fi
+              if [ -z "$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)" ]; then
+                sed -i "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN || '7728157706:AAEZMpN66PSXd7GkyIhKK4Fz4vTi5lxJYI8' }}|" .env
+              fi
+              if [ -z "$(grep '^TELEGRAM_CHAT_ID=' .env | cut -d= -f2)" ]; then
+                sed -i "s|^TELEGRAM_CHAT_ID=.*|TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}|" .env
+              fi
+              
               # Update non-secret env vars that may have changed
               # (these don't affect sessions, safe to update)
               sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db|' .env
