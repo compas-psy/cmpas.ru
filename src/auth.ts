@@ -7,6 +7,30 @@ import { html, text } from "@/lib/email-template"
 // @ts-expect-error - nodemailer types not installed due to peer dep conflict
 import { createTransport } from "nodemailer"
 
+// ============================================
+// AUTH_SECRET VALIDATION (CRITICAL!)
+// If AUTH_SECRET changes between deploys, ALL user sessions become invalid.
+// This check provides early warning when the secret is misconfigured.
+// ============================================
+const PLACEHOLDER_SECRETS = [
+    "changeme-in-production-please-secret-key",
+    "secret-to-be-changed-in-production",
+    "changeme",
+]
+
+if (!process.env.AUTH_SECRET) {
+    console.error("[AUTH CRITICAL] AUTH_SECRET is not set! Authentication will not work.")
+} else if (PLACEHOLDER_SECRETS.includes(process.env.AUTH_SECRET)) {
+    console.error(
+        `[AUTH CRITICAL] AUTH_SECRET is set to a placeholder value! ` +
+        `Generate a real secret with: openssl rand -base64 32`
+    )
+} else {
+    // Log fingerprint (first 8 chars) to help debug secret changes across deploys
+    const fingerprint = process.env.AUTH_SECRET.substring(0, 8)
+    console.log(`[AUTH] AUTH_SECRET fingerprint: ${fingerprint}... (stable = sessions preserved)`)
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(db),
     session: {
