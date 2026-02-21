@@ -47,7 +47,7 @@ jobs:
             TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}
             GOOGLE_CALENDAR_CLIENT_ID=649610920409-i5orvlp14u9qo882fqd6caji868o603c.apps.googleusercontent.com
             GOOGLE_CALENDAR_CLIENT_SECRET=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
-            DADATA_API_KEY=${{ secrets.DADATA_API_KEY || '' }}
+            DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}
             EOF
               echo ".env created with new AUTH_SECRET."
             else
@@ -90,6 +90,11 @@ jobs:
               sed -i 's|^EMAIL_FROM=.*|EMAIL_FROM=noreply@cmpas.ru|' .env
               sed -i 's|^AUTH_TRUST_HOST=.*|AUTH_TRUST_HOST=true|' .env
               sed -i 's|^AUTH_URL=.*|AUTH_URL=https://cmpas.ru|' .env
+              
+              # Ensure DADATA_API_KEY exists
+              if ! grep -q '^DADATA_API_KEY=' .env; then
+                echo "DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}" >> .env
+              fi
             fi
             
             # Show AUTH_SECRET fingerprint (first 8 chars) for debugging
