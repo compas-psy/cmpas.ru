@@ -270,7 +270,8 @@ model AvailabilitySlot {
   endTime         String   // "13:00"
   duration        Int      @default(50)
   isRecurring     Boolean  @default(true)
-  specificDate    DateTime?
+  startDate       DateTime?
+  endDate         DateTime?
   isActive        Boolean  @default(true)
   
   createdAt       DateTime @default(now())

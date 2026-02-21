@@ -19,15 +19,23 @@ export async function getAvailabilitySlots() {
 }
 
 export async function createAvailabilitySlot(data: {
-    date: string;
+    startDate: string;
+    endDate: string;
     startTime: string;
     endTime: string;
     duration?: number;
-    isRecurring?: boolean;
 }) {
     const psychologistId = await getPsychologistId();
-    const dateObj = new Date(data.date);
-    const dayOfWeek = (dateObj.getDay() + 6) % 7; // Convert to Mon=0
+
+    // Parse dates to extract weekday and auto-detect recurrence
+    const start = new Date(data.startDate);
+    const end = new Date(data.endDate);
+
+    // Convert getDay() (Sun=0) to our format (Mon=0, Sun=6)
+    const dayOfWeek = (start.getDay() + 6) % 7;
+
+    // If start and end dates differ, it's a recurring slot across that range
+    const isRecurring = start.getTime() !== end.getTime();
 
     const slot = await db.availabilitySlot.create({
         data: {
@@ -36,8 +44,9 @@ export async function createAvailabilitySlot(data: {
             startTime: data.startTime,
             endTime: data.endTime,
             duration: data.duration || 50,
-            isRecurring: data.isRecurring ?? false,
-            specificDate: data.isRecurring ? null : dateObj,
+            isRecurring,
+            startDate: start,
+            endDate: end,
         },
     });
     revalidatePath('/diary/availability');

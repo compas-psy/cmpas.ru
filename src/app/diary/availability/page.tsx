@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee } from 'lucide-react';
 import { toast } from 'sonner';
 
-type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean };
+type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
 
 const dayShort = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -17,7 +17,7 @@ export default function AvailabilityPage() {
     const [showNewSlot, setShowNewSlot] = useState(false);
     const [showNewBlock, setShowNewBlock] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [newSlot, setNewSlot] = useState({ date: '', startTime: '09:00', endTime: '13:00', duration: 50, isRecurring: false });
+    const [newSlot, setNewSlot] = useState({ startDate: '', endDate: '', startTime: '09:00', endTime: '13:00', duration: 50 });
     const [newBlock, setNewBlock] = useState({ startDate: '', endDate: '', type: 'vacation', reason: '' });
 
     const fetchData = useCallback(async () => {
@@ -33,7 +33,9 @@ export default function AvailabilityPage() {
     useEffect(() => { fetchData(); }, [fetchData]);
 
     const addSlot = async () => {
-        if (!newSlot.date) { toast.error('Укажите дату'); return; }
+        if (!newSlot.startDate || !newSlot.endDate) { toast.error('Укажите даты'); return; }
+        if (new Date(newSlot.endDate) < new Date(newSlot.startDate)) { toast.error('Дата окончания не может быть раньше даты начала'); return; }
+
         const { createAvailabilitySlot } = await import('../actions/availability');
         await createAvailabilitySlot(newSlot);
         toast.success('Окно добавлено'); setShowNewSlot(false); fetchData();
@@ -90,7 +92,15 @@ export default function AvailabilityPage() {
                                     <div key={slot.id} className="bg-primary/10 rounded p-2 group relative">
                                         <div className="text-xs font-medium text-primary">{slot.startTime} - {slot.endTime}</div>
                                         <div className="text-xs text-muted-foreground">{slot.duration} мин</div>
-                                        {slot.isRecurring && <div className="text-xs text-primary/60">♻ Повтор</div>}
+                                        <div className="text-xs text-primary/60 mt-1">
+                                            {slot.isRecurring && slot.startDate && slot.endDate ? (
+                                                `♻ С ${new Date(slot.startDate).toLocaleDateString('ru-RU')} по ${new Date(slot.endDate).toLocaleDateString('ru-RU')}`
+                                            ) : slot.startDate ? (
+                                                `📅 ${new Date(slot.startDate).toLocaleDateString('ru-RU')}`
+                                            ) : (
+                                                `♻ Постоянно` // For old slots
+                                            )}
+                                        </div>
                                         <button onClick={() => rmSlot(slot.id)} className="absolute top-1 right-1 p-0.5 bg-white rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10">
                                             <Trash2 className="w-3 h-3 text-destructive" />
                                         </button>
@@ -131,7 +141,10 @@ export default function AvailabilityPage() {
 
             {/* New Slot Modal */}
             {showNewSlot && <Modal title="Новое окно" onClose={() => setShowNewSlot(false)} onSubmit={addSlot}>
-                <Field label="Дата"><input type="date" value={newSlot.date} onChange={e => setNewSlot(s => ({ ...s, date: e.target.value }))} className="inp" /></Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="С даты"><input type="date" value={newSlot.startDate} onChange={e => setNewSlot(s => ({ ...s, startDate: e.target.value }))} className="inp" /></Field>
+                    <Field label="По дату"><input type="date" value={newSlot.endDate} onChange={e => setNewSlot(s => ({ ...s, endDate: e.target.value }))} className="inp" /></Field>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Начало"><input type="time" value={newSlot.startTime} onChange={e => setNewSlot(s => ({ ...s, startTime: e.target.value }))} className="inp" /></Field>
                     <Field label="Конец"><input type="time" value={newSlot.endTime} onChange={e => setNewSlot(s => ({ ...s, endTime: e.target.value }))} className="inp" /></Field>
@@ -141,10 +154,9 @@ export default function AvailabilityPage() {
                         <option value={50}>50 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
                     </select>
                 </Field>
-                <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={newSlot.isRecurring} onChange={e => setNewSlot(s => ({ ...s, isRecurring: e.target.checked }))} className="w-4 h-4 accent-primary" />
-                    <span className="text-sm">Повторять еженедельно</span>
-                </label>
+                <div className="text-xs text-muted-foreground mt-2">
+                    * Если нужно одноразовое окно, укажите одинаковые даты "С даты" и "По дату". Если разные, окно будет повторяться каждую неделю в выбранный день недели в этом диапазоне (например, каждую Пятницу).
+                </div>
             </Modal>}
 
             {/* New Block Modal */}

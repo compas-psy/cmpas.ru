@@ -110,35 +110,83 @@ export function setupBot() {
                 return;
             }
 
-            // Create inline results
-            const results = slots.map(slot => {
-                const dayLabels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-                const title = `Окно: ${dayLabels[slot.dayOfWeek]} в ${slot.startTime}`;
-                const description = `Длительность: ${slot.duration} мин`;
+            // Create 3 smart inline results
+            const results = [];
 
-                return {
+            // 1. Прямая ссылка на онлайн-запись (Бронирование)
+            results.push({
+                type: 'article',
+                id: 'booking_link',
+                title: '🔗 Отправить ссылку на запись',
+                description: 'Клиент получит ссылку для самостоятельного выбора времени',
+                input_message_content: {
+                    message_text: `👋 Привет! Записаться ко мне на консультацию можно по ссылке ниже:\n\n[Выбрать время и записаться](${TELEGRAM_APP_URL}/bot/book/${psy.id})`,
+                    parse_mode: 'Markdown'
+                },
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: '📅 Записаться',
+                                url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}`
+                            }
+                        ]
+                    ]
+                }
+            });
+
+            // 2. Выбрать время в календаре (через интерфейс Telegram Mini App)
+            results.push({
+                type: 'article',
+                id: 'miniapp_calendar',
+                title: '📅 Выбрать время через Telegram',
+                description: 'Отправит карточку с кнопкой, открывающей календарь внутри Telegram',
+                input_message_content: {
+                    message_text: `👋 Привет! Чтобы выбрать удобное время для сессии, нажми на кнопку ниже. Откроется календарь прямо здесь, в Telegram.`,
+                },
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: '📅 Выбрать время',
+                                url: `https://t.me/cmpas_bot?start=psy_${psy.id}`
+                            }
+                        ]
+                    ]
+                }
+            });
+
+            // 3. Ближайшее свободное окно (если есть слоты)
+            if (slots.length > 0) {
+                // Find the soonest slot. Assuming slots are partially sorted, or just take the first one for simplicity for now.
+                // In a perfect world, we'd calculate the exact next occurrence of the dayOfWeek.
+                const nextSlot = slots[0];
+                const dayLabels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+                results.push({
                     type: 'article',
-                    id: slot.id,
-                    title: title,
-                    description: description,
+                    id: 'nearest_slot',
+                    title: `⚡️ Пригласить на ближайшее окно: ${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}`,
+                    description: `Длительность: ${nextSlot.duration} мин`,
                     input_message_content: {
-                        message_text: `👋 Привет! Я открыл окно для записи: *${dayLabels[slot.dayOfWeek]} в ${slot.startTime}*\n\nНажмите кнопку ниже, чтобы забронировать это время.`,
+                        message_text: `👋 Привет! У меня появилось свободное окно для сессии: *${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}*.\n\nНажми на кнопку ниже, чтобы занять его!`,
                         parse_mode: 'Markdown'
                     },
                     reply_markup: {
                         inline_keyboard: [
                             [
                                 {
-                                    text: 'Записаться',
+                                    text: 'Занять это время',
                                     url: `https://t.me/cmpas_bot?start=psy_${psy.id}`
                                 }
                             ]
                         ]
                     }
-                };
-            });
+                });
+            }
 
-            await ctx.answerInlineQuery(results as any, { cache_time: 0 });
+            // Reverse to show Nearest Slot first if it exists
+            await ctx.answerInlineQuery(results.reverse() as any, { cache_time: 0 });
 
         } catch (error) {
             console.error('Inline query error:', error);
