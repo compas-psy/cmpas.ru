@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { exchangeCodeForTokens, getGoogleUserEmail, listGoogleCalendars } from '@/lib/calendar/google';
 
+const BASE_URL = process.env.AUTH_URL || 'https://cmpas.ru';
+
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -9,11 +11,11 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get('error');
 
     if (error) {
-        return NextResponse.redirect(new URL('/diary/integrations?error=denied', request.url));
+        return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=denied`);
     }
 
     if (!code || !state) {
-        return NextResponse.redirect(new URL('/diary/integrations?error=invalid', request.url));
+        return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=invalid`);
     }
 
     try {
@@ -55,9 +57,9 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        return NextResponse.redirect(new URL('/diary/integrations?success=google', request.url));
+        return NextResponse.redirect(`${BASE_URL}/diary/integrations?success=google`);
     } catch (err) {
         console.error('Google Calendar callback error:', err);
-        return NextResponse.redirect(new URL('/diary/integrations?error=google_failed', request.url));
+        return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=google_failed`);
     }
 }
