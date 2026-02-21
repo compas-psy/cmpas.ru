@@ -149,7 +149,7 @@ export function setupBot() {
                         [
                             {
                                 text: '📅 Выбрать время',
-                                url: `https://t.me/cmpas_bot?start=psy_${psy.id}`
+                                url: `https://t.me/CompasProBot?start=psy_${psy.id}`
                             }
                         ]
                     ]
@@ -177,7 +177,7 @@ export function setupBot() {
                             [
                                 {
                                     text: 'Занять это время',
-                                    url: `https://t.me/cmpas_bot?start=psy_${psy.id}`
+                                    url: `https://t.me/CompasProBot?start=psy_${psy.id}`
                                 }
                             ]
                         ]

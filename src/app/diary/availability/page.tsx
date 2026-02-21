@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee } from 'lucide-react';
 import { toast } from 'sonner';
+import { DatePicker, TimePicker } from '@/components/ui/date-picker';
 
 type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
@@ -146,12 +147,12 @@ export default function AvailabilityPage() {
             {/* New Slot Modal */}
             {showNewSlot && <Modal title="Новое окно" onClose={() => setShowNewSlot(false)} onSubmit={addSlot}>
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="С даты"><input type="date" value={newSlot.startDate} onChange={e => setNewSlot(s => ({ ...s, startDate: e.target.value }))} className="inp" /></Field>
-                    <Field label="По дату"><input type="date" value={newSlot.endDate} onChange={e => setNewSlot(s => ({ ...s, endDate: e.target.value }))} className="inp" /></Field>
+                    <Field label="С даты"><DatePicker value={newSlot.startDate} onChange={d => setNewSlot(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                    <Field label="По дату"><DatePicker value={newSlot.endDate} onChange={d => setNewSlot(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="Начало"><input type="time" value={newSlot.startTime} onChange={e => setNewSlot(s => ({ ...s, startTime: e.target.value }))} className="inp" /></Field>
-                    <Field label="Конец"><input type="time" value={newSlot.endTime} onChange={e => setNewSlot(s => ({ ...s, endTime: e.target.value }))} className="inp" /></Field>
+                    <Field label="Начало"><TimePicker value={newSlot.startTime} onChange={t => setNewSlot(s => ({ ...s, startTime: t }))} /></Field>
+                    <Field label="Конец"><TimePicker value={newSlot.endTime} onChange={t => setNewSlot(s => ({ ...s, endTime: t }))} /></Field>
                 </div>
                 <Field label="Длительность">
                     <select value={newSlot.duration} onChange={e => setNewSlot(s => ({ ...s, duration: Number(e.target.value) }))} className="inp bg-white">
@@ -166,8 +167,8 @@ export default function AvailabilityPage() {
             {/* New Block Modal */}
             {showNewBlock && <Modal title="Блокировка времени" onClose={() => setShowNewBlock(false)} onSubmit={addBlock}>
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="С"><input type="date" value={newBlock.startDate} onChange={e => setNewBlock(s => ({ ...s, startDate: e.target.value }))} className="inp" /></Field>
-                    <Field label="По"><input type="date" value={newBlock.endDate} onChange={e => setNewBlock(s => ({ ...s, endDate: e.target.value }))} className="inp" /></Field>
+                    <Field label="С"><DatePicker value={newBlock.startDate} onChange={d => setNewBlock(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                    <Field label="По"><DatePicker value={newBlock.endDate} onChange={d => setNewBlock(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                 </div>
                 <Field label="Тип">
                     <div className="flex gap-2">

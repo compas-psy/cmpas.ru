@@ -444,10 +444,11 @@ export default function ClientsPage() {
                                         label="Дата рождения"
                                         value={questionnaireForm.dateOfBirth}
                                         onChange={date => {
-                                            // Handle timezone offset for correct date string
-                                            const offset = date.getTimezoneOffset();
-                                            const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-                                            setQuestionnaireForm(f => ({ ...f, dateOfBirth: adjustedDate.toISOString().split('T')[0] }));
+                                            if (date) {
+                                                const offset = date.getTimezoneOffset();
+                                                const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+                                                setQuestionnaireForm(f => ({ ...f, dateOfBirth: adjustedDate.toISOString().split('T')[0] }));
+                                            }
                                         }}
                                     />
                                     <QInput type="number" label="Возраст" value={String(questionnaireForm.age || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, age: Number(v) || undefined }))} />
