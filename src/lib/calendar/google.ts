@@ -263,7 +263,11 @@ export async function syncAllSessionsToGoogle(
         let synced = 0;
         for (const session of sessions) {
             const result = await createGoogleCalendarEvent(integration.id, session);
-            if (result.success) synced++;
+            if (result.success) {
+                synced++;
+            } else {
+                console.error(`Failed to sync session ${session.id} to Google:`, result.error);
+            }
         }
 
         return { success: true, synced };

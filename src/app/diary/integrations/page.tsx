@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { Link2, RefreshCw, ShieldCheck, ExternalLink, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -13,16 +14,18 @@ type Integration = {
     conflictsCount: number;
 };
 
-const providerInfo: Record<string, { name: string; color: string; icon: string; description: string }> = {
+const providerInfo: Record<string, { name: string; color: string; image?: string; icon: string; description: string }> = {
     google: {
         name: 'Google Calendar',
-        color: 'bg-blue-500',
+        color: 'bg-white',
+        image: '/icons/google-calendar.svg',
         icon: '📅',
         description: 'Синхронизация через OAuth. Нажмите для авторизации через Google.'
     },
     yandex: {
         name: 'Яндекс Календарь',
-        color: 'bg-red-500',
+        color: 'bg-[#FC3F1D]',
+        image: '/icons/yandex-calendar.svg',
         icon: '📆',
         description: 'Подключение через пароль приложения Яндекс.'
     },
@@ -44,14 +47,24 @@ export default function IntegrationsPage() {
     const [yandexConnecting, setYandexConnecting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
+    const [autoSync, setAutoSync] = useState(true);
+    const [blockConflicts, setBlockConflicts] = useState(true);
+    const [updatingSettings, setUpdatingSettings] = useState(false);
+
     const fetchData = useCallback(async () => {
         try {
-            const { getIntegrations } = await import('../actions/settings');
+            const { getIntegrations, getSettings } = await import('../actions/settings');
             const data = await getIntegrations();
             setIntegrations(data.map((d: { id: string; provider: string; accountEmail: string | null; isActive: boolean; lastSynced: Date | null; conflictsCount: number }) => ({
                 ...d,
                 lastSynced: d.lastSynced ? new Date(d.lastSynced).toISOString() : null
             })));
+
+            const settings = await getSettings();
+            if (settings) {
+                setAutoSync(settings.autoSync);
+                setBlockConflicts(settings.blockConflicts);
+            }
         } catch { /* */ }
         setLoading(false);
     }, []);
@@ -159,6 +172,21 @@ export default function IntegrationsPage() {
 
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
+    const handleToggleSetting = async (field: 'autoSync' | 'blockConflicts', currentValue: boolean) => {
+        setUpdatingSettings(true);
+        try {
+            const { updateSettings } = await import('../actions/settings');
+            const newValue = !currentValue;
+            await updateSettings({ [field]: newValue });
+            if (field === 'autoSync') setAutoSync(newValue);
+            if (field === 'blockConflicts') setBlockConflicts(newValue);
+            toast.success('Настройки сохранены');
+        } catch {
+            toast.error('Ошибка при сохранении');
+        }
+        setUpdatingSettings(false);
+    };
+
     const connectedProviders = integrations.map(i => i.provider);
     const availableProviders = ['google', 'yandex', 'apple'].filter(p => !connectedProviders.includes(p));
 
@@ -179,7 +207,13 @@ export default function IntegrationsPage() {
                             return (
                                 <div key={i.id} className="bg-white rounded-lg border border-border p-5">
                                     <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl`}>{info.icon}</div>
+                                        <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl overflow-hidden shrink-0 border border-border/50`}>
+                                            {info.image ? (
+                                                <Image src={info.image} alt={info.name} width={48} height={48} className="w-full h-full object-cover" />
+                                            ) : (
+                                                info.icon
+                                            )}
+                                        </div>
                                         <div className="flex-1">
                                             <div className="font-medium flex items-center gap-2">
                                                 {info.name}
@@ -235,7 +269,13 @@ export default function IntegrationsPage() {
                         const isApple = p === 'apple';
                         return (
                             <div key={p} className={`bg-white rounded-lg border border-border p-5 ${isApple ? 'opacity-60' : ''}`}>
-                                <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl mb-3`}>{info.icon}</div>
+                                <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl mb-3 overflow-hidden border border-border/50`}>
+                                    {info.image ? (
+                                        <Image src={info.image} alt={info.name} width={48} height={48} className="w-full h-full object-cover" />
+                                    ) : (
+                                        info.icon
+                                    )}
+                                </div>
                                 <h3 className="font-medium mb-1">{info.name}</h3>
                                 <p className="text-xs text-muted-foreground mb-4">{info.description}</p>
                                 <button
@@ -262,7 +302,9 @@ export default function IntegrationsPage() {
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowYandexForm(false)}>
                     <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center text-white text-lg">📆</div>
+                            <div className="w-10 h-10 bg-[#FC3F1D] rounded-xl flex items-center justify-center text-white overflow-hidden border border-border/50">
+                                <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={40} height={40} className="w-full h-full object-cover" />
+                            </div>
                             <h3 className="text-lg font-semibold">Яндекс Календарь</h3>
                         </div>
 
@@ -346,7 +388,13 @@ export default function IntegrationsPage() {
                             <div className="text-sm font-medium">Автоматическая синхронизация</div>
                             <div className="text-xs text-muted-foreground">Синхронизировать события при создании/изменении сессий</div>
                         </div>
-                        <button className="relative w-12 h-6 rounded-full bg-primary"><div className="absolute top-0.5 left-[26px] w-5 h-5 bg-white rounded-full shadow" /></button>
+                        <button
+                            disabled={updatingSettings}
+                            onClick={() => handleToggleSetting('autoSync', autoSync)}
+                            className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${autoSync ? 'bg-primary' : 'bg-muted'}`}
+                        >
+                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoSync ? 'left-[26px]' : 'left-0.5'}`} />
+                        </button>
                     </div>
                     <div className="h-px bg-border" />
                     <div className="flex items-center justify-between">
@@ -354,7 +402,13 @@ export default function IntegrationsPage() {
                             <div className="text-sm font-medium">Блокировка конфликтов</div>
                             <div className="text-xs text-muted-foreground">Блокировать слоты при конфликтах с внешним календарём</div>
                         </div>
-                        <button className="relative w-12 h-6 rounded-full bg-primary"><div className="absolute top-0.5 left-[26px] w-5 h-5 bg-white rounded-full shadow" /></button>
+                        <button
+                            disabled={updatingSettings}
+                            onClick={() => handleToggleSetting('blockConflicts', blockConflicts)}
+                            className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${blockConflicts ? 'bg-primary' : 'bg-muted'}`}
+                        >
+                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${blockConflicts ? 'left-[26px]' : 'left-0.5'}`} />
+                        </button>
                     </div>
                 </div>
             </div>
