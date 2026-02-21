@@ -297,6 +297,20 @@ model CalendarIntegration {
   isActive        Boolean  @default(false)
   lastSynced      DateTime?
   conflictsCount  Int      @default(0)
+
+  // OAuth tokens (Google Calendar)
+  accessToken     String?  // encrypted
+  refreshToken    String?  // encrypted
+  tokenExpiry     DateTime?
+
+  // CalDAV credentials (Yandex Calendar)
+  caldavLogin     String?  // encrypted
+  caldavPassword  String?  // encrypted (app password)
+  caldavUrl       String?  // CalDAV server URL
+
+  // Calendar identifiers
+  calendarId      String?  // provider-specific calendar ID or URL
+  syncToken       String?  // for incremental sync (ctag/syncToken)
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

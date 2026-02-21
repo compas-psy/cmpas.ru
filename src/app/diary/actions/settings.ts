@@ -60,3 +60,11 @@ export async function toggleIntegration(id: string, isActive: boolean) {
     revalidatePath('/diary/integrations');
     return integration;
 }
+
+export async function disconnectIntegration(id: string) {
+    await getPsychologistId();
+    await db.calendarIntegration.delete({
+        where: { id },
+    });
+    revalidatePath('/diary/integrations');
+}
