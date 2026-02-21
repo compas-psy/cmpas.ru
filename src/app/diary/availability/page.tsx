@@ -24,8 +24,12 @@ export default function AvailabilityPage() {
         try {
             const { getAvailabilitySlots, getTimeBlocks } = await import('../actions/availability');
             const [s, b] = await Promise.all([getAvailabilitySlots(), getTimeBlocks()]);
-            setSlots(s);
-            setBlocks(b.map((x: { id: string; startDate: Date; endDate: Date; type: string; reason: string | null }) => ({ ...x, startDate: new Date(x.startDate).toISOString(), endDate: new Date(x.endDate).toISOString() })));
+            setSlots(s.map((x: any) => ({
+                ...x,
+                startDate: x.startDate ? new Date(x.startDate).toISOString() : null,
+                endDate: x.endDate ? new Date(x.endDate).toISOString() : null
+            })));
+            setBlocks(b.map((x: any) => ({ ...x, startDate: new Date(x.startDate).toISOString(), endDate: new Date(x.endDate).toISOString() })));
         } catch { /* */ }
         setLoading(false);
     }, []);
