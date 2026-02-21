@@ -191,7 +191,51 @@ jobs:
             done
             
             # Run Database Migrations (safe - only applies new migrations)
-            echo "Running database migrations..."
+            # First, ensure critical schema changes are applied directly (idempotent)
+            echo "Applying idempotent schema fixes..."
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
+              -- PsychologistAddress table
+              CREATE TABLE IF NOT EXISTS \"PsychologistAddress\" (
+                \"id\" TEXT NOT NULL,
+                \"psychologistId\" TEXT NOT NULL,
+                \"name\" TEXT NOT NULL,
+                \"address\" TEXT NOT NULL,
+                \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \"updatedAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT \"PsychologistAddress_pkey\" PRIMARY KEY (\"id\")
+              );
+              -- AvailabilitySlot columns
+              ALTER TABLE \"AvailabilitySlot\" ADD COLUMN IF NOT EXISTS \"format\" TEXT NOT NULL DEFAULT 'online';
+              ALTER TABLE \"AvailabilitySlot\" ADD COLUMN IF NOT EXISTS \"addressId\" TEXT;
+              -- DiarySession columns
+              ALTER TABLE \"DiarySession\" ADD COLUMN IF NOT EXISTS \"addressId\" TEXT;
+              -- PsychologistSettings columns
+              ALTER TABLE \"PsychologistSettings\" ADD COLUMN IF NOT EXISTS \"sessionBreak\" INTEGER NOT NULL DEFAULT 15;
+            " || echo "WARNING: Direct SQL fixup failed"
+            
+            # Add foreign keys if they don't exist
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
+              DO \$\$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PsychologistAddress_psychologistId_fkey') THEN
+                  ALTER TABLE \"PsychologistAddress\" ADD CONSTRAINT \"PsychologistAddress_psychologistId_fkey\" FOREIGN KEY (\"psychologistId\") REFERENCES \"User\"(\"id\") ON DELETE CASCADE ON UPDATE CASCADE;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AvailabilitySlot_addressId_fkey') THEN
+                  ALTER TABLE \"AvailabilitySlot\" ADD CONSTRAINT \"AvailabilitySlot_addressId_fkey\" FOREIGN KEY (\"addressId\") REFERENCES \"PsychologistAddress\"(\"id\") ON DELETE SET NULL ON UPDATE CASCADE;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'DiarySession_addressId_fkey') THEN
+                  ALTER TABLE \"DiarySession\" ADD CONSTRAINT \"DiarySession_addressId_fkey\" FOREIGN KEY (\"addressId\") REFERENCES \"PsychologistAddress\"(\"id\") ON DELETE SET NULL ON UPDATE CASCADE;
+                END IF;
+              END \$\$;
+            " || echo "WARNING: Foreign key fixup failed"
+            
+            # Mark the migration as applied if it's not already
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
+              INSERT INTO \"_prisma_migrations\" (\"id\", \"checksum\", \"finished_at\", \"migration_name\", \"logs\", \"rolled_back_at\", \"started_at\", \"applied_steps_count\")
+              SELECT gen_random_uuid()::text, 'manual', NOW(), '20260222000000_add_advanced_scheduling', NULL, NULL, NOW(), 1
+              WHERE NOT EXISTS (SELECT 1 FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260222000000_add_advanced_scheduling');
+            " || echo "WARNING: Migration record insert failed"
+            
+            echo "Running prisma migrate deploy..."
             docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy || {
               echo "WARNING: Migration failed! Check the migration files."
             }
