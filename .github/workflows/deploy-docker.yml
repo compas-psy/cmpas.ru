@@ -166,6 +166,11 @@ jobs:
             echo "=== pg_hba.conf verification ==="
             docker exec cmpas-postgres grep -v '^#' /var/lib/postgresql/data/pg_hba.conf | grep -v '^$'
             
+            # Restart app so Prisma connects with trust auth (not the old scram-sha-256)
+            echo "Restarting app to use patched pg_hba.conf..."
+            docker compose restart app
+            sleep 3
+            
             # Wait for app to be healthy
             echo "Waiting for app to start..."
             for i in {1..30}; do
