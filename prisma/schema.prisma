@@ -27,6 +27,11 @@ model User {
   timeBlocks           TimeBlock[]
   calendarIntegrations CalendarIntegration[]
   psychologistSettings PsychologistSettings?
+  
+  // Telegram Integration
+  telegramChatId       String?   @unique
+  telegramUsername     String?
+  telegramClients      TelegramClient[]
  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -206,6 +211,10 @@ model DiaryClient {
   nextSessionDate   DateTime?
   status            String    @default("active") // active, paused, archived
   
+  // Telegram Integration
+  telegramChatId    String?   // For notifications direct to client
+  telegramClient    TelegramClient?
+  
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -338,4 +347,28 @@ model PsychologistSettings {
   updatedAt             DateTime @updatedAt
 
   psychologist          User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+}
+
+// Telegram Bot specific tables
+model TelegramClient {
+  id              String   @id @default(cuid())
+  telegramUserId  String   @unique
+  telegramUsername String?
+  phone           String?
+  email           String?
+  fullName        String?
+  consentGiven    Boolean  @default(false)
+  consentDate     DateTime?
+
+  // Linking to potential actual entities
+  diaryClientId   String?  @unique
+  diaryClient     DiaryClient? @relation(fields: [diaryClientId], references: [id])
+  
+  psychologistId  String?  // The primary psychologist this client interacts with
+  psychologist    User?    @relation(fields: [psychologistId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([psychologistId])
 }

@@ -68,3 +68,16 @@ export async function disconnectIntegration(id: string) {
     });
     revalidatePath('/diary/integrations');
 }
+
+export async function linkTelegramAccount(telegramChatId: string, telegramUsername?: string) {
+    const psychologistId = await getPsychologistId();
+    await db.user.update({
+        where: { id: psychologistId },
+        data: {
+            telegramChatId: telegramChatId.toString(),
+            telegramUsername
+        },
+    });
+    revalidatePath('/diary/integrations');
+    return { success: true };
+}
