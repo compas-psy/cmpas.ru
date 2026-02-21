@@ -8,7 +8,7 @@ export async function getPsychologist(id: string) {
     return db.user.findUnique({ where: { id }, select: { name: true, image: true } });
 }
 
-function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[]) {
+function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], sessionBreak: number) {
     // Expected dateStr format: 'yyyy-MM-dd'
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
@@ -31,7 +31,7 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
 
     const daySessions = sessions.filter(s => s.date.getTime() === date.getTime());
 
-    let times: string[] = [];
+    let timesObj: Record<string, { time: string, format: string, addressId: string | null }> = {};
 
     daySlots.forEach(slot => {
         const [startH, startM] = slot.startTime.split(':').map(Number);
@@ -63,14 +63,21 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
             });
 
             if (!hasClash) {
-                times.push(timeStr);
+                const key = `${timeStr}-${slot.format || 'online'}`;
+                if (!timesObj[key]) {
+                    timesObj[key] = {
+                        time: timeStr,
+                        format: slot.format || 'online',
+                        addressId: slot.addressId || null
+                    };
+                }
             }
 
-            currentTotalMins += duration;
+            currentTotalMins += duration + sessionBreak;
         }
     });
 
-    return Array.from(new Set(times)).sort();
+    return Object.values(timesObj).sort((a, b) => a.time.localeCompare(b.time));
 }
 
 export async function getAvailableDates(psychologistId: string, year: number, month: number) {
@@ -80,6 +87,9 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     if (!slots.length) return [];
+
+    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    const sessionBreak = settings?.sessionBreak ?? 15;
 
     const blocks = await db.timeBlock.findMany({
         where: {
@@ -104,7 +114,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
         if (isBefore(d, today)) continue;
 
         const dateStr = format(d, 'yyyy-MM-dd');
-        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions);
+        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions, sessionBreak);
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
         }
@@ -118,6 +128,9 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string)
     const date = new Date(year, month - 1, day);
 
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
+    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    const sessionBreak = settings?.sessionBreak ?? 15;
+
     const blocks = await db.timeBlock.findMany({
         where: {
             psychologistId,
@@ -134,10 +147,10 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string)
         select: { date: true, time: true, duration: true }
     });
 
-    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions);
+    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions, sessionBreak);
 }
 
-export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string }) {
+export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
     let client = await db.diaryClient.findFirst({
         where: { psychologistId, phone: form.phone }
     });
@@ -177,7 +190,8 @@ export async function bookSession(psychologistId: string, userDetails: any, form
             endTime,
             duration,
             type: 'individual',
-            format: 'online',
+            format: form.format || 'online',
+            addressId: form.addressId || null,
             status: 'confirmed'
         }
     });
@@ -193,7 +207,7 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         try {
             await bot.telegram.sendMessage(
                 psy.telegramChatId,
-                `🔥 <b>Новая запись через Telegram!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n\nСвяжитесь с клиентом в Telegram или по телефону для подтверждения, если это необходимо.`,
+                `🔥 <b>Новая запись через Telegram!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}\n\nСвяжитесь с клиентом в Telegram или по телефону для подтверждения, если это необходимо.`,
                 { parse_mode: 'HTML' }
             );
         } catch (e) {

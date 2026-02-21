@@ -21,36 +21,58 @@ export async function getAvailabilitySlots() {
 export async function createAvailabilitySlot(data: {
     startDate: string;
     endDate: string;
+    daysOfWeek: number[];
     startTime: string;
     endTime: string;
     duration?: number;
+    hasLunch?: boolean;
+    lunchStart?: string;
+    lunchEnd?: string;
+    format?: string;
+    addressId?: string | null;
 }) {
     const psychologistId = await getPsychologistId();
-
-    // Parse dates to extract weekday and auto-detect recurrence
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
-
-    // Convert getDay() (Sun=0) to our format (Mon=0, Sun=6)
-    const dayOfWeek = (start.getDay() + 6) % 7;
-
-    // If start and end dates differ, it's a recurring slot across that range
     const isRecurring = start.getTime() !== end.getTime();
 
-    const slot = await db.availabilitySlot.create({
-        data: {
-            psychologistId,
-            dayOfWeek,
-            startTime: data.startTime,
-            endTime: data.endTime,
-            duration: data.duration || 50,
-            isRecurring,
-            startDate: start,
-            endDate: end,
-        },
-    });
+    const slotsToCreate = [];
+
+    for (const dayOfWeek of data.daysOfWeek) {
+        if (data.hasLunch && data.lunchStart && data.lunchEnd) {
+            // Before lunch
+            slotsToCreate.push({
+                psychologistId, dayOfWeek,
+                startTime: data.startTime, endTime: data.lunchStart,
+                duration: data.duration || 50, isRecurring, startDate: start, endDate: end,
+                format: data.format || 'online', addressId: data.addressId || null
+            });
+            // After lunch
+            slotsToCreate.push({
+                psychologistId, dayOfWeek,
+                startTime: data.lunchEnd, endTime: data.endTime,
+                duration: data.duration || 50, isRecurring, startDate: start, endDate: end,
+                format: data.format || 'online', addressId: data.addressId || null
+            });
+        } else {
+            // Full day
+            slotsToCreate.push({
+                psychologistId, dayOfWeek,
+                startTime: data.startTime, endTime: data.endTime,
+                duration: data.duration || 50, isRecurring, startDate: start, endDate: end,
+                format: data.format || 'online', addressId: data.addressId || null
+            });
+        }
+    }
+
+    if (slotsToCreate.length > 0) {
+        await db.availabilitySlot.createMany({
+            data: slotsToCreate
+        });
+    }
+
     revalidatePath('/diary/availability');
-    return slot;
+    return { success: true };
 }
 
 export async function deleteAvailabilitySlot(id: string) {

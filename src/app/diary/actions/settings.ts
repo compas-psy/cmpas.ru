@@ -23,9 +23,30 @@ export async function getSettings() {
     return settings;
 }
 
+export async function getAddresses() {
+    const psychologistId = await getPsychologistId();
+    return db.psychologistAddress.findMany({ where: { psychologistId } });
+}
+
+export async function createAddress(data: { name: string; address: string }) {
+    const psychologistId = await getPsychologistId();
+    const result = await db.psychologistAddress.create({
+        data: { psychologistId, name: data.name, address: data.address }
+    });
+    revalidatePath('/diary/settings');
+    return result;
+}
+
+export async function deleteAddress(id: string) {
+    await getPsychologistId();
+    await db.psychologistAddress.delete({ where: { id } });
+    revalidatePath('/diary/settings');
+}
+
 export async function updateSettings(data: {
     timezone?: string;
     defaultSessionDuration?: number;
+    sessionBreak?: number;
     onlineSessionLink?: string;
     officeAddress?: string;
     cancellationHours?: number;

@@ -7,11 +7,18 @@ import { toast } from 'sonner';
 type Settings = {
     timezone: string;
     defaultSessionDuration: number;
+    sessionBreak: number;
     onlineSessionLink: string;
     officeAddress: string;
     cancellationHours: number;
     cancellationFee: number;
     cancellationText: string;
+};
+
+type Address = {
+    id: string;
+    name: string;
+    address: string;
 };
 
 const timezones = [
@@ -24,24 +31,31 @@ const timezones = [
 
 export default function SettingsPage() {
     const [settings, setSettings] = useState<Settings>({
-        timezone: 'Europe/Moscow', defaultSessionDuration: 50,
+        timezone: 'Europe/Moscow', defaultSessionDuration: 50, sessionBreak: 15,
         onlineSessionLink: '', officeAddress: '',
         cancellationHours: 24, cancellationFee: 50, cancellationText: '',
     });
+    const [addresses, setAddresses] = useState<Address[]>([]);
+    const [newAddress, setNewAddress] = useState({ name: '', address: '' });
+    const [addingAddress, setAddingAddress] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
 
     const fetchSettings = useCallback(async () => {
         try {
-            const { getSettings } = await import('../actions/settings');
-            const data = await getSettings();
+            const { getSettings, getAddresses } = await import('../actions/settings');
+            const [data, addrs] = await Promise.all([getSettings(), getAddresses()]);
             setSettings({
-                timezone: data.timezone, defaultSessionDuration: data.defaultSessionDuration,
-                onlineSessionLink: data.onlineSessionLink || '', officeAddress: data.officeAddress || '',
+                timezone: data.timezone,
+                defaultSessionDuration: data.defaultSessionDuration,
+                sessionBreak: data.sessionBreak ?? 15,
+                onlineSessionLink: data.onlineSessionLink || '',
+                officeAddress: data.officeAddress || '',
                 cancellationHours: data.cancellationHours, cancellationFee: data.cancellationFee,
                 cancellationText: data.cancellationText || '',
             });
+            setAddresses(addrs);
         } catch { /* */ }
         setLoading(false);
     }, []);
@@ -56,6 +70,32 @@ export default function SettingsPage() {
             toast.success('Настройки сохранены');
         } catch { toast.error('Ошибка при сохранении'); }
         setSaving(false);
+    };
+
+    const handleAddAddress = async () => {
+        if (!newAddress.name || !newAddress.address) return;
+        setAddingAddress(true);
+        try {
+            const { createAddress } = await import('../actions/settings');
+            await createAddress(newAddress);
+            toast.success('Кабинет добавлен');
+            setNewAddress({ name: '', address: '' });
+            fetchSettings();
+        } catch {
+            toast.error('Ошибка добавления');
+        }
+        setAddingAddress(false);
+    };
+
+    const handleDeleteAddress = async (id: string) => {
+        try {
+            const { deleteAddress } = await import('../actions/settings');
+            await deleteAddress(id);
+            toast.success('Кабинет удален');
+            fetchSettings();
+        } catch {
+            toast.error('Ошибка удаления');
+        }
     };
 
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -98,10 +138,51 @@ export default function SettingsPage() {
                     </div>
                     <div>
                         <label className="text-sm font-medium mb-2">Длительность по умолчанию</label>
-                        <select value={settings.defaultSessionDuration} onChange={e => setSettings(s => ({ ...s, defaultSessionDuration: Number(e.target.value) }))}
-                            className="w-full px-3 py-2.5 border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1">
-                            <option value={50}>50 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
-                        </select>
+                        <div className="grid grid-cols-2 gap-4">
+                            <select value={settings.defaultSessionDuration} onChange={e => setSettings(s => ({ ...s, defaultSessionDuration: Number(e.target.value) }))}
+                                className="w-full px-3 py-2.5 border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1">
+                                <option value={50}>50 мин</option><option value={60}>60 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
+                            </select>
+                            <select value={settings.sessionBreak} onChange={e => setSettings(s => ({ ...s, sessionBreak: Number(e.target.value) }))}
+                                className="w-full px-3 py-2.5 border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1">
+                                <option value={0}>Без перерыва</option>
+                                <option value={10}>Перерыв 10 мин</option>
+                                <option value={15}>Перерыв 15 мин</option>
+                                <option value={30}>Перерыв 30 мин</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Cabinets / Addresses */}
+            <div className="bg-white rounded-lg border border-border p-5">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" />Офлайн кабинеты</h2>
+                <div className="space-y-4">
+                    {addresses.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Нет добавленных кабинетов</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {addresses.map(a => (
+                                <div key={a.id} className="flex justify-between items-center p-3 border rounded-lg">
+                                    <div>
+                                        <p className="font-medium text-sm">{a.name}</p>
+                                        <p className="text-xs text-muted-foreground">{a.address}</p>
+                                    </div>
+                                    <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm hover:underline px-2">Удалить</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="pt-4 border-t border-border/50">
+                        <label className="text-sm font-medium mb-2 block">Добавить новый кабинет</label>
+                        <div className="flex gap-2">
+                            <input type="text" value={newAddress.name} onChange={e => setNewAddress(a => ({ ...a, name: e.target.value }))} placeholder="Название (например, Центр на Тверской)" className="flex-1 px-3 py-2 text-sm border rounded-lg" />
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                            <input type="text" value={newAddress.address} onChange={e => setNewAddress(a => ({ ...a, address: e.target.value }))} placeholder="Точный адрес" className="flex-[2] px-3 py-2 text-sm border rounded-lg" />
+                            <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="flex-1 bg-primary text-white text-sm font-medium rounded-lg disabled:opacity-50">Добавить</button>
+                        </div>
                     </div>
                 </div>
             </div>

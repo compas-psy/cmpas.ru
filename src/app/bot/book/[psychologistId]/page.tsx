@@ -26,8 +26,10 @@ export default function ClientBookingPage() {
     // Booking state
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
-    const [availableTimes, setAvailableTimes] = useState<string[]>([]);
-    const [selectedTime, setSelectedTime] = useState<string>('');
+    type TimeSlot = { time: string, format: string, addressId: string | null };
+    const [availableTimes, setAvailableTimes] = useState<TimeSlot[]>([]);
+    const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
+    const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline'>('online');
     const [form, setForm] = useState({ name: '', phone: '' });
 
     // Fetch initial data
@@ -77,7 +79,7 @@ export default function ClientBookingPage() {
         if (!date) return;
 
         setSelectedDate(date);
-        setSelectedTime('');
+        setSelectedTimeSlot(null);
         setAvailableTimes([]);
 
         const dateStr = format(date, 'yyyy-MM-dd');
@@ -91,7 +93,7 @@ export default function ClientBookingPage() {
 
     const handleBooking = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedDate || !selectedTime) {
+        if (!selectedDate || !selectedTimeSlot) {
             toast.error('Выберите дату и время');
             return;
         }
@@ -101,9 +103,16 @@ export default function ClientBookingPage() {
         }
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const sessionFormat = selectedTimeSlot.format === 'both' ? selectedFormat : selectedTimeSlot.format;
 
         toast.promise(
-            bookSession(psychologistId, tgUser, { ...form, date: dateStr, time: selectedTime }),
+            bookSession(psychologistId, tgUser, {
+                ...form,
+                date: dateStr,
+                time: selectedTimeSlot.time,
+                format: sessionFormat,
+                addressId: sessionFormat === 'offline' ? selectedTimeSlot.addressId : null
+            }),
             {
                 loading: 'Оформление записи...',
                 success: () => {
@@ -174,19 +183,50 @@ export default function ClientBookingPage() {
                             <p className="text-muted-foreground text-sm">Нет свободного времени на эту дату</p>
                         ) : (
                             <div className="grid grid-cols-4 gap-2">
-                                {availableTimes.map(time => (
+                                {availableTimes.map(slot => (
                                     <button
-                                        key={time}
+                                        key={`${slot.time}-${slot.format}`}
                                         type="button"
-                                        onClick={() => setSelectedTime(time)}
-                                        className={`py-2 rounded-lg font-medium transition-colors text-sm ${selectedTime === time
-                                                ? 'bg-primary text-primary-foreground shadow-md'
-                                                : 'bg-primary/5 text-primary hover:bg-primary/20'
+                                        onClick={() => {
+                                            setSelectedTimeSlot(slot);
+                                            setSelectedFormat(slot.format === 'offline' ? 'offline' : 'online');
+                                        }}
+                                        className={`py-2 rounded-lg font-medium transition-colors text-sm ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
+                                            ? 'bg-primary text-primary-foreground shadow-md'
+                                            : 'bg-primary/5 text-primary hover:bg-primary/20'
                                             }`}
                                     >
-                                        {time}
+                                        {slot.time}
                                     </button>
                                 ))}
+                            </div>
+                        )}
+
+                        {selectedTimeSlot?.format === 'both' && (
+                            <div className="mt-4 pt-4 border-t">
+                                <label className="block text-sm font-medium mb-2 text-slate-700">Формат проведения</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedFormat('online')}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${selectedFormat === 'online' ? 'bg-primary text-white shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
+                                    >Онлайн</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedFormat('offline')}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${selectedFormat === 'offline' ? 'bg-primary text-white shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
+                                    >В кабинете</button>
+                                </div>
+                            </div>
+                        )}
+                        {selectedTimeSlot?.format === 'offline' && (
+                            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+                                Будет проведена очная встреча в кабинете.
+                            </div>
+                        )}
+                        {selectedTimeSlot?.format === 'online' && (
+                            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+                                Встреча пройдет в онлайн-формате.
                             </div>
                         )}
                     </div>
@@ -231,7 +271,7 @@ export default function ClientBookingPage() {
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTime}
+                        disabled={!selectedDate || !selectedTimeSlot}
                         className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-medium mt-6 shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Подтвердить запись

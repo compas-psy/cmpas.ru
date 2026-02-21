@@ -251,10 +251,13 @@ export async function syncAllSessionsToGoogle(
             return { success: false, synced: 0, error: 'Интеграция не активна' };
         }
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const sessions = await db.diarySession.findMany({
             where: {
                 psychologistId,
-                date: { gte: new Date() },
+                date: { gte: today },
                 status: { in: ['confirmed', 'pending'] },
             },
             include: { client: { select: { name: true } } },

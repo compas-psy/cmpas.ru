@@ -5,8 +5,9 @@ import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee } from 'lucide-react'
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
 
-type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; };
+type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; format?: string; };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
+type Address = { id: string; name: string; address: string };
 
 const dayShort = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const blockLabels: Record<string, string> = { vacation: 'Отпуск', personal: 'Личное', other: 'Другое' };
@@ -15,22 +16,32 @@ const blockIcons: Record<string, typeof Palmtree> = { vacation: Palmtree, person
 export default function AvailabilityPage() {
     const [slots, setSlots] = useState<Slot[]>([]);
     const [blocks, setBlocks] = useState<Block[]>([]);
+    const [addresses, setAddresses] = useState<Address[]>([]);
     const [showNewSlot, setShowNewSlot] = useState(false);
     const [showNewBlock, setShowNewBlock] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [newSlot, setNewSlot] = useState({ startDate: '', endDate: '', startTime: '09:00', endTime: '13:00', duration: 50 });
+    const initialSlot = {
+        startDate: '', endDate: '',
+        daysOfWeek: [] as number[],
+        startTime: '09:00', endTime: '18:00', duration: 50,
+        hasLunch: false, lunchStart: '13:00', lunchEnd: '14:00',
+        format: 'online', addressId: ''
+    };
+    const [newSlot, setNewSlot] = useState(initialSlot);
     const [newBlock, setNewBlock] = useState({ startDate: '', endDate: '', type: 'vacation', reason: '' });
 
     const fetchData = useCallback(async () => {
         try {
             const { getAvailabilitySlots, getTimeBlocks } = await import('../actions/availability');
-            const [s, b] = await Promise.all([getAvailabilitySlots(), getTimeBlocks()]);
+            const { getAddresses } = await import('../actions/settings');
+            const [s, b, addrs] = await Promise.all([getAvailabilitySlots(), getTimeBlocks(), getAddresses()]);
             setSlots(s.map((x: any) => ({
                 ...x,
                 startDate: x.startDate ? new Date(x.startDate).toISOString() : null,
                 endDate: x.endDate ? new Date(x.endDate).toISOString() : null
             })));
             setBlocks(b.map((x: any) => ({ ...x, startDate: new Date(x.startDate).toISOString(), endDate: new Date(x.endDate).toISOString() })));
+            setAddresses(addrs);
         } catch { /* */ }
         setLoading(false);
     }, []);
@@ -40,10 +51,18 @@ export default function AvailabilityPage() {
     const addSlot = async () => {
         if (!newSlot.startDate || !newSlot.endDate) { toast.error('Укажите даты'); return; }
         if (new Date(newSlot.endDate) < new Date(newSlot.startDate)) { toast.error('Дата окончания не может быть раньше даты начала'); return; }
+        if (newSlot.daysOfWeek.length === 0) { toast.error('Выберите хотя бы один день недели'); return; }
+        if (newSlot.startTime >= newSlot.endTime) { toast.error('Время начала должно быть раньше времени окончания'); return; }
+        if (newSlot.hasLunch && (newSlot.lunchStart <= newSlot.startTime || newSlot.lunchEnd >= newSlot.endTime || newSlot.lunchStart >= newSlot.lunchEnd)) {
+            toast.error('Некорректное время обеда'); return;
+        }
 
         const { createAvailabilitySlot } = await import('../actions/availability');
         await createAvailabilitySlot(newSlot);
-        toast.success('Окно добавлено'); setShowNewSlot(false); fetchData();
+        toast.success('Окна добавлены');
+        setShowNewSlot(false);
+        setNewSlot(initialSlot);
+        fetchData();
     };
 
     const rmSlot = async (id: string) => {
@@ -145,22 +164,73 @@ export default function AvailabilityPage() {
             </div>
 
             {/* New Slot Modal */}
-            {showNewSlot && <Modal title="Новое окно" onClose={() => setShowNewSlot(false)} onSubmit={addSlot}>
+            {showNewSlot && <Modal title="Новые окна" onClose={() => setShowNewSlot(false)} onSubmit={addSlot}>
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="С даты"><DatePicker value={newSlot.startDate} onChange={d => setNewSlot(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
-                    <Field label="По дату"><DatePicker value={newSlot.endDate} onChange={d => setNewSlot(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                    <Field label="Действует с"><DatePicker value={newSlot.startDate} onChange={d => setNewSlot(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                    <Field label="Действует по"><DatePicker value={newSlot.endDate} onChange={d => setNewSlot(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <Field label="Начало"><TimePicker value={newSlot.startTime} onChange={t => setNewSlot(s => ({ ...s, startTime: t }))} /></Field>
-                    <Field label="Конец"><TimePicker value={newSlot.endTime} onChange={t => setNewSlot(s => ({ ...s, endTime: t }))} /></Field>
-                </div>
-                <Field label="Длительность">
-                    <select value={newSlot.duration} onChange={e => setNewSlot(s => ({ ...s, duration: Number(e.target.value) }))} className="inp bg-white">
-                        <option value={50}>50 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
-                    </select>
+                <Field label="Дни недели">
+                    <div className="flex flex-wrap gap-2">
+                        {dayShort.map((d, i) => (
+                            <button
+                                key={d} type="button"
+                                onClick={() => setNewSlot(s => ({
+                                    ...s,
+                                    daysOfWeek: s.daysOfWeek.includes(i) ? s.daysOfWeek.filter(x => x !== i) : [...s.daysOfWeek, i]
+                                }))}
+                                className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${newSlot.daysOfWeek.includes(i) ? 'bg-primary text-white' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}
+                            >
+                                {d}
+                            </button>
+                        ))}
+                    </div>
                 </Field>
-                <div className="text-xs text-muted-foreground mt-2">
-                    * Если нужно одноразовое окно, укажите одинаковые даты "С даты" и "По дату". Если разные, окно будет повторяться каждую неделю в выбранный день недели в этом диапазоне (например, каждую Пятницу).
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Начало раб. дня"><TimePicker value={newSlot.startTime} onChange={t => setNewSlot(s => ({ ...s, startTime: t }))} /></Field>
+                    <Field label="Конец раб. дня"><TimePicker value={newSlot.endTime} onChange={t => setNewSlot(s => ({ ...s, endTime: t }))} /></Field>
+                </div>
+
+                <div className="bg-muted/30 p-4 rounded-lg space-y-4 border border-border/50">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={newSlot.hasLunch} onChange={e => setNewSlot(s => ({ ...s, hasLunch: e.target.checked }))} className="w-4 h-4 rounded text-primary focus:ring-primary border-border" />
+                        <span className="text-sm font-medium">Добавить перерыв (Обед)</span>
+                    </label>
+                    {newSlot.hasLunch && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="Начало обеда"><TimePicker value={newSlot.lunchStart} onChange={t => setNewSlot(s => ({ ...s, lunchStart: t }))} /></Field>
+                            <Field label="Конец обеда"><TimePicker value={newSlot.lunchEnd} onChange={t => setNewSlot(s => ({ ...s, lunchEnd: t }))} /></Field>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Режим работы">
+                        <select value={newSlot.format} onChange={e => setNewSlot(s => ({ ...s, format: e.target.value }))} className="inp bg-white">
+                            <option value="online">Только Онлайн</option>
+                            <option value="offline">Только Кабинет</option>
+                            <option value="both">Онлайн + Кабинет</option>
+                        </select>
+                    </Field>
+                    <Field label="Длительность (мин)">
+                        <select value={newSlot.duration} onChange={e => setNewSlot(s => ({ ...s, duration: Number(e.target.value) }))} className="inp bg-white">
+                            <option value={50}>50 мин</option><option value={60}>60 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
+                        </select>
+                    </Field>
+                </div>
+                {(newSlot.format === 'offline' || newSlot.format === 'both') && (
+                    <Field label="Кабинет">
+                        {addresses.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Сначала добавьте кабинет в Настройках → Офлайн кабинеты</p>
+                        ) : (
+                            <select value={newSlot.addressId} onChange={e => setNewSlot(s => ({ ...s, addressId: e.target.value }))} className="inp bg-white">
+                                <option value="">— Выберите кабинет —</option>
+                                {addresses.map(a => <option key={a.id} value={a.id}>{a.name} ({a.address})</option>)}
+                            </select>
+                        )}
+                    </Field>
+                )}
+                <div className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                    * Укажите период действия расписания, выберите нужные дни недели и часы работы. Система автоматически создаст доступные слоты на все подходящие даты.
                 </div>
             </Modal>}
 
