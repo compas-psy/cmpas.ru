@@ -51,7 +51,7 @@ export function setupBot() {
                                 [
                                     {
                                         text: '📅 Записаться на сессию',
-                                        web_app: { url: `${TELEGRAM_APP_URL}/diary/bot/book/${psychologistId}` }
+                                        web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psychologistId}` }
                                     }
                                 ]
                             ]
