@@ -17,6 +17,7 @@ services:
       - EMAIL_FROM=noreply@cmpas.ru
       - AUTH_TRUST_HOST=true
       - AUTH_URL=https://cmpas.ru
+      - DADATA_API_KEY=${DADATA_API_KEY}
     env_file:
       - .env
     depends_on:

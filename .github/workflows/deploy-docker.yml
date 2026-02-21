@@ -47,6 +47,7 @@ jobs:
             TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}
             GOOGLE_CALENDAR_CLIENT_ID=649610920409-i5orvlp14u9qo882fqd6caji868o603c.apps.googleusercontent.com
             GOOGLE_CALENDAR_CLIENT_SECRET=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
+            DADATA_API_KEY=${{ secrets.DADATA_API_KEY || '' }}
             EOF
               echo ".env created with new AUTH_SECRET."
             else
@@ -185,7 +186,10 @@ jobs:
             done
             
             # Run Database Migrations (safe - only applies new migrations)
-            docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy 2>/dev/null || true
+            echo "Running database migrations..."
+            docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy || {
+              echo "WARNING: Migration failed! Check the migration files."
+            }
             
             # ============================================
             # POST-DEPLOY VERIFICATION

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Save, Clock, Video, MapPin, AlertCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import AddressAutocomplete from '@/components/ui/address-autocomplete';
 
 type Settings = {
     timezone: string;
@@ -133,8 +134,12 @@ export default function SettingsPage() {
                     </div>
                     <div>
                         <label className="text-sm font-medium mb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />Адрес офиса</label>
-                        <input type="text" value={settings.officeAddress || ''} onChange={e => setSettings(s => ({ ...s, officeAddress: e.target.value }))}
-                            className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1" placeholder="Москва, ул. Примерная, 1" />
+                        <AddressAutocomplete
+                            value={settings.officeAddress || ''}
+                            onChange={(val) => setSettings(s => ({ ...s, officeAddress: val }))}
+                            className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1"
+                            placeholder="Начните вводить адрес..."
+                        />
                     </div>
                     <div>
                         <label className="text-sm font-medium mb-2">Длительность по умолчанию</label>
@@ -180,7 +185,14 @@ export default function SettingsPage() {
                             <input type="text" value={newAddress.name} onChange={e => setNewAddress(a => ({ ...a, name: e.target.value }))} placeholder="Название (например, Центр на Тверской)" className="flex-1 px-3 py-2 text-sm border rounded-lg" />
                         </div>
                         <div className="flex gap-2 mt-2">
-                            <input type="text" value={newAddress.address} onChange={e => setNewAddress(a => ({ ...a, address: e.target.value }))} placeholder="Точный адрес" className="flex-[2] px-3 py-2 text-sm border rounded-lg" />
+                            <div className="flex-[2]">
+                                <AddressAutocomplete
+                                    value={newAddress.address}
+                                    onChange={(val) => setNewAddress(a => ({ ...a, address: val }))}
+                                    className="w-full px-3 py-2 text-sm border rounded-lg"
+                                    placeholder="Начните вводить адрес..."
+                                />
+                            </div>
                             <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="flex-1 bg-primary text-white text-sm font-medium rounded-lg disabled:opacity-50">Добавить</button>
                         </div>
                     </div>

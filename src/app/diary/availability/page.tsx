@@ -57,12 +57,17 @@ export default function AvailabilityPage() {
             toast.error('Некорректное время обеда'); return;
         }
 
-        const { createAvailabilitySlot } = await import('../actions/availability');
-        await createAvailabilitySlot(newSlot);
-        toast.success('Окна добавлены');
-        setShowNewSlot(false);
-        setNewSlot(initialSlot);
-        fetchData();
+        try {
+            const { createAvailabilitySlot } = await import('../actions/availability');
+            await createAvailabilitySlot(newSlot);
+            toast.success('Окна добавлены');
+            setShowNewSlot(false);
+            setNewSlot(initialSlot);
+            fetchData();
+        } catch (e: any) {
+            console.error('addSlot error:', e);
+            toast.error('Ошибка при создании окон: ' + (e?.message || 'Неизвестная ошибка'));
+        }
     };
 
     const rmSlot = async (id: string) => {
