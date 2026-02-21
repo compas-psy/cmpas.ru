@@ -1,4 +1,4 @@
-'use server';
+// Yandex Calendar CalDAV service (via tsdav)
 
 import { DAVClient } from 'tsdav';
 import { db } from '@/lib/db';

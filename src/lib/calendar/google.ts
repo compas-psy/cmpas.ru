@@ -1,4 +1,4 @@
-'use server';
+// Google Calendar OAuth2 + REST API service
 
 import { db } from '@/lib/db';
 
