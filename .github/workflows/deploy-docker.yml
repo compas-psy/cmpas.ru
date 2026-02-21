@@ -109,7 +109,13 @@ jobs:
             ls -la "$BACKUP_DIR" | tail -5
             # ============================================
             
-            # Ensure port 25 is free (ALWAYS occupied by another service on this server)
+            # ============================================
+            # DISABLE EXIM4 (conflicts with Docker mailer on port 25)
+            # ============================================
+            systemctl stop exim4 2>/dev/null || true
+            systemctl disable exim4 2>/dev/null || true
+            
+            # Ensure port 25 is free
             fuser -k 25/tcp 2>/dev/null || true
             
             # CRITICAL: NEVER use "docker compose down -v" - this deletes database!
@@ -120,15 +126,19 @@ jobs:
             docker compose up -d --build --force-recreate
             
             # ============================================
-            # FIX POSTGRES PASSWORD (CRITICAL!)
-            # docker-entrypoint-initdb.d only runs on FIRST init.
-            # If volume already exists, the password is whatever was
-            # set when the volume was first created. This resets it
-            # to match our expected credentials every time.
+            # FIX POSTGRES AUTH (PERMANENT!)
+            # 
+            # Problem: pg_hba.conf uses scram-sha-256 for network
+            # connections, which causes intermittent auth failures
+            # when Prisma's connection pool reconnects.
+            #
+            # Solution: Since we removed the exposed 5432 port,
+            # postgres is only reachable from Docker network.
+            # We switch to 'trust' auth for all connections.
+            # This change persists in the volume.
             # ============================================
             echo "Waiting for postgres to be ready..."
             
-            # Use distinct loop to wait for PG readiness
             RETRIES=30
             until docker exec cmpas-postgres pg_isready -U postgres || [ $RETRIES -eq 0 ]; do
               echo "Postgres is unavailable - sleeping... ($RETRIES retries left)"
@@ -140,14 +150,21 @@ jobs:
               echo "Error: Postgres failed to start within timeout."
               exit 1
             fi
-
-            echo "Postgres is ready. Resetting password..."
-            docker exec cmpas-postgres psql -U postgres -c "ALTER USER postgres PASSWORD 'postgres';" || true
-            echo "Postgres password reset complete."
             
-            # Restart app so Prisma reconnects with correct credentials
-            docker compose restart app
-            sleep 3
+            echo "Postgres is ready. Patching pg_hba.conf for trust auth..."
+            
+            # Replace scram-sha-256 with trust for all host connections
+            # This is safe because postgres port is NOT exposed to the host
+            docker exec cmpas-postgres sh -c "sed -i 's/host all all all scram-sha-256/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
+            docker exec cmpas-postgres sh -c "sed -i 's/host all all all md5/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
+            
+            # Reload postgres config (no restart needed)
+            docker exec cmpas-postgres pg_ctl reload -D /var/lib/postgresql/data
+            echo "pg_hba.conf patched: all Docker network connections now use trust auth."
+            
+            # Verify pg_hba.conf
+            echo "=== pg_hba.conf verification ==="
+            docker exec cmpas-postgres grep -v '^#' /var/lib/postgresql/data/pg_hba.conf | grep -v '^$'
             
             # Wait for app to be healthy
             echo "Waiting for app to start..."
@@ -163,12 +180,30 @@ jobs:
             # Run Database Migrations (safe - only applies new migrations)
             docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy 2>/dev/null || true
             
-            # Final AUTH_SECRET stability check
-            echo "=== POST-DEPLOY AUTH_SECRET CHECK ==="
+            # ============================================
+            # POST-DEPLOY VERIFICATION
+            # ============================================
+            echo "=== POST-DEPLOY CHECKS ==="
             echo "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2 | cut -c1-8)..."
-            echo "Sessions will remain valid across this deploy."
+            
+            # Verify DB connectivity from app container
+            echo "Testing DB connectivity from app..."
+            if docker compose exec -T app node -e "
+              const { PrismaClient } = require('@prisma/client');
+              const p = new PrismaClient();
+              p.\$queryRaw\`SELECT 1\`.then(() => { console.log('DB OK'); process.exit(0); }).catch(e => { console.error('DB FAIL:', e.message); process.exit(1); });
+            " 2>/dev/null; then
+              echo "Database connectivity: OK"
+            else
+              echo "WARNING: Database connectivity test failed"
+            fi
+            
+            # Verify auth endpoint
+            AUTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/auth/session)
+            echo "Auth endpoint status: $AUTH_STATUS"
             
             # Cleanup old images
             docker image prune -f
             
             echo "Deployment complete!"
+

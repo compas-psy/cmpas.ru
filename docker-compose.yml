@@ -20,8 +20,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - postgres
-      - mailer
+      postgres:
+        condition: service_healthy
+      mailer:
+        condition: service_started
 
   postgres:
     image: postgres:15-alpine
@@ -34,8 +36,14 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./docker/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
-    ports:
-      - "5432:5432"
+    # Port 5432 is NOT exposed to host — app connects via Docker network.
+    # Exposing it caused ISPManager to probe the DB as user "app" (which doesn't exist).
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d cmpas_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   mailer:
     image: boky/postfix
