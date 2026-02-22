@@ -350,6 +350,9 @@ model PsychologistSettings {
   cancellationText      String?
   autoSync              Boolean  @default(true)
   blockConflicts        Boolean  @default(true)
+
+  methods               String[] @default([])
+  basePrice             Int?
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

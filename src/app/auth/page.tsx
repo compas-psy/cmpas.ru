@@ -74,30 +74,36 @@ export default function AuthPage() {
 
                 {/* Левая часть: Форма авторизации */}
                 <div className="flex flex-col items-center">
-                    {/* Логотип с деревом */}
+                    {/* Логотип КОМПАС */}
                     <Link
                         href="/"
-                        className="flex items-center gap-3 mb-8 hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-3 mb-6 hover:opacity-90 transition-opacity"
                     >
-                        <Image
-                            src="/logo-tree.png"
-                            alt="Compas Logo"
-                            width={40}
-                            height={40}
-                            className="object-contain"
-                        />
-                        <span className="text-2xl font-semibold text-[#1a4d3a] tracking-wide">
-                            ЕЖЕДНЕВНИК ПСИХОЛОГА
+                        <div className="w-8 h-8 bg-[#1a4d3a] rounded flex items-center justify-center">
+                            <span className="text-white text-xs font-bold leading-none">К</span>
+                        </div>
+                        <span className="text-xl font-medium tracking-[0.2em] text-[#1a1a1a]">
+                            КОМПАС
                         </span>
                     </Link>
 
+                    {/* Заголовок */}
+                    <div className="text-center mb-8">
+                        <h1 className="text-2xl font-bold text-[#1a1a1a] mb-2">
+                            Вход для психологов
+                        </h1>
+                        <p className="text-sm text-[#1a1a1a]/60">
+                            Войдите или зарегистрируйтесь, чтобы получить доступ к своему расписанию
+                        </p>
+                    </div>
+
                     {/* Карточка авторизации */}
-                    <div className="w-full max-w-[420px] bg-[#1a4d3a] rounded-3xl shadow-xl p-8 lg:p-12">
+                    <div className="w-full max-w-[420px] bg-[#1a4d3a] rounded-[32px] shadow-xl p-8 lg:p-10">
 
                         {/* Кнопка Яндекс */}
                         <button
                             onClick={handleYandexAuth}
-                            className="w-full bg-white hover:bg-gray-50 rounded-2xl px-6 py-4 flex items-center justify-center gap-3 transition-colors mb-6"
+                            className="w-full bg-white hover:bg-gray-50 rounded-2xl px-6 py-[18px] flex items-center justify-center gap-3 transition-colors mb-6 shadow-sm"
                         >
                             <Image
                                 src="/yandex-logo.png"

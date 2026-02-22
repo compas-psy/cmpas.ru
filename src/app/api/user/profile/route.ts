@@ -11,10 +11,18 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { name, email, timezone } = body
+        const {
+            name,
+            methods,
+            workDays,
+            startTime,
+            endTime,
+            defaultSessionDuration,
+            basePrice
+        } = body
 
-        // Update user profile
-        await db.user.update({
+        // 1. Update user profile
+        const user = await db.user.update({
             where: { email: session.user.email },
             data: {
                 name,
@@ -22,7 +30,60 @@ export async function POST(request: Request) {
             }
         })
 
-        return NextResponse.json({ success: true })
+        // 2. Upsert Psychologist Settings
+        const settings = await db.psychologistSettings.upsert({
+            where: { psychologistId: user.id },
+            update: {
+                methods: methods || [],
+                basePrice: basePrice || 0,
+                defaultSessionDuration: defaultSessionDuration || 50,
+            },
+            create: {
+                psychologistId: user.id,
+                methods: methods || [],
+                basePrice: basePrice || 0,
+                defaultSessionDuration: defaultSessionDuration || 50,
+            }
+        })
+
+        // 3. Re-create Availability Slots based on workDays array
+        if (Array.isArray(workDays) && workDays.length === 7) {
+            // First, delete any existing basic recurring slots created during a previous onboarding
+            // We only delete slots without an explicit startDate to avoid wiping out specific exceptions.
+            await db.availabilitySlot.deleteMany({
+                where: {
+                    psychologistId: user.id,
+                    startDate: null,
+                    endDate: null
+                }
+            })
+
+            const newSlots = []
+            for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+                if (workDays[dayIdx]) {
+                    // Map UI day index (0=Mon, 6=Sun) to DB if needed? 
+                    // Wait, our DB expects 0=Mon, 1=Tue etc. as per Prisma spec and UI.
+                    newSlots.push({
+                        psychologistId: user.id,
+                        dayOfWeek: dayIdx,
+                        startTime: startTime || "09:00",
+                        endTime: endTime || "18:00",
+                        duration: defaultSessionDuration || 50,
+                        format: "online",
+                        isRecurring: true,
+                        isActive: true
+                    })
+                }
+            }
+
+            if (newSlots.length > 0) {
+                await db.availabilitySlot.createMany({
+                    data: newSlots
+                })
+            }
+        }
+
+        return NextResponse.json({ success: true, settings })
     } catch (error) {
         console.error("Profile update error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
