@@ -178,8 +178,8 @@ export default function ClientBookingPage() {
                                 if (isAvail) return "!text-foreground !font-medium hover:!bg-muted !rounded-full transition-colors";
                                 return "!text-muted-foreground/30 !opacity-50";
                             }}
-                            monthClassName="!text-foreground !font-medium"
-                            weekDayClassName="!text-muted-foreground !font-medium !text-xs"
+                            monthClassName={() => "!text-foreground !font-medium"}
+                            weekDayClassName={() => "!text-muted-foreground !font-medium !text-xs"}
                         />
                     </div>
                 </div>
