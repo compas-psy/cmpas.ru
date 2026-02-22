@@ -81,6 +81,33 @@ export async function deleteAvailabilitySlot(id: string) {
     revalidatePath('/diary/availability');
 }
 
+export async function updateAvailabilitySlot(id: string, data: {
+    startTime: string;
+    endTime: string;
+    duration: number;
+    format: string;
+    addressId?: string | null;
+}) {
+    const psychologistId = await getPsychologistId();
+    // Only allow updating owned slots
+    const existing = await db.availabilitySlot.findUnique({ where: { id } });
+    if (!existing || existing.psychologistId !== psychologistId) {
+        throw new Error('Unauthorized');
+    }
+
+    await db.availabilitySlot.update({
+        where: { id },
+        data: {
+            startTime: data.startTime,
+            endTime: data.endTime,
+            duration: data.duration,
+            format: data.format,
+            addressId: data.addressId || null,
+        }
+    });
+    revalidatePath('/diary/availability');
+}
+
 export async function getTimeBlocks() {
     const psychologistId = await getPsychologistId();
     return db.timeBlock.findMany({

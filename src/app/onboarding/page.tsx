@@ -34,6 +34,10 @@ export default function OnboardingPage() {
         startTime: "09:00",
         endTime: "18:00",
         defaultSessionDuration: 50,
+        sessionBreak: 15,
+        hasLunchBreak: false,
+        lunchStartTime: "13:00",
+        lunchEndTime: "14:00",
         basePrice: 0,
     })
 
@@ -222,6 +226,71 @@ export default function OnboardingPage() {
                     </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-white text-sm mb-2">Длительность сеанса (мин)</label>
+                        <input
+                            type="number"
+                            min="15"
+                            step="5"
+                            value={formData.defaultSessionDuration}
+                            onChange={(e) => setFormData({ ...formData, defaultSessionDuration: parseInt(e.target.value) || 50 })}
+                            className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white focus:border-white/40 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-white text-sm mb-2">Перерыв между (мин)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="5"
+                            value={formData.sessionBreak}
+                            onChange={(e) => setFormData({ ...formData, sessionBreak: parseInt(e.target.value) || 0 })}
+                            className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white focus:border-white/40 outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <label className="flex items-center gap-3 cursor-pointer group mb-4">
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.hasLunchBreak ? 'bg-[#c9a961] border-[#c9a961]' : 'border-white/30 group-hover:border-white/60'}`}>
+                            {formData.hasLunchBreak && (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            )}
+                        </div>
+                        <span className={`text-sm ${formData.hasLunchBreak ? 'text-white font-medium' : 'text-white/70 group-hover:text-white/90'}`}>
+                            Есть обеденный перерыв
+                        </span>
+                    </label>
+
+                    {formData.hasLunchBreak && (
+                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div>
+                                <label className="block text-white/70 text-xs mb-2">Начало обеда</label>
+                                <input
+                                    type="time"
+                                    value={formData.lunchStartTime}
+                                    onChange={(e) => setFormData({ ...formData, lunchStartTime: e.target.value })}
+                                    className="w-full h-10 px-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none"
+                                    style={{ colorScheme: 'dark' }}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-white/70 text-xs mb-2">Конец обеда</label>
+                                <input
+                                    type="time"
+                                    value={formData.lunchEndTime}
+                                    onChange={(e) => setFormData({ ...formData, lunchEndTime: e.target.value })}
+                                    className="w-full h-10 px-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none"
+                                    style={{ colorScheme: 'dark' }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className="flex gap-4 pt-4">
                     <button
                         onClick={prevStep}
@@ -360,9 +429,7 @@ export default function OnboardingPage() {
                     <div className="flex items-center justify-between mb-12">
                         {/* Logo КОМПАС */}
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
-                                <span className="text-[#1a4d3a] text-xs font-bold leading-none">К</span>
-                            </div>
+                            <Image src="/icon.png" alt="КОМПАС" width={32} height={32} className="w-8 h-8 rounded" />
                             <span className="text-xl font-medium tracking-[0.2em] text-white">
                                 КОМПАС
                             </span>

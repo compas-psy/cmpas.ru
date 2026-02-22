@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee } from 'lucide-react';
+import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
 
-type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; format?: string; };
+type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; format?: string; addressId?: string | null; };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
 type Address = { id: string; name: string; address: string };
 
@@ -19,6 +19,7 @@ export default function AvailabilityPage() {
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [showNewSlot, setShowNewSlot] = useState(false);
     const [showNewBlock, setShowNewBlock] = useState(false);
+    const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
     const [loading, setLoading] = useState(true);
     const initialSlot = {
         startDate: '', endDate: '',
@@ -73,6 +74,28 @@ export default function AvailabilityPage() {
     const rmSlot = async (id: string) => {
         const { deleteAvailabilitySlot } = await import('../actions/availability');
         await deleteAvailabilitySlot(id); toast.success('Удалено'); fetchData();
+    };
+
+    const updateSlot = async () => {
+        if (!editingSlot) return;
+        if (editingSlot.startTime >= editingSlot.endTime) { toast.error('Время начала должно быть раньше времени окончания'); return; }
+
+        try {
+            const { updateAvailabilitySlot } = await import('../actions/availability');
+            await updateAvailabilitySlot(editingSlot.id, {
+                startTime: editingSlot.startTime,
+                endTime: editingSlot.endTime,
+                duration: editingSlot.duration,
+                format: editingSlot.format || 'online',
+                addressId: editingSlot.format !== 'online' ? (editingSlot.addressId || null) : null
+            });
+            toast.success('Окно обновлено');
+            setEditingSlot(null);
+            fetchData();
+        } catch (e: any) {
+            console.error('updateSlot error:', e);
+            toast.error('Ошибка при обновлении: ' + (e?.message || 'Неизвестная ошибка'));
+        }
     };
 
     const addBlock = async () => {
@@ -130,9 +153,14 @@ export default function AvailabilityPage() {
                                                 `♻ Постоянно` // For old slots
                                             )}
                                         </div>
-                                        <button onClick={() => rmSlot(slot.id)} className="absolute top-1 right-1 p-0.5 bg-white rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10">
-                                            <Trash2 className="w-3 h-3 text-destructive" />
-                                        </button>
+                                        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => setEditingSlot(slot)} className="p-0.5 bg-white rounded hover:bg-muted/50 transition-colors">
+                                                <Edit2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                                            </button>
+                                            <button onClick={() => rmSlot(slot.id)} className="p-0.5 bg-white rounded hover:bg-destructive/10 transition-colors">
+                                                <Trash2 className="w-3 h-3 text-destructive" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -254,6 +282,40 @@ export default function AvailabilityPage() {
                     </div>
                 </Field>
                 <Field label="Причина"><input type="text" value={newBlock.reason} onChange={e => setNewBlock(s => ({ ...s, reason: e.target.value }))} placeholder="Необязательно" className="inp" /></Field>
+            </Modal>}
+
+            {/* Edit Slot Modal */}
+            {editingSlot && <Modal title="Редактировать окно" onClose={() => setEditingSlot(null)} onSubmit={updateSlot}>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Начало"><TimePicker value={editingSlot.startTime} onChange={t => setEditingSlot(s => s ? { ...s, startTime: t } : s)} /></Field>
+                    <Field label="Конец"><TimePicker value={editingSlot.endTime} onChange={t => setEditingSlot(s => s ? { ...s, endTime: t } : s)} /></Field>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Режим работы">
+                        <select value={editingSlot.format || 'online'} onChange={e => setEditingSlot(s => s ? { ...s, format: e.target.value } : s)} className="inp bg-white">
+                            <option value="online">Только Онлайн</option>
+                            <option value="offline">Только Кабинет</option>
+                            <option value="both">Онлайн + Кабинет</option>
+                        </select>
+                    </Field>
+                    <Field label="Длительность (мин)">
+                        <select value={editingSlot.duration} onChange={e => setEditingSlot(s => s ? { ...s, duration: Number(e.target.value) } : s)} className="inp bg-white">
+                            <option value={50}>50 мин</option><option value={60}>60 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
+                        </select>
+                    </Field>
+                </div>
+                {(editingSlot.format === 'offline' || editingSlot.format === 'both') && (
+                    <Field label="Кабинет">
+                        {addresses.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Сначала добавьте кабинет в Настройках → Офлайн кабинеты</p>
+                        ) : (
+                            <select value={editingSlot.addressId || ''} onChange={e => setEditingSlot(s => s ? { ...s, addressId: e.target.value } : s)} className="inp bg-white">
+                                <option value="">— Выберите кабинет —</option>
+                                {addresses.map(a => <option key={a.id} value={a.id}>{a.name} ({a.address})</option>)}
+                            </select>
+                        )}
+                    </Field>
+                )}
             </Modal>}
 
             <style jsx>{`.inp { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: 0.5rem; font-size: 0.875rem; outline: none; } .inp:focus { box-shadow: 0 0 0 2px rgba(26,77,58,0.1); }`}</style>

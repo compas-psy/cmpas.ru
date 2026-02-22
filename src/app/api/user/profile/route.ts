@@ -18,7 +18,11 @@ export async function POST(request: Request) {
             startTime,
             endTime,
             defaultSessionDuration,
-            basePrice
+            basePrice,
+            sessionBreak,
+            hasLunchBreak,
+            lunchStartTime,
+            lunchEndTime
         } = body
 
         // 1. Update user profile
@@ -37,12 +41,14 @@ export async function POST(request: Request) {
                 methods: methods || [],
                 basePrice: basePrice || 0,
                 defaultSessionDuration: defaultSessionDuration || 50,
+                sessionBreak: sessionBreak || 15,
             },
             create: {
                 psychologistId: user.id,
                 methods: methods || [],
                 basePrice: basePrice || 0,
                 defaultSessionDuration: defaultSessionDuration || 50,
+                sessionBreak: sessionBreak || 15,
             }
         })
 
@@ -61,18 +67,41 @@ export async function POST(request: Request) {
             const newSlots = []
             for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
                 if (workDays[dayIdx]) {
-                    // Map UI day index (0=Mon, 6=Sun) to DB if needed? 
-                    // Wait, our DB expects 0=Mon, 1=Tue etc. as per Prisma spec and UI.
-                    newSlots.push({
-                        psychologistId: user.id,
-                        dayOfWeek: dayIdx,
-                        startTime: startTime || "09:00",
-                        endTime: endTime || "18:00",
-                        duration: defaultSessionDuration || 50,
-                        format: "online",
-                        isRecurring: true,
-                        isActive: true
-                    })
+                    if (hasLunchBreak && lunchStartTime && lunchEndTime) {
+                        // Split into two slots: Morning and Afternoon
+                        newSlots.push({
+                            psychologistId: user.id,
+                            dayOfWeek: dayIdx,
+                            startTime: startTime || "09:00",
+                            endTime: lunchStartTime,
+                            duration: defaultSessionDuration || 50,
+                            format: "online",
+                            isRecurring: true,
+                            isActive: true
+                        })
+                        newSlots.push({
+                            psychologistId: user.id,
+                            dayOfWeek: dayIdx,
+                            startTime: lunchEndTime,
+                            endTime: endTime || "18:00",
+                            duration: defaultSessionDuration || 50,
+                            format: "online",
+                            isRecurring: true,
+                            isActive: true
+                        })
+                    } else {
+                        // Single continuous slot
+                        newSlots.push({
+                            psychologistId: user.id,
+                            dayOfWeek: dayIdx,
+                            startTime: startTime || "09:00",
+                            endTime: endTime || "18:00",
+                            duration: defaultSessionDuration || 50,
+                            format: "online",
+                            isRecurring: true,
+                            isActive: true
+                        })
+                    }
                 }
             }
 

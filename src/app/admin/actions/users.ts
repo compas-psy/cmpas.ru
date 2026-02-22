@@ -5,14 +5,14 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 
 /**
- * Ensures the caller is a SUPERADMIN before performing destructuve actions
+ * Ensures the caller is an ADMIN or SUPERADMIN before performing destructuve actions
  */
-async function ensureSuperAdmin() {
+async function ensureAdmin() {
     const session = await auth()
     const userRole = (session?.user as { role?: string })?.role
 
-    if (!session?.user || userRole !== "SUPERADMIN") {
-        throw new Error("Unauthorized: Only SUPERADMINs can perform this action.")
+    if (!session?.user || (userRole !== "ADMIN" && userRole !== "SUPERADMIN")) {
+        throw new Error("Unauthorized: Only Admins can perform this action.")
     }
 }
 
