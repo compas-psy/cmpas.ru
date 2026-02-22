@@ -120,15 +120,6 @@ jobs:
             ls -la "$BACKUP_DIR" | tail -5
             # ============================================
             
-            # ============================================
-            # DISABLE EXIM4 (conflicts with Docker mailer on port 25)
-            # ============================================
-            systemctl stop exim4 2>/dev/null || true
-            systemctl disable exim4 2>/dev/null || true
-            
-            # Ensure port 25 is free
-            fuser -k 25/tcp 2>/dev/null || true
-            
             # CRITICAL: NEVER use "docker compose down -v" - this deletes database!
             # Only stop containers, preserve volumes
             docker compose down --timeout 30 || true
@@ -136,6 +127,17 @@ jobs:
             # Prune builder cache to fix "parent snapshot does not exist" error
             echo "Pruning docker builder cache completely..."
             docker builder prune -a -f || true
+
+            # ============================================
+            # DISABLE EXIM4 (conflicts with Docker mailer on port 25)
+            # ============================================
+            systemctl stop exim4 2>/dev/null || true
+            systemctl disable exim4 2>/dev/null || true
+            
+            # Ensure port 25 is free right before docker compose up
+            # (If done earlier, a system service might grab it during the docker build)
+            fuser -k 25/tcp 2>/dev/null || true
+            sleep 2
 
             # Rebuild and restart containers
             docker compose up -d --build --force-recreate
