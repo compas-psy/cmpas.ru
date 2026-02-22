@@ -92,9 +92,18 @@ export default async function DiaryLayout({
         redirect('/auth');
     }
 
-    const userRole = (session.user as { role?: string }).role;
-    if (userRole !== 'ADMIN' && userRole !== 'SUPERADMIN') {
-        redirect('/');
+    // Fetch user with settings to determine onboarding and block status
+    const dbUser = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: { psychologistSettings: true }
+    });
+
+    if (dbUser?.isBlocked) {
+        redirect('/auth/blocked');
+    }
+
+    if (!dbUser?.psychologistSettings) {
+        redirect('/onboarding');
     }
 
     const userName = session.user.name || session.user.email?.split('@')[0] || 'Психолог';

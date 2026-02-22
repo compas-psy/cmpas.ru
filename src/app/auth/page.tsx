@@ -21,7 +21,7 @@ export default function AuthPage() {
 
     const handleYandexAuth = async () => {
         try {
-            await signIn("yandex", { callbackUrl: "/" })
+            await signIn("yandex", { callbackUrl: "/diary" })
         } catch (error) {
             console.error("Yandex sign-in error:", error)
         }
@@ -60,7 +60,7 @@ export default function AuthPage() {
             }
 
             // Proceed with email sign in
-            await signIn("nodemailer", { email, callbackUrl: "/" })
+            await signIn("nodemailer", { email, callbackUrl: "/diary" })
         } catch (error) {
             console.error("Email sign-in error:", error)
         }
@@ -74,16 +74,20 @@ export default function AuthPage() {
 
                 {/* Левая часть: Форма авторизации */}
                 <div className="flex flex-col items-center">
-                    {/* Логотип КОМПАС */}
+                    {/* Логотип с деревом */}
                     <Link
                         href="/"
-                        className="flex items-center gap-3 mb-6 hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-3 mb-8 hover:opacity-90 transition-opacity"
                     >
-                        <div className="w-8 h-8 bg-[#1a4d3a] rounded flex items-center justify-center">
-                            <span className="text-white text-xs font-bold leading-none">К</span>
-                        </div>
-                        <span className="text-xl font-medium tracking-[0.2em] text-[#1a1a1a]">
-                            КОМПАС
+                        <Image
+                            src="/logo-tree.png"
+                            alt="Compas Logo"
+                            width={40}
+                            height={40}
+                            className="object-contain"
+                        />
+                        <span className="text-2xl font-semibold text-[#1a4d3a] tracking-wide">
+                            ЕЖЕДНЕВНИК ПСИХОЛОГА
                         </span>
                     </Link>
 
