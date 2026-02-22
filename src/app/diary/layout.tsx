@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
+import { db } from '@/lib/db';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
