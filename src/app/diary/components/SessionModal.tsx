@@ -89,22 +89,22 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-auto">
-                <div className="flex items-center justify-between p-6 border-b border-border">
-                    <h2 className="text-xl font-semibold">{editSession ? 'Редактировать запись' : 'Новая запись'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
-                        <X className="w-5 h-5" />
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-border/50 bg-muted/10">
+                    <h2 className="text-xl font-bold tracking-tight">{editSession ? 'Редактировать запись' : 'Новая запись'}</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors active:scale-95">
+                        <X className="w-5 h-5 text-muted-foreground" />
                     </button>
                 </div>
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-5 overflow-auto telegram-miniapp-scrollbar-hide">
                     {!editSession && (
                         <div>
-                            <label className="block text-sm font-medium mb-2"><User className="w-4 h-4 inline mr-1" />Клиент</label>
+                            <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90"><User className="w-4 h-4 inline mr-1 text-muted-foreground" />Клиент</label>
                             <select
                                 value={formData.clientId}
                                 onChange={e => setFormData(s => ({ ...s, clientId: e.target.value }))}
-                                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                                className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-sm font-medium transition-all"
                                 disabled={!!initialClient}
                             >
                                 <option value="">Выберите клиента</option>
@@ -141,12 +141,12 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
 
                     {editSession && (
                         <div>
-                            <label className="block text-sm font-medium mb-2"><FileText className="w-4 h-4 inline mr-1" />Заметки по сессии</label>
+                            <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90"><FileText className="w-4 h-4 inline mr-1 text-muted-foreground" />Заметки по сессии</label>
                             <textarea
                                 value={formData.notes}
                                 onChange={e => setFormData(s => ({ ...s, notes: e.target.value }))}
                                 rows={6}
-                                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                                className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background resize-none text-sm font-medium transition-all placeholder:text-muted-foreground/50"
                                 placeholder="Ход сессии, домашнее задание, наблюдения..."
                             />
                         </div>
@@ -156,9 +156,9 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         <>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-2">Длительность</label>
+                                    <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Длительность</label>
                                     <select value={formData.duration} onChange={e => setFormData(s => ({ ...s, duration: Number(e.target.value) }))}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white">
+                                        className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-sm font-medium transition-all">
                                         <option value={50}>50 мин</option>
                                         <option value={60}>60 мин</option>
                                         <option value={80}>80 мин</option>
@@ -167,25 +167,25 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-2">Тип</label>
+                                <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Тип</label>
                                 <div className="flex gap-2">
                                     {[{ v: 'individual', l: 'Индивид.' }, { v: 'couple', l: 'Парная' }, { v: 'family', l: 'Семейная' }].map(t => (
                                         <button key={t.v} type="button" onClick={() => setFormData(s => ({ ...s, type: t.v }))}
-                                            className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formData.type === t.v ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
+                                            className={`flex-1 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors min-h-[44px] ${formData.type === t.v ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
                                             {t.l}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-2">Формат</label>
+                                <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Формат</label>
                                 <div className="flex gap-2">
                                     <button type="button" onClick={() => setFormData(s => ({ ...s, format: 'online' }))}
-                                        className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors flex items-center justify-center gap-2 ${formData.format === 'online' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
+                                        className={`flex-1 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors flex items-center justify-center gap-2 min-h-[44px] ${formData.format === 'online' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
                                         <Video className="w-4 h-4" />Онлайн
                                     </button>
                                     <button type="button" onClick={() => setFormData(s => ({ ...s, format: 'offline' }))}
-                                        className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors flex items-center justify-center gap-2 ${formData.format === 'offline' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
+                                        className={`flex-1 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors flex items-center justify-center gap-2 min-h-[44px] ${formData.format === 'offline' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
                                         <MapPin className="w-4 h-4" />Офлайн
                                     </button>
                                 </div>
@@ -193,11 +193,11 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         </>
                     )}
                 </div>
-                <div className="p-6 border-t border-border flex gap-3">
-                    <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
+                <div className="p-6 border-t border-border/50 bg-muted/10 flex gap-4">
+                    <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-all active:scale-[0.98]">
                         Отмена
                     </button>
-                    <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50">
+                    <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]">
                         {loading ? 'Сохранение...' : 'Сохранить'}
                     </button>
                 </div>

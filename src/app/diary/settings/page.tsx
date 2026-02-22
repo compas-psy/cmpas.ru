@@ -102,54 +102,70 @@ export default function SettingsPage() {
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
     return (
-        <div className="space-y-6 max-w-2xl">
-            <div className="flex items-center justify-between">
+        <div className="space-y-8 pb-12 max-w-3xl mx-auto">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-semibold">Настройки</h1>
-                    <p className="text-muted-foreground text-sm mt-1">Параметры вашего кабинета</p>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Настройки</h1>
+                    <p className="text-muted-foreground text-base mt-2">Параметры вашего кабинета и расписания</p>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50">
+                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.98] disabled:opacity-50">
                     <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
                 </button>
             </div>
 
             {/* Timezone */}
-            <div className="bg-white rounded-lg border border-border p-5">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Clock className="w-5 h-5 text-primary" />Часовой пояс</h2>
-                <select value={settings.timezone} onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm">
-                    {timezones.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-                </select>
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Clock className="w-5 h-5" />
+                    </div>
+                    Часовой пояс
+                </h2>
+                <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground/80 ml-1">Текущий часовой пояс</label>
+                    <select value={settings.timezone} onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}
+                        className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium text-foreground transition-all">
+                        {timezones.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+                    </select>
+                </div>
             </div>
 
             {/* Session Formats */}
-            <div className="bg-white rounded-lg border border-border p-5">
-                <h2 className="text-lg font-semibold mb-4">Форматы сессий</h2>
-                <div className="space-y-4">
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
+                    <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
+                        <Video className="w-5 h-5" />
+                    </div>
+                    Форматы сессий
+                </h2>
+                <div className="space-y-6">
                     <div>
-                        <label className="text-sm font-medium mb-2 flex items-center gap-2"><Video className="w-4 h-4 text-primary" />Ссылка для онлайн-сессий</label>
+                        <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1 flex items-center gap-2">Ссылка для онлайн-сессий</label>
                         <input type="url" value={settings.onlineSessionLink || ''} onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
-                            className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1" placeholder="https://zoom.us/..." />
+                            className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all" placeholder="https://zoom.us/..." />
                     </div>
                     <div>
-                        <label className="text-sm font-medium mb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />Адрес офиса</label>
+                        <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1 flex items-center gap-2">Основной адрес офиса</label>
                         <AddressAutocomplete
                             value={settings.officeAddress || ''}
                             onChange={(val) => setSettings(s => ({ ...s, officeAddress: val }))}
-                            className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1"
+                            className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all"
                             placeholder="Начните вводить адрес..."
                         />
                     </div>
                     <div>
-                        <label className="text-sm font-medium mb-2">Длительность по умолчанию</label>
-                        <div className="grid grid-cols-2 gap-4">
+                        <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1">Временные интервалы по умолчанию</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <select value={settings.defaultSessionDuration} onChange={e => setSettings(s => ({ ...s, defaultSessionDuration: Number(e.target.value) }))}
-                                className="w-full px-3 py-2.5 border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1">
-                                <option value={50}>50 мин</option><option value={60}>60 мин</option><option value={80}>80 мин</option><option value={90}>90 мин</option>
+                                className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all">
+                                <option value={50}>Длительность 50 мин</option>
+                                <option value={60}>Длительность 60 мин</option>
+                                <option value={80}>Длительность 80 мин</option>
+                                <option value={90}>Длительность 90 мин</option>
                             </select>
                             <select value={settings.sessionBreak} onChange={e => setSettings(s => ({ ...s, sessionBreak: Number(e.target.value) }))}
-                                className="w-full px-3 py-2.5 border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm mt-1">
+                                className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all">
                                 <option value={0}>Без перерыва</option>
                                 <option value={10}>Перерыв 10 мин</option>
                                 <option value={15}>Перерыв 15 мин</option>
@@ -161,77 +177,94 @@ export default function SettingsPage() {
             </div>
 
             {/* Cabinets / Addresses */}
-            <div className="bg-white rounded-lg border border-border p-5">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" />Офлайн кабинеты</h2>
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <MapPin className="w-5 h-5" />
+                    </div>
+                    Офлайн кабинеты
+                </h2>
                 <div className="space-y-4">
                     {addresses.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Нет добавленных кабинетов</p>
+                        <div className="bg-muted/30 rounded-2xl p-6 text-center border border-border/50">
+                            <p className="text-sm font-medium text-muted-foreground">У вас пока нет добавленных кабинетов</p>
+                        </div>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {addresses.map(a => (
-                                <div key={a.id} className="flex justify-between items-center p-3 border rounded-lg">
+                                <div key={a.id} className="flex justify-between items-center p-4 bg-background border border-border rounded-2xl hover:border-primary/30 transition-colors group shadow-sm">
                                     <div>
-                                        <p className="font-medium text-sm">{a.name}</p>
-                                        <p className="text-xs text-muted-foreground">{a.address}</p>
+                                        <p className="font-bold text-sm text-foreground">{a.name}</p>
+                                        <p className="text-sm font-medium text-muted-foreground mt-0.5">{a.address}</p>
                                     </div>
-                                    <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm hover:underline px-2">Удалить</button>
+                                    <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity bg-destructive/10 hover:bg-destructive/20 px-3 py-2 rounded-xl">Удалить</button>
                                 </div>
                             ))}
                         </div>
                     )}
-                    <div className="pt-4 border-t border-border/50">
-                        <label className="text-sm font-medium mb-2 block">Добавить новый кабинет</label>
-                        <div className="flex gap-2">
-                            <input type="text" value={newAddress.name} onChange={e => setNewAddress(a => ({ ...a, name: e.target.value }))} placeholder="Название (например, Центр на Тверской)" className="flex-1 px-3 py-2 text-sm border rounded-lg" />
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                            <div className="flex-[2]">
-                                <AddressAutocomplete
-                                    value={newAddress.address}
-                                    onChange={(val) => setNewAddress(a => ({ ...a, address: val }))}
-                                    className="w-full px-3 py-2 text-sm border rounded-lg"
-                                    placeholder="Начните вводить адрес..."
-                                />
+
+                    <div className="pt-6 mt-6 border-t border-border/50">
+                        <label className="text-sm font-semibold mb-3 block text-foreground/80 ml-1">Новый кабинет</label>
+                        <div className="space-y-3">
+                            <input type="text" value={newAddress.name} onChange={e => setNewAddress(a => ({ ...a, name: e.target.value }))} placeholder="Название (например, Центр на Тверской)" className="w-full px-4 py-3 min-h-[48px] text-sm font-medium bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 transition-all" />
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <div className="flex-[2]">
+                                    <AddressAutocomplete
+                                        value={newAddress.address}
+                                        onChange={(val) => setNewAddress(a => ({ ...a, address: val }))}
+                                        className="w-full px-4 py-3 min-h-[48px] text-sm font-medium bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 transition-all"
+                                        placeholder="Начните вводить адрес..."
+                                    />
+                                </div>
+                                <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="md:w-auto w-full px-6 py-3 min-h-[48px] bg-primary text-primary-foreground text-sm font-semibold rounded-xl shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 active:scale-[0.98]">
+                                    Добавить
+                                </button>
                             </div>
-                            <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="flex-1 bg-primary text-white text-sm font-medium rounded-lg disabled:opacity-50">Добавить</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Cancellation Policy */}
-            <div className="bg-white rounded-lg border border-border p-5">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-accent" />Правила отмены</h2>
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
+                    <div className="w-10 h-10 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
+                        <AlertCircle className="w-5 h-5" />
+                    </div>
+                    Правила отмены
+                </h2>
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-sm font-medium mb-2 block">Минимум часов до отмены</label>
+                            <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Без штрафа за часов до отмены</label>
                             <input type="number" value={settings.cancellationHours} onChange={e => setSettings(s => ({ ...s, cancellationHours: Number(e.target.value) }))}
-                                className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" min={0} />
+                                className="w-full px-4 py-3 min-h-[48px] bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all" min={0} />
                         </div>
                         <div>
-                            <label className="text-sm font-medium mb-2 block">Процент оплаты (%)</label>
+                            <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Удержание при поздней отмене (%)</label>
                             <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))}
-                                className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" min={0} max={100} />
+                                className="w-full px-4 py-3 min-h-[48px] bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all" min={0} max={100} />
                         </div>
                     </div>
                     <div>
-                        <label className="text-sm font-medium mb-2 block">Текст правил для клиента</label>
+                        <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Свой текст правил для клиента</label>
                         <textarea value={settings.cancellationText || ''} onChange={e => setSettings(s => ({ ...s, cancellationText: e.target.value }))} rows={4}
-                            className="w-full px-3 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none"
-                            placeholder="Отмена сессии возможна не позднее чем за 24 часа..." />
+                            className="w-full px-4 py-3 bg-background border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium resize-none transition-all placeholder:text-muted-foreground/50"
+                            placeholder="Опишите ваши условия отмены..." />
                     </div>
-                    <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm text-primary hover:underline">
-                        <Eye className="w-4 h-4" />{showPreview ? 'Скрыть предпросмотр' : 'Предпросмотр для клиента'}
-                    </button>
-                    {showPreview && (
-                        <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mt-2">
-                            <h4 className="font-semibold text-sm mb-2 text-accent">Правила отмены</h4>
-                            <p className="text-sm text-foreground/80">
-                                {settings.cancellationText || `Отмена сессии возможна не позднее чем за ${settings.cancellationHours} часов. При отмене менее чем за ${settings.cancellationHours} часов взимается ${settings.cancellationFee}% от стоимости сессии.`}
-                            </p>
-                        </div>
-                    )}
+                    <div>
+                        <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/70 transition-colors ml-1">
+                            <Eye className="w-4 h-4" />{showPreview ? 'Скрыть предпросмотр' : 'Взглянуть глазами клиента'}
+                        </button>
+                        {showPreview && (
+                            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 mt-4 transition-all animate-in fade-in zoom-in-95 duration-200">
+                                <h4 className="font-bold text-sm mb-2 text-foreground">Отмена сеанса</h4>
+                                <p className="text-sm text-foreground/80 leading-relaxed font-medium">
+                                    {settings.cancellationText || `Вы можете бесплатно отменить или перенести сессию не позднее чем за ${settings.cancellationHours} часов. При отмене менее чем за ${settings.cancellationHours} часов удерживается ${settings.cancellationFee}% от стоимости сеанса.`}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

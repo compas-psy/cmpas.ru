@@ -185,64 +185,64 @@ export default function IntegrationsPage() {
     const availableProviders = ['google', 'yandex'].filter(p => !connectedProviders.includes(p));
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 pb-12 max-w-3xl mx-auto">
             <div>
-                <h1 className="text-2xl md:text-3xl font-semibold">Интеграции</h1>
-                <p className="text-muted-foreground text-sm mt-1">Подключите внешние календари для автоматической синхронизации сессий</p>
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Интеграции</h1>
+                <p className="text-muted-foreground text-base mt-2">Подключите внешние календари для автоматической синхронизации сессий</p>
             </div>
 
             {/* Connected */}
             {integrations.length > 0 && (
-                <div>
-                    <h2 className="text-lg font-semibold mb-3">Подключённые</h2>
-                    <div className="space-y-3">
+                <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                    <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">Подключённые</h2>
+                    <div className="space-y-4">
                         {integrations.map(i => {
                             const info = providerInfo[i.provider] || { name: i.provider, color: 'bg-gray-500', icon: '📋', description: '' };
                             return (
-                                <div key={i.id} className="bg-white rounded-lg border border-border p-5">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl overflow-hidden shrink-0 border border-border/50`}>
+                                <div key={i.id} className="bg-background rounded-2xl border border-border p-5 shadow-sm hover:border-primary/30 transition-colors">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                        <div className={`w-14 h-14 ${info.color} rounded-2xl flex items-center justify-center text-white text-xl overflow-hidden shrink-0 border border-border/50 shadow-sm`}>
                                             {info.image ? (
-                                                <Image src={info.image} alt={info.name} width={48} height={48} className="w-full h-full object-cover" />
+                                                <Image src={info.image} alt={info.name} width={56} height={56} className="w-full h-full object-cover" />
                                             ) : (
                                                 info.icon
                                             )}
                                         </div>
                                         <div className="flex-1">
-                                            <div className="font-medium flex items-center gap-2">
+                                            <div className="font-bold text-base text-foreground flex items-center gap-2">
                                                 {info.name}
-                                                {i.isActive && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                                                {i.isActive && <CheckCircle2 className="w-5 h-5 text-green-500" />}
                                             </div>
-                                            {i.accountEmail && <div className="text-sm text-muted-foreground">{i.accountEmail}</div>}
-                                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                                {i.lastSynced && <span><RefreshCw className="w-3 h-3 inline mr-1" />Синхр. {new Date(i.lastSynced).toLocaleDateString('ru-RU')}</span>}
-                                                {i.conflictsCount > 0 && <span className="text-destructive">{i.conflictsCount} конфликтов</span>}
+                                            {i.accountEmail && <div className="text-sm font-medium text-muted-foreground mt-0.5">{i.accountEmail}</div>}
+                                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-semibold text-muted-foreground">
+                                                {i.lastSynced && <span><RefreshCw className="w-3.5 h-3.5 inline mr-1.5" />Синхр. {new Date(i.lastSynced).toLocaleDateString('ru-RU')}</span>}
+                                                {i.conflictsCount > 0 && <span className="text-destructive bg-destructive/10 px-2 py-1 rounded-md">{i.conflictsCount} конфликтов</span>}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center justify-between sm:justify-end gap-3 mt-4 sm:mt-0 w-full sm:w-auto">
                                             <button
                                                 onClick={() => handleSync(i.provider)}
                                                 disabled={syncing === i.provider || !i.isActive}
-                                                className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                className="px-4 py-2 text-sm font-semibold bg-secondary text-secondary-foreground rounded-xl hover:bg-secondary/80 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 flex-1 sm:flex-none"
                                             >
                                                 {syncing === i.provider ? (
-                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
                                                 ) : (
-                                                    <RefreshCw className="w-3 h-3" />
+                                                    <RefreshCw className="w-4 h-4" />
                                                 )}
                                                 Синхр.
                                             </button>
                                             <button onClick={() => handleToggle(i.id, i.isActive)}
-                                                className={`relative w-12 h-6 rounded-full transition-colors ${i.isActive ? 'bg-primary' : 'bg-muted'}`}>
-                                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${i.isActive ? 'left-[26px]' : 'left-0.5'}`} />
+                                                className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ${i.isActive ? 'bg-primary' : 'bg-muted'}`}>
+                                                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${i.isActive ? 'left-[30px]' : 'left-1'}`} />
                                             </button>
                                         </div>
                                     </div>
                                     {/* Disconnect button */}
-                                    <div className="mt-3 pt-3 border-t border-border flex justify-end">
+                                    <div className="mt-5 pt-4 border-t border-border/50 flex justify-end">
                                         <button
                                             onClick={() => handleDisconnect(i.id, i.provider)}
-                                            className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                                            className="text-sm font-semibold text-destructive hover:bg-destructive/10 px-3 py-1.5 rounded-lg transition-colors"
                                         >
                                             Отключить интеграцию
                                         </button>
@@ -255,30 +255,30 @@ export default function IntegrationsPage() {
             )}
 
             {/* Available */}
-            <div>
-                <h2 className="text-lg font-semibold mb-3">Доступные интеграции</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">Доступные интеграции</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {availableProviders.map(p => {
                         const info = providerInfo[p] || { name: p, color: 'bg-gray-500', icon: '📋', description: '' };
                         return (
-                            <div key={p} className="bg-white rounded-lg border border-border p-5">
-                                <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl mb-3 overflow-hidden border border-border/50`}>
+                            <div key={p} className="bg-background rounded-2xl border border-border p-6 hover:border-primary/30 transition-colors shadow-sm flex flex-col h-full">
+                                <div className={`w-14 h-14 ${info.color} rounded-2xl flex items-center justify-center text-white text-xl mb-4 overflow-hidden border border-border/50 shadow-sm`}>
                                     {info.image ? (
-                                        <Image src={info.image} alt={info.name} width={48} height={48} className="w-full h-full object-cover" />
+                                        <Image src={info.image} alt={info.name} width={56} height={56} className="w-full h-full object-cover" />
                                     ) : (
                                         info.icon
                                     )}
                                 </div>
-                                <h3 className="font-medium mb-1">{info.name}</h3>
-                                <p className="text-xs text-muted-foreground mb-4">{info.description}</p>
+                                <h3 className="font-bold text-lg text-foreground mb-2">{info.name}</h3>
+                                <p className="text-sm font-medium text-muted-foreground mb-6 flex-1">{info.description}</p>
                                 <button
                                     onClick={() => handleConnect(p)}
-                                    className="w-full px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2"
+                                    className="w-full px-5 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                                 >
                                     {p === 'google' ? (
-                                        <><ExternalLink className="w-4 h-4" />Авторизоваться</>
+                                        <><ExternalLink className="w-5 h-5" />Авторизоваться</>
                                     ) : (
-                                        <><Link2 className="w-4 h-4" />Подключить</>
+                                        <><Link2 className="w-5 h-5" />Подключить</>
                                     )}
                                 </button>
                             </div>
@@ -289,77 +289,75 @@ export default function IntegrationsPage() {
 
             {/* Yandex Connection Modal */}
             {showYandexForm && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowYandexForm(false)}>
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 bg-[#FC3F1D] rounded-xl flex items-center justify-center text-white overflow-hidden border border-border/50">
-                                <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={40} height={40} className="w-full h-full object-cover" />
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowYandexForm(false)}>
+                    <div className="bg-card rounded-3xl shadow-2xl max-w-md w-full p-8" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-12 h-12 bg-[#FC3F1D] rounded-2xl flex items-center justify-center text-white overflow-hidden border border-border/50 shadow-sm">
+                                <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={48} height={48} className="w-full h-full object-cover" />
                             </div>
-                            <h3 className="text-lg font-semibold">Яндекс Календарь</h3>
+                            <h3 className="text-2xl font-bold tracking-tight text-foreground">Яндекс Календарь</h3>
                         </div>
 
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                            <div className="flex items-start gap-2">
-                                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
-                                <div className="text-xs text-amber-800">
-                                    <p className="font-medium mb-1">Используйте пароль приложения, а не основной пароль!</p>
-                                    <ol className="list-decimal ml-4 space-y-1">
-                                        <li>Откройте <a href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noreferrer" className="underline font-medium">Яндекс ID → Пароли приложений</a></li>
-                                        <li>Нажмите «Создать пароль приложения»</li>
-                                        <li>Выберите тип «Календарь (CalDAV)»</li>
-                                        <li>Укажите название «Компас»</li>
-                                        <li>Скопируйте пароль и вставьте ниже</li>
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-6">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="text-sm text-amber-800 dark:text-amber-400">
+                                    <p className="font-bold mb-2">Требуется пароль приложения</p>
+                                    <ol className="list-decimal ml-5 space-y-1.5 font-medium">
+                                        <li>Перейдите в <a href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noreferrer" className="underline font-bold text-amber-700 dark:text-amber-300">Пароли приложений</a> Яндекс ID</li>
+                                        <li>Создайте пароль типа «Календарь»</li>
+                                        <li>Используйте его для входа ниже</li>
                                     </ol>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div>
-                                <label className="text-sm font-medium text-foreground">Яндекс логин (email)</label>
+                                <label className="text-sm font-semibold text-foreground/80 ml-1">Яндекс логин (email)</label>
                                 <input
                                     type="email"
                                     value={yandexLogin}
                                     onChange={e => setYandexLogin(e.target.value)}
                                     placeholder="user@yandex.ru"
-                                    className="w-full mt-1 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                    className="w-full mt-2 px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/50 transition-all"
                                 />
                             </div>
                             <div>
-                                <label className="text-sm font-medium text-foreground">Пароль приложения</label>
-                                <div className="relative mt-1">
+                                <label className="text-sm font-semibold text-foreground/80 ml-1">Пароль приложения</label>
+                                <div className="relative mt-2">
                                     <input
                                         type={showPassword ? 'text' : 'password'}
                                         value={yandexPassword}
                                         onChange={e => setYandexPassword(e.target.value)}
                                         placeholder="Пароль приложения от Яндекса"
-                                        className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 pr-10"
+                                        className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/50 pr-12 transition-all"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
                                     >
-                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex gap-2 mt-5">
+                        <div className="flex flex-col sm:flex-row gap-3 mt-8">
                             <button
                                 onClick={() => setShowYandexForm(false)}
-                                className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+                                className="w-full sm:w-1/2 px-4 py-3 min-h-[48px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-colors"
                             >
                                 Отмена
                             </button>
                             <button
                                 onClick={handleYandexConnect}
                                 disabled={yandexConnecting || !yandexLogin || !yandexPassword}
-                                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="w-full sm:w-1/2 px-4 py-3 min-h-[48px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
                             >
                                 {yandexConnecting ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" />Подключаем...</>
+                                    <><Loader2 className="w-5 h-5 animate-spin" />Вход...</>
                                 ) : (
                                     <>Подключить</>
                                 )}
@@ -370,34 +368,39 @@ export default function IntegrationsPage() {
             )}
 
             {/* Sync Settings */}
-            <div className="bg-white rounded-lg border border-border p-5">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" />Настройки синхронизации</h2>
-                <div className="space-y-4">
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-6 flex items-center gap-3 text-foreground tracking-tight">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    Настройки синхронизации
+                </h2>
+                <div className="space-y-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="text-sm font-medium">Автоматическая синхронизация</div>
-                            <div className="text-xs text-muted-foreground">Синхронизировать события при создании/изменении сессий</div>
+                            <div className="text-base font-semibold text-foreground">Автоматическая синхронизация</div>
+                            <div className="text-sm font-medium text-muted-foreground mt-1">Синхронизировать события при создании или изменении</div>
                         </div>
                         <button
                             disabled={updatingSettings}
                             onClick={() => handleToggleSetting('autoSync', autoSync)}
-                            className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${autoSync ? 'bg-primary' : 'bg-muted'}`}
+                            className={`relative w-14 h-8 rounded-full transition-colors shrink-0 disabled:opacity-50 ${autoSync ? 'bg-primary' : 'bg-muted'}`}
                         >
-                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoSync ? 'left-[26px]' : 'left-0.5'}`} />
+                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${autoSync ? 'left-[30px]' : 'left-1'}`} />
                         </button>
                     </div>
-                    <div className="h-px bg-border" />
+                    <div className="h-px bg-border/50" />
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="text-sm font-medium">Блокировка конфликтов</div>
-                            <div className="text-xs text-muted-foreground">Блокировать слоты при конфликтах с внешним календарём</div>
+                            <div className="text-base font-semibold text-foreground">Блокировка конфликтов</div>
+                            <div className="text-sm font-medium text-muted-foreground mt-1">Блокировать слоты при конфликтах с внешним календарём</div>
                         </div>
                         <button
                             disabled={updatingSettings}
                             onClick={() => handleToggleSetting('blockConflicts', blockConflicts)}
-                            className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${blockConflicts ? 'bg-primary' : 'bg-muted'}`}
+                            className={`relative w-14 h-8 rounded-full transition-colors shrink-0 disabled:opacity-50 ${blockConflicts ? 'bg-primary' : 'bg-muted'}`}
                         >
-                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${blockConflicts ? 'left-[26px]' : 'left-0.5'}`} />
+                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${blockConflicts ? 'left-[30px]' : 'left-1'}`} />
                         </button>
                     </div>
                 </div>

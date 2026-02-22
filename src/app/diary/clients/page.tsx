@@ -161,9 +161,9 @@ export default function ClientsPage() {
 
     const statusColors: Record<string, string> = {
         confirmed: 'bg-primary',
-        pending: 'bg-accent',
+        pending: 'bg-accent text-accent-foreground',
         completed: 'bg-muted-foreground',
-        cancelled: 'bg-destructive',
+        cancelled: 'bg-destructive text-destructive-foreground',
     };
 
     const statusLabels: Record<string, string> = {
@@ -185,41 +185,41 @@ export default function ClientsPage() {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-semibold">Клиенты</h1>
+                    <h1 className="text-2xl md:text-3xl font-semibold text-foreground">Клиенты</h1>
                     <p className="text-muted-foreground text-sm mt-1">{clients.length} клиентов</p>
                 </div>
                 <button onClick={() => setShowNewClient(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium self-start">
-                    <Plus className="w-4 h-4" />Новый клиент
+                    className="flex items-center gap-2 px-6 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-medium self-start shadow-sm active:scale-[0.98]">
+                    <Plus className="w-5 h-5" />Новый клиент
                 </button>
             </div>
 
             {/* Search */}
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input type="text" placeholder="Поиск по имени..." value={search} onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                    className="w-full pl-12 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm transition-all" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Client List */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {clients.map(c => (
                         <button key={c.id} onClick={() => { setSelectedClient(c); fetchClientDetail(c.id); setActiveTab('questionnaire'); }}
-                            className={`w-full p-4 bg-white rounded-lg border text-left hover:border-primary/50 transition-colors flex items-center gap-3 ${selectedClient?.id === c.id ? 'border-primary ring-1 ring-primary' : 'border-border'}`}>
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm flex-shrink-0">
+                            className={`w-full p-4 bg-card rounded-2xl border text-left hover:border-border hover:shadow-md transition-all flex items-center gap-4 ${selectedClient?.id === c.id ? 'border-primary ring-2 ring-primary ring-inset shadow-sm' : 'border-border shadow-sm'}`}>
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-base flex-shrink-0">
                                 {c.name.slice(0, 2).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{c.name}</p>
-                                <p className="text-xs text-muted-foreground">{c.totalSessions} сессий</p>
+                                <p className="font-semibold text-foreground text-base truncate mb-0.5">{c.name}</p>
+                                <p className="text-sm font-medium text-muted-foreground">{c.totalSessions} сессий</p>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            <ChevronRight className="w-5 h-5 text-muted-foreground/50 flex-shrink-0" />
                         </button>
                     ))}
                     {clients.length === 0 && (
-                        <div className="bg-white rounded-lg border border-border p-8 text-center">
-                            <p className="text-muted-foreground text-sm">Нет клиентов</p>
+                        <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
+                            <p className="text-muted-foreground font-medium text-sm">Нет клиентов</p>
                         </div>
                     )}
                 </div>
@@ -227,34 +227,36 @@ export default function ClientsPage() {
                 {/* Client Detail */}
                 <div className="lg:col-span-2">
                     {!selectedClient ? (
-                        <div className="bg-white rounded-lg border border-border p-12 text-center">
-                            <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                            <p className="text-muted-foreground">Выберите клиента</p>
+                        <div className="bg-card rounded-2xl border border-border shadow-sm p-12 text-center h-full flex flex-col items-center justify-center min-h-[400px]">
+                            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4 text-muted-foreground">
+                                <FileText className="w-8 h-8 opacity-50" />
+                            </div>
+                            <p className="text-muted-foreground font-medium">Выберите клиента для просмотра информации</p>
                         </div>
                     ) : (
-                        <div className="bg-white rounded-lg border border-border overflow-hidden">
+                        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-12rem)] min-h-[600px]">
                             {/* Client header */}
-                            <div className="p-6 border-b border-border">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-lg">
+                            <div className="p-6 pb-0">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
                                         {selectedClient.name.slice(0, 2).toUpperCase()}
                                     </div>
                                     <div className="flex-1">
-                                        <h2 className="text-xl font-semibold">{selectedClient.name}</h2>
-                                        <div className="flex gap-4 text-sm text-muted-foreground mt-1">
+                                        <h2 className="text-2xl font-bold text-foreground mb-1">{selectedClient.name}</h2>
+                                        <div className="flex gap-4 text-sm font-medium text-muted-foreground">
                                             {selectedClient.phone && <span>{selectedClient.phone}</span>}
                                             {selectedClient.email && <span>{selectedClient.email}</span>}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                    <div className="bg-[#f5f5f5] p-3 rounded-lg">
-                                        <div className="text-sm text-muted-foreground">Всего сессий</div>
-                                        <div className="text-2xl font-semibold mt-1">{selectedClient.totalSessions}</div>
+                                <div className="grid grid-cols-2 gap-4 mt-6">
+                                    <div className="bg-muted p-4 rounded-xl border border-border/50">
+                                        <div className="text-sm font-medium text-muted-foreground">Всего сессий</div>
+                                        <div className="text-2xl font-bold text-foreground mt-1">{selectedClient.totalSessions}</div>
                                     </div>
-                                    <div className="bg-[#f5f5f5] p-3 rounded-lg">
-                                        <div className="text-sm text-muted-foreground">Следующая запись</div>
-                                        <div className="text-sm font-medium mt-1 truncate">
+                                    <div className="bg-muted p-4 rounded-xl border border-border/50">
+                                        <div className="text-sm font-medium text-muted-foreground">Следующая запись</div>
+                                        <div className="text-base font-semibold text-foreground mt-1 truncate">
                                             {selectedClient.nextSessionDate
                                                 ? new Date(selectedClient.nextSessionDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
                                                 : 'Не запланирована'}
@@ -264,19 +266,19 @@ export default function ClientsPage() {
                             </div>
 
                             {/* Tabs */}
-                            <div className="flex border-b border-border">
+                            <div className="flex mt-2 px-6 border-b border-border">
                                 <button onClick={() => setActiveTab('questionnaire')}
-                                    className={`flex-1 px-6 py-3 font-medium transition-colors text-sm ${activeTab === 'questionnaire' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                                    className={`flex-1 px-6 py-4 font-semibold transition-colors text-sm border-b-2 ${activeTab === 'questionnaire' ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}>
                                     Анкета
                                 </button>
                                 <button onClick={() => setActiveTab('sessions')}
-                                    className={`flex-1 px-6 py-3 font-medium transition-colors text-sm ${activeTab === 'sessions' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                                    className={`flex-1 px-6 py-4 font-semibold transition-colors text-sm border-b-2 ${activeTab === 'sessions' ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}>
                                     Сессии ({selectedClient.sessions?.length || 0})
                                 </button>
                             </div>
 
                             {/* Content */}
-                            <div className="p-6 overflow-auto max-h-[60vh]">
+                            <div className="p-6 flex-1 overflow-auto telegram-miniapp-scrollbar-hide relative">
                                 {activeTab === 'questionnaire' ? (
                                     <div className="space-y-6 max-w-2xl">
                                         {selectedClient.questionnaire?.data ? (
@@ -334,33 +336,41 @@ export default function ClientsPage() {
                                             </div>
                                         )}
                                         <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || { fullName: selectedClient.name, gender: selectedClient.gender || undefined, phone: selectedClient.phone || undefined, email: selectedClient.email || undefined }); }}
-                                            className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors">
+                                            className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-all shadow-sm active:scale-[0.98] mt-6">
                                             {selectedClient.questionnaire?.data ? 'Редактировать анкету' : 'Заполнить анкету'}
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
                                         {(selectedClient.sessions?.length || 0) === 0 ? (
-                                            <p className="text-muted-foreground text-sm text-center py-8">Нет сессий</p>
+                                            <div className="text-center py-12">
+                                                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 text-muted-foreground">
+                                                    <FileText className="w-8 h-8 opacity-50" />
+                                                </div>
+                                                <p className="text-muted-foreground font-medium text-sm">Нет сессий</p>
+                                            </div>
                                         ) : (
                                             selectedClient.sessions?.map(s => (
                                                 <div key={s.id}
                                                     onClick={() => { setEditingSession(s); setShowNewSession(true); }}
-                                                    className="p-4 bg-[#f5f5f5] rounded-lg flex items-center gap-3 cursor-pointer hover:bg-[#eaeaea] transition-colors"
+                                                    className="p-5 bg-card border border-border rounded-2xl flex items-center gap-4 cursor-pointer hover:border-border hover:shadow-md transition-all shadow-sm group"
                                                 >
-                                                    <div className={`w-1 h-10 rounded-full ${statusColors[s.status]}`} />
-                                                    <div className="flex-1">
-                                                        <div className="text-sm font-medium">
-                                                            {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} · {s.time}
+                                                    <div className={`w-1.5 h-16 rounded-full ${statusColors[s.status]}`} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-base font-semibold text-foreground mb-1">
+                                                            {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} <span className="text-muted-foreground mx-1">·</span> {s.time}
                                                         </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : 'Семейная'} · {s.duration} мин
+                                                        <div className="text-sm font-medium text-muted-foreground flex gap-2 items-center">
+                                                            {s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : 'Семейная'} <span className="text-muted-foreground/30">•</span> {s.duration} мин
                                                         </div>
-                                                        {s.notes && <div className="mt-1 text-xs text-muted-foreground line-clamp-1 italic">{s.notes}</div>}
+                                                        {s.notes && <div className="mt-2 text-sm text-foreground/80 line-clamp-1 italic bg-muted/50 p-2 rounded-lg">{s.notes}</div>}
                                                     </div>
-                                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[s.status]}/10`}>
-                                                        {statusLabels[s.status]}
-                                                    </span>
+                                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusColors[s.status]}/10 ${statusColors[s.status].replace('bg-', 'text-')}`}>
+                                                            {statusLabels[s.status]}
+                                                        </span>
+                                                        <ChevronRight className="w-5 h-5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0" />
+                                                    </div>
                                                 </div>
                                             ))
                                         )}
@@ -369,10 +379,10 @@ export default function ClientsPage() {
                             </div>
 
                             {/* Schedule Footer */}
-                            <div className="p-4 border-t border-border sticky bottom-0 bg-white">
+                            <div className="p-6 border-t border-border bg-card">
                                 <button
                                     onClick={() => { setEditingSession(null); setShowNewSession(true); }}
-                                    className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors shadow-sm"
+                                    className="w-full py-3.5 bg-accent text-accent-foreground rounded-xl font-medium hover:bg-accent/90 transition-all shadow-sm active:scale-[0.98]"
                                 >
                                     Запланировать следующую сессию
                                 </button>
@@ -384,43 +394,43 @@ export default function ClientsPage() {
 
             {/* New Client Modal */}
             {showNewClient && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl w-full max-w-md">
-                        <div className="flex items-center justify-between p-6 border-b border-border">
-                            <h2 className="text-xl font-semibold">Новый клиент</h2>
-                            <button onClick={() => setShowNewClient(false)} className="p-2 hover:bg-muted rounded-lg"><X className="w-5 h-5" /></button>
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between p-6 pb-4 border-b border-border/50">
+                            <h2 className="text-xl font-bold text-foreground">Новый клиент</h2>
+                            <button onClick={() => setShowNewClient(false)} className="p-2 hover:bg-muted rounded-xl transition-colors"><X className="w-5 h-5 text-foreground" /></button>
                         </div>
-                        <div className="p-6 space-y-4">
+                        <div className="p-6 space-y-5">
                             <div>
-                                <label className="block text-sm font-medium mb-2">Имя *</label>
+                                <label className="block text-sm font-semibold mb-2 text-foreground">Имя *</label>
                                 <input type="text" value={newClient.name} onChange={e => setNewClient(s => ({ ...s, name: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="ФИО" />
+                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground transition-all" placeholder="ФИО" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-2">Телефон</label>
+                                <label className="block text-sm font-semibold mb-2 text-foreground">Телефон</label>
                                 <input type="tel" value={newClient.phone} onChange={e => setNewClient(s => ({ ...s, phone: formatPhoneNumber(e.target.value) }))}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="+7 (___) ___-__-__" />
+                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground transition-all" placeholder="+7 (___) ___-__-__" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-2">Email</label>
+                                <label className="block text-sm font-semibold mb-2 text-foreground">Email</label>
                                 <input type="email" value={newClient.email} onChange={e => setNewClient(s => ({ ...s, email: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="email@example.com" />
+                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground transition-all" placeholder="email@example.com" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-2">Пол</label>
-                                <div className="flex gap-2">
+                                <label className="block text-sm font-semibold mb-2 text-foreground">Пол</label>
+                                <div className="flex gap-3">
                                     {[{ v: 'male', l: 'Мужской' }, { v: 'female', l: 'Женский' }].map(g => (
                                         <button key={g.v} type="button" onClick={() => setNewClient(s => ({ ...s, gender: g.v }))}
-                                            className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${newClient.gender === g.v ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}>
+                                            className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${newClient.gender === g.v ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border bg-background hover:border-primary/50 text-foreground'}`}>
                                             {g.l}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-border flex gap-3">
-                            <button onClick={() => setShowNewClient(false)} className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">Отмена</button>
-                            <button onClick={handleCreateClient} className="flex-1 px-4 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">Создать</button>
+                        <div className="p-6 pt-4 border-t border-border/50 flex gap-4">
+                            <button onClick={() => setShowNewClient(false)} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/80 transition-all">Отмена</button>
+                            <button onClick={handleCreateClient} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-all shadow-sm">Создать</button>
                         </div>
                     </div>
                 </div>
@@ -428,13 +438,13 @@ export default function ClientsPage() {
 
             {/* Questionnaire Edit Modal */}
             {showEditQuestionnaire && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-auto">
-                        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-white z-10">
-                            <h2 className="text-xl font-semibold">Анкета клиента</h2>
-                            <button onClick={() => setShowEditQuestionnaire(false)} className="p-2 hover:bg-muted rounded-lg"><X className="w-5 h-5" /></button>
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-card rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between p-6 border-b border-border/50 bg-card z-10">
+                            <h2 className="text-xl font-bold text-foreground">Анкета клиента</h2>
+                            <button onClick={() => setShowEditQuestionnaire(false)} className="p-2 hover:bg-muted rounded-xl transition-colors"><X className="w-5 h-5 text-foreground" /></button>
                         </div>
-                        <div className="p-6 space-y-8">
+                        <div className="p-6 overflow-auto telegram-miniapp-scrollbar-hide space-y-10 flex-1 relative">
                             {/* Section 1 */}
                             <div>
                                 <h3 className="text-base font-semibold mb-3 text-primary">1. Персональная информация</h3>
@@ -453,12 +463,12 @@ export default function ClientsPage() {
                                     />
                                     <QInput type="number" label="Возраст" value={String(questionnaireForm.age || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, age: Number(v) || undefined }))} />
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Пол</label>
-                                        <div className="flex gap-2">
-                                            <div className="flex gap-2">
-                                                {[{ v: 'male', l: 'М' }, { v: 'female', l: 'Ж' }].map(g => (
+                                        <label className="block text-sm font-semibold mb-2 text-foreground">Пол</label>
+                                        <div className="flex gap-3">
+                                            <div className="flex gap-3 w-full">
+                                                {[{ v: 'male', l: 'Мужской' }, { v: 'female', l: 'Женский' }].map(g => (
                                                     <button key={g.v} type="button" onClick={() => setQuestionnaireForm(f => ({ ...f, gender: g.v }))}
-                                                        className={`px-4 py-1.5 rounded-lg border text-sm ${questionnaireForm.gender === g.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>
+                                                        className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${questionnaireForm.gender === g.v ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border bg-background hover:border-primary/50 text-foreground'}`}>
                                                         {g.l}
                                                     </button>
                                                 ))}
@@ -484,11 +494,11 @@ export default function ClientsPage() {
                                     <QInput label="Род деятельности" value={questionnaireForm.occupation || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, occupation: v }))} />
                                     <QInput label="Должность" value={questionnaireForm.position || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, position: v }))} />
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Уровень стресса (1-10)</label>
+                                        <label className="block text-sm font-semibold mb-2 text-foreground">Уровень стресса (1-10)</label>
                                         <input type="range" min="1" max="10" value={questionnaireForm.stressLevel || 5}
                                             onChange={e => setQuestionnaireForm(f => ({ ...f, stressLevel: Number(e.target.value) }))}
-                                            className="w-full accent-primary" />
-                                        <div className="flex justify-between text-xs text-muted-foreground"><span>1</span><span>{questionnaireForm.stressLevel || 5}</span><span>10</span></div>
+                                            className="w-full accent-primary h-2 bg-muted rounded-lg appearance-none cursor-pointer" />
+                                        <div className="flex justify-between text-xs font-semibold text-muted-foreground mt-2"><span>1</span><span className="text-primary text-sm">{questionnaireForm.stressLevel || 5}</span><span>10</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -500,11 +510,11 @@ export default function ClientsPage() {
                                     <QInput label="Лекарства" value={questionnaireForm.medications || ''} onChange={v => setQuestionnaireForm(f => ({ ...f, medications: v }))} />
                                     <QInput type="number" label="Сон (часов)" value={String(questionnaireForm.sleepHours || '')} onChange={v => setQuestionnaireForm(f => ({ ...f, sleepHours: Number(v) || undefined }))} />
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Качество сна</label>
-                                        <div className="flex gap-2">
+                                        <label className="block text-sm font-semibold mb-2 text-foreground">Качество сна</label>
+                                        <div className="flex gap-3">
                                             {[{ v: 'excellent', l: 'Отличное' }, { v: 'good', l: 'Хорошее' }, { v: 'poor', l: 'Плохое' }].map(q => (
                                                 <button key={q.v} type="button" onClick={() => setQuestionnaireForm(f => ({ ...f, sleepQuality: q.v }))}
-                                                    className={`px-3 py-1.5 rounded-lg border text-sm ${questionnaireForm.sleepQuality === q.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>
+                                                    className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${questionnaireForm.sleepQuality === q.v ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border bg-background hover:border-primary/50 text-foreground'}`}>
                                                     {q.l}
                                                 </button>
                                             ))}
@@ -517,12 +527,12 @@ export default function ClientsPage() {
                                 <h3 className="text-base font-semibold mb-3 text-primary">5. История психического здоровья</h3>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Предыдущая терапия</label>
-                                        <div className="flex gap-2">
+                                        <label className="block text-sm font-semibold mb-2 text-foreground">Предыдущая терапия</label>
+                                        <div className="flex gap-3">
                                             <button type="button" onClick={() => setQuestionnaireForm(f => ({ ...f, previousTherapy: true }))}
-                                                className={`px-4 py-1.5 rounded-lg border text-sm ${questionnaireForm.previousTherapy === true ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>Да</button>
+                                                className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${questionnaireForm.previousTherapy === true ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border bg-background hover:border-primary/50 text-foreground'}`}>Да</button>
                                             <button type="button" onClick={() => setQuestionnaireForm(f => ({ ...f, previousTherapy: false }))}
-                                                className={`px-4 py-1.5 rounded-lg border text-sm ${questionnaireForm.previousTherapy === false ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>Нет</button>
+                                                className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${questionnaireForm.previousTherapy === false ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border bg-background hover:border-primary/50 text-foreground'}`}>Нет</button>
                                         </div>
                                     </div>
                                     {questionnaireForm.previousTherapy && (
@@ -551,9 +561,9 @@ export default function ClientsPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-border flex gap-3 sticky bottom-0 bg-white">
-                            <button onClick={() => setShowEditQuestionnaire(false)} className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">Отмена</button>
-                            <button onClick={handleSaveQuestionnaire} className="flex-1 px-4 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">Сохранить</button>
+                        <div className="p-6 border-t border-border/50 bg-card flex gap-4 mt-auto">
+                            <button onClick={() => setShowEditQuestionnaire(false)} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/80 transition-all">Отмена</button>
+                            <button onClick={handleSaveQuestionnaire} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-all shadow-sm">Сохранить</button>
                         </div>
                     </div>
                 </div>
@@ -568,21 +578,21 @@ export default function ClientsPage() {
                 editSession={editingSession}
                 clients={clients.map(c => ({ id: c.id, name: c.name }))}
             />
-        </div >
-    );
+        </div>
+    )
 }
 
 // Helper Components
 function QInput({ label, value, onChange, multiline, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean; type?: string }) {
     return (
         <div>
-            <label className="block text-sm font-medium mb-1">{label}</label>
+            <label className="block text-sm font-semibold mb-2 text-foreground">{label}</label>
             {multiline ? (
                 <textarea value={value} onChange={e => onChange(e.target.value)} rows={3}
-                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none" />
+                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground text-sm resize-none transition-all" />
             ) : (
                 <input type={type} value={value} onChange={e => onChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground text-sm transition-all" />
             )}
         </div>
     );
@@ -600,16 +610,16 @@ function QuestionnaireSection({ title, data, fields }: {
     if (!hasAnyData) return null;
 
     return (
-        <div>
-            <h3 className="text-base font-semibold mb-3 text-primary">{title}</h3>
-            <div className="space-y-2 pl-4">
+        <div className="bg-muted/30 p-5 rounded-2xl border border-border/50">
+            <h3 className="text-base font-bold mb-4 text-foreground">{title}</h3>
+            <div className="space-y-3">
                 {fields.map(f => {
                     const val = data[f.key as keyof QuestionnaireData];
                     if (val === undefined || val === null || val === '') return null;
                     return (
-                        <div key={f.key} className="flex gap-2">
-                            <span className="text-sm text-muted-foreground whitespace-nowrap">{f.label}:</span>
-                            <span className="text-sm">{f.transform ? f.transform(val) : `${val}${f.suffix || ''}`}</span>
+                        <div key={f.key} className="flex gap-4 items-start border-b border-border/50 last:border-0 pb-3 last:pb-0">
+                            <span className="text-sm font-medium text-muted-foreground w-1/3 shrink-0">{f.label}</span>
+                            <span className="text-sm font-medium text-foreground">{f.transform ? f.transform(val) : `${val}${f.suffix || ''}`}</span>
                         </div>
                     );
                 })}

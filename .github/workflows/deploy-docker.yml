@@ -20,6 +20,9 @@ jobs:
           script: |
             cd /var/www/cmpas.ru
             
+            # Stop execution on any error
+            set -e
+
             # UPDATE CODE
             git stash 2>/dev/null || true
             git pull origin main
@@ -129,7 +132,11 @@ jobs:
             # CRITICAL: NEVER use "docker compose down -v" - this deletes database!
             # Only stop containers, preserve volumes
             docker compose down --timeout 30 || true
-            
+
+            # Prune builder cache to fix "parent snapshot does not exist" error
+            echo "Pruning docker builder cache completely..."
+            docker builder prune -a -f || true
+
             # Rebuild and restart containers
             docker compose up -d --build --force-recreate
             

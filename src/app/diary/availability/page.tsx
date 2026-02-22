@@ -115,54 +115,59 @@ export default function AvailabilityPage() {
     const slotsByDay = dayShort.map((_, i) => slots.filter(s => s.dayOfWeek === i));
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 pb-12">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-semibold">Расписание</h1>
-                    <p className="text-muted-foreground text-sm mt-1">Управляйте своей доступностью</p>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Расписание</h1>
+                    <p className="text-muted-foreground text-base mt-2">Управляйте своей доступностью и слотами</p>
                 </div>
-                <div className="flex gap-2 self-start">
-                    <button onClick={() => setShowNewSlot(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium">
-                        <Plus className="w-4 h-4" />Новое окно
-                    </button>
-                    <button onClick={() => setShowNewBlock(true)} className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg hover:bg-muted transition-colors text-sm font-medium">
+                <div className="flex gap-3 self-start">
+                    <button onClick={() => setShowNewBlock(true)} className="flex items-center gap-2 px-5 py-2.5 bg-card border border-border rounded-xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.98] min-h-[44px]">
                         <Calendar className="w-4 h-4" />Блокировка
+                    </button>
+                    <button onClick={() => setShowNewSlot(true)} className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.98] min-h-[44px]">
+                        <Plus className="w-4 h-4" />Новое окно
                     </button>
                 </div>
             </div>
 
             {/* Weekly Grid */}
-            <div className="bg-white rounded-lg border border-border overflow-hidden">
-                <div className="grid grid-cols-7">
+            <div className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm">
+                <div className="grid grid-cols-7 divide-x divide-border">
                     {dayShort.map((day, i) => (
-                        <div key={day} className="border-r last:border-r-0 border-border">
-                            <div className="p-3 bg-muted/30 text-center border-b border-border">
-                                <span className="text-xs font-medium text-muted-foreground">{day}</span>
+                        <div key={day} className="flex flex-col">
+                            <div className="p-4 bg-muted/30 text-center border-b border-border">
+                                <span className="text-sm font-semibold text-foreground/80">{day}</span>
                             </div>
-                            <div className="p-2 min-h-[120px] space-y-1">
+                            <div className="p-3 min-h-[200px] space-y-2 bg-background/50">
                                 {slotsByDay[i].map(slot => (
-                                    <div key={slot.id} className="bg-primary/10 rounded p-2 group relative">
-                                        <div className="text-xs font-medium text-primary">{slot.startTime} - {slot.endTime}</div>
-                                        <div className="text-xs text-muted-foreground">{slot.duration} мин</div>
-                                        <div className="text-xs text-primary/60 mt-1">
+                                    <div key={slot.id} className="bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-2xl p-3 group relative transition-colors shadow-sm">
+                                        <div className="text-sm font-bold text-primary">{slot.startTime} - {slot.endTime}</div>
+                                        <div className="text-xs font-medium text-muted-foreground mt-0.5">{slot.duration} мин</div>
+                                        <div className="text-[10px] font-medium text-primary/80 mt-2 bg-primary/10 px-2 py-1 rounded-md inline-block">
                                             {slot.isRecurring && slot.startDate && slot.endDate ? (
-                                                `♻ С ${new Date(slot.startDate).toLocaleDateString('ru-RU')} по ${new Date(slot.endDate).toLocaleDateString('ru-RU')}`
+                                                `♻ ${new Date(slot.startDate).toLocaleDateString('ru-RU')} - ${new Date(slot.endDate).toLocaleDateString('ru-RU')}`
                                             ) : slot.startDate ? (
                                                 `📅 ${new Date(slot.startDate).toLocaleDateString('ru-RU')}`
                                             ) : (
-                                                `♻ Постоянно` // For old slots
+                                                `♻ Постоянно`
                                             )}
                                         </div>
-                                        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => setEditingSlot(slot)} className="p-0.5 bg-white rounded hover:bg-muted/50 transition-colors">
-                                                <Edit2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                                        <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => setEditingSlot(slot)} className="p-1.5 bg-card border border-border rounded-lg hover:bg-muted transition-colors shadow-sm">
+                                                <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
                                             </button>
-                                            <button onClick={() => rmSlot(slot.id)} className="p-0.5 bg-white rounded hover:bg-destructive/10 transition-colors">
-                                                <Trash2 className="w-3 h-3 text-destructive" />
+                                            <button onClick={() => rmSlot(slot.id)} className="p-1.5 bg-card border border-border rounded-lg hover:bg-destructive/10 transition-colors shadow-sm group/btn">
+                                                <Trash2 className="w-3.5 h-3.5 text-destructive group-hover/btn:text-destructive" />
                                             </button>
                                         </div>
                                     </div>
                                 ))}
+                                {slotsByDay[i].length === 0 && (
+                                    <div className="h-full flex items-center justify-center pt-8">
+                                        <span className="text-xs text-muted-foreground/50 font-medium">Нет слотов</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -170,25 +175,34 @@ export default function AvailabilityPage() {
             </div>
 
             {/* Time Blocks */}
-            <div>
-                <h2 className="text-lg font-semibold mb-3">Блокировки времени</h2>
+            <div className="mt-8">
+                <h2 className="text-xl font-semibold mb-4 text-foreground tracking-tight">Блокировки времени</h2>
                 {blocks.length === 0 ? (
-                    <div className="bg-white rounded-lg border border-border p-8 text-center"><p className="text-muted-foreground text-sm">Нет блокировок</p></div>
+                    <div className="bg-card rounded-3xl border border-border p-10 text-center shadow-sm">
+                        <div className="w-12 h-12 bg-muted/50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                            <Calendar className="w-6 h-6 text-muted-foreground/50" />
+                        </div>
+                        <p className="text-muted-foreground text-sm font-medium">Нет активных блокировок расписания</p>
+                    </div>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {blocks.map(b => {
                             const Icon = blockIcons[b.type] || Coffee;
                             return (
-                                <div key={b.id} className="bg-white rounded-lg border border-border p-4 flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${b.type === 'vacation' ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary'}`}>
-                                        <Icon className="w-5 h-5" />
+                                <div key={b.id} className="bg-card rounded-2xl border border-border p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-all group">
+                                    <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center ${b.type === 'vacation' ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary'}`}>
+                                        <Icon className="w-6 h-6" />
                                     </div>
-                                    <div className="flex-1">
-                                        <div className="font-medium text-sm">{blockLabels[b.type]}</div>
-                                        <div className="text-xs text-muted-foreground">{new Date(b.startDate).toLocaleDateString('ru-RU')} — {new Date(b.endDate).toLocaleDateString('ru-RU')}</div>
-                                        {b.reason && <div className="text-xs text-muted-foreground mt-0.5">{b.reason}</div>}
+                                    <div className="flex-1 min-w-0 pt-0.5">
+                                        <div className="font-bold text-base text-foreground truncate">{blockLabels[b.type]}</div>
+                                        <div className="text-sm font-medium text-muted-foreground mt-1">
+                                            {new Date(b.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — {new Date(b.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                                        </div>
+                                        {b.reason && <div className="text-sm text-foreground/70 mt-2 bg-muted/50 p-2 rounded-xl border border-border/50">{b.reason}</div>}
                                     </div>
-                                    <button onClick={() => rmBlock(b.id)} className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                                    <button onClick={() => rmBlock(b.id)} className="p-2 bg-background border border-border hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive rounded-xl transition-colors opacity-0 group-hover:opacity-100">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             );
                         })}
@@ -211,7 +225,7 @@ export default function AvailabilityPage() {
                                     ...s,
                                     daysOfWeek: s.daysOfWeek.includes(i) ? s.daysOfWeek.filter(x => x !== i) : [...s.daysOfWeek, i]
                                 }))}
-                                className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${newSlot.daysOfWeek.includes(i) ? 'bg-primary text-white' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}
+                                className={`w-11 h-11 rounded-full text-sm font-semibold transition-all ${newSlot.daysOfWeek.includes(i) ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/50 text-muted-foreground border border-border hover:bg-muted'}`}
                             >
                                 {d}
                             </button>
@@ -223,10 +237,10 @@ export default function AvailabilityPage() {
                     <Field label="Конец раб. дня"><TimePicker value={newSlot.endTime} onChange={t => setNewSlot(s => ({ ...s, endTime: t }))} /></Field>
                 </div>
 
-                <div className="bg-muted/30 p-4 rounded-lg space-y-4 border border-border/50">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={newSlot.hasLunch} onChange={e => setNewSlot(s => ({ ...s, hasLunch: e.target.checked }))} className="w-4 h-4 rounded text-primary focus:ring-primary border-border" />
-                        <span className="text-sm font-medium">Добавить перерыв (Обед)</span>
+                <div className="bg-muted/30 p-5 rounded-2xl space-y-4 border border-border/50">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={newSlot.hasLunch} onChange={e => setNewSlot(s => ({ ...s, hasLunch: e.target.checked }))} className="w-5 h-5 rounded-md text-primary focus:ring-primary border-border accent-primary" />
+                        <span className="text-sm font-semibold">Добавить перерыв (Обед)</span>
                     </label>
                     {newSlot.hasLunch && (
                         <div className="grid grid-cols-2 gap-4">
@@ -318,23 +332,41 @@ export default function AvailabilityPage() {
                 )}
             </Modal>}
 
-            <style jsx>{`.inp { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: 0.5rem; font-size: 0.875rem; outline: none; } .inp:focus { box-shadow: 0 0 0 2px rgba(26,77,58,0.1); }`}</style>
+            <style jsx>{`
+                .inp { 
+                    width: 100%; 
+                    min-height: 48px;
+                    padding: 0 1rem; 
+                    border: 1px solidhsl(var(--border)); 
+                    border-radius: 0.75rem; 
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    outline: none; 
+                    background-color: hsl(var(--background));
+                    color: hsl(var(--foreground));
+                    transition: all 0.2s;
+                } 
+                .inp:focus { 
+                    border-color: hsl(var(--ring));
+                    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2); 
+                }
+            `}</style>
         </div>
     );
 }
 
 function Modal({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: React.ReactNode }) {
     return (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl w-full max-w-md">
-                <div className="flex items-center justify-between p-6 border-b border-border">
-                    <h2 className="text-xl font-semibold">{title}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg"><X className="w-5 h-5" /></button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-card rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between p-6 border-b border-border/50 bg-muted/10">
+                    <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-5 h-5" /></button>
                 </div>
-                <div className="p-6 space-y-4">{children}</div>
-                <div className="p-6 border-t border-border flex gap-3">
-                    <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">Отмена</button>
-                    <button onClick={onSubmit} className="flex-1 px-4 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">Добавить</button>
+                <div className="p-6 space-y-5 overflow-auto telegram-miniapp-scrollbar-hide">{children}</div>
+                <div className="p-6 border-t border-border/50 bg-muted/10 flex gap-4">
+                    <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/80 transition-all">Отмена</button>
+                    <button onClick={onSubmit} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-all shadow-sm">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -342,5 +374,5 @@ function Modal({ title, onClose, onSubmit, children }: { title: string; onClose:
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-    return <div><label className="block text-sm font-medium mb-2">{label}</label>{children}</div>;
+    return <div><label className="block text-sm font-semibold mb-2 text-foreground/90 ml-1">{label}</label>{children}</div>;
 }
