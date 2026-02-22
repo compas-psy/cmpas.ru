@@ -22,7 +22,10 @@ export async function POST(request: Request) {
             sessionBreak,
             hasLunchBreak,
             lunchStartTime,
-            lunchEndTime
+            lunchEndTime,
+            cancellationHours,
+            cancellationFee,
+            cancellationText
         } = body
 
         // 1. Update user profile
@@ -42,6 +45,9 @@ export async function POST(request: Request) {
                 basePrice: basePrice || 0,
                 defaultSessionDuration: defaultSessionDuration || 50,
                 sessionBreak: sessionBreak || 15,
+                cancellationHours: cancellationHours !== undefined ? cancellationHours : 24,
+                cancellationFee: cancellationFee !== undefined ? cancellationFee : 50,
+                cancellationText: cancellationText || null,
             },
             create: {
                 psychologistId: user.id,
@@ -49,6 +55,9 @@ export async function POST(request: Request) {
                 basePrice: basePrice || 0,
                 defaultSessionDuration: defaultSessionDuration || 50,
                 sessionBreak: sessionBreak || 15,
+                cancellationHours: cancellationHours !== undefined ? cancellationHours : 24,
+                cancellationFee: cancellationFee !== undefined ? cancellationFee : 50,
+                cancellationText: cancellationText || null,
             }
         })
 

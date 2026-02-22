@@ -39,6 +39,9 @@ export default function OnboardingPage() {
         lunchStartTime: "13:00",
         lunchEndTime: "14:00",
         basePrice: 0,
+        cancellationHours: 24,
+        cancellationFee: 50,
+        cancellationText: "Отмена сессии возможна не позднее чем за 24 часа...",
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -94,6 +97,9 @@ export default function OnboardingPage() {
                     endTime: formData.endTime,
                     defaultSessionDuration: formData.defaultSessionDuration,
                     basePrice: formData.basePrice,
+                    cancellationHours: formData.cancellationHours,
+                    cancellationFee: formData.cancellationFee,
+                    cancellationText: formData.cancellationText,
                 })
             })
             if (res.ok) {
@@ -143,6 +149,12 @@ export default function OnboardingPage() {
                     <div className="max-h-[200px] overflow-y-auto pr-2 space-y-2 custom-scrollbar mb-3">
                         {METHODS.map(method => (
                             <label key={method} className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    className="hidden"
+                                    checked={formData.methods.includes(method)}
+                                    onChange={() => handleMethodToggle(method)}
+                                />
                                 <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.methods.includes(method) ? 'bg-[#c9a961] border-[#c9a961]' : 'border-white/30 group-hover:border-white/60'}`}>
                                     {formData.methods.includes(method) && (
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -253,6 +265,12 @@ export default function OnboardingPage() {
 
                 <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                     <label className="flex items-center gap-3 cursor-pointer group mb-4">
+                        <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={formData.hasLunchBreak}
+                            onChange={(e) => setFormData({ ...formData, hasLunchBreak: e.target.checked })}
+                        />
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.hasLunchBreak ? 'bg-[#c9a961] border-[#c9a961]' : 'border-white/30 group-hover:border-white/60'}`}>
                             {formData.hasLunchBreak && (
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -320,22 +338,7 @@ export default function OnboardingPage() {
 
             <div className="space-y-6">
                 <div>
-                    <label className="block text-white text-sm mb-2">Длительность сессии (минут)</label>
-                    <div className="relative">
-                        <input
-                            type="number"
-                            min="10"
-                            step="5"
-                            value={formData.defaultSessionDuration || ''}
-                            onChange={(e) => setFormData({ ...formData, defaultSessionDuration: parseInt(e.target.value) || 0 })}
-                            className="w-full h-12 px-4 pr-12 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:bg-white/15 transition-all text-xl font-medium"
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50">мин</span>
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-white text-sm mb-2">Стоимость</label>
+                    <label className="block text-white text-sm mb-2">Стоимость (₽)</label>
                     <div className="relative">
                         <input
                             type="number"
@@ -350,9 +353,54 @@ export default function OnboardingPage() {
                     </div>
                 </div>
 
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <div className="flex items-center gap-2 mb-4">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a961" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <h3 className="text-white font-medium">Правила отмены</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className="block text-white/70 text-xs mb-2">Минимум часов до отмены</label>
+                            <input
+                                type="number"
+                                min="0"
+                                value={formData.cancellationHours}
+                                onChange={(e) => setFormData({ ...formData, cancellationHours: parseInt(e.target.value) || 0 })}
+                                className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-xl text-white outline-none focus:border-white/40"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-white/70 text-xs mb-2">Процент оплаты (%)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={formData.cancellationFee}
+                                onChange={(e) => setFormData({ ...formData, cancellationFee: parseInt(e.target.value) || 0 })}
+                                className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-xl text-white outline-none focus:border-white/40"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-white/70 text-xs mb-2">Текст правил для клиента</label>
+                        <textarea
+                            value={formData.cancellationText}
+                            onChange={(e) => setFormData({ ...formData, cancellationText: e.target.value })}
+                            placeholder="Отмена сессии возможна не позднее чем за 24 часа..."
+                            className="w-full h-24 p-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm placeholder:text-white/40 outline-none focus:border-white/40 resize-none"
+                        />
+                    </div>
+                </div>
+
                 <div className="flex gap-4 pt-4">
                     <button onClick={prevStep} className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors">Назад</button>
-                    <button onClick={nextStep} disabled={formData.defaultSessionDuration < 1} className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-medium transition-colors">
+                    <button onClick={nextStep} className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-medium transition-colors">
                         Продолжить
                     </button>
                 </div>
