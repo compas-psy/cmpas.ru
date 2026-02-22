@@ -283,9 +283,6 @@ export default function ClientBookingPage() {
                         {loading ? 'Секундочку...' : 'Записаться'}
                     </button>
                 </form>
-            </div>
-        </div>
-
                 <style dangerouslySetInnerHTML={{
                     __html: `
                     .react-datepicker { font-family: inherit; border: none; }
