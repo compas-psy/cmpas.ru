@@ -94,10 +94,20 @@ export default async function DiaryLayout({
     }
 
     // Fetch user with settings to determine onboarding and block status
-    const dbUser = await db.user.findUnique({
-        where: { email: session.user.email },
-        include: { psychologistSettings: true }
-    });
+    let dbUser;
+    try {
+        dbUser = await db.user.findUnique({
+            where: { email: session.user.email },
+            include: { psychologistSettings: true }
+        });
+    } catch (error: any) {
+        return (
+            <div className="p-10 bg-red-50 text-red-900 border border-red-200 m-10 rounded-xl">
+                <h1 className="text-2xl font-bold mb-4">Server Error in DiaryLayout</h1>
+                <p className="font-mono whitespace-pre-wrap">{error?.message || 'Unknown error'}</p>
+            </div>
+        );
+    }
 
     if (dbUser?.isBlocked) {
         redirect('/auth/blocked');
