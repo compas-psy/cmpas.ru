@@ -65,10 +65,8 @@ export default function Home() {
     },
     offers: {
       '@type': 'Offer',
-      url: 'https://cmpas.ru',
+      url: 'https://www.ozon.ru/product/ezhednevnik-nedatirovannyy-a5-listov-272-3514667316/',
       priceCurrency: 'RUB',
-      price: '1790',
-      priceValidUntil: '2026-12-31',
       availability: 'https://schema.org/InStock',
       itemCondition: 'https://schema.org/NewCondition',
       seller: {
