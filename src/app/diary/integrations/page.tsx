@@ -29,12 +29,6 @@ const providerInfo: Record<string, { name: string; color: string; image?: string
         icon: '📆',
         description: 'Подключение через пароль приложения Яндекс.'
     },
-    apple: {
-        name: 'Apple Calendar',
-        color: 'bg-gray-800',
-        icon: '🍎',
-        description: 'Скоро'
-    },
 };
 
 export default function IntegrationsPage() {

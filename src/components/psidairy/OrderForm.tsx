@@ -7,7 +7,8 @@ export default function OrderForm() {
     const [formData, setFormData] = useState({
         name: '',
         phone: '',
-        method: ''
+        method: '',
+        message: ''
     });
 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -73,7 +74,7 @@ export default function OrderForm() {
 
         if (result.success) {
             alert('Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.');
-            setFormData({ name: '', phone: '', method: '' });
+            setFormData({ name: '', phone: '', method: '', message: '' });
         } else {
             alert('Произошла ошибка при отправке: ' + result.message);
         }
@@ -84,9 +85,9 @@ export default function OrderForm() {
             <div className="container mx-auto px-4">
                 <div className="max-w-[520px] mx-auto bg-[#FAFAFA] px-10 py-12 rounded-lg border border-primary shadow-sm relative">
 
-                    <h2 className="text-2xl font-medium text-center mb-3 text-primary">Оформить заказ</h2>
+                    <h2 className="text-2xl font-medium text-center mb-3 text-primary">Оставить заявку</h2>
                     <p className="text-center text-foreground/60 text-[13px] mb-10 max-w-sm mx-auto leading-relaxed">
-                        Заполните форму, и мы свяжемся с вами для подтверждения заказа
+                        Заполните форму для оптового заказа, помощи с доставкой или другого вопроса — мы свяжемся с вами
                     </p>
 
                     <form className="space-y-6" onSubmit={handleSubmit}>
@@ -164,6 +165,18 @@ export default function OrderForm() {
                             )}
                         </div>
 
+                        {/* Message Input */}
+                        <div className="space-y-1.5">
+                            <label className="block text-[11px] font-bold text-foreground ml-1">Сообщение</label>
+                            <textarea
+                                placeholder="Опишите ваш запрос: количество экземпляров, вопрос по доставке и т.д."
+                                className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition text-sm placeholder:text-gray-400 text-foreground resize-none"
+                                rows={3}
+                                value={formData.message}
+                                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                            />
+                        </div>
+
                         <button
                             type="submit"
                             className="w-full bg-primary text-white h-12 rounded-lg font-bold hover:bg-[#1B3C35] transition shadow-md mt-4 text-[13px]"
@@ -172,7 +185,7 @@ export default function OrderForm() {
                         </button>
 
                         <p className="text-[10px] text-gray-400 text-center mt-4">
-                            * Все поля обязательны для заполнения
+                            * Поля отмеченные звёздочкой обязательны для заполнения
                         </p>
                     </form>
                 </div>
