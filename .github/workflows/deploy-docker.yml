@@ -194,6 +194,8 @@ jobs:
             # First, ensure critical schema changes are applied directly (idempotent)
             echo "Applying idempotent schema fixes..."
             docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
+              -- User table
+              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"isBlocked\" BOOLEAN NOT NULL DEFAULT false;
               -- PsychologistAddress table
               CREATE TABLE IF NOT EXISTS \"PsychologistAddress\" (
                 \"id\" TEXT NOT NULL,
