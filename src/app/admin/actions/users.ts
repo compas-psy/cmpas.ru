@@ -17,7 +17,7 @@ async function ensureAdmin() {
 }
 
 export async function toggleUserBlock(userId: string, isBlocked: boolean) {
-    await ensureSuperAdmin()
+    await ensureAdmin()
 
     await db.user.update({
         where: { id: userId },
@@ -28,7 +28,7 @@ export async function toggleUserBlock(userId: string, isBlocked: boolean) {
 }
 
 export async function changeUserRole(userId: string, newRole: "USER" | "ADMIN" | "SUPERADMIN") {
-    await ensureSuperAdmin()
+    await ensureAdmin()
 
     await db.user.update({
         where: { id: userId },
@@ -39,7 +39,7 @@ export async function changeUserRole(userId: string, newRole: "USER" | "ADMIN" |
 }
 
 export async function resetUserSettings(userId: string) {
-    await ensureSuperAdmin()
+    await ensureAdmin()
 
     // Find the user's psychologist ID
     const settings = await db.psychologistSettings.findUnique({
@@ -63,7 +63,7 @@ export async function resetUserSettings(userId: string) {
 }
 
 export async function deleteUserAccount(userId: string) {
-    await ensureSuperAdmin()
+    await ensureAdmin()
 
     // Thanks to Prisma's onDelete: Cascade, deleting the User model
     // automatically handles related Accounts, Sessions, DiarySessions, etc.
