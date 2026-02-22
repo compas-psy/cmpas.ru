@@ -137,7 +137,7 @@ export default function ClientBookingPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-[#f5f5f5]">
+            <div className="flex items-center justify-center min-h-screen mobile-full-height bg-background safe-top safe-bottom">
                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
         );
@@ -145,15 +145,15 @@ export default function ClientBookingPage() {
 
     if (!psy) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-[#f5f5f5] p-4 text-center">
-                <h2 className="text-xl font-bold mb-2">Специалист не найден</h2>
+            <div className="flex flex-col items-center justify-center min-h-screen mobile-full-height bg-background p-4 text-center safe-top safe-bottom">
+                <h2 className="text-xl font-bold mb-2 text-foreground">Специалист не найден</h2>
                 <p className="text-muted-foreground text-sm">Проверьте ссылку и попробуйте еще раз.</p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#f5f5f5] text-slate-900 pb-12">
+        <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <div className="p-4 max-w-md mx-auto">
                 <h1 className="text-2xl font-bold mb-2">Запись на сессию</h1>
                 <p className="text-muted-foreground mb-6 text-sm">
@@ -161,8 +161,8 @@ export default function ClientBookingPage() {
                 </p>
 
                 {/* Calendar */}
-                <div className="mb-6 flex justify-center">
-                    <div className="bg-white border rounded-xl overflow-hidden inline-block shadow-sm">
+                <div className="mb-6">
+                    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm p-2 flex justify-center">
                         <DatePicker
                             inline
                             locale="ru"
@@ -170,17 +170,26 @@ export default function ClientBookingPage() {
                             onChange={handleDateChange}
                             minDate={new Date()}
                             filterDate={isDateAvailable}
-                            calendarClassName="!border-none"
+                            calendarClassName="!border-none !font-sans !bg-transparent"
+                            dayClassName={(date) => {
+                                const isAvail = isDateAvailable(date);
+                                const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
+                                if (isSelected) return "!bg-primary !text-primary-foreground !rounded-full !font-medium hover:!bg-primary/90";
+                                if (isAvail) return "!text-foreground !font-medium hover:!bg-muted !rounded-full transition-colors";
+                                return "!text-muted-foreground/30 !opacity-50";
+                            }}
+                            monthClassName="!text-foreground !font-medium"
+                            weekDayClassName="!text-muted-foreground !font-medium !text-xs"
                         />
                     </div>
                 </div>
 
                 {/* Time selection */}
                 {selectedDate && (
-                    <div className="mb-6 bg-white p-4 rounded-xl border shadow-sm">
-                        <h3 className="font-medium mb-3">Свободное время:</h3>
+                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <h3 className="font-medium mb-3 text-foreground">Свободное время:</h3>
                         {availableTimes.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Нет свободного времени на эту дату</p>
+                            <p className="text-muted-foreground text-sm text-center py-4">Нет свободного времени на эту дату</p>
                         ) : (
                             <div className="grid grid-cols-4 gap-2">
                                 {availableTimes.map(slot => (
@@ -191,9 +200,9 @@ export default function ClientBookingPage() {
                                             setSelectedTimeSlot(slot);
                                             setSelectedFormat(slot.format === 'offline' ? 'offline' : 'online');
                                         }}
-                                        className={`py-2 rounded-lg font-medium transition-colors text-sm ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                            ? 'bg-primary text-primary-foreground shadow-md'
-                                            : 'bg-primary/5 text-primary hover:bg-primary/20'
+                                        className={`py-2 rounded-xl font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
+                                            ? 'bg-primary text-primary-foreground shadow-sm'
+                                            : 'bg-primary/5 text-primary hover:bg-primary/15'
                                             }`}
                                     >
                                         {slot.time}
@@ -203,80 +212,79 @@ export default function ClientBookingPage() {
                         )}
 
                         {selectedTimeSlot?.format === 'both' && (
-                            <div className="mt-4 pt-4 border-t">
-                                <label className="block text-sm font-medium mb-2 text-slate-700">Формат проведения</label>
+                            <div className="mt-4 pt-4 border-t border-border/50 animate-in fade-in duration-200">
+                                <label className="block text-sm font-medium mb-3 text-foreground">Формат проведения</label>
                                 <div className="flex gap-2">
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('online')}
-                                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${selectedFormat === 'online' ? 'bg-primary text-white shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
                                     >Онлайн</button>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('offline')}
-                                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${selectedFormat === 'offline' ? 'bg-primary text-white shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
                                     >В кабинете</button>
                                 </div>
                             </div>
                         )}
                         {selectedTimeSlot?.format === 'offline' && (
-                            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+                            <div className="mt-4 pt-4 border-t border-border/50 text-sm text-primary flex items-center justify-center p-3 bg-primary/5 rounded-xl animate-in fade-in duration-200">
                                 Будет проведена очная встреча в кабинете.
                             </div>
                         )}
                         {selectedTimeSlot?.format === 'online' && (
-                            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+                            <div className="mt-4 pt-4 border-t border-border/50 text-sm text-primary flex items-center justify-center p-3 bg-primary/5 rounded-xl animate-in fade-in duration-200">
                                 Встреча пройдет в онлайн-формате.
                             </div>
                         )}
                     </div>
                 )}
 
-                <form onSubmit={handleBooking} className="space-y-4 bg-white p-4 rounded-xl border shadow-sm">
+                <form onSubmit={handleBooking} className="space-y-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
                     <div>
-                        <label className="block text-sm font-medium mb-1 text-slate-700">Имя</label>
+                        <label className="block text-sm font-medium mb-1.5 text-foreground">Имя</label>
                         <input
                             type="text"
                             required
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 bg-[#f5f5f5]"
+                            className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-foreground transition-all"
                             placeholder="Ваше имя"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1 text-slate-700">Телефон</label>
+                        <label className="block text-sm font-medium mb-1.5 text-foreground">Телефон</label>
                         <PhoneInput
                             country={'ru'}
                             value={form.phone}
                             onChange={phone => setForm(f => ({ ...f, phone }))}
-                            inputStyle={{
-                                width: '100%',
-                                height: '42px',
-                                borderRadius: '0.5rem',
-                                borderColor: 'hsl(var(--border))',
-                                backgroundColor: '#f5f5f5',
-                                fontSize: '1rem',
+                            inputProps={{
+                                required: true,
                             }}
-                            buttonStyle={{
-                                borderRadius: '0.5rem 0 0 0.5rem',
-                                borderColor: 'hsl(var(--border))',
-                                backgroundColor: '#fff',
-                            }}
-                            containerStyle={{
-                                width: '100%',
-                            }}
+                            containerClass="!w-full"
+                            inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-border !rounded-xl focus:!ring-2 focus:!ring-ring/50 !bg-background !text-foreground !transition-all"
+                            buttonClass="!bg-background !border-border !rounded-l-xl focus:!ring-ring/50 hover:!bg-muted"
+                            dropdownClass="!bg-card !text-foreground !border !border-border !rounded-xl !shadow-lg"
                         />
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Телефон нужен для связи. Уведомление о сессии придет в Telegram.
+                        </p>
                     </div>
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTimeSlot}
-                        className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-medium mt-6 shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!selectedDate || !selectedTimeSlot || loading}
+                        className={`w-full py-3.5 rounded-xl font-medium text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
+                            ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-70'
+                            : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-[0.98]'
+                            }`}
                     >
-                        Подтвердить запись
+                        {loading ? 'Секундочку...' : 'Записаться'}
                     </button>
                 </form>
+            </div>
+        </div>
 
                 <style dangerouslySetInnerHTML={{
                     __html: `
@@ -286,7 +294,7 @@ export default function ClientBookingPage() {
                     .react-datepicker__day:hover { border-radius: 50%; }
                     .react-datepicker__day--disabled { opacity: 0.3; }
                 `}} />
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

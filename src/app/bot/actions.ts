@@ -19,17 +19,28 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
     const dayOfWeek = (date.getDay() + 6) % 7;
 
     // Check blocks
-    const isBlocked = blocks.some(b => startOfDay(b.startDate) <= date && startOfDay(b.endDate) >= date);
+    const isBlocked = blocks.some(b => {
+        const bStartStr = format(b.startDate, 'yyyy-MM-dd');
+        const bEndStr = format(b.endDate, 'yyyy-MM-dd');
+        return dateStr >= bStartStr && dateStr <= bEndStr;
+    });
     if (isBlocked) return [];
 
     const daySlots = slots.filter(s => {
         if (s.dayOfWeek !== dayOfWeek) return false;
-        if (s.startDate && startOfDay(s.startDate) > date) return false;
-        if (s.endDate && startOfDay(s.endDate) < date) return false;
+
+        if (s.startDate) {
+            const slotStartStr = format(s.startDate, 'yyyy-MM-dd');
+            if (dateStr < slotStartStr) return false;
+        }
+        if (s.endDate) {
+            const slotEndStr = format(s.endDate, 'yyyy-MM-dd');
+            if (dateStr > slotEndStr) return false;
+        }
         return true;
     });
 
-    const daySessions = sessions.filter(s => s.date.getTime() === date.getTime());
+    const daySessions = sessions.filter(s => format(s.date, 'yyyy-MM-dd') === dateStr);
 
     let timesObj: Record<string, { time: string, format: string, addressId: string | null }> = {};
 
