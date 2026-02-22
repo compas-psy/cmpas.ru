@@ -88,7 +88,7 @@ export default function Header() {
                     <div className="flex items-center gap-4">
                         {/* Action Button - Hidden on mobile when menu is open */}
                         <Link
-                            href="#order-form"
+                            href="#доставка"
                             className="hidden sm:block bg-primary text-white px-8 py-3 rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm"
                         >
                             Купить
@@ -143,7 +143,7 @@ export default function Header() {
 
                     {/* Mobile CTA Button */}
                     <Link
-                        href="#order-form"
+                        href="#доставка"
                         onClick={handleLinkClick}
                         className="mt-6 bg-primary text-white px-8 py-4 rounded-lg text-base font-medium hover:bg-primary/90 transition shadow-sm text-center"
                     >

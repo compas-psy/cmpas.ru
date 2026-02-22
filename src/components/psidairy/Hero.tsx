@@ -52,7 +52,7 @@ export default function Hero() {
                         </ul>
 
                         <div className="flex flex-col sm:flex-row gap-4 pt-6">
-                            <Link href="#order-form" className="bg-primary text-white px-10 py-4 rounded-lg text-base font-medium hover:bg-primary/90 transition shadow-sm text-center">
+                            <Link href="#доставка" className="bg-primary text-white px-10 py-4 rounded-lg text-base font-medium hover:bg-primary/90 transition shadow-sm text-center">
                                 Купить ежедневник
                             </Link>
                             <Link href="#развороты" className="bg-white border border-border text-foreground px-10 py-4 rounded-lg text-base font-medium hover:bg-muted/50 transition text-center">

@@ -182,7 +182,7 @@ export default function IntegrationsPage() {
     };
 
     const connectedProviders = integrations.map(i => i.provider);
-    const availableProviders = ['google', 'yandex', 'apple'].filter(p => !connectedProviders.includes(p));
+    const availableProviders = ['google', 'yandex'].filter(p => !connectedProviders.includes(p));
 
     return (
         <div className="space-y-6">
@@ -259,10 +259,9 @@ export default function IntegrationsPage() {
                 <h2 className="text-lg font-semibold mb-3">Доступные интеграции</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {availableProviders.map(p => {
-                        const info = providerInfo[p];
-                        const isApple = p === 'apple';
+                        const info = providerInfo[p] || { name: p, color: 'bg-gray-500', icon: '📋', description: '' };
                         return (
-                            <div key={p} className={`bg-white rounded-lg border border-border p-5 ${isApple ? 'opacity-60' : ''}`}>
+                            <div key={p} className="bg-white rounded-lg border border-border p-5">
                                 <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center text-white text-xl mb-3 overflow-hidden border border-border/50`}>
                                     {info.image ? (
                                         <Image src={info.image} alt={info.name} width={48} height={48} className="w-full h-full object-cover" />
@@ -274,12 +273,9 @@ export default function IntegrationsPage() {
                                 <p className="text-xs text-muted-foreground mb-4">{info.description}</p>
                                 <button
                                     onClick={() => handleConnect(p)}
-                                    disabled={isApple}
-                                    className="w-full px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2"
                                 >
-                                    {isApple ? (
-                                        'Скоро'
-                                    ) : p === 'google' ? (
+                                    {p === 'google' ? (
                                         <><ExternalLink className="w-4 h-4" />Авторизоваться</>
                                     ) : (
                                         <><Link2 className="w-4 h-4" />Подключить</>
