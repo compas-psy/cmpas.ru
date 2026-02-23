@@ -201,8 +201,8 @@ export default function ClientBookingPage() {
                                             setSelectedFormat(slot.format === 'offline' ? 'offline' : 'online');
                                         }}
                                         className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                            ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent shadow-sm'
-                                            : 'border-border text-foreground hover:border-[#1e3a2f]/50 dark:hover:border-[#b89a4e]/50 bg-transparent'
+                                            ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm'
+                                            : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'
                                             }`}
                                     >
                                         {slot.time}
@@ -218,12 +218,12 @@ export default function ClientBookingPage() {
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('online')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent shadow-sm' : 'border-border text-foreground hover:border-border/80 bg-transparent'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
                                     >Онлайн</button>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('offline')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent shadow-sm' : 'border-border text-foreground hover:border-border/80 bg-transparent'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
                                     >В кабинете</button>
                                 </div>
                             </div>
@@ -276,8 +276,8 @@ export default function ClientBookingPage() {
                         type="submit"
                         disabled={!selectedDate || !selectedTimeSlot || loading}
                         className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
-                            ? 'border-border text-muted-foreground bg-transparent cursor-not-allowed opacity-70'
-                            : 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent hover:bg-[#1e3a2f]/5 dark:hover:bg-[#b89a4e]/5 shadow-sm active:scale-[0.98]'
+                            ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
+                            : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}
                     >
                         {loading ? 'Секундочку...' : 'Записаться'}
@@ -287,7 +287,18 @@ export default function ClientBookingPage() {
                     __html: `
                     .react-datepicker { font-family: inherit; border: none; }
                     .react-datepicker__header { background: transparent; border-bottom: none; padding-top: 1rem; }
-                    .react-datepicker__day--selected { background-color: hsl(var(--primary)) !important; border-radius: 50%; color: white !important;}
+                    .react-datepicker__day--selected { 
+                        background-color: transparent !important; 
+                        border: 2px solid #1e3a2f !important; 
+                        border-radius: 50% !important; 
+                        color: #1e3a2f !important;
+                    }
+                    @media (prefers-color-scheme: dark) {
+                        .react-datepicker__day--selected { 
+                            border: 2px solid #b89a4e !important; 
+                            color: #b89a4e !important;
+                        }
+                    }
                     .react-datepicker__day:hover { border-radius: 50%; }
                     .react-datepicker__day--disabled { opacity: 0.3; }
                 `}} />

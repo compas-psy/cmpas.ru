@@ -241,3 +241,48 @@ export async function bookSession(psychologistId: string, userDetails: any, form
 
     return session.id;
 }
+export async function getClientSessions(telegramChatId: string) {
+    if (!telegramChatId) return [];
+
+    const client = await db.diaryClient.findFirst({
+        where: { telegramChatId }
+    });
+
+    if (!client) return [];
+
+    const now = new Date();
+    // Reset time to start of day for comparison so we don't miss today's later sessions
+    now.setHours(0, 0, 0, 0);
+
+    const sessions = await db.diarySession.findMany({
+        where: {
+            clientId: client.id,
+            date: { gte: now },
+            status: { not: 'cancelled' }
+        },
+        include: {
+            psychologist: {
+                select: {
+                    name: true,
+                    psychologistSettings: {
+                        select: { fullName: true }
+                    }
+                }
+            }
+        },
+        orderBy: [
+            { date: 'asc' },
+            { time: 'asc' }
+        ]
+    });
+
+    return sessions.map(s => ({
+        id: s.id,
+        date: s.date,
+        time: s.time,
+        status: s.status,
+        format: s.format,
+        psychologistId: s.psychologistId,
+        psychologistName: s.psychologist.psychologistSettings?.fullName || s.psychologist.name || 'Специалист'
+    }));
+}

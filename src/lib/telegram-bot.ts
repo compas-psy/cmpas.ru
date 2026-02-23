@@ -26,7 +26,7 @@ async function showClientMenu(ctx: Context, psychologistId: string, clientName: 
     await ctx.reply(`Добро пожаловать, ${clientName}!\nИспользуйте меню для управления записями.`,
         Markup.keyboard([
             [Markup.button.webApp('📅 Записаться', `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}`)],
-            ['🗓 Мои сессии']
+            [Markup.button.webApp('🗓 Мои сессии', `${TELEGRAM_APP_URL}/bot/client?v=${Date.now()}`)]
         ]).resize()
     );
 }
