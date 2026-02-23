@@ -207,11 +207,11 @@ export default function ClientsPage() {
                     {clients.map(c => (
                         <button key={c.id} onClick={() => { setSelectedClient(c); fetchClientDetail(c.id); setActiveTab('questionnaire'); }}
                             className={`w-full p-4 bg-card rounded-2xl border text-left hover:border-border hover:shadow-md transition-all flex items-center gap-4 ${selectedClient?.id === c.id ? 'border-primary ring-2 ring-primary ring-inset shadow-sm' : 'border-border shadow-sm'}`}>
-                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-base flex-shrink-0">
-                                {c.name.slice(0, 2).toUpperCase()}
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-base flex-shrink-0 uppercase">
+                                {(c.questionnaire?.data?.fullName || c.name || '?').slice(0, 2)}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-foreground text-base truncate mb-0.5">{c.name}</p>
+                                <p className="font-semibold text-foreground text-base truncate mb-0.5">{c.questionnaire?.data?.fullName || c.name}</p>
                                 <p className="text-sm font-medium text-muted-foreground">{c.totalSessions} сессий</p>
                             </div>
                             <ChevronRight className="w-5 h-5 text-muted-foreground/50 flex-shrink-0" />
@@ -238,11 +238,11 @@ export default function ClientsPage() {
                             {/* Client header */}
                             <div className="p-6 pb-0">
                                 <div className="flex items-center gap-5">
-                                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
-                                        {selectedClient.name.slice(0, 2).toUpperCase()}
+                                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl uppercase">
+                                        {(selectedClient.questionnaire?.data?.fullName || selectedClient.name || '?').slice(0, 2)}
                                     </div>
                                     <div className="flex-1">
-                                        <h2 className="text-2xl font-bold text-foreground mb-1">{selectedClient.name}</h2>
+                                        <h2 className="text-2xl font-bold text-foreground mb-1">{selectedClient.questionnaire?.data?.fullName || selectedClient.name}</h2>
                                         <div className="flex gap-4 text-sm font-medium text-muted-foreground">
                                             {selectedClient.phone && <span>{selectedClient.phone}</span>}
                                             {selectedClient.email && <span>{selectedClient.email}</span>}

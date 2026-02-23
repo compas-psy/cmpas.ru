@@ -17,7 +17,7 @@ export async function getSessions(dateFrom?: Date, dateTo?: Date) {
             psychologistId,
             ...(dateFrom && dateTo ? { date: { gte: dateFrom, lte: dateTo } } : {}),
         },
-        include: { client: { select: { id: true, name: true } } },
+        include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } } } } },
         orderBy: { date: 'asc' },
     });
 }
@@ -34,7 +34,7 @@ export async function getSessionsByDate(date: Date) {
             psychologistId,
             date: { gte: dayStart, lte: dayEnd },
         },
-        include: { client: { select: { id: true, name: true } } },
+        include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } } } } },
         orderBy: { time: 'asc' },
     });
 }

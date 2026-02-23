@@ -155,7 +155,7 @@ export default function ClientBookingPage() {
     return (
         <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <div className="p-4 max-w-md mx-auto">
-                <h1 className="text-2xl font-bold mb-2">Запись на сессию</h1>
+                <h1 className="text-3xl font-bold tracking-tight mb-2">Запись на сессию</h1>
                 <p className="text-muted-foreground mb-6 text-sm">
                     К специалисту {psy.name}. Выберите удобное время.
                 </p>
@@ -175,8 +175,8 @@ export default function ClientBookingPage() {
                                 const isAvail = isDateAvailable(date);
                                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
                                 if (isSelected) return "!bg-primary !text-primary-foreground !rounded-full !font-medium hover:!bg-primary/90";
-                                if (isAvail) return "!text-foreground !font-medium hover:!bg-muted !rounded-full transition-colors";
-                                return "!text-muted-foreground/30 !opacity-50";
+                                if (isAvail) return "!text-foreground !font-medium hover:!bg-primary/10 !rounded-full transition-colors";
+                                return "!text-muted-foreground !opacity-40 !font-normal bg-muted/30 !rounded-full";
                             }}
                             monthClassName={() => "!text-foreground !font-medium"}
                             weekDayClassName={() => "!text-muted-foreground !font-medium !text-xs"}

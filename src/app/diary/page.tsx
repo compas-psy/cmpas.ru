@@ -16,12 +16,13 @@ type Session = {
     format: string;
     status: string;
     notes: string | null;
-    client: { id: string; name: string };
+    client: { id: string; name: string; questionnaire?: { data: any } | null };
 };
 
 type Client = {
     id: string;
     name: string;
+    questionnaire?: { data: any } | null;
 };
 
 type ViewMode = 'month' | 'week' | 'day';
@@ -321,7 +322,11 @@ export default function DiaryCalendarPage() {
                                                 {daySessions.map(s => (
                                                     <div key={s.id} className={`text-xs p-2.5 rounded-xl border-l-4 text-left shadow-sm bg-card`} style={{ borderLeftColor: 'var(--color-primary)' }}>
                                                         <div className="font-bold truncate mb-1 text-foreground">{s.time}</div>
-                                                        <div className="text-muted-foreground font-medium truncate">{s.client.name}</div>
+                                                        <div className="text-muted-foreground font-medium truncate">
+                                                            {s.client.questionnaire?.data && (s.client.questionnaire.data as any).fullName
+                                                                ? (s.client.questionnaire.data as any).fullName
+                                                                : s.client.name}
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -353,7 +358,11 @@ export default function DiaryCalendarPage() {
                                     <div key={s.id} className="bg-card rounded-3xl border border-border shadow-sm p-6 flex flex-col sm:flex-row sm:items-center gap-5 transition-all hover:border-primary/30">
                                         <div className={`hidden sm:block w-1.5 h-16 rounded-full ${statusColors[s.status]}`} />
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-foreground text-xl mb-1.5">{s.client.name}</div>
+                                            <div className="font-bold text-foreground text-xl mb-1.5">
+                                                {s.client.questionnaire?.data && (s.client.questionnaire.data as any).fullName
+                                                    ? (s.client.questionnaire.data as any).fullName
+                                                    : s.client.name}
+                                            </div>
                                             <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2.5">
                                                 <div className="flex items-center gap-1.5 text-foreground">
                                                     <Clock className="w-4 h-4 text-primary" />

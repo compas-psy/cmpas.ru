@@ -5,7 +5,20 @@ import { bot } from '@/lib/telegram-bot';
 import { addDays, format, isBefore, startOfDay } from 'date-fns';
 
 export async function getPsychologist(id: string) {
-    return db.user.findUnique({ where: { id }, select: { name: true, image: true } });
+    const user = await db.user.findUnique({
+        where: { id },
+        select: {
+            name: true,
+            image: true,
+        }
+    });
+
+    if (!user) return null;
+
+    return {
+        ...user,
+        name: user.name || 'Специалист'
+    };
 }
 
 function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], sessionBreak: number) {
@@ -99,8 +112,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     if (!slots.length) return [];
 
-    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
-    const sessionBreak = settings?.sessionBreak ?? 15;
+    const sessionBreak = 15;
 
     const blocks = await db.timeBlock.findMany({
         where: {
@@ -139,8 +151,7 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string)
     const date = new Date(year, month - 1, day);
 
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
-    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
-    const sessionBreak = settings?.sessionBreak ?? 15;
+    const sessionBreak = 15;
 
     const blocks = await db.timeBlock.findMany({
         where: {
@@ -172,16 +183,8 @@ export async function bookSession(psychologistId: string, userDetails: any, form
                 psychologistId,
                 name: form.name,
                 phone: form.phone,
-                telegramChatId: userDetails?.id ? String(userDetails.id) : null,
             }
         });
-    } else {
-        if (userDetails?.id && !client.telegramChatId) {
-            await db.diaryClient.update({
-                where: { id: client.id },
-                data: { telegramChatId: String(userDetails.id) }
-            });
-        }
     }
 
     const [y, m, d] = form.date.split('-').map(Number);
@@ -202,7 +205,6 @@ export async function bookSession(psychologistId: string, userDetails: any, form
             duration,
             type: 'individual',
             format: form.format || 'online',
-            addressId: form.addressId || null,
             status: 'confirmed'
         }
     });
@@ -213,7 +215,7 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         data: { totalSessions: sessionsCount }
     });
 
-    const psy = await db.user.findUnique({ where: { id: psychologistId }, select: { telegramChatId: true } });
+    const psy = await db.user.findUnique({ where: { id: psychologistId } }) as any;
     if (psy?.telegramChatId && bot) {
         try {
             await bot.telegram.sendMessage(
