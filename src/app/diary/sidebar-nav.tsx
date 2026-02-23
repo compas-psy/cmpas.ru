@@ -30,8 +30,8 @@ export function SidebarNav() {
                             <Link
                                 href={item.href}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm ${isActive
-                                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
-                                        : 'text-foreground/80 hover:bg-secondary hover:text-foreground font-medium'
+                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
+                                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium'
                                     }`}
                             >
                                 <Icon className="w-5 h-5" strokeWidth={isActive ? 2 : 1.5} />

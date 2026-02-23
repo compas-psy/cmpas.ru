@@ -201,8 +201,8 @@ export default function ClientBookingPage() {
                                             setSelectedFormat(slot.format === 'offline' ? 'offline' : 'online');
                                         }}
                                         className={`py-2 rounded-xl font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                            ? 'bg-primary text-primary-foreground shadow-sm'
-                                            : 'bg-primary/5 text-primary hover:bg-primary/15'
+                                            ? 'bg-accent text-accent-foreground shadow-sm'
+                                            : 'bg-muted text-foreground hover:bg-muted/80'
                                             }`}
                                     >
                                         {slot.time}
@@ -275,9 +275,9 @@ export default function ClientBookingPage() {
                     <button
                         type="submit"
                         disabled={!selectedDate || !selectedTimeSlot || loading}
-                        className={`w-full py-3.5 rounded-xl font-medium text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
+                        className={`w-full py-3.5 rounded-xl font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
                             ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-70'
-                            : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-[0.98]'
+                            : 'bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm active:scale-[0.98]'
                             }`}
                     >
                         {loading ? 'Секундочку...' : 'Записаться'}

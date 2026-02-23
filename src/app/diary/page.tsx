@@ -171,23 +171,30 @@ export default function DiaryCalendarPage() {
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Календарь</h1>
                     <p className="text-muted-foreground text-base mt-2">Управляйте своими записями</p>
                 </div>
-                <button
-                    onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
-                    className="flex items-center justify-center gap-2 px-6 py-3 min-h-[48px] bg-primary text-primary-foreground rounded-xl shadow-sm hover:bg-primary/90 transition-all font-semibold active:scale-[0.98] md:w-auto w-full"
-                >
-                    <Plus className="w-5 h-5" />
-                    Новая запись
-                </button>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <button
+                        onClick={() => window.location.href = '/diary/availability'}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-foreground hover:bg-muted font-semibold rounded-lg transition-all md:w-auto w-full"
+                    >
+                        <Plus className="w-4 h-4" /> Окно
+                    </button>
+                    <button
+                        onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                        className="flex items-center justify-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.98] md:w-auto w-full"
+                    >
+                        <Plus className="w-4 h-4" /> Запись
+                    </button>
+                </div>
             </div>
 
             {/* Widgets */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-card p-5 rounded-3xl border border-border shadow-sm flex items-center gap-5 transition-all hover:shadow-md">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold shadow-sm">
-                        <CalendarIcon className="w-6 h-6" />
+                <div className="bg-card py-3 px-4 rounded-xl border border-border bg-white flex items-start gap-4 transition-all hover:shadow-sm">
+                    <div className="mt-1 text-muted-foreground">
+                        <CalendarIcon className="w-5 h-5" />
                     </div>
                     <div>
-                        <div className="text-3xl font-bold tracking-tight text-foreground">{sessions.filter(s => {
+                        <div className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{sessions.filter(s => {
                             const d = new Date(s.date);
                             const now = new Date();
                             const startOfWeek = new Date(now);
@@ -196,25 +203,25 @@ export default function DiaryCalendarPage() {
                             endOfWeek.setDate(startOfWeek.getDate() + 6);
                             return d >= startOfWeek && d <= endOfWeek;
                         }).length}</div>
-                        <div className="text-sm font-semibold text-muted-foreground">Записей на неделю</div>
+                        <div className="text-xs font-medium text-muted-foreground">Записей на неделе</div>
                     </div>
                 </div>
-                <div className="bg-card p-5 rounded-3xl border border-border shadow-sm flex items-center gap-5 transition-all hover:shadow-md">
-                    <div className="w-14 h-14 rounded-2xl bg-green-500/10 text-green-600 flex items-center justify-center font-bold shadow-sm">
-                        <User className="w-6 h-6" />
+                <div className="bg-card py-3 px-4 rounded-xl border border-border bg-white flex items-start gap-4 transition-all hover:shadow-sm">
+                    <div className="mt-1 text-accent">
+                        <Clock className="w-5 h-5" />
                     </div>
                     <div>
-                        <div className="text-3xl font-bold tracking-tight text-foreground">{clients.length}</div>
-                        <div className="text-sm font-semibold text-muted-foreground">Всего клиентов</div>
+                        <div className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{sessions.filter(s => s.status === 'pending').length}</div>
+                        <div className="text-xs font-medium text-muted-foreground">Свободных окон</div>
                     </div>
                 </div>
-                <div className="bg-card p-5 rounded-3xl border border-border shadow-sm flex items-center gap-5 transition-all hover:shadow-md">
-                    <div className="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center font-bold shadow-sm">
-                        <Clock className="w-6 h-6" />
+                <div className="bg-card py-3 px-4 rounded-xl border border-border bg-white flex items-start gap-4 transition-all hover:shadow-sm">
+                    <div className="mt-1 text-primary">
+                        <User className="w-5 h-5" />
                     </div>
                     <div>
-                        <div className="text-3xl font-bold tracking-tight text-foreground">{sessions.filter(s => s.status === 'pending').length}</div>
-                        <div className="text-sm font-semibold text-muted-foreground">Ожидают подтверждения</div>
+                        <div className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{clients.length}</div>
+                        <div className="text-xs font-medium text-muted-foreground">Всего клиентов</div>
                     </div>
                 </div>
             </div>

@@ -2,14 +2,39 @@
 
 @theme {
     --color-primary: #1a4d3a;
+    --color-primary-foreground: #ffffff;
     --color-background: #faf8f5;
     --color-accent: #c9a961;
-    --color-foreground: #1a1a1a;
-    --color-muted: #e8e5df;
-    --color-muted-foreground: #6b6b6b;
+    --color-accent-foreground: #ffffff;
+    --color-foreground: #1a4d3a;
+    --color-muted: rgba(26, 77, 58, 0.05);
+    /* #1a4d3a at 5% */
+    --color-muted-foreground: rgba(26, 77, 58, 0.6);
     --color-border: rgba(26, 77, 58, 0.1);
     --color-input: #ffffff;
     --color-destructive: #d4183d;
+    --color-destructive-foreground: #ffffff;
+    --color-card: #ffffff;
+    --color-card-foreground: #1a4d3a;
+    --color-popover: #ffffff;
+    --color-secondary: #f5f2ed;
+    --color-secondary-foreground: #1a4d3a;
+    --color-ring: #c9a961;
+
+    --color-sidebar: #1a4d3a;
+    --color-sidebar-foreground: #faf8f5;
+    --color-sidebar-primary: #c9a961;
+    --color-sidebar-primary-foreground: #1a4d3a;
+    --color-sidebar-accent: rgba(255, 255, 255, 0.1);
+    --color-sidebar-accent-foreground: #ffffff;
+    --color-sidebar-border: rgba(255, 255, 255, 0.1);
+    --color-sidebar-ring: #c9a961;
+
+    --radius-sm: calc(6px - 4px);
+    --radius-md: calc(6px - 2px);
+    --radius-lg: 6px;
+    --radius-xl: calc(6px + 4px);
+    --radius-2xl: calc(6px + 10px);
 
     /* System fonts are default in Tailwind, no need to override unless specified.
      User requested default system fonts. */

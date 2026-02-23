@@ -189,8 +189,8 @@ export default function ClientsPage() {
                     <p className="text-muted-foreground text-sm mt-1">{clients.length} клиентов</p>
                 </div>
                 <button onClick={() => setShowNewClient(true)}
-                    className="flex items-center gap-2 px-6 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-medium self-start shadow-sm active:scale-[0.98]">
-                    <Plus className="w-5 h-5" />Новый клиент
+                    className="flex items-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-all font-semibold self-start shadow-sm active:scale-[0.98]">
+                    <Plus className="w-4 h-4" /> Добавить
                 </button>
             </div>
 
