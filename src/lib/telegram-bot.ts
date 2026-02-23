@@ -53,9 +53,13 @@ export function setupBot() {
         if (payload?.startsWith('psy_')) {
             const psychologistId = payload.replace('psy_', '');
 
-            const targetPsy = await db.user.findUnique({ where: { id: psychologistId }, select: { name: true } });
+            const targetPsy = await db.user.findUnique({
+                where: { id: psychologistId },
+                select: { name: true, psychologistSettings: { select: { fullName: true } } }
+            });
 
             if (targetPsy) {
+                const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
                 // Save them temporarily as TelegramClient so we know their psychologist
                 await db.telegramClient.upsert({
                     where: { telegramUserId: tgId },
@@ -63,7 +67,7 @@ export function setupBot() {
                     create: { telegramUserId: tgId, psychologistId, telegramUsername: ctx.from?.username }
                 });
 
-                return showClientMenu(ctx, psychologistId);
+                return showClientMenu(ctx, psychologistId, psyName);
             }
         }
 

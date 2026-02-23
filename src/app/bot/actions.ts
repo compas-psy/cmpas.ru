@@ -10,6 +10,9 @@ export async function getPsychologist(id: string) {
         select: {
             name: true,
             image: true,
+            psychologistSettings: {
+                select: { fullName: true }
+            }
         }
     });
 
@@ -17,7 +20,7 @@ export async function getPsychologist(id: string) {
 
     return {
         ...user,
-        name: user.name || 'Специалист'
+        name: user.psychologistSettings?.fullName || user.name || 'Специалист'
     };
 }
 

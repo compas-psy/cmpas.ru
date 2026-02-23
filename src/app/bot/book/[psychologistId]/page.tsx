@@ -174,9 +174,9 @@ export default function ClientBookingPage() {
                             dayClassName={(date) => {
                                 const isAvail = isDateAvailable(date);
                                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
-                                if (isSelected) return "!bg-primary !text-primary-foreground !rounded-full !font-medium hover:!bg-primary/90";
-                                if (isAvail) return "!text-foreground !font-medium hover:!bg-primary/10 !rounded-full transition-colors";
-                                return "!text-muted-foreground !opacity-40 !font-normal bg-muted/30 !rounded-full";
+                                if (isSelected) return "!bg-transparent !border-2 !border-[#1e3a2f] dark:!border-[#b89a4e] !text-[#1e3a2f] dark:!text-[#b89a4e] !rounded-[50%] !font-medium";
+                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[#1e3a2f]/50 dark:hover:!border-[#b89a4e]/50 !font-medium !rounded-[50%] transition-colors";
+                                return "!text-muted-foreground !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[50%]";
                             }}
                             monthClassName={() => "!text-foreground !font-medium"}
                             weekDayClassName={() => "!text-muted-foreground !font-medium !text-xs"}
@@ -200,9 +200,9 @@ export default function ClientBookingPage() {
                                             setSelectedTimeSlot(slot);
                                             setSelectedFormat(slot.format === 'offline' ? 'offline' : 'online');
                                         }}
-                                        className={`py-2 rounded-xl font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                            ? 'bg-accent text-accent-foreground shadow-sm'
-                                            : 'bg-muted text-foreground hover:bg-muted/80'
+                                        className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
+                                            ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent shadow-sm'
+                                            : 'border-border text-foreground hover:border-[#1e3a2f]/50 dark:hover:border-[#b89a4e]/50 bg-transparent'
                                             }`}
                                     >
                                         {slot.time}
@@ -218,12 +218,12 @@ export default function ClientBookingPage() {
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('online')}
-                                        className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent shadow-sm' : 'border-border text-foreground hover:border-border/80 bg-transparent'}`}
                                     >Онлайн</button>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('offline')}
-                                        className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-primary/5 text-primary hover:bg-primary/10'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent shadow-sm' : 'border-border text-foreground hover:border-border/80 bg-transparent'}`}
                                     >В кабинете</button>
                                 </div>
                             </div>
@@ -275,9 +275,9 @@ export default function ClientBookingPage() {
                     <button
                         type="submit"
                         disabled={!selectedDate || !selectedTimeSlot || loading}
-                        className={`w-full py-3.5 rounded-xl font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
-                            ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-70'
-                            : 'bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm active:scale-[0.98]'
+                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
+                            ? 'border-border text-muted-foreground bg-transparent cursor-not-allowed opacity-70'
+                            : 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent hover:bg-[#1e3a2f]/5 dark:hover:bg-[#b89a4e]/5 shadow-sm active:scale-[0.98]'
                             }`}
                     >
                         {loading ? 'Секундочку...' : 'Записаться'}

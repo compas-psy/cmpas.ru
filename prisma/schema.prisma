@@ -341,6 +341,7 @@ model CalendarIntegration {
 model PsychologistSettings {
   id                    String   @id @default(cuid())
   psychologistId        String   @unique
+  fullName              String?
   timezone              String   @default("Europe/Moscow")
   defaultSessionDuration Int     @default(50)
   sessionBreak          Int      @default(15) // Minutes buffer between sessions
