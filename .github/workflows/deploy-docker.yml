@@ -120,6 +120,12 @@ jobs:
             ls -la "$BACKUP_DIR" | tail -5
             # ============================================
             
+            # ============================================
+            # BUILD CONTAINERS FIRST (Zero Downtime Strategy)
+            # ============================================
+            echo "Pre-building docker images..."
+            docker compose build
+            
             # CRITICAL: NEVER use "docker compose down -v" - this deletes database!
             # Only stop containers, preserve volumes
             docker compose down --timeout 30 || true
@@ -129,18 +135,18 @@ jobs:
             docker builder prune -a -f || true
 
             # ============================================
-            # DISABLE EXIM4 (conflicts with Docker mailer on port 25)
+            # DISABLE MAIL SERVICES (conflicts with Docker mailer on port 25)
             # ============================================
-            systemctl stop exim4 2>/dev/null || true
-            systemctl disable exim4 2>/dev/null || true
+            systemctl stop exim4 postfix sendmail 2>/dev/null || true
+            systemctl disable exim4 postfix sendmail 2>/dev/null || true
             
             # Ensure port 25 is free right before docker compose up
-            # (If done earlier, a system service might grab it during the docker build)
+            # (Building took time, so we must kill the port RIGHT before starting)
             fuser -k 25/tcp 2>/dev/null || true
             sleep 2
 
-            # Rebuild and restart containers
-            docker compose up -d --build --force-recreate
+            # Restart containers without building (since we just built them)
+            docker compose up -d --force-recreate
             
             # ============================================
             # FIX POSTGRES AUTH (PERMANENT!)
