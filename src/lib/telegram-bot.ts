@@ -1,5 +1,6 @@
-import { Telegraf, Context } from 'telegraf';
+import { Telegraf, Context, Markup } from 'telegraf';
 import { db } from '@/lib/db';
+import { format } from 'date-fns';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -12,6 +13,24 @@ if (!BOT_TOKEN) {
 
 export const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 
+async function showPsyMenu(ctx: Context, psy: any) {
+    await ctx.reply(`Добро пожаловать в кабинет психолога, ${psy.name || 'Специалист'}!`,
+        Markup.keyboard([
+            ['💼 Мой кабинет', '🗓 Мои сессии'],
+            ['🔗 Отправить ссылку на запись']
+        ]).resize()
+    );
+}
+
+async function showClientMenu(ctx: Context, psychologistId: string, clientName: string = 'Клиент') {
+    await ctx.reply(`Добро пожаловать, ${clientName}!\nИспользуйте меню для управления записями.`,
+        Markup.keyboard([
+            [Markup.button.webApp('📅 Записаться', `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}`)],
+            ['🗓 Мои сессии']
+        ]).resize()
+    );
+}
+
 /**
  * Initializes bot commands and listeners
  */
@@ -21,64 +40,171 @@ export function setupBot() {
     // Command: /start
     bot.start(async (ctx: Context) => {
         const payload = (ctx as any).message?.text?.split(' ')[1]; // e.g. /start psy_123
+        const tgId = ctx.from?.id.toString();
+        if (!tgId) return;
 
-        const keyboard = {
-            inline_keyboard: [
-                [
-                    {
-                        text: '💼 Войти в кабинет (для психолога)',
-                        web_app: { url: `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}` }
-                    }
-                ]
-            ]
-        };
+        // 1. Check if Psychologist
+        const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
+        if (psy) {
+            return showPsyMenu(ctx, psy);
+        }
 
+        // 2. Check if Client coming directly from booking link
         if (payload?.startsWith('psy_')) {
-            // Client Flow: Came via booking link
             const psychologistId = payload.replace('psy_', '');
 
-            // Try to look up the psychologist to personalize the greeting
-            try {
-                const psy = await db.user.findUnique({
-                    where: { id: psychologistId },
-                    select: { name: true }
+            const targetPsy = await db.user.findUnique({ where: { id: psychologistId }, select: { name: true } });
+
+            if (targetPsy) {
+                // Save them temporarily as TelegramClient so we know their psychologist
+                await db.telegramClient.upsert({
+                    where: { telegramUserId: tgId },
+                    update: { psychologistId },
+                    create: { telegramUserId: tgId, psychologistId, telegramUsername: ctx.from?.username }
                 });
 
-                if (psy) {
-                    await ctx.reply(`Добро пожаловать к психологу ${psy.name || 'Специалист'}!\n\nНажмите кнопку ниже, чтобы выбрать удобное время для сессии.`, {
-                        reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    {
-                                        text: '📅 Записаться на сессию',
-                                        web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}` }
-                                    }
-                                ]
-                            ]
-                        }
-                    });
-                    return;
-                }
-            } catch (err) {
-                console.error('Error fetching psychologist:', err);
+                return showClientMenu(ctx, psychologistId);
             }
         }
 
-        // Default greeting (mostly for Psychologists)
+        // 3. Check if existing DiaryClient or TelegramClient
+        const client = await db.diaryClient.findFirst({
+            where: { telegramChatId: tgId },
+            include: { psychologist: true }
+        });
+        if (client) {
+            return showClientMenu(ctx, client.psychologistId, client.name);
+        }
+
+        const tgClient = await db.telegramClient.findUnique({ where: { telegramUserId: tgId } });
+        if (tgClient && tgClient.psychologistId) {
+            return showClientMenu(ctx, tgClient.psychologistId);
+        }
+
+        // 4. Default greeting (Unregistered/Unknown)
         await ctx.reply(
             'Добро пожаловать в Compas.ru!\n\nЕсли вы психолог — нажмите кнопку ниже, чтобы привязать свой аккаунт и получать уведомления.',
-            { reply_markup: keyboard }
+            Markup.inlineKeyboard([
+                [Markup.button.webApp('💼 Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}`)]
+            ])
         );
     });
 
-    // Inline Query Handler
+    // Psychologist Actions
+    bot.hears('💼 Мой кабинет', async (ctx) => {
+        await ctx.reply('Нажмите на кнопку ниже, чтобы перейти в свой кабинет:',
+            Markup.inlineKeyboard([
+                [Markup.button.webApp('Открыть кабинет', `${TELEGRAM_APP_URL}/diary?v=${Date.now()}`)]
+            ])
+        );
+    });
+
+    bot.hears('🔗 Отправить ссылку на запись', async (ctx) => {
+        const tgId = ctx.from?.id.toString();
+        const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
+        if (!psy) return;
+
+        await ctx.reply('Перешлите это сообщение вашему клиенту:',
+            Markup.inlineKeyboard([
+                [Markup.button.url('📅 Записаться', `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}`)]
+            ])
+        );
+    });
+
+    // Shared text for My Sessions (handled differently for Psy and Client)
+    bot.hears('🗓 Мои сессии', async (ctx) => {
+        const tgId = ctx.from?.id.toString();
+        if (!tgId) return;
+
+        // Check if Psy
+        const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
+        if (psy) {
+            const sessions = await db.diarySession.findMany({
+                where: { psychologistId: psy.id, status: 'confirmed', date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+                orderBy: [{ date: 'asc' }, { time: 'asc' }],
+                take: 5,
+                include: { client: true }
+            });
+
+            if (sessions.length === 0) {
+                return ctx.reply('У вас нет предстоящих подтвержденных сессий.');
+            }
+
+            let msg = '📅 <b>Ваши ближайшие сессии:</b>\n\n';
+            sessions.forEach(s => {
+                msg += `👤 <b>${s.client.name}</b>\n⏰ ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 ${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`;
+            });
+            return ctx.reply(msg, { parse_mode: 'HTML' });
+        }
+
+        // Check if Client
+        const client = await db.diaryClient.findFirst({ where: { telegramChatId: tgId } });
+        if (client) {
+            const sessions = await db.diarySession.findMany({
+                where: { clientId: client.id, status: 'confirmed', date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+                orderBy: [{ date: 'asc' }, { time: 'asc' }],
+                include: { psychologist: true }
+            });
+
+            if (sessions.length === 0) {
+                return ctx.reply('У вас нет предстоящих записей.');
+            }
+
+            for (const s of sessions) {
+                const msg = `📅 <b>Сессия с психологом ${s.psychologist.name}</b>\n\n⏰ Дата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 Формат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}`;
+                await ctx.reply(msg, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Перенести (Новая запись)', web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?v=${Date.now()}` } }],
+                            [{ text: '❌ Отменить', callback_data: `cancel_${s.id}` }]
+                        ]
+                    }
+                });
+            }
+            return;
+        }
+
+        await ctx.reply('Аккаунт не найден. Выберите "Записаться" по прямой ссылке от вашего психолога.');
+    });
+
+    // Session Cancel Callback
+    bot.action(/cancel_(.+)/, async (ctx) => {
+        const sessionId = ctx.match[1];
+        const tgId = ctx.from?.id.toString();
+
+        const session = await db.diarySession.findUnique({
+            where: { id: sessionId },
+            include: { client: true, psychologist: true }
+        });
+
+        if (!session || session.client.telegramChatId !== tgId) {
+            return ctx.answerCbQuery('Сессия не найдена или у вас нет доступа.', { show_alert: true });
+        }
+
+        await db.diarySession.update({
+            where: { id: sessionId },
+            data: { status: 'cancelled' }
+        });
+
+        await ctx.editMessageText(`❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
+        await ctx.answerCbQuery('Вы успешно отменили запись');
+
+        // Notify Psy
+        if (session.psychologist.telegramChatId) {
+            try {
+                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `⚠️ <b>Отмена записи</b>\n\nКлиент ${session.client.name} отменил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
+            } catch (e) { }
+        }
+    });
+
+    // Inline Query Handler (For Psy to send quick booking links in chats)
     bot.on('inline_query', async (ctx) => {
         try {
             const userId = ctx.from.id.toString();
 
-            // Find psychologist linked to this Telegram user
             const psy = await db.user.findFirst({
-                where: { telegramChatId: userId } // We use chatId/userId interchangeably here for PMs
+                where: { telegramChatId: userId }
             });
 
             if (!psy) {
@@ -91,8 +217,6 @@ export function setupBot() {
                 return;
             }
 
-            // Fetch upcoming availability slots
-            // Simplified logic: finding all slots. Ideally we'd expand recurring slots into actual dates.
             const slots = await db.availabilitySlot.findMany({
                 where: { psychologistId: psy.id, isActive: true },
                 take: 5
@@ -103,17 +227,13 @@ export function setupBot() {
                     type: 'article',
                     id: 'no_slots',
                     title: 'Нет свободных окон',
-                    input_message_content: {
-                        message_text: 'К сожалению, у меня пока нет добавленных свободных окон в расписании.'
-                    }
+                    input_message_content: { message_text: 'К сожалению, у меня пока нет добавленных свободных окон в расписании.' }
                 }]);
                 return;
             }
 
-            // Create 3 smart inline results
             const results = [];
 
-            // 1. Прямая ссылка на онлайн-запись (Бронирование)
             results.push({
                 type: 'article',
                 id: 'booking_link',
@@ -124,18 +244,10 @@ export function setupBot() {
                     parse_mode: 'Markdown'
                 },
                 reply_markup: {
-                    inline_keyboard: [
-                        [
-                            {
-                                text: '📅 Записаться',
-                                url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}`
-                            }
-                        ]
-                    ]
+                    inline_keyboard: [[{ text: '📅 Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}` }]]
                 }
             });
 
-            // 2. Выбрать время в календаре (через интерфейс Telegram Mini App)
             results.push({
                 type: 'article',
                 id: 'miniapp_calendar',
@@ -145,47 +257,28 @@ export function setupBot() {
                     message_text: `👋 Привет! Чтобы выбрать удобное время для сессии, нажми на кнопку ниже. Откроется календарь прямо здесь, в Telegram.`,
                 },
                 reply_markup: {
-                    inline_keyboard: [
-                        [
-                            {
-                                text: '📅 Выбрать время',
-                                url: `https://t.me/CompasProBot?start=psy_${psy.id}`
-                            }
-                        ]
-                    ]
+                    inline_keyboard: [[{ text: '📅 Выбрать время', url: `https://t.me/CompasProBot?start=psy_${psy.id}` }]]
                 }
             });
 
-            // 3. Ближайшее свободное окно (если есть слоты)
             if (slots.length > 0) {
-                // Find the soonest slot. Assuming slots are partially sorted, or just take the first one for simplicity for now.
-                // In a perfect world, we'd calculate the exact next occurrence of the dayOfWeek.
                 const nextSlot = slots[0];
                 const dayLabels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-
                 results.push({
                     type: 'article',
                     id: 'nearest_slot',
-                    title: `⚡️ Пригласить на ближайшее окно: ${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}`,
+                    title: `⚡️ Пригласить на окно: ${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}`,
                     description: `Длительность: ${nextSlot.duration} мин`,
                     input_message_content: {
                         message_text: `👋 Привет! У меня появилось свободное окно для сессии: *${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}*.\n\nНажми на кнопку ниже, чтобы занять его!`,
                         parse_mode: 'Markdown'
                     },
                     reply_markup: {
-                        inline_keyboard: [
-                            [
-                                {
-                                    text: 'Занять это время',
-                                    url: `https://t.me/CompasProBot?start=psy_${psy.id}`
-                                }
-                            ]
-                        ]
+                        inline_keyboard: [[{ text: 'Занять это время', url: `https://t.me/CompasProBot?start=psy_${psy.id}` }]]
                     }
                 });
             }
 
-            // Reverse to show Nearest Slot first if it exists
             await ctx.answerInlineQuery(results.reverse() as any, { cache_time: 0 });
 
         } catch (error) {
@@ -194,5 +287,5 @@ export function setupBot() {
     });
 }
 
-// Ensure the bot is set up when the module is imported
 setupBot();
+

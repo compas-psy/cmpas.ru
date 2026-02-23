@@ -177,13 +177,21 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         where: { psychologistId, phone: form.phone }
     });
 
+    const tgUserId = userDetails?.id ? String(userDetails.id) : null;
+
     if (!client) {
         client = await db.diaryClient.create({
             data: {
                 psychologistId,
                 name: form.name,
                 phone: form.phone,
+                telegramChatId: tgUserId,
             }
+        });
+    } else if (tgUserId && !client.telegramChatId) {
+        client = await db.diaryClient.update({
+            where: { id: client.id },
+            data: { telegramChatId: tgUserId }
         });
     }
 
