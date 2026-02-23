@@ -301,7 +301,7 @@ export default function DiaryCalendarPage() {
 
                     {viewMode === 'week' && (
                         <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden min-h-[500px]">
-                            <div className="grid grid-cols-7 h-full">
+                            <div className="flex overflow-x-auto md:grid md:grid-cols-7 h-full snap-x snap-mandatory telegram-miniapp-scrollbar-hide pb-2 md:pb-0">
                                 {getWeekDays().map((day, i) => {
                                     const daySessions = getSessionsForDay(day);
                                     const isToday = isSameDay(day, new Date());
@@ -310,7 +310,7 @@ export default function DiaryCalendarPage() {
                                         <button
                                             key={i}
                                             onClick={() => setSelectedDate(day)}
-                                            className={`p-4 border-r border-border/50 last:border-r-0 hover:bg-muted/30 transition-colors text-center h-full flex flex-col bg-background ${isToday ? 'bg-primary/5' : ''} ${isSelected ? 'bg-primary/5' : ''}`}
+                                            className={`min-w-[140px] md:min-w-0 flex-1 shrink-0 snap-start p-4 border-r border-border/50 last:border-r-0 hover:bg-muted/30 transition-colors text-center h-full flex flex-col bg-background ${isToday ? 'bg-primary/5' : ''} ${isSelected ? 'bg-primary/5' : ''}`}
                                         >
                                             <div className="text-sm font-semibold text-muted-foreground mb-2 tracking-tight">
                                                 {day.toLocaleDateString('ru-RU', { weekday: 'short' })}
