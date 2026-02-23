@@ -19,13 +19,8 @@ function SidebarContent({ userName, userInitials }: { userName: string; userInit
             {/* Logo */}
             <div className="p-6">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                        {/* A rough approximation of the tree logo */}
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                            <path d="M12 22v-6" />
-                            <path d="M12 16a4 4 0 0 0 4-4V8c0-2-2-4-4-4s-4 2-4 4v4a4 4 0 0 0 4 4z" />
-                            <path d="M8 12h8" />
-                        </svg>
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        <img src="/icon.png" alt="Компаc" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-lg font-bold text-sidebar-foreground tracking-widest uppercase truncate">КОМПАС</p>
@@ -106,13 +101,16 @@ export default async function DiaryLayout({
             <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 opacity-0 pointer-events-none peer-checked:opacity-100 peer-checked:pointer-events-auto transition-opacity duration-300">
                 <label htmlFor="diary-sidebar-toggle" className="absolute inset-0" />
             </div>
-            <aside className="md:hidden fixed top-0 left-0 bottom-0 w-[300px] z-50 flex flex-col -translate-x-full peer-checked:translate-x-0 transition-transform duration-300 rounded-r-3xl shadow-2xl overflow-hidden bg-sidebar">
-                <div className="flex items-center justify-end p-4 bg-sidebar">
-                    <label htmlFor="diary-sidebar-toggle" className="p-2 cursor-pointer hover:bg-sidebar-accent rounded-xl transition-colors active:scale-95">
+            <aside className="md:hidden fixed top-0 left-0 right-0 max-h-[50vh] z-50 flex flex-col -translate-y-full peer-checked:translate-y-0 transition-transform duration-300 rounded-b-3xl shadow-2xl bg-sidebar border-b border-sidebar-border">
+                <div className="flex items-center justify-between p-4 shrink-0 shadow-sm z-10">
+                    <span className="font-bold text-lg text-sidebar-foreground px-2">Меню</span>
+                    <label htmlFor="diary-sidebar-toggle" className="p-2 cursor-pointer hover:bg-sidebar-accent rounded-xl transition-colors active:scale-95 flex-shrink-0">
                         <X className="w-6 h-6 text-sidebar-foreground" />
                     </label>
                 </div>
-                <SidebarContent userName={userName} userInitials={userInitials} />
+                <div className="overflow-y-auto flex-1">
+                    <SidebarContent userName={userName} userInitials={userInitials} />
+                </div>
             </aside>
 
             {/* Main content */}

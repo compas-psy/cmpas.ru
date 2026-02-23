@@ -185,7 +185,7 @@ export default function ClientsPage() {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-semibold text-foreground">Клиенты</h1>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Клиенты</h1>
                     <p className="text-muted-foreground text-sm mt-1">{clients.length} клиентов</p>
                 </div>
                 <button onClick={() => setShowNewClient(true)}
