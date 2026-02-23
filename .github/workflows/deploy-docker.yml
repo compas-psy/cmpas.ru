@@ -172,11 +172,11 @@ jobs:
             
             # Replace scram-sha-256 with trust for all host connections
             # This is safe because postgres port is NOT exposed to the host
-            docker exec cmpas-postgres sh -c "sed -i 's/host all all all scram-sha-256/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
-            docker exec cmpas-postgres sh -c "sed -i 's/host all all all md5/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
+            docker exec -u postgres cmpas-postgres sh -c "sed -i 's/host all all all scram-sha-256/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
+            docker exec -u postgres cmpas-postgres sh -c "sed -i 's/host all all all md5/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
             
             # Reload postgres config (no restart needed)
-            docker exec cmpas-postgres pg_ctl reload -D /var/lib/postgresql/data
+            docker exec -u postgres cmpas-postgres pg_ctl reload -D /var/lib/postgresql/data
             echo "pg_hba.conf patched: all Docker network connections now use trust auth."
             
             # Verify pg_hba.conf
