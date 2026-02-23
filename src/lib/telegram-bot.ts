@@ -128,7 +128,7 @@ export function setupBot() {
                         [
                             {
                                 text: '📅 Записаться',
-                                url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}`
+                                web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}` }
                             }
                         ]
                     ]
