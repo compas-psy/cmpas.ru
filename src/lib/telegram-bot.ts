@@ -27,7 +27,7 @@ export function setupBot() {
                 [
                     {
                         text: '💼 Войти в кабинет (для психолога)',
-                        web_app: { url: `${TELEGRAM_APP_URL}/diary/bot` }
+                        web_app: { url: `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}` }
                     }
                 ]
             ]
@@ -51,7 +51,7 @@ export function setupBot() {
                                 [
                                     {
                                         text: '📅 Записаться на сессию',
-                                        web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psychologistId}` }
+                                        web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}` }
                                     }
                                 ]
                             ]
@@ -128,7 +128,7 @@ export function setupBot() {
                         [
                             {
                                 text: '📅 Записаться',
-                                url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}`
+                                url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}`
                             }
                         ]
                     ]
