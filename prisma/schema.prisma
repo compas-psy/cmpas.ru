@@ -29,6 +29,7 @@ model User {
   calendarIntegrations   CalendarIntegration[]
   psychologistSettings   PsychologistSettings?
   psychologistAddresses  PsychologistAddress[]
+  diaryBlocks          DiaryBlock[]
   
   // Telegram Integration
   telegramChatId       String?   @unique
@@ -264,6 +265,24 @@ model DiarySession {
   @@index([clientId])
   @@index([date])
   @@index([status])
+}
+
+model DiaryBlock {
+  id              String   @id @default(cuid())
+  psychologistId  String
+  date            DateTime // Дата блокировки
+  startTime       String   // "10:00"
+  endTime         String   // "12:00"
+  reason          String?  // Причина, например "Отпуск" или "Обед"
+  type            String   @default("personal") // В будущем можно делить на 'personal', 'holiday', 'sick_leave'
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@index([psychologistId])
+  @@index([date])
 }
 
 model AvailabilitySlot {

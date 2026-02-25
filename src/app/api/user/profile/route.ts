@@ -25,7 +25,8 @@ export async function POST(request: Request) {
             lunchEndTime,
             cancellationHours,
             cancellationFee,
-            cancellationText
+            cancellationText,
+            psychologistSettings // Из-за отправки с клиента в формате { psychologistSettings: { ... } }
         } = body
 
         // 1. Update user profile
@@ -43,22 +44,26 @@ export async function POST(request: Request) {
             update: {
                 methods: methods || [],
                 basePrice: basePrice || 0,
-                defaultSessionDuration: defaultSessionDuration || 50,
-                sessionBreak: sessionBreak || 15,
-                cancellationHours: cancellationHours !== undefined ? cancellationHours : 24,
-                cancellationFee: cancellationFee !== undefined ? cancellationFee : 50,
-                cancellationText: cancellationText || null,
-            },
+                defaultSessionDuration: defaultSessionDuration || psychologistSettings?.defaultSessionDuration || 50,
+                sessionBreak: sessionBreak || psychologistSettings?.sessionBreak || 15,
+                cancellationHours: cancellationHours !== undefined ? cancellationHours : (psychologistSettings?.cancellationHours ?? 24),
+                cancellationFee: cancellationFee !== undefined ? cancellationFee : (psychologistSettings?.cancellationFee ?? 50),
+                cancellationText: cancellationText || psychologistSettings?.cancellationText || null,
+                notifyTelegram: psychologistSettings?.notifyTelegram ?? true,
+                onlineSessionLink: psychologistSettings?.onlineSessionLink || null
+            } as any,
             create: {
                 psychologistId: user.id,
                 methods: methods || [],
                 basePrice: basePrice || 0,
-                defaultSessionDuration: defaultSessionDuration || 50,
-                sessionBreak: sessionBreak || 15,
-                cancellationHours: cancellationHours !== undefined ? cancellationHours : 24,
-                cancellationFee: cancellationFee !== undefined ? cancellationFee : 50,
-                cancellationText: cancellationText || null,
-            }
+                defaultSessionDuration: defaultSessionDuration || psychologistSettings?.defaultSessionDuration || 50,
+                sessionBreak: sessionBreak || psychologistSettings?.sessionBreak || 15,
+                cancellationHours: cancellationHours !== undefined ? cancellationHours : (psychologistSettings?.cancellationHours ?? 24),
+                cancellationFee: cancellationFee !== undefined ? cancellationFee : (psychologistSettings?.cancellationFee ?? 50),
+                cancellationText: cancellationText || psychologistSettings?.cancellationText || null,
+                notifyTelegram: psychologistSettings?.notifyTelegram ?? true,
+                onlineSessionLink: psychologistSettings?.onlineSessionLink || null
+            } as any
         })
 
         // 3. Re-create Availability Slots based on workDays array

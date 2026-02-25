@@ -14,6 +14,7 @@ type Settings = {
     cancellationHours: number;
     cancellationFee: number;
     cancellationText: string;
+    notifyTelegram: boolean;
 };
 
 type Address = {
@@ -23,18 +24,29 @@ type Address = {
 };
 
 const timezones = [
-    { value: 'Europe/Moscow', label: 'Москва (GMT+3)' },
+    { value: 'Europe/London', label: 'Лондон (GMT+0)' },
+    { value: 'Europe/Berlin', label: 'Берлин (GMT+1)' },
     { value: 'Europe/Kyiv', label: 'Киев (GMT+2)' },
+    { value: 'Europe/Moscow', label: 'Москва (GMT+3)' },
     { value: 'Europe/Minsk', label: 'Минск (GMT+3)' },
+    { value: 'Asia/Dubai', label: 'Дубай (GMT+4)' },
     { value: 'Asia/Yekaterinburg', label: 'Екатеринбург (GMT+5)' },
     { value: 'Asia/Novosibirsk', label: 'Новосибирск (GMT+7)' },
+    { value: 'Asia/Bangkok', label: 'Бангкок, Пхукет (GMT+7)' },
+    { value: 'Asia/Makassar', label: 'Бали (GMT+8)' },
 ];
 
 export default function SettingsPage() {
     const [settings, setSettings] = useState<Settings>({
-        timezone: 'Europe/Moscow', defaultSessionDuration: 50, sessionBreak: 15,
-        onlineSessionLink: '', officeAddress: '',
-        cancellationHours: 24, cancellationFee: 50, cancellationText: '',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        defaultSessionDuration: 50,
+        sessionBreak: 15,
+        onlineSessionLink: '',
+        officeAddress: '',
+        cancellationHours: 24,
+        cancellationFee: 50,
+        cancellationText: '',
+        notifyTelegram: true
     });
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [newAddress, setNewAddress] = useState({ name: '', address: '' });
@@ -55,6 +67,7 @@ export default function SettingsPage() {
                 officeAddress: data.officeAddress || '',
                 cancellationHours: data.cancellationHours, cancellationFee: data.cancellationFee,
                 cancellationText: data.cancellationText || '',
+                notifyTelegram: (data as any).notifyTelegram !== false
             });
             setAddresses(addrs);
         } catch { /* */ }
@@ -131,7 +144,41 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            {/* Session Formats */}
+            {/* Рабочий процесс и Уведомления */}
+            <div className="bg-card rounded-3xl border border-border shadow-sm p-6 space-y-6">
+                <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+                    <Video className="w-5 h-5 text-primary" />
+                    <h2 className="text-xl font-bold tracking-tight">Рабочий процесс и Уведомления</h2>
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Ссылка для онлайн-сессий</label>
+                        <input
+                            type="text"
+                            value={settings.onlineSessionLink}
+                            onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
+                            placeholder="https://zoom.us/j/..."
+                            className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background transition-all font-medium text-sm"
+                        />
+                    </div>
+                    <div className="pt-2">
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={settings.notifyTelegram}
+                                onChange={e => setSettings(s => ({ ...s, notifyTelegram: e.target.checked }))}
+                                className="w-5 h-5 rounded border-border text-primary focus:ring-primary/50 transition-all cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-foreground/90 group-hover:text-primary transition-colors">Telegram уведомления психологу</span>
+                                <span className="text-xs font-medium text-muted-foreground">Получать напоминания о предстоящих сессиях (за 24 часа)</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            {/* Session Formats (remaining parts) */}
             <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
                     <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
@@ -140,11 +187,6 @@ export default function SettingsPage() {
                     Форматы сессий
                 </h2>
                 <div className="space-y-6">
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1 flex items-center gap-2">Ссылка для онлайн-сессий</label>
-                        <input type="url" value={settings.onlineSessionLink || ''} onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
-                            className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all" placeholder="https://zoom.us/..." />
-                    </div>
                     <div>
                         <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1 flex items-center gap-2">Основной адрес офиса</label>
                         <AddressAutocomplete
@@ -250,7 +292,7 @@ export default function SettingsPage() {
                         <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Свой текст правил для клиента</label>
                         <textarea value={settings.cancellationText || ''} onChange={e => setSettings(s => ({ ...s, cancellationText: e.target.value }))} rows={4}
                             className="w-full px-4 py-3 bg-background border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium resize-none transition-all placeholder:text-muted-foreground/50"
-                            placeholder="Опишите ваши условия отмены..." />
+                            placeholder="Опишите ваши условия отмены (например, штраф ₽1000)..." />
                     </div>
                     <div>
                         <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/70 transition-colors ml-1">

@@ -50,12 +50,13 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function DiaryCalendarPage() {
-    const [viewMode, setViewMode] = useState<ViewMode>('month');
+    const [viewMode, setViewMode] = useState<ViewMode>('day');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [sessions, setSessions] = useState<Session[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [showNewSession, setShowNewSession] = useState(false);
+    const [editingSession, setEditingSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
@@ -189,13 +190,13 @@ export default function DiaryCalendarPage() {
             </div>
 
             {/* Widgets */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-card py-3 px-4 rounded-xl border border-border bg-white flex items-start gap-4 transition-all hover:shadow-sm">
-                    <div className="mt-1 text-muted-foreground">
+            <div className="grid grid-cols-3 gap-2 md:gap-4">
+                <div className="bg-card py-2 md:py-3 px-2 md:px-4 rounded-xl border border-border bg-white flex flex-col items-center justify-center md:flex-row md:items-start md:justify-start gap-1 md:gap-4 transition-all hover:shadow-sm text-center md:text-left">
+                    <div className="md:mt-1 text-muted-foreground hidden md:block">
                         <CalendarIcon className="w-5 h-5" />
                     </div>
-                    <div>
-                        <div className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{sessions.filter(s => {
+                    <div className="flex flex-col items-center md:items-start">
+                        <div className="text-lg md:text-2xl font-bold tracking-tight text-foreground leading-none mb-0.5 md:mb-1">{sessions.filter(s => {
                             const d = new Date(s.date);
                             const now = new Date();
                             const startOfWeek = new Date(now);
@@ -204,25 +205,25 @@ export default function DiaryCalendarPage() {
                             endOfWeek.setDate(startOfWeek.getDate() + 6);
                             return d >= startOfWeek && d <= endOfWeek;
                         }).length}</div>
-                        <div className="text-xs font-medium text-muted-foreground">Записей на неделе</div>
+                        <div className="text-[10px] md:text-xs font-medium text-muted-foreground leading-none md:leading-tight">Сессий<br className="hidden md:block" /> в нед.</div>
                     </div>
                 </div>
-                <div className="bg-card py-3 px-4 rounded-xl border border-border bg-white flex items-start gap-4 transition-all hover:shadow-sm">
-                    <div className="mt-1 text-accent">
+                <div className="bg-card py-2 md:py-3 px-2 md:px-4 rounded-xl border border-border bg-white flex flex-col items-center justify-center md:flex-row md:items-start md:justify-start gap-1 md:gap-4 transition-all hover:shadow-sm text-center md:text-left">
+                    <div className="md:mt-1 text-accent hidden md:block">
                         <Clock className="w-5 h-5" />
                     </div>
-                    <div>
-                        <div className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{sessions.filter(s => s.status === 'pending').length}</div>
-                        <div className="text-xs font-medium text-muted-foreground">Свободных окон</div>
+                    <div className="flex flex-col items-center md:items-start">
+                        <div className="text-lg md:text-2xl font-bold tracking-tight text-foreground leading-none mb-0.5 md:mb-1">{sessions.filter(s => s.status === 'pending').length}</div>
+                        <div className="text-[10px] md:text-xs font-medium text-muted-foreground leading-none md:leading-tight">Окон<br className="hidden md:block" /> свободно</div>
                     </div>
                 </div>
-                <div className="bg-card py-3 px-4 rounded-xl border border-border bg-white flex items-start gap-4 transition-all hover:shadow-sm">
-                    <div className="mt-1 text-primary">
+                <div className="bg-card py-2 md:py-3 px-2 md:px-4 rounded-xl border border-border bg-white flex flex-col items-center justify-center md:flex-row md:items-start md:justify-start gap-1 md:gap-4 transition-all hover:shadow-sm text-center md:text-left">
+                    <div className="md:mt-1 text-primary hidden md:block">
                         <User className="w-5 h-5" />
                     </div>
-                    <div>
-                        <div className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{clients.length}</div>
-                        <div className="text-xs font-medium text-muted-foreground">Всего клиентов</div>
+                    <div className="flex flex-col items-center md:items-start">
+                        <div className="text-lg md:text-2xl font-bold tracking-tight text-foreground leading-none mb-0.5 md:mb-1">{clients.length}</div>
+                        <div className="text-[10px] md:text-xs font-medium text-muted-foreground leading-none md:leading-tight">Всего<br className="hidden md:block" /> клиентов</div>
                     </div>
                 </div>
             </div>
@@ -230,7 +231,7 @@ export default function DiaryCalendarPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-2 rounded-2xl border border-border shadow-sm">
                 {/* View Mode Tabs */}
                 <div className="flex gap-1 bg-muted/50 p-1.5 rounded-xl w-full md:w-auto">
-                    {(['month', 'week', 'day'] as ViewMode[]).map(mode => (
+                    {(['day', 'week', 'month'] as ViewMode[]).map(mode => (
                         <button
                             key={mode}
                             onClick={() => {
@@ -278,16 +279,16 @@ export default function DiaryCalendarPage() {
                                         <button
                                             key={i}
                                             onClick={() => setSelectedDate(day)}
-                                            className={`p-2 border-r border-b border-border/50 last:border-r-0 hover:bg-muted/50 transition-colors text-center relative min-h-[80px] md:aspect-square ${!isCurrentMonth ? 'bg-muted/10 opacity-50' : 'bg-background'} ${isToday ? 'bg-primary/5' : ''} ${isSelected ? 'bg-primary/5 ring-2 ring-primary ring-inset overflow-hidden' : ''}`}
+                                            className={`p-1 md:p-2 border-r border-b border-border/50 last:border-r-0 hover:bg-muted/50 transition-colors text-center relative min-h-[50px] md:min-h-[80px] md:aspect-square ${!isCurrentMonth ? 'bg-muted/10 opacity-50' : 'bg-background'} ${isToday ? 'bg-primary/5' : ''} ${isSelected ? 'bg-primary/5 ring-2 ring-primary ring-inset overflow-hidden' : ''}`}
                                         >
-                                            <div className="flex flex-col items-center gap-2 h-full">
-                                                <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${isToday ? 'bg-primary text-primary-foreground shadow-sm' : isSelected ? 'bg-primary/20 text-primary' : isCurrentMonth ? 'text-foreground hover:bg-muted' : 'text-muted-foreground hover:bg-muted'}`}>
+                                            <div className="flex flex-col items-center gap-1 md:gap-2 h-full">
+                                                <span className={`text-sm md:text-sm font-bold w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-xl transition-colors ${isToday ? 'bg-primary text-primary-foreground shadow-sm' : isSelected ? 'bg-primary/20 text-primary' : isCurrentMonth ? 'text-foreground hover:bg-muted' : 'text-muted-foreground hover:bg-muted'}`}>
                                                     {day.getDate()}
                                                 </span>
                                                 {daySessions.length > 0 && (
-                                                    <div className="flex gap-1.5 justify-center flex-wrap px-1">
+                                                    <div className="flex gap-1 md:gap-1.5 justify-center flex-wrap px-0.5 w-full max-w-[30px] md:max-w-none">
                                                         {daySessions.slice(0, 4).map(s => (
-                                                            <div key={s.id} className={`w-2.5 h-2.5 rounded-full shadow-sm ${statusColors[s.status] || 'bg-border'}`} />
+                                                            <div key={s.id} className={`w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full shadow-sm ${statusColors[s.status] || 'bg-border'}`} />
                                                         ))}
                                                     </div>
                                                 )}
@@ -299,43 +300,117 @@ export default function DiaryCalendarPage() {
                         </div>
                     )}
 
-                    {viewMode === 'week' && (
-                        <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden min-h-[500px]">
-                            <div className="flex overflow-x-auto md:grid md:grid-cols-7 h-full snap-x snap-mandatory telegram-miniapp-scrollbar-hide pb-2 md:pb-0">
-                                {getWeekDays().map((day, i) => {
-                                    const daySessions = getSessionsForDay(day);
-                                    const isToday = isSameDay(day, new Date());
-                                    const isSelected = isSameDay(day, selectedDate);
-                                    return (
-                                        <button
-                                            key={i}
-                                            onClick={() => setSelectedDate(day)}
-                                            className={`min-w-[140px] md:min-w-0 flex-1 shrink-0 snap-start p-4 border-r border-border/50 last:border-r-0 hover:bg-muted/30 transition-colors text-center h-full flex flex-col bg-background ${isToday ? 'bg-primary/5' : ''} ${isSelected ? 'bg-primary/5' : ''}`}
-                                        >
-                                            <div className="text-sm font-semibold text-muted-foreground mb-2 tracking-tight">
-                                                {day.toLocaleDateString('ru-RU', { weekday: 'short' })}
+                    {viewMode === 'week' && (() => {
+                        const weekDaysList = getWeekDays();
+                        return (
+                            <div className="bg-background rounded-2xl border border-border shadow-sm overflow-hidden h-full flex flex-col">
+                                {/* Week View Header - Desktop only */}
+                                <div className="hidden md:grid grid-cols-7 border-b border-border bg-muted/30">
+                                    {weekDaysList.map((date, i) => (
+                                        <div key={i} className={`p-4 text-center border-r border-border/50 last:border-r-0 ${new Date().toDateString() === date.toDateString() ? 'bg-primary/5' : ''}`}>
+                                            <div className="text-sm font-semibold text-muted-foreground mb-1">{['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][date.getDay()]}</div>
+                                            <div className={`text-xl font-bold w-10 h-10 mx-auto flex items-center justify-center rounded-xl ${new Date().toDateString() === date.toDateString() ? 'bg-primary text-primary-foreground shadow-sm' : 'text-foreground'}`}>
+                                                {date.getDate()}
                                             </div>
-                                            <div className={`text-xl w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-bold mb-5 ${isToday ? 'bg-primary text-primary-foreground shadow-sm' : 'text-foreground'}`}>
-                                                {day.getDate()}
-                                            </div>
-                                            <div className="space-y-3 flex-1 w-full text-left">
-                                                {daySessions.map(s => (
-                                                    <div key={s.id} className={`text-xs p-2.5 rounded-xl border-l-4 text-left shadow-sm bg-card`} style={{ borderLeftColor: 'var(--color-primary)' }}>
-                                                        <div className="font-bold truncate mb-1 text-foreground">{s.time}</div>
-                                                        <div className="text-muted-foreground font-medium truncate">
-                                                            {s.client.questionnaire?.data && (s.client.questionnaire.data as any).fullName
-                                                                ? (s.client.questionnaire.data as any).fullName
-                                                                : s.client.name}
-                                                        </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Week View Body */}
+                                <div className="flex-1 overflow-auto">
+                                    {/* Desktop Grid */}
+                                    <div className="hidden md:grid grid-cols-7 min-h-full">
+                                        {weekDaysList.map((date, i) => {
+                                            const daySessions = sessions.filter(s => new Date(s.date).toDateString() === date.toDateString());
+                                            const isToday = new Date().toDateString() === date.toDateString();
+                                            return (
+                                                <div key={i} className={`p-2 border-r border-border/50 last:border-r-0 min-h-[200px] ${isToday ? 'bg-primary/[0.02]' : ''}`}>
+                                                    <div className="space-y-2 mt-2">
+                                                        {daySessions.sort((a, b) => a.time.localeCompare(b.time)).map(session => {
+                                                            const client = clients.find(c => c.id === session.clientId);
+                                                            return (
+                                                                <div key={session.id}
+                                                                    onClick={() => setEditingSession(session)}
+                                                                    className="p-3 bg-background border border-border rounded-xl shadow-sm hover:shadow-md transition-all group relative cursor-pointer hover:border-primary/30 flex flex-col justify-between"
+                                                                >
+                                                                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${statusColors[session.status] || 'bg-border'}`} />
+                                                                    <div>
+                                                                        <div className="text-xs font-bold text-foreground/90 mb-1 pl-2 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> {session.time}</div>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); window.location.href = `/diary/clients?clientId=${client?.id}`; }}
+                                                                            className="text-sm font-semibold max-w-[120px] truncate pl-2 hover:text-primary transition-colors text-left active:scale-95 z-10 relative"
+                                                                        >
+                                                                            {client?.name || 'Нет клиента'}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Mobile Vertical List */}
+                                    <div className="md:hidden flex flex-col divide-y divide-border/50">
+                                        {weekDaysList.map((date, i) => {
+                                            const daySessions = sessions.filter(s => new Date(s.date).toDateString() === date.toDateString());
+                                            const isToday = new Date().toDateString() === date.toDateString();
+                                            return (
+                                                <div key={i} className={`py-4 px-3 ${isToday ? 'bg-primary/[0.02]' : ''}`}>
+                                                    <div className="flex items-center gap-3 mb-3">
+                                                        <div className="flex flex-col items-center justify-center w-12">
+                                                            <div className="text-xs font-semibold text-muted-foreground uppercase">{['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][date.getDay()]}</div>
+                                                            <div className={`text-lg font-bold w-10 h-10 flex items-center justify-center rounded-xl ${isToday ? 'bg-primary text-primary-foreground shadow-sm' : 'text-foreground'}`}>
+                                                                {date.getDate()}
+                                                            </div>
+                                                        </div>
+                                                        <div className="h-px bg-border/50 flex-1"></div>
+                                                    </div>
+                                                    <div className="space-y-2 pl-14">
+                                                        {daySessions.length === 0 ? (
+                                                            <div className="text-sm text-muted-foreground italic py-2">Нет записей</div>
+                                                        ) : (
+                                                            daySessions.sort((a, b) => a.time.localeCompare(b.time)).map(session => {
+                                                                const client = clients.find(c => c.id === session.clientId);
+                                                                return (
+                                                                    <div key={session.id}
+                                                                        onClick={() => setEditingSession(session)}
+                                                                        className="p-3 bg-background border border-border rounded-xl shadow-sm hover:shadow-md transition-all relative cursor-pointer active:scale-[0.98]">
+                                                                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${statusColors[session.status] || 'bg-border'}`} />
+                                                                        <div className="flex justify-between items-start pl-2">
+                                                                            <div className="flex-1 min-w-0 pr-2">
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); window.location.href = `/diary/clients?clientId=${client?.id}`; }}
+                                                                                    className="text-sm font-bold text-foreground mb-0.5 hover:text-primary transition-colors text-left w-full truncate active:scale-95"
+                                                                                >
+                                                                                    {client?.name || 'Нет клиента'}
+                                                                                </button>
+                                                                                <div className="text-xs font-medium text-foreground/80 flex items-center gap-1.5 mt-1">
+                                                                                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                                                                                    {session.time} • {session.duration} мин
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex flex-col gap-2 items-end shrink-0">
+                                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${statusColors[session.status]?.replace('bg-', 'text-').replace('border-', 'text-') || 'text-muted-foreground'} bg-muted/30`}>
+                                                                                    {session.status === 'confirmed' ? 'Подтверждена' : 'Ожидание'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {viewMode === 'day' && (
                         <div className="space-y-4">
@@ -412,11 +487,19 @@ export default function DiaryCalendarPage() {
                                                 <Clock className="w-4 h-4 text-primary" />
                                                 {s.time} – {s.endTime}
                                             </span>
+                                            <div className="ml-auto flex gap-2">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingSession(s); setShowNewSession(true); }} className="p-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors">
+                                                    Редактировать
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="text-base font-bold mb-2 text-foreground flex items-center gap-2">
+                                        <button
+                                            onClick={() => window.location.href = `/diary/clients?clientId=${s.client.id}`}
+                                            className="text-base font-bold mb-2 text-foreground hover:text-primary transition-colors flex items-center gap-2 text-left w-fit active:scale-95"
+                                        >
                                             <User className="w-5 h-5 text-muted-foreground" />
                                             {s.client.name}
-                                        </div>
+                                        </button>
                                         <div className="flex flex-wrap items-center gap-2 text-xs font-bold mt-4 mb-5">
                                             <span className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-xl">{s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : 'Семейная'}</span>
                                             <span className="bg-secondary text-secondary-foreground px-3 py-1.5 rounded-xl flex items-center gap-1.5">
@@ -444,12 +527,13 @@ export default function DiaryCalendarPage() {
                 </div>
             </div>
 
-            {/* New Session Modal */}
+            {/* Session Modal */}
             <SessionModal
                 isOpen={showNewSession}
-                onClose={() => setShowNewSession(false)}
+                onClose={() => { setShowNewSession(false); setEditingSession(null); }}
                 onSave={handleSessionSave}
                 initialDate={newSessionDefaults.date}
+                editSession={editingSession}
                 clients={clients}
             />
         </div>);

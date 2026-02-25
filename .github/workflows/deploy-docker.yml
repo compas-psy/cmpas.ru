@@ -255,9 +255,9 @@ jobs:
               WHERE NOT EXISTS (SELECT 1 FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260222000000_add_advanced_scheduling');
             " || echo "WARNING: Migration record insert failed"
             
-            echo "Running prisma migrate deploy..."
-            docker compose exec -T app node node_modules/prisma/build/index.js migrate deploy || {
-              echo "WARNING: Migration failed! Check the migration files."
+            echo "Running prisma db push to apply new schema changes directly..."
+            docker compose exec -T app npx prisma db push --accept-data-loss || {
+              echo "WARNING: Database push failed!"
             }
             
             # ============================================

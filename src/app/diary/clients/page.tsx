@@ -5,6 +5,7 @@ import { Search, Plus, X, ChevronRight, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
+import { PhoneInput } from '@/components/ui/phone-input';
 
 type QuestionnaireData = {
     fullName?: string;
@@ -202,8 +203,32 @@ export default function ClientsPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Client List */}
-                <div className="space-y-3">
+                {/* Mobile Client Selector */}
+                <div className="lg:hidden">
+                    <div className="relative">
+                        <select
+                            className="w-full appearance-none bg-card border border-border text-foreground font-semibold py-3 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-sm"
+                            value={selectedClient?.id || ''}
+                            onChange={(e) => {
+                                const client = clients.find(c => c.id === e.target.value);
+                                if (client) {
+                                    setSelectedClient(client);
+                                    fetchClientDetail(client.id);
+                                    setActiveTab('questionnaire');
+                                }
+                            }}
+                        >
+                            <option value="" disabled>Выберите клиента</option>
+                            {clients.map(c => (
+                                <option key={c.id} value={c.id}>{c.questionnaire?.data?.fullName || c.name}</option>
+                            ))}
+                        </select>
+                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground rotate-90 pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Desktop Client List */}
+                <div className="hidden lg:flex flex-col space-y-3">
                     {clients.map(c => (
                         <button key={c.id} onClick={() => { setSelectedClient(c); fetchClientDetail(c.id); setActiveTab('questionnaire'); }}
                             className={`w-full p-4 bg-card rounded-2xl border text-left hover:border-border hover:shadow-md transition-all flex items-center gap-4 ${selectedClient?.id === c.id ? 'border-primary ring-2 ring-primary ring-inset shadow-sm' : 'border-border shadow-sm'}`}>
@@ -408,8 +433,11 @@ export default function ClientsPage() {
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold mb-2 text-foreground">Телефон</label>
-                                <input type="tel" value={newClient.phone} onChange={e => setNewClient(s => ({ ...s, phone: formatPhoneNumber(e.target.value) }))}
-                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground transition-all" placeholder="+7 (___) ___-__-__" />
+                                <PhoneInput
+                                    value={newClient.phone}
+                                    onChange={(value) => setNewClient(s => ({ ...s, phone: value }))}
+                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-foreground transition-all"
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold mb-2 text-foreground">Email</label>
@@ -627,35 +655,6 @@ function QuestionnaireSection({ title, data, fields }: {
         </div>
     );
 }
-
-const formatPhoneNumber = (value: string) => {
-    // Remove all non-digit characters
-    let numbers = value.replace(/\D/g, '');
-
-    // Handle empty
-    if (numbers.length === 0) return '';
-
-    // Handle start digits
-    // If starts with 8 -> replace with 7
-    // If starts with not 7 (and not 8) -> prepend 7
-    if (numbers[0] === '8') {
-        numbers = '7' + numbers.slice(1);
-    } else if (numbers[0] !== '7') {
-        numbers = '7' + numbers;
-    }
-
-    // Limit to 11 digits
-    numbers = numbers.slice(0, 11);
-
-    // Format: +7 (xxx) xxx-xx-xx
-    let final = '+7';
-    if (numbers.length > 1) final += ' (' + numbers.slice(1, 4);
-    if (numbers.length > 4) final += ') ' + numbers.slice(4, 7);
-    if (numbers.length > 7) final += '-' + numbers.slice(7, 9);
-    if (numbers.length > 9) final += '-' + numbers.slice(9, 11);
-
-    return final;
-};
 
 const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

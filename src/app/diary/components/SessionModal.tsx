@@ -149,6 +149,18 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                 className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background resize-none text-sm font-medium transition-all placeholder:text-muted-foreground/50"
                                 placeholder="Ход сессии, домашнее задание, наблюдения..."
                             />
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {["Тревожность", "Апатия", "Сопротивление", "Инсайт", "Выдано ДЗ", "Ресурсное состояние", "Прогресс", "Требует внимания"].map(tag => (
+                                    <button
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => setFormData(s => ({ ...s, notes: s.notes ? `${s.notes} #${tag}` : `#${tag}` }))}
+                                        className="text-xs px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors active:scale-95"
+                                    >
+                                        +{tag}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
 

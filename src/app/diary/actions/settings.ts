@@ -54,6 +54,7 @@ export async function updateSettings(data: {
     cancellationText?: string;
     autoSync?: boolean;
     blockConflicts?: boolean;
+    notifyTelegram?: boolean;
 }) {
     const psychologistId = await getPsychologistId();
     const settings = await db.psychologistSettings.upsert({
