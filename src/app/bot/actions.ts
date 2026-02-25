@@ -34,13 +34,7 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
 
     const dayOfWeek = (date.getDay() + 6) % 7;
 
-    // Check blocks
-    const isBlocked = blocks.some(b => {
-        const bStartStr = format(b.startDate, 'yyyy-MM-dd');
-        const bEndStr = format(b.endDate, 'yyyy-MM-dd');
-        return dateStr >= bStartStr && dateStr <= bEndStr;
-    });
-    if (isBlocked) return [];
+    // Check blocks logic moved inside the times loop
 
     const daySlots = slots.filter(s => {
         if (s.dayOfWeek !== dayOfWeek) return false;
@@ -89,7 +83,17 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
                 return currentTotalMins < sessEndMins && slotEndTimeMins > sessStartMins;
             });
 
-            if (!hasClash) {
+            // Check if clashes with any block
+            const hasBlock = blocks.some(b => {
+                if (format(b.date, 'yyyy-MM-dd') !== dateStr) return false;
+                const [bSH, bSM] = b.startTime.split(':').map(Number);
+                const [bEH, bEM] = b.endTime.split(':').map(Number);
+                const blockStartMins = bSH * 60 + bSM;
+                const blockEndMins = bEH * 60 + bEM;
+                return currentTotalMins < blockEndMins && slotEndTimeMins > blockStartMins;
+            });
+
+            if (!hasClash && !hasBlock) {
                 const key = `${timeStr}-${slot.format || 'online'}`;
                 if (!timesObj[key]) {
                     timesObj[key] = {
@@ -117,11 +121,10 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
     const sessionBreak = 15;
 
-    const blocks = await db.timeBlock.findMany({
+    const blocks = await db.diaryBlock.findMany({
         where: {
             psychologistId,
-            startDate: { lte: endDate },
-            endDate: { gte: startDate }
+            date: { lte: endDate, gte: startDate }
         }
     });
 
@@ -156,11 +159,10 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string)
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     const sessionBreak = 15;
 
-    const blocks = await db.timeBlock.findMany({
+    const blocks = await db.diaryBlock.findMany({
         where: {
             psychologistId,
-            startDate: { lte: date },
-            endDate: { gte: date }
+            date
         }
     });
     const sessions = await db.diarySession.findMany({
