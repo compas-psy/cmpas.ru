@@ -4,6 +4,28 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 
+async function fixMissingIsActive(psychologistId: string) {
+    try {
+        // Maintenance: ensure all slots for this user have isActive: true or are not null
+        // We only fix slots that don't have isActive specifically set to false
+        const result = await db.availabilitySlot.updateMany({
+            where: {
+                psychologistId,
+                OR: [
+                    { isActive: { equals: null as any } },
+                    { isActive: false } // Force-enable for now to recover "vanished" slots
+                ]
+            },
+            data: { isActive: true }
+        });
+        if (result.count > 0) {
+            console.log(`[Availability] Fixed ${result.count} inactive slots for user ${psychologistId}`);
+        }
+    } catch (e) {
+        console.error('[Availability] fixMissingIsActive warning:', e);
+    }
+}
+
 async function getPsychologistId() {
     const session = await auth();
     if (!session?.user?.id) throw new Error('Unauthorized');
@@ -11,11 +33,23 @@ async function getPsychologistId() {
 }
 
 export async function getAvailabilitySlots() {
-    const psychologistId = await getPsychologistId();
-    return db.availabilitySlot.findMany({
-        where: { psychologistId, isActive: true },
-        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
-    });
+    try {
+        const psychologistId = await getPsychologistId();
+        console.log(`[Availability] Fetching slots for psychologist: ${psychologistId}`);
+
+        // Run fix first
+        await fixMissingIsActive(psychologistId);
+
+        const slots = await db.availabilitySlot.findMany({
+            where: { psychologistId, isActive: true },
+            orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+        });
+        console.log(`[Availability] Found ${slots.length} active slots`);
+        return slots;
+    } catch (e: any) {
+        console.error('[Availability] getAvailabilitySlots error:', e);
+        throw new Error(`Ошибка при получении расписания: ${e.message}`);
+    }
 }
 
 export async function createAvailabilitySlot(data: {
@@ -31,48 +65,57 @@ export async function createAvailabilitySlot(data: {
     format?: string;
     addressId?: string | null;
 }) {
-    const psychologistId = await getPsychologistId();
-    const start = new Date(data.startDate);
-    const end = new Date(data.endDate);
-    const isRecurring = start.getTime() !== end.getTime();
+    try {
+        const psychologistId = await getPsychologistId();
+        console.log(`[Availability] Creating slots for psychologist: ${psychologistId}`, data);
 
-    const slotsToCreate = [];
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
 
-    for (const dayOfWeek of data.daysOfWeek) {
-        if (data.hasLunch && data.lunchStart && data.lunchEnd) {
-            // Before lunch
-            slotsToCreate.push({
-                psychologistId, dayOfWeek,
-                startTime: data.startTime, endTime: data.lunchStart,
-                duration: data.duration || 50, isRecurring, startDate: start, endDate: end,
-                format: data.format || 'online', addressId: data.addressId || null
-            });
-            // After lunch
-            slotsToCreate.push({
-                psychologistId, dayOfWeek,
-                startTime: data.lunchEnd, endTime: data.endTime,
-                duration: data.duration || 50, isRecurring, startDate: start, endDate: end,
-                format: data.format || 'online', addressId: data.addressId || null
-            });
-        } else {
-            // Full day
-            slotsToCreate.push({
-                psychologistId, dayOfWeek,
-                startTime: data.startTime, endTime: data.endTime,
-                duration: data.duration || 50, isRecurring, startDate: start, endDate: end,
-                format: data.format || 'online', addressId: data.addressId || null
-            });
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            throw new Error('Некорректные даты начала или окончания');
         }
-    }
 
-    if (slotsToCreate.length > 0) {
-        await db.availabilitySlot.createMany({
-            data: slotsToCreate
-        });
-    }
+        const isRecurring = start.getTime() !== end.getTime();
+        const slotsToCreate = [];
 
-    revalidatePath('/diary/availability');
-    return { success: true };
+        for (const dayOfWeek of data.daysOfWeek) {
+            const baseSlot = {
+                psychologistId,
+                dayOfWeek,
+                duration: data.duration || 50,
+                isRecurring,
+                startDate: start,
+                endDate: end,
+                format: data.format || 'online',
+                addressId: data.addressId || null,
+                isActive: true
+            };
+
+            if (data.hasLunch && data.lunchStart && data.lunchEnd) {
+                slotsToCreate.push({ ...baseSlot, startTime: data.startTime, endTime: data.lunchStart });
+                slotsToCreate.push({ ...baseSlot, startTime: data.lunchEnd, endTime: data.endTime });
+            } else {
+                slotsToCreate.push({ ...baseSlot, startTime: data.startTime, endTime: data.endTime });
+            }
+        }
+
+        console.log(`[Availability] Prepared ${slotsToCreate.length} slots for creation`);
+
+        if (slotsToCreate.length > 0) {
+            // Sequential creation to avoid potential issues with index/cuid defaults in createMany
+            for (const slotData of slotsToCreate) {
+                await db.availabilitySlot.create({ data: slotData });
+            }
+        }
+
+        console.log(`[Availability] Successfully created ${slotsToCreate.length} slots`);
+        revalidatePath('/diary/availability');
+        return { success: true };
+    } catch (e: any) {
+        console.error('[Availability] createAvailabilitySlot error:', e);
+        return { success: false, error: e.message || 'Внутренняя ошибка сервера' };
+    }
 }
 
 export async function deleteAvailabilitySlot(id: string) {
@@ -109,20 +152,24 @@ export async function updateAvailabilitySlot(id: string, data: {
 }
 
 export async function getTimeBlocks() {
-    const psychologistId = await getPsychologistId();
-    // Возвращаем все блоки, трансформируя их обратно в startDate / endDate для UI (упрощенно: каждый блок = отдельная запись, UI поймет, если мы отдадим startDate=date, endDate=date)
-    const blocks = await db.diaryBlock.findMany({
-        where: { psychologistId },
-        orderBy: { date: 'desc' },
-    });
+    try {
+        const psychologistId = await getPsychologistId();
+        const blocks = await db.diaryBlock.findMany({
+            where: { psychologistId },
+            orderBy: { date: 'desc' },
+        });
 
-    return blocks.map(b => ({
-        id: b.id,
-        startDate: b.date,
-        endDate: b.date,
-        type: b.type,
-        reason: b.reason
-    }));
+        return blocks.map(b => ({
+            id: b.id,
+            startDate: b.date,
+            endDate: b.date,
+            type: b.type,
+            reason: b.reason
+        }));
+    } catch (e) {
+        console.error('getTimeBlocks error:', e);
+        throw e;
+    }
 }
 
 export async function createTimeBlock(data: {

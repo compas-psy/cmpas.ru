@@ -4,6 +4,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
+import {
+    getAvailabilitySlots,
+    getTimeBlocks,
+    createAvailabilitySlot,
+    deleteAvailabilitySlot,
+    updateAvailabilitySlot,
+    deleteTimeBlock,
+    createTimeBlock,
+    checkBlockIntersections
+} from '../actions/availability';
+import { getAddresses } from '../actions/settings';
 
 type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; format?: string; addressId?: string | null; };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
@@ -33,17 +44,27 @@ export default function AvailabilityPage() {
 
     const fetchData = useCallback(async () => {
         try {
-            const { getAvailabilitySlots, getTimeBlocks } = await import('../actions/availability');
-            const { getAddresses } = await import('../actions/settings');
-            const [s, b, addrs] = await Promise.all([getAvailabilitySlots(), getTimeBlocks(), getAddresses()]);
+            const [s, b, addrs] = await Promise.all([
+                getAvailabilitySlots(),
+                getTimeBlocks(),
+                getAddresses()
+            ]);
+
             setSlots(s.map((x: any) => ({
                 ...x,
                 startDate: x.startDate ? new Date(x.startDate).toISOString() : null,
                 endDate: x.endDate ? new Date(x.endDate).toISOString() : null
             })));
-            setBlocks(b.map((x: any) => ({ ...x, startDate: new Date(x.startDate).toISOString(), endDate: new Date(x.endDate).toISOString() })));
+            setBlocks(b.map((x: any) => ({
+                ...x,
+                startDate: new Date(x.startDate).toISOString(),
+                endDate: new Date(x.endDate).toISOString()
+            })));
             setAddresses(addrs);
-        } catch { /* */ }
+        } catch (e: any) {
+            console.error('fetchData error:', e);
+            toast.error('Ошибка при загрузке данных: ' + (e?.message || 'Неизвестная ошибка'));
+        }
         setLoading(false);
     }, []);
 
@@ -59,7 +80,6 @@ export default function AvailabilityPage() {
         }
 
         try {
-            const { createAvailabilitySlot } = await import('../actions/availability');
             await createAvailabilitySlot(newSlot);
             toast.success('Окна добавлены');
             setShowNewSlot(false);
@@ -72,8 +92,13 @@ export default function AvailabilityPage() {
     };
 
     const rmSlot = async (id: string) => {
-        const { deleteAvailabilitySlot } = await import('../actions/availability');
-        await deleteAvailabilitySlot(id); toast.success('Удалено'); fetchData();
+        try {
+            await deleteAvailabilitySlot(id);
+            toast.success('Удалено');
+            fetchData();
+        } catch (e: any) {
+            toast.error('Ошибка при удалении');
+        }
     };
 
     const updateSlot = async () => {
@@ -81,7 +106,6 @@ export default function AvailabilityPage() {
         if (editingSlot.startTime >= editingSlot.endTime) { toast.error('Время начала должно быть раньше времени окончания'); return; }
 
         try {
-            const { updateAvailabilitySlot } = await import('../actions/availability');
             await updateAvailabilitySlot(editingSlot.id, {
                 startTime: editingSlot.startTime,
                 endTime: editingSlot.endTime,
@@ -105,33 +129,40 @@ export default function AvailabilityPage() {
     const addBlock = async () => {
         if (!newBlock.startDate || !newBlock.endDate) { toast.error('Укажите даты'); return; }
 
-        const { createTimeBlock, checkBlockIntersections } = await import('../actions/availability');
-
-        if (!isConfirmingBlock) {
-            const intersections = await checkBlockIntersections(newBlock.startDate, newBlock.endDate);
-            if (intersections.length > 0) {
-                setIntersectingSessions(intersections);
-                setIsConfirmingBlock(true);
-                return;
+        try {
+            if (!isConfirmingBlock) {
+                const intersections = await checkBlockIntersections(newBlock.startDate, newBlock.endDate);
+                if (intersections.length > 0) {
+                    setIntersectingSessions(intersections);
+                    setIsConfirmingBlock(true);
+                    return;
+                }
             }
+
+            await createTimeBlock({
+                ...newBlock,
+                cancelIntersectingSessions: cancelIntersecting
+            });
+
+            toast.success('Блокировка добавлена');
+            setShowNewBlock(false);
+            setIsConfirmingBlock(false);
+            setIntersectingSessions([]);
+            setCancelIntersecting(false);
+            fetchData();
+        } catch (e: any) {
+            toast.error('Ошибка при добавлении блокировки');
         }
-
-        await createTimeBlock({
-            ...newBlock,
-            cancelIntersectingSessions: cancelIntersecting
-        });
-
-        toast.success('Блокировка добавлена');
-        setShowNewBlock(false);
-        setIsConfirmingBlock(false);
-        setIntersectingSessions([]);
-        setCancelIntersecting(false);
-        fetchData();
     };
 
     const rmBlock = async (id: string) => {
-        const { deleteTimeBlock } = await import('../actions/availability');
-        await deleteTimeBlock(id); toast.success('Удалено'); fetchData();
+        try {
+            await deleteTimeBlock(id);
+            toast.success('Удалено');
+            fetchData();
+        } catch (e: any) {
+            toast.error('Ошибка при удалении');
+        }
     };
 
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -395,7 +426,7 @@ export default function AvailabilityPage() {
                     width: 100%; 
                     min-height: 48px;
                     padding: 0 1rem; 
-                    border: 1px solidhsl(var(--border)); 
+                    border: 1px solid hsl(var(--border)); 
                     border-radius: 0.75rem; 
                     font-size: 0.875rem;
                     font-weight: 500;
