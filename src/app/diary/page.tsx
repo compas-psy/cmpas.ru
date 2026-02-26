@@ -57,6 +57,7 @@ export default function DiaryCalendarPage() {
     const [clients, setClients] = useState<Client[]>([]);
     const [showNewSession, setShowNewSession] = useState(false);
     const [editingSession, setEditingSession] = useState<Session | null>(null);
+    const [settings, setSettings] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
@@ -82,8 +83,17 @@ export default function DiaryCalendarPage() {
         } catch { /* empty */ }
     }, []);
 
+    const fetchSettings = useCallback(async () => {
+        try {
+            const { getSettings } = await import('./actions/settings');
+            const data = await getSettings();
+            setSettings(data);
+        } catch { /* empty */ }
+    }, []);
+
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => { fetchClients(); }, [fetchClients]);
+    useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
     const handleSessionSave = () => {
         fetchSessions();
@@ -455,6 +465,22 @@ export default function DiaryCalendarPage() {
                                                 {s.format === 'online' ? <Video className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
                                                 {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
                                             </span>
+                                            {s.format === 'online' && settings?.onlineSessionLink && (
+                                                <a
+                                                    href={settings.onlineSessionLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] text-primary hover:underline flex items-center gap-1 font-bold bg-primary/5 px-2 py-1 rounded-lg"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <Video className="w-3 h-3" /> Ссылка
+                                                </a>
+                                            )}
+                                            {s.format === 'offline' && settings?.officeAddress && (
+                                                <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-bold bg-muted px-2 py-1 rounded-lg">
+                                                    <MapPin className="w-3 h-3" /> {settings.officeAddress}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 ))
@@ -506,6 +532,21 @@ export default function DiaryCalendarPage() {
                                                 {s.format === 'online' ? <Video className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
                                                 {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
                                             </span>
+                                            {s.format === 'online' && settings?.onlineSessionLink && (
+                                                <a
+                                                    href={settings.onlineSessionLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] text-primary hover:underline flex items-center gap-1 font-bold bg-primary/5 px-2 py-1 rounded-lg"
+                                                >
+                                                    <Video className="w-3 h-3" /> Ссылка на встречу
+                                                </a>
+                                            )}
+                                            {s.format === 'offline' && settings?.officeAddress && (
+                                                <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-bold bg-muted px-2 py-1 rounded-lg">
+                                                    <MapPin className="w-3 h-3" /> {settings.officeAddress}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex gap-3 mt-4 pt-4 border-t border-border/50">
                                             {s.status !== 'completed' && (

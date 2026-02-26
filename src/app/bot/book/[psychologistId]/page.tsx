@@ -29,7 +29,7 @@ export default function ClientBookingPage() {
     type TimeSlot = { time: string, format: string, addressId: string | null };
     const [availableTimes, setAvailableTimes] = useState<TimeSlot[]>([]);
     const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
-    const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline'>('online');
+    const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline' | null>(null);
     const [form, setForm] = useState({ name: '', phone: '' });
 
     // Fetch initial data
@@ -91,10 +91,19 @@ export default function ClientBookingPage() {
         }
     };
 
+    const handleTimeSlotSelect = (slot: TimeSlot) => {
+        setSelectedTimeSlot(slot);
+        if (slot.format === 'both') {
+            setSelectedFormat(null); // Force user to choose
+        } else {
+            setSelectedFormat(slot.format as 'online' | 'offline');
+        }
+    };
+
     const handleBooking = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedDate || !selectedTimeSlot) {
-            toast.error('Выберите дату и время');
+        if (!selectedDate || !selectedTimeSlot || !selectedFormat) {
+            toast.error('Выберите дату, время и формат встречи');
             return;
         }
         if (!form.phone || form.phone.length < 10) {
@@ -103,15 +112,14 @@ export default function ClientBookingPage() {
         }
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        const sessionFormat = selectedTimeSlot.format === 'both' ? selectedFormat : selectedTimeSlot.format;
 
         toast.promise(
             bookSession(psychologistId, tgUser, {
                 ...form,
                 date: dateStr,
                 time: selectedTimeSlot.time,
-                format: sessionFormat,
-                addressId: sessionFormat === 'offline' ? selectedTimeSlot.addressId : null
+                format: selectedFormat,
+                addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
             }),
             {
                 loading: 'Оформление записи...',
@@ -196,10 +204,7 @@ export default function ClientBookingPage() {
                                     <button
                                         key={`${slot.time}-${slot.format}`}
                                         type="button"
-                                        onClick={() => {
-                                            setSelectedTimeSlot(slot);
-                                            setSelectedFormat(slot.format === 'offline' ? 'offline' : 'online');
-                                        }}
+                                        onClick={() => handleTimeSlotSelect(slot)}
                                         className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
                                             ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm'
                                             : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'
@@ -213,18 +218,18 @@ export default function ClientBookingPage() {
 
                         {selectedTimeSlot?.format === 'both' && (
                             <div className="mt-4 pt-4 border-t border-border/50 animate-in fade-in duration-200">
-                                <label className="block text-sm font-medium mb-3 text-foreground">Формат проведения</label>
+                                <label className="block text-sm font-medium mb-3 text-foreground">Формат проведения <span className="text-destructive">*</span></label>
                                 <div className="flex gap-2">
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('online')}
                                         className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
-                                    >Онлайн</button>
+                                    >💻 Онлайн</button>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('offline')}
                                         className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
-                                    >В кабинете</button>
+                                    >🏠 В кабинете</button>
                                 </div>
                             </div>
                         )}
@@ -274,8 +279,8 @@ export default function ClientBookingPage() {
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTimeSlot || loading}
-                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || loading
+                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || loading}
+                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || loading
                             ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
                             : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}

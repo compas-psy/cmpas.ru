@@ -98,11 +98,35 @@ export default function AvailabilityPage() {
         }
     };
 
+    const [intersectingSessions, setIntersectingSessions] = useState<{ id: string, date: Date, time: string, clientName: string }[]>([]);
+    const [cancelIntersecting, setCancelIntersecting] = useState(false);
+    const [isConfirmingBlock, setIsConfirmingBlock] = useState(false);
+
     const addBlock = async () => {
         if (!newBlock.startDate || !newBlock.endDate) { toast.error('Укажите даты'); return; }
-        const { createTimeBlock } = await import('../actions/availability');
-        await createTimeBlock(newBlock);
-        toast.success('Блокировка добавлена'); setShowNewBlock(false); fetchData();
+
+        const { createTimeBlock, checkBlockIntersections } = await import('../actions/availability');
+
+        if (!isConfirmingBlock) {
+            const intersections = await checkBlockIntersections(newBlock.startDate, newBlock.endDate);
+            if (intersections.length > 0) {
+                setIntersectingSessions(intersections);
+                setIsConfirmingBlock(true);
+                return;
+            }
+        }
+
+        await createTimeBlock({
+            ...newBlock,
+            cancelIntersectingSessions: cancelIntersecting
+        });
+
+        toast.success('Блокировка добавлена');
+        setShowNewBlock(false);
+        setIsConfirmingBlock(false);
+        setIntersectingSessions([]);
+        setCancelIntersecting(false);
+        fetchData();
     };
 
     const rmBlock = async (id: string) => {
@@ -282,20 +306,54 @@ export default function AvailabilityPage() {
             </Modal>}
 
             {/* New Block Modal */}
-            {showNewBlock && <Modal title="Блокировка времени" onClose={() => setShowNewBlock(false)} onSubmit={addBlock}>
-                <div className="grid grid-cols-2 gap-4">
-                    <Field label="С"><DatePicker value={newBlock.startDate} onChange={d => setNewBlock(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
-                    <Field label="По"><DatePicker value={newBlock.endDate} onChange={d => setNewBlock(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
-                </div>
-                <Field label="Тип">
-                    <div className="flex gap-2">
-                        {[{ v: 'vacation', l: 'Отпуск' }, { v: 'personal', l: 'Личное' }, { v: 'other', l: 'Другое' }].map(t => (
-                            <button key={t.v} type="button" onClick={() => setNewBlock(s => ({ ...s, type: t.v }))}
-                                className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${newBlock.type === t.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{t.l}</button>
-                        ))}
+            {showNewBlock && <Modal title="Блокировка времени" onClose={() => { setShowNewBlock(false); setIsConfirmingBlock(false); setIntersectingSessions([]); setCancelIntersecting(false); }} onSubmit={addBlock}>
+                {!isConfirmingBlock ? (
+                    <>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="С"><DatePicker value={newBlock.startDate} onChange={d => setNewBlock(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                            <Field label="По"><DatePicker value={newBlock.endDate} onChange={d => setNewBlock(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                        </div>
+                        <Field label="Тип">
+                            <div className="flex gap-2">
+                                {[{ v: 'vacation', l: 'Отпуск' }, { v: 'personal', l: 'Личное' }, { v: 'other', l: 'Другое' }].map(t => (
+                                    <button key={t.v} type="button" onClick={() => setNewBlock(s => ({ ...s, type: t.v }))}
+                                        className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${newBlock.type === t.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{t.l}</button>
+                                ))}
+                            </div>
+                        </Field>
+                        <Field label="Причина"><input type="text" value={newBlock.reason} onChange={e => setNewBlock(s => ({ ...s, reason: e.target.value }))} placeholder="Необязательно (увидят клиенты)" className="inp" /></Field>
+                    </>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-2xl">
+                            <h3 className="text-destructive font-semibold text-sm mb-2">Внимание! Есть пересечения</h3>
+                            <p className="text-sm text-foreground/80">
+                                В выбранный период попадают уже запланированные сессии ({intersectingSessions.length} шт.).
+                            </p>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+                            {intersectingSessions.map(session => (
+                                <div key={session.id} className="text-sm p-3 bg-card border border-border rounded-xl shadow-sm flex justify-between items-center">
+                                    <div>
+                                        <div className="font-medium text-foreground">{session.clientName}</div>
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                        {new Date(session.date).toLocaleDateString('ru-RU')} в {session.time}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="pt-2">
+                            <label className="flex items-start gap-3 cursor-pointer p-3 border border-border rounded-xl bg-card hover:bg-muted/30 transition-colors">
+                                <input type="checkbox" checked={cancelIntersecting} onChange={e => setCancelIntersecting(e.target.checked)} className="mt-0.5 w-5 h-5 rounded-md text-primary focus:ring-primary border-border accent-primary" />
+                                <div>
+                                    <span className="text-sm font-semibold block text-foreground">Отменить записи и уведомить клиентов</span>
+                                    <span className="text-xs text-muted-foreground">Клиентам будет отправлено сообщение в Telegram с вашей причиной. Если галочка не стоит, сессии останутся в календаре, но время будет заблокировано для новых.</span>
+                                </div>
+                            </label>
+                        </div>
                     </div>
-                </Field>
-                <Field label="Причина"><input type="text" value={newBlock.reason} onChange={e => setNewBlock(s => ({ ...s, reason: e.target.value }))} placeholder="Необязательно" className="inp" /></Field>
+                )}
             </Modal>}
 
             {/* Edit Slot Modal */}
