@@ -78,10 +78,16 @@ export async function updateSettings(data: {
 }
 
 export async function getIntegrations() {
-    const psychologistId = await getPsychologistId();
-    return db.calendarIntegration.findMany({
-        where: { psychologistId },
-    });
+    try {
+        const psychologistId = await getPsychologistId();
+        const integrations = await db.calendarIntegration.findMany({
+            where: { psychologistId },
+        });
+        return { success: true, data: integrations };
+    } catch (e: any) {
+        console.error('getIntegrations error:', e);
+        return { success: false, error: e.message || 'Ошибка при получении интеграций' };
+    }
 }
 
 export async function toggleIntegration(id: string, isActive: boolean) {

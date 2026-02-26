@@ -48,18 +48,27 @@ export default function IntegrationsPage() {
     const fetchData = useCallback(async () => {
         try {
             const { getIntegrations, getSettings } = await import('../actions/settings');
-            const data = await getIntegrations();
-            setIntegrations(data.map((d: { id: string; provider: string; accountEmail: string | null; isActive: boolean; lastSynced: Date | null; conflictsCount: number }) => ({
-                ...d,
-                lastSynced: d.lastSynced ? new Date(d.lastSynced).toISOString() : null
-            })));
+            const [integrationsRes, settingsRes] = await Promise.all([getIntegrations(), getSettings()]);
 
-            const settings = await getSettings();
-            if (settings) {
-                setAutoSync(settings.autoSync);
-                setBlockConflicts(settings.blockConflicts);
+            if (integrationsRes.success && integrationsRes.data) {
+                setIntegrations(integrationsRes.data.map((d: any) => ({
+                    ...d,
+                    lastSynced: d.lastSynced ? new Date(d.lastSynced).toISOString() : null
+                })));
+            } else if (!integrationsRes.success) {
+                toast.error(integrationsRes.error || 'Ошибка при загрузке интеграций');
             }
-        } catch { /* */ }
+
+            if (settingsRes.success && settingsRes.data) {
+                const s = settingsRes.data;
+                setAutoSync(s.autoSync);
+                setBlockConflicts(s.blockConflicts);
+            } else if (!settingsRes.success) {
+                toast.error(settingsRes.error || 'Ошибка при загрузке настроек');
+            }
+        } catch (e: any) {
+            console.error('fetchData error:', e);
+        }
         setLoading(false);
     }, []);
 

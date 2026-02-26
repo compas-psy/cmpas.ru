@@ -86,9 +86,13 @@ export default function DiaryCalendarPage() {
     const fetchSettings = useCallback(async () => {
         try {
             const { getSettings } = await import('./actions/settings');
-            const data = await getSettings();
-            setSettings(data);
-        } catch { /* empty */ }
+            const res = await getSettings();
+            if (res.success && res.data) {
+                setSettings(res.data);
+            }
+        } catch (e: any) {
+            console.error('fetchSettings error:', e);
+        }
     }, []);
 
     useEffect(() => { fetchSessions(); }, [fetchSessions]);

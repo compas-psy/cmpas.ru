@@ -58,19 +58,33 @@ export default function SettingsPage() {
     const fetchSettings = useCallback(async () => {
         try {
             const { getSettings, getAddresses } = await import('../actions/settings');
-            const [data, addrs] = await Promise.all([getSettings(), getAddresses()]);
-            setSettings({
-                timezone: data.timezone,
-                defaultSessionDuration: data.defaultSessionDuration,
-                sessionBreak: data.sessionBreak ?? 15,
-                onlineSessionLink: data.onlineSessionLink || '',
-                officeAddress: data.officeAddress || '',
-                cancellationHours: data.cancellationHours, cancellationFee: data.cancellationFee,
-                cancellationText: data.cancellationText || '',
-                notifyTelegram: (data as any).notifyTelegram !== false
-            });
-            setAddresses(addrs);
-        } catch { /* */ }
+            const [settingsRes, addrsRes] = await Promise.all([getSettings(), getAddresses()]);
+
+            if (settingsRes.success && settingsRes.data) {
+                const data = settingsRes.data;
+                setSettings({
+                    timezone: data.timezone,
+                    defaultSessionDuration: data.defaultSessionDuration,
+                    sessionBreak: data.sessionBreak ?? 15,
+                    onlineSessionLink: data.onlineSessionLink || '',
+                    officeAddress: data.officeAddress || '',
+                    cancellationHours: data.cancellationHours,
+                    cancellationFee: data.cancellationFee,
+                    cancellationText: data.cancellationText || '',
+                    notifyTelegram: (data as any).notifyTelegram !== false
+                });
+            } else if (!settingsRes.success) {
+                toast.error(settingsRes.error || 'Ошибка при загрузке настроек');
+            }
+
+            if (addrsRes.success && addrsRes.data) {
+                setAddresses(addrsRes.data);
+            } else if (!addrsRes.success) {
+                toast.error(addrsRes.error || 'Ошибка при загрузке адресов');
+            }
+        } catch (e: any) {
+            console.error('fetchSettings error:', e);
+        }
         setLoading(false);
     }, []);
 
