@@ -11,21 +11,32 @@ async function getPsychologistId() {
 }
 
 export async function getSettings() {
-    const psychologistId = await getPsychologistId();
-    let settings = await db.psychologistSettings.findUnique({
-        where: { psychologistId },
-    });
-    if (!settings) {
-        settings = await db.psychologistSettings.create({
-            data: { psychologistId },
+    try {
+        const psychologistId = await getPsychologistId();
+        let settings = await db.psychologistSettings.findUnique({
+            where: { psychologistId },
         });
+        if (!settings) {
+            settings = await db.psychologistSettings.create({
+                data: { psychologistId },
+            });
+        }
+        return { success: true, data: settings };
+    } catch (e: any) {
+        console.error('getSettings error:', e);
+        return { success: false, error: e.message || 'Ошибка при получении настроек' };
     }
-    return settings;
 }
 
 export async function getAddresses() {
-    const psychologistId = await getPsychologistId();
-    return db.psychologistAddress.findMany({ where: { psychologistId } });
+    try {
+        const psychologistId = await getPsychologistId();
+        const addresses = await db.psychologistAddress.findMany({ where: { psychologistId } });
+        return { success: true, data: addresses };
+    } catch (e: any) {
+        console.error('getAddresses error:', e);
+        return { success: false, error: e.message || 'Ошибка при получении адресов' };
+    }
 }
 
 export async function createAddress(data: { name: string; address: string }) {

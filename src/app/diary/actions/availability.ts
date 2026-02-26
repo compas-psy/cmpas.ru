@@ -45,10 +45,10 @@ export async function getAvailabilitySlots() {
             orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
         });
         console.log(`[Availability] Found ${slots.length} active slots`);
-        return slots;
+        return { success: true, data: slots };
     } catch (e: any) {
         console.error('[Availability] getAvailabilitySlots error:', e);
-        throw new Error(`Ошибка при получении расписания: ${e.message}`);
+        return { success: false, error: e.message || 'Ошибка при получении расписания' };
     }
 }
 
@@ -119,9 +119,15 @@ export async function createAvailabilitySlot(data: {
 }
 
 export async function deleteAvailabilitySlot(id: string) {
-    await getPsychologistId();
-    await db.availabilitySlot.delete({ where: { id } });
-    revalidatePath('/diary/availability');
+    try {
+        await getPsychologistId();
+        await db.availabilitySlot.delete({ where: { id } });
+        revalidatePath('/diary/availability');
+        return { success: true };
+    } catch (e: any) {
+        console.error('[Availability] deleteAvailabilitySlot error:', e);
+        return { success: false, error: e.message || 'Ошибка при удалении окна' };
+    }
 }
 
 export async function updateAvailabilitySlot(id: string, data: {
@@ -131,24 +137,30 @@ export async function updateAvailabilitySlot(id: string, data: {
     format: string;
     addressId?: string | null;
 }) {
-    const psychologistId = await getPsychologistId();
-    // Only allow updating owned slots
-    const existing = await db.availabilitySlot.findUnique({ where: { id } });
-    if (!existing || existing.psychologistId !== psychologistId) {
-        throw new Error('Unauthorized');
-    }
-
-    await db.availabilitySlot.update({
-        where: { id },
-        data: {
-            startTime: data.startTime,
-            endTime: data.endTime,
-            duration: data.duration,
-            format: data.format,
-            addressId: data.addressId || null,
+    try {
+        const psychologistId = await getPsychologistId();
+        // Only allow updating owned slots
+        const existing = await db.availabilitySlot.findUnique({ where: { id } });
+        if (!existing || existing.psychologistId !== psychologistId) {
+            throw new Error('Unauthorized');
         }
-    });
-    revalidatePath('/diary/availability');
+
+        await db.availabilitySlot.update({
+            where: { id },
+            data: {
+                startTime: data.startTime,
+                endTime: data.endTime,
+                duration: data.duration,
+                format: data.format,
+                addressId: data.addressId || null,
+            }
+        });
+        revalidatePath('/diary/availability');
+        return { success: true };
+    } catch (e: any) {
+        console.error('[Availability] updateAvailabilitySlot error:', e);
+        return { success: false, error: e.message || 'Ошибка при обновлении окна' };
+    }
 }
 
 export async function getTimeBlocks() {
@@ -159,16 +171,17 @@ export async function getTimeBlocks() {
             orderBy: { date: 'desc' },
         });
 
-        return blocks.map(b => ({
+        const formatted = blocks.map(b => ({
             id: b.id,
             startDate: b.date,
             endDate: b.date,
             type: b.type,
             reason: b.reason
         }));
-    } catch (e) {
+        return { success: true, data: formatted };
+    } catch (e: any) {
         console.error('getTimeBlocks error:', e);
-        throw e;
+        return { success: false, error: e.message || 'Ошибка при получении блокировок' };
     }
 }
 
@@ -179,97 +192,114 @@ export async function createTimeBlock(data: {
     reason?: string;
     cancelIntersectingSessions?: boolean;
 }) {
-    const psychologistId = await getPsychologistId();
+    try {
+        const psychologistId = await getPsychologistId();
 
-    const start = new Date(data.startDate);
-    const end = new Date(data.endDate);
-    const blocksToCreate = [];
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
+        const blocksToCreate = [];
 
-    // Создаем блоки на каждый день от startDate до endDate
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        blocksToCreate.push({
-            psychologistId,
-            date: new Date(d),
-            startTime: '00:00',
-            endTime: '23:59',
-            type: data.type,
-            reason: data.reason || null,
-        });
-    }
-
-    await db.diaryBlock.createMany({
-        data: blocksToCreate
-    });
-
-    if (data.cancelIntersectingSessions) {
-        // Find and cancel all intersecting sessions in this range
-        const sessionsToCancel = await db.diarySession.findMany({
-            where: {
+        // Создаем блоки на каждый день от startDate до endDate
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            blocksToCreate.push({
                 psychologistId,
-                date: { gte: start, lte: end },
-                status: { notIn: ['cancelled', 'completed'] }
-            },
-            include: { client: { include: { telegramClient: true } } }
+                date: new Date(d),
+                startTime: '00:00',
+                endTime: '23:59',
+                type: data.type,
+                reason: data.reason || null,
+            });
+        }
+
+        await db.diaryBlock.createMany({
+            data: blocksToCreate
         });
 
-        if (sessionsToCancel.length > 0) {
-            await db.diarySession.updateMany({
-                where: { id: { in: sessionsToCancel.map(s => s.id) } },
-                data: { status: 'cancelled' }
+        if (data.cancelIntersectingSessions) {
+            // Find and cancel all intersecting sessions in this range
+            const sessionsToCancel = await db.diarySession.findMany({
+                where: {
+                    psychologistId,
+                    date: { gte: start, lte: end },
+                    status: { notIn: ['cancelled', 'completed'] }
+                },
+                include: { client: { include: { telegramClient: true } } }
             });
 
-            // Trigger telegram messages
-            for (const session of sessionsToCancel) {
-                const clientChatId = session.client?.telegramClient?.telegramUserId || session.client?.telegramChatId;
-                if (clientChatId) {
-                    const message = `⚠️ Ваша запись на ${session.date.toLocaleDateString('ru-RU')} в ${session.time} была отменена психологом ` +
-                        (data.reason ? `(Причина: ${data.reason}). ` : `. `) +
-                        `Пожалуйста, свяжитесь для переноса.`;
+            if (sessionsToCancel.length > 0) {
+                await db.diarySession.updateMany({
+                    where: { id: { in: sessionsToCancel.map(s => s.id) } },
+                    data: { status: 'cancelled' }
+                });
 
-                    try {
-                        const { sendTelegramMessage } = await import('@/lib/telegram');
-                        await sendTelegramMessage(clientChatId, message);
-                    } catch (e) {
-                        console.error('Failed to send cancellation notice to', clientChatId, e);
+                // Trigger telegram messages
+                for (const session of sessionsToCancel) {
+                    const clientChatId = session.client?.telegramClient?.telegramUserId || session.client?.telegramChatId;
+                    if (clientChatId) {
+                        const message = `⚠️ Ваша запись на ${session.date.toLocaleDateString('ru-RU')} в ${session.time} была отменена психологом ` +
+                            (data.reason ? `(Причина: ${data.reason}). ` : `. `) +
+                            `Пожалуйста, свяжитесь для переноса.`;
+
+                        try {
+                            const { sendTelegramMessage } = await import('@/lib/telegram');
+                            await sendTelegramMessage(clientChatId, message);
+                        } catch (e) {
+                            console.error('Failed to send cancellation notice to', clientChatId, e);
+                        }
                     }
                 }
             }
         }
-    }
 
-    revalidatePath('/diary/availability');
-    revalidatePath('/diary');
-    return { success: true };
+        revalidatePath('/diary/availability');
+        revalidatePath('/diary');
+        return { success: true };
+    } catch (e: any) {
+        console.error('[Availability] createTimeBlock error:', e);
+        return { success: false, error: e.message || 'Ошибка при создании блокировки' };
+    }
 }
 
 export async function deleteTimeBlock(id: string) {
-    await getPsychologistId();
-    await db.diaryBlock.delete({ where: { id } });
-    revalidatePath('/diary/availability');
+    try {
+        await getPsychologistId();
+        await db.diaryBlock.delete({ where: { id } });
+        revalidatePath('/diary/availability');
+        return { success: true };
+    } catch (e: any) {
+        console.error('[Availability] deleteTimeBlock error:', e);
+        return { success: false, error: e.message || 'Ошибка при удалении блокировки' };
+    }
 }
 
 export async function checkBlockIntersections(startDate: string, endDate: string) {
-    const psychologistId = await getPsychologistId();
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    try {
+        const psychologistId = await getPsychologistId();
+        const start = new Date(startDate);
+        const end = new Date(endDate);
 
-    // Find sessions in this date range
-    const sessions = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            date: {
-                gte: start,
-                lte: end
+        // Find sessions in this date range
+        const sessions = await db.diarySession.findMany({
+            where: {
+                psychologistId,
+                date: {
+                    gte: start,
+                    lte: end
+                },
+                status: { notIn: ['cancelled', 'completed'] }
             },
-            status: { notIn: ['cancelled', 'completed'] }
-        },
-        include: { client: true }
-    });
+            include: { client: true }
+        });
 
-    return sessions.map(s => ({
-        id: s.id,
-        date: s.date,
-        time: s.time,
-        clientName: s.client.name
-    }));
+        const formatted = sessions.map(s => ({
+            id: s.id,
+            date: s.date,
+            time: s.time,
+            clientName: s.client.name
+        }));
+        return { success: true, data: formatted };
+    } catch (e: any) {
+        console.error('[Availability] checkBlockIntersections error:', e);
+        return { success: false, error: e.message || 'Ошибка при проверке пересечений' };
+    }
 }

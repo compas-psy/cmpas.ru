@@ -44,23 +44,37 @@ export default function AvailabilityPage() {
 
     const fetchData = useCallback(async () => {
         try {
-            const [s, b, addrs] = await Promise.all([
+            const [slotsRes, blocksRes, addrs] = await Promise.all([
                 getAvailabilitySlots(),
                 getTimeBlocks(),
                 getAddresses()
             ]);
 
-            setSlots(s.map((x: any) => ({
-                ...x,
-                startDate: x.startDate ? new Date(x.startDate).toISOString() : null,
-                endDate: x.endDate ? new Date(x.endDate).toISOString() : null
-            })));
-            setBlocks(b.map((x: any) => ({
-                ...x,
-                startDate: new Date(x.startDate).toISOString(),
-                endDate: new Date(x.endDate).toISOString()
-            })));
-            setAddresses(addrs);
+            if (slotsRes.success && slotsRes.data) {
+                setSlots(slotsRes.data.map((x: any) => ({
+                    ...x,
+                    startDate: x.startDate ? new Date(x.startDate).toISOString() : null,
+                    endDate: x.endDate ? new Date(x.endDate).toISOString() : null
+                })));
+            } else if (!slotsRes.success) {
+                toast.error(slotsRes.error || 'Ошибка при загрузке окон');
+            }
+
+            if (blocksRes.success && blocksRes.data) {
+                setBlocks(blocksRes.data.map((x: any) => ({
+                    ...x,
+                    startDate: new Date(x.startDate).toISOString(),
+                    endDate: new Date(x.endDate).toISOString()
+                })));
+            } else if (!blocksRes.success) {
+                toast.error(blocksRes.error || 'Ошибка при загрузке блокировок');
+            }
+
+            if (addrs.success && addrs.data) {
+                setAddresses(addrs.data);
+            } else if (!addrs.success) {
+                toast.error(addrs.error || 'Ошибка при загрузке адресов');
+            }
         } catch (e: any) {
             console.error('fetchData error:', e);
             toast.error('Ошибка при загрузке данных: ' + (e?.message || 'Неизвестная ошибка'));
@@ -80,24 +94,32 @@ export default function AvailabilityPage() {
         }
 
         try {
-            await createAvailabilitySlot(newSlot);
-            toast.success('Окна добавлены');
-            setShowNewSlot(false);
-            setNewSlot(initialSlot);
-            fetchData();
+            const res = await createAvailabilitySlot(newSlot);
+            if (res.success) {
+                toast.success('Окна добавлены');
+                setShowNewSlot(false);
+                setNewSlot(initialSlot);
+                fetchData();
+            } else {
+                toast.error(res.error || 'Ошибка при создании окон');
+            }
         } catch (e: any) {
             console.error('addSlot error:', e);
-            toast.error('Ошибка при создании окон: ' + (e?.message || 'Неизвестная ошибка'));
+            toast.error('Критическая ошибка при создании окон');
         }
     };
 
     const rmSlot = async (id: string) => {
         try {
-            await deleteAvailabilitySlot(id);
-            toast.success('Удалено');
-            fetchData();
+            const res = await deleteAvailabilitySlot(id);
+            if (res.success) {
+                toast.success('Удалено');
+                fetchData();
+            } else {
+                toast.error(res.error || 'Ошибка при удалении');
+            }
         } catch (e: any) {
-            toast.error('Ошибка при удалении');
+            toast.error('Критическая ошибка при удалении');
         }
     };
 
@@ -106,19 +128,23 @@ export default function AvailabilityPage() {
         if (editingSlot.startTime >= editingSlot.endTime) { toast.error('Время начала должно быть раньше времени окончания'); return; }
 
         try {
-            await updateAvailabilitySlot(editingSlot.id, {
+            const res = await updateAvailabilitySlot(editingSlot.id, {
                 startTime: editingSlot.startTime,
                 endTime: editingSlot.endTime,
                 duration: editingSlot.duration,
                 format: editingSlot.format || 'online',
                 addressId: editingSlot.format !== 'online' ? (editingSlot.addressId || null) : null
             });
-            toast.success('Окно обновлено');
-            setEditingSlot(null);
-            fetchData();
+            if (res.success) {
+                toast.success('Окно обновлено');
+                setEditingSlot(null);
+                fetchData();
+            } else {
+                toast.error(res.error || 'Ошибка при обновлении');
+            }
         } catch (e: any) {
             console.error('updateSlot error:', e);
-            toast.error('Ошибка при обновлении: ' + (e?.message || 'Неизвестная ошибка'));
+            toast.error('Критическая ошибка при обновлении');
         }
     };
 
@@ -131,37 +157,51 @@ export default function AvailabilityPage() {
 
         try {
             if (!isConfirmingBlock) {
-                const intersections = await checkBlockIntersections(newBlock.startDate, newBlock.endDate);
-                if (intersections.length > 0) {
-                    setIntersectingSessions(intersections);
+                const res = await checkBlockIntersections(newBlock.startDate, newBlock.endDate);
+                if (res.success && res.data && res.data.length > 0) {
+                    setIntersectingSessions(res.data.map((x: any) => ({
+                        ...x,
+                        date: new Date(x.date)
+                    })));
                     setIsConfirmingBlock(true);
+                    return;
+                } else if (!res.success) {
+                    toast.error(res.error || 'Ошибка при проверке пересечений');
                     return;
                 }
             }
 
-            await createTimeBlock({
+            const res = await createTimeBlock({
                 ...newBlock,
                 cancelIntersectingSessions: cancelIntersecting
             });
 
-            toast.success('Блокировка добавлена');
-            setShowNewBlock(false);
-            setIsConfirmingBlock(false);
-            setIntersectingSessions([]);
-            setCancelIntersecting(false);
-            fetchData();
+            if (res.success) {
+                toast.success('Блокировка добавлена');
+                setShowNewBlock(false);
+                setIsConfirmingBlock(false);
+                setIntersectingSessions([]);
+                setCancelIntersecting(false);
+                fetchData();
+            } else {
+                toast.error(res.error || 'Ошибка при добавлении блокировки');
+            }
         } catch (e: any) {
-            toast.error('Ошибка при добавлении блокировки');
+            toast.error('Критическая ошибка при добавлении блокировки');
         }
     };
 
     const rmBlock = async (id: string) => {
         try {
-            await deleteTimeBlock(id);
-            toast.success('Удалено');
-            fetchData();
+            const res = await deleteTimeBlock(id);
+            if (res.success) {
+                toast.success('Удалено');
+                fetchData();
+            } else {
+                toast.error(res.error || 'Ошибка при удалении');
+            }
         } catch (e: any) {
-            toast.error('Ошибка при удалении');
+            toast.error('Критическая ошибка при удалении');
         }
     };
 
