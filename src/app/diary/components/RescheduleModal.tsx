@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Calendar, Clock, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, Calendar, Clock, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Props = {
@@ -12,28 +12,77 @@ type Props = {
     currentDate: string;
     currentTime: string;
     clientName: string;
+    clientId?: string;
 };
 
-export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDate, currentTime, clientName }: Props) {
-    const [newDate, setNewDate] = useState(currentDate);
-    const [newTime, setNewTime] = useState(currentTime);
-    const [saving, setSaving] = useState(false);
+type AvailableSlot = { time: string; format: string; addressId: string | null };
 
-    if (!isOpen) return null;
+export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDate, currentTime, clientName, clientId }: Props) {
+    const [selectedDate, setSelectedDate] = useState<string>('');
+    const [availableDates, setAvailableDates] = useState<string[]>([]);
+    const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
+    const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [loadingDates, setLoadingDates] = useState(true);
+    const [loadingSlots, setLoadingSlots] = useState(false);
+
+    // Calendar state
+    const [calMonth, setCalMonth] = useState(() => {
+        const d = new Date();
+        return { year: d.getFullYear(), month: d.getMonth() };
+    });
+
+    const fetchAvailableDates = useCallback(async (year: number, month: number) => {
+        try {
+            const { getAvailableDatesForReschedule } = await import('../actions/sessions');
+            const dates = await getAvailableDatesForReschedule(year, month);
+            return dates;
+        } catch {
+            return [];
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setLoadingDates(true);
+        const load = async () => {
+            const d1 = await fetchAvailableDates(calMonth.year, calMonth.month);
+            const m2 = calMonth.month === 11 ? 0 : calMonth.month + 1;
+            const y2 = calMonth.month === 11 ? calMonth.year + 1 : calMonth.year;
+            const d2 = await fetchAvailableDates(y2, m2);
+            setAvailableDates([...d1, ...d2]);
+            setLoadingDates(false);
+        };
+        load();
+    }, [isOpen, calMonth, fetchAvailableDates]);
+
+    const fetchSlots = useCallback(async (dateStr: string) => {
+        setLoadingSlots(true);
+        try {
+            const { getAvailableTimesForReschedule } = await import('../actions/sessions');
+            const slots = await getAvailableTimesForReschedule(dateStr, clientId);
+            setAvailableSlots(slots);
+        } catch {
+            setAvailableSlots([]);
+        }
+        setLoadingSlots(false);
+    }, [clientId]);
+
+    const handleDateSelect = (dateStr: string) => {
+        setSelectedDate(dateStr);
+        setSelectedSlot(null);
+        fetchSlots(dateStr);
+    };
 
     const handleSave = async () => {
-        if (!newDate || !newTime) {
-            toast.error('Укажите дату и время');
-            return;
-        }
-        if (newDate === currentDate && newTime === currentTime) {
-            toast.error('Выберите другую дату или время');
+        if (!selectedDate || !selectedSlot) {
+            toast.error('Выберите дату и время');
             return;
         }
         setSaving(true);
         try {
             const { rescheduleSession } = await import('../actions/sessions');
-            await rescheduleSession(sessionId, newDate, newTime);
+            await rescheduleSession(sessionId, selectedDate, selectedSlot.time);
             toast.success('Сессия перенесена');
             onSave();
             onClose();
@@ -43,59 +92,118 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
         setSaving(false);
     };
 
+    if (!isOpen) return null;
+
+    // Build calendar grid for current calMonth
+    const daysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate();
+    const firstDayOfWeek = (new Date(calMonth.year, calMonth.month, 1).getDay() + 6) % 7; // Mon=0
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const monthName = new Date(calMonth.year, calMonth.month).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+
+    const prevMonth = () => {
+        setCalMonth(prev => {
+            if (prev.month === 0) return { year: prev.year - 1, month: 11 };
+            return { ...prev, month: prev.month - 1 };
+        });
+    };
+    const nextMonth = () => {
+        setCalMonth(prev => {
+            if (prev.month === 11) return { year: prev.year + 1, month: 0 };
+            return { ...prev, month: prev.month + 1 };
+        });
+    };
+
     return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-card rounded-3xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-6">
+            <div className="bg-card rounded-3xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-5">
                     <h3 className="text-xl font-bold tracking-tight text-foreground">Перенести сессию</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors">
-                        <X className="w-5 h-5 text-muted-foreground" />
-                    </button>
+                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors"><X className="w-5 h-5 text-muted-foreground" /></button>
                 </div>
 
-                <div className="bg-muted/30 rounded-2xl p-4 mb-6 border border-border/50">
+                <div className="bg-muted/30 rounded-2xl p-4 mb-5 border border-border/50">
                     <p className="text-sm font-medium text-muted-foreground">Клиент</p>
                     <p className="font-bold text-foreground">{clientName}</p>
                     <p className="text-sm font-medium text-muted-foreground mt-2">Текущее время</p>
-                    <p className="font-semibold text-foreground">{currentDate} в {currentTime}</p>
+                    <p className="font-semibold text-foreground">
+                        {new Date(currentDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} в {currentTime}
+                    </p>
                 </div>
 
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 ml-1 flex items-center gap-1.5 mb-2">
-                            <Calendar className="w-3.5 h-3.5" /> Новая дата
-                        </label>
-                        <input
-                            type="date"
-                            value={newDate}
-                            onChange={e => setNewDate(e.target.value)}
-                            min={new Date().toISOString().split('T')[0]}
-                            className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all"
-                        />
+                {/* Calendar */}
+                <div className="mb-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <button onClick={prevMonth} className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground">◀</button>
+                        <span className="font-semibold text-foreground capitalize">{monthName}</span>
+                        <button onClick={nextMonth} className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground">▶</button>
                     </div>
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 ml-1 flex items-center gap-1.5 mb-2">
-                            <Clock className="w-3.5 h-3.5" /> Новое время
-                        </label>
-                        <input
-                            type="time"
-                            value={newTime}
-                            onChange={e => setNewTime(e.target.value)}
-                            className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all"
-                        />
+                    <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground mb-2">
+                        {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(d => <div key={d}>{d}</div>)}
                     </div>
+                    <div className="grid grid-cols-7 gap-1">
+                        {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`e-${i}`} />)}
+                        {Array.from({ length: daysInMonth }).map((_, i) => {
+                            const day = i + 1;
+                            const dateObj = new Date(calMonth.year, calMonth.month, day);
+                            const dateStr = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                            const isPast = dateObj < today;
+                            const isAvail = availableDates.includes(dateStr);
+                            const isSel = selectedDate === dateStr;
+                            const isToday = dateObj.getTime() === today.getTime();
+
+                            return (
+                                <button
+                                    key={day}
+                                    disabled={isPast || !isAvail}
+                                    onClick={() => handleDateSelect(dateStr)}
+                                    className={`relative h-9 rounded-xl text-sm font-medium transition-colors ${isSel
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : isAvail
+                                            ? 'text-foreground hover:bg-muted'
+                                            : 'text-muted-foreground/40 cursor-default'
+                                        } ${isToday && !isSel ? 'ring-1 ring-primary/30' : ''}`}
+                                >
+                                    {day}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {loadingDates && <div className="text-center pt-2"><Loader2 className="w-4 h-4 animate-spin inline text-muted-foreground" /></div>}
                 </div>
 
-                <div className="flex gap-3 mt-8">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-colors"
-                    >
-                        Отмена
-                    </button>
+                {/* Time slots */}
+                {selectedDate && (
+                    <div className="mb-5 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <h4 className="font-semibold text-foreground mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4 text-primary" /> Свободное время:</h4>
+                        {loadingSlots ? (
+                            <div className="text-center py-4"><Loader2 className="w-5 h-5 animate-spin inline text-muted-foreground" /></div>
+                        ) : availableSlots.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-3">Нет свободных слотов</p>
+                        ) : (
+                            <div className="grid grid-cols-4 gap-2">
+                                {availableSlots.map(slot => (
+                                    <button
+                                        key={slot.time}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`py-2 rounded-xl border-2 font-medium text-sm transition-colors ${selectedSlot?.time === slot.time
+                                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                            : 'border-border text-foreground hover:border-primary/50'
+                                            }`}
+                                    >
+                                        {slot.time}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="flex gap-3">
+                    <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-colors">Отмена</button>
                     <button
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || !selectedSlot}
                         className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

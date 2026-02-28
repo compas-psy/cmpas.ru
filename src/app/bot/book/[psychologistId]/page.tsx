@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle2, MapPin, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ru } from 'date-fns/locale/ru';
@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getPsychologist, getAvailableDates, getAvailableTimes, bookSession } from '../../actions';
+import { getPsychologist, getAvailableDates, getAvailableTimes, bookSession, getClientByTelegram } from '../../actions';
 
 registerLocale('ru', ru);
 
@@ -31,6 +31,18 @@ export default function ClientBookingPage() {
     const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
     const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline' | null>(null);
     const [form, setForm] = useState({ name: '', phone: '' });
+    const [booking, setBooking] = useState(false);
+
+    // Success state
+    const [bookingSuccess, setBookingSuccess] = useState<{
+        date: string;
+        time: string;
+        format: string;
+        psyName: string;
+    } | null>(null);
+
+    // Auto-navigate to first available month
+    const [startDate, setStartDate] = useState<Date | null>(null);
 
     // Fetch initial data
     useEffect(() => {
@@ -43,7 +55,6 @@ export default function ClientBookingPage() {
 
             if (tg.initDataUnsafe?.user) {
                 setTgUser(tg.initDataUnsafe.user);
-                setForm(f => ({ ...f, name: tg.initDataUnsafe.user.first_name || '' }));
             }
         }
 
@@ -54,14 +65,40 @@ export default function ClientBookingPage() {
                 const user = await getPsychologist(psychologistId);
                 setPsy(user);
 
-                // Fetch dates for current and next month
+                // Fetch dates for current and next 3 months to find first available
                 const now = new Date();
-                const d1 = await getAvailableDates(psychologistId, now.getFullYear(), now.getMonth());
-                const m2 = now.getMonth() === 11 ? 0 : now.getMonth() + 1;
-                const y2 = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
-                const d2 = await getAvailableDates(psychologistId, y2, m2);
+                let allDates: string[] = [];
+                for (let i = 0; i < 4; i++) {
+                    const m = (now.getMonth() + i) % 12;
+                    const y = now.getFullYear() + Math.floor((now.getMonth() + i) / 12);
+                    const d = await getAvailableDates(psychologistId, y, m);
+                    allDates = [...allDates, ...d];
+                }
+                setAvailableDates(allDates);
 
-                setAvailableDates([...d1, ...d2]);
+                // Auto-navigate to first month with available dates
+                if (allDates.length > 0) {
+                    const firstDate = new Date(allDates[0] + 'T00:00:00');
+                    setStartDate(firstDate);
+                }
+
+                // Pre-fill client data if returning
+                const tgUserId = tg?.initDataUnsafe?.user?.id;
+                if (tgUserId && user) {
+                    try {
+                        const client = await getClientByTelegram(psychologistId, String(tgUserId));
+                        if (client) {
+                            setForm({
+                                name: client.name || tg?.initDataUnsafe?.user?.first_name || '',
+                                phone: client.phone || ''
+                            });
+                        } else {
+                            setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
+                        }
+                    } catch {
+                        setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
+                    }
+                }
             } catch (err) {
                 toast.error('Не удалось загрузить данные специалиста');
             } finally {
@@ -80,6 +117,7 @@ export default function ClientBookingPage() {
 
         setSelectedDate(date);
         setSelectedTimeSlot(null);
+        setSelectedFormat(null);
         setAvailableTimes([]);
 
         const dateStr = format(date, 'yyyy-MM-dd');
@@ -88,6 +126,19 @@ export default function ClientBookingPage() {
             setAvailableTimes(times);
         } catch (e) {
             toast.error('Ошибка при загрузке времени');
+        }
+    };
+
+    // Handle month change in DatePicker — fetch dates for new month
+    const handleMonthChange = async (date: Date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        // Check if we already have dates for this month
+        const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+        const hasMonth = availableDates.some(d => d.startsWith(monthPrefix));
+        if (!hasMonth) {
+            const newDates = await getAvailableDates(psychologistId, year, month);
+            setAvailableDates(prev => [...prev, ...newDates]);
         }
     };
 
@@ -112,30 +163,30 @@ export default function ClientBookingPage() {
         }
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        setBooking(true);
 
-        toast.promise(
-            bookSession(psychologistId, tgUser, {
+        try {
+            await bookSession(psychologistId, tgUser, {
                 ...form,
                 date: dateStr,
                 time: selectedTimeSlot.time,
                 format: selectedFormat,
                 addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
-            }),
-            {
-                loading: 'Оформление записи...',
-                success: () => {
-                    const tg = (window as any).Telegram?.WebApp;
-                    if (tg) {
-                        tg.showAlert('Вы успешно записаны!', () => tg.close());
-                    } else {
-                        toast.success('Успешно заявка отправлена!');
-                        setTimeout(() => window.location.href = '/', 2000);
-                    }
-                    return 'Успех! Уведомление придет в Telegram.';
-                },
-                error: 'Ошибка записи'
-            }
-        );
+            });
+
+            // Show success screen
+            const dayOfWeek = selectedDate.toLocaleDateString('ru-RU', { weekday: 'long' });
+            const formattedDate = selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+            setBookingSuccess({
+                date: `${dayOfWeek}, ${formattedDate}`,
+                time: selectedTimeSlot.time,
+                format: selectedFormat,
+                psyName: psy?.name || 'Специалист',
+            });
+        } catch (e: any) {
+            toast.error(e?.message || 'Ошибка записи');
+        }
+        setBooking(false);
     };
 
     const isDateAvailable = (date: Date) => {
@@ -160,6 +211,55 @@ export default function ClientBookingPage() {
         );
     }
 
+    // Success screen
+    if (bookingSuccess) {
+        return (
+            <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+                <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
+                    <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                            <CheckCircle2 className="w-8 h-8 text-green-600" />
+                        </div>
+                        <h2 className="text-2xl font-bold mb-2 text-foreground">Вы записаны!</h2>
+                        <p className="text-muted-foreground text-sm mb-6">Уведомление придёт в Telegram</p>
+
+                        <div className="bg-muted/30 rounded-2xl p-5 text-left space-y-3 border border-border/50">
+                            <div>
+                                <p className="text-xs font-medium text-muted-foreground">Специалист</p>
+                                <p className="font-bold text-foreground">{bookingSuccess.psyName}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-muted-foreground">Дата и время</p>
+                                <p className="font-bold text-foreground">{bookingSuccess.time}, {bookingSuccess.date}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-muted-foreground">Формат</p>
+                                <p className="font-bold text-foreground flex items-center gap-1.5">
+                                    {bookingSuccess.format === 'online' ? (
+                                        <><Video className="w-4 h-4 text-primary" /> Онлайн</>
+                                    ) : (
+                                        <><MapPin className="w-4 h-4 text-primary" /> В кабинете</>
+                                    )}
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                const tg = (window as any).Telegram?.WebApp;
+                                if (tg) tg.close();
+                                else window.location.href = '/';
+                            }}
+                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[#1e3a2f] text-white bg-[#1e3a2f] dark:border-[#b89a4e] dark:text-gray-900 dark:bg-[#b89a4e] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                        >
+                            Готово
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <div className="p-4 max-w-md mx-auto">
@@ -177,15 +277,17 @@ export default function ClientBookingPage() {
                             locale="ru"
                             selected={selectedDate}
                             onChange={handleDateChange}
+                            onMonthChange={handleMonthChange}
                             minDate={new Date()}
+                            openToDate={startDate || undefined}
                             filterDate={isDateAvailable}
                             calendarClassName="!border-none !font-sans !bg-transparent"
                             dayClassName={(date) => {
                                 const isAvail = isDateAvailable(date);
                                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
-                                if (isSelected) return "!bg-transparent !border-2 !border-[#1e3a2f] dark:!border-[#b89a4e] !text-[#1e3a2f] dark:!text-[#b89a4e] !rounded-[50%] !font-medium";
-                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[#1e3a2f]/50 dark:hover:!border-[#b89a4e]/50 !font-medium !rounded-[50%] transition-colors";
-                                return "!text-muted-foreground !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[50%]";
+                                if (isSelected) return "!bg-transparent !border-2 !border-[#1e3a2f] dark:!border-[#b89a4e] !text-[#1e3a2f] dark:!text-[#b89a4e] !rounded-[12px] !font-medium";
+                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[#1e3a2f]/50 dark:hover:!border-[#b89a4e]/50 !font-medium !rounded-[12px] transition-colors";
+                                return "!text-muted-foreground !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[12px]";
                             }}
                             monthClassName={() => "!text-foreground !font-medium"}
                             weekDayClassName={() => "!text-muted-foreground !font-medium !text-xs"}
@@ -217,6 +319,7 @@ export default function ClientBookingPage() {
                             </div>
                         )}
 
+                        {/* Format selection — only for hybrid slots */}
                         {selectedTimeSlot?.format === 'both' && (
                             <div className="mt-4 pt-4 border-t border-border/50 animate-in fade-in duration-200">
                                 <label className="block text-sm font-medium mb-3 text-foreground">Формат проведения <span className="text-destructive">*</span></label>
@@ -232,16 +335,6 @@ export default function ClientBookingPage() {
                                         className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
                                     >🏠 В кабинете</button>
                                 </div>
-                            </div>
-                        )}
-                        {selectedTimeSlot?.format === 'offline' && (
-                            <div className="mt-4 pt-4 border-t border-border/50 text-sm text-primary flex items-center justify-center p-3 bg-primary/5 rounded-xl animate-in fade-in duration-200">
-                                Будет проведена очная встреча в кабинете.
-                            </div>
-                        )}
-                        {selectedTimeSlot?.format === 'online' && (
-                            <div className="mt-4 pt-4 border-t border-border/50 text-sm text-primary flex items-center justify-center p-3 bg-primary/5 rounded-xl animate-in fade-in duration-200">
-                                Встреча пройдет в онлайн-формате.
                             </div>
                         )}
                     </div>
@@ -280,13 +373,14 @@ export default function ClientBookingPage() {
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || loading}
-                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || loading
+                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking}
+                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking
                             ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
                             : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}
                     >
-                        {loading ? 'Секундочку...' : 'Записаться'}
+                        {booking ? <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> : null}
+                        {booking ? 'Оформление...' : 'Записаться'}
                     </button>
                 </form>
                 <style dangerouslySetInnerHTML={{
@@ -296,7 +390,7 @@ export default function ClientBookingPage() {
                     .react-datepicker__day--selected { 
                         background-color: transparent !important; 
                         border: 2px solid #1e3a2f !important; 
-                        border-radius: 50% !important; 
+                        border-radius: 12px !important; 
                         color: #1e3a2f !important;
                     }
                     @media (prefers-color-scheme: dark) {
@@ -305,7 +399,7 @@ export default function ClientBookingPage() {
                             color: #b89a4e !important;
                         }
                     }
-                    .react-datepicker__day:hover { border-radius: 50%; }
+                    .react-datepicker__day:hover { border-radius: 12px; }
                     .react-datepicker__day--disabled { opacity: 0.3; }
                 `}} />
             </div >

@@ -91,7 +91,9 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
                 </div>
             )}
             {showDropdown && suggestions.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-[999] w-full bottom-full mb-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                    style={{ filter: 'drop-shadow(0 -4px 12px rgba(0,0,0,0.1))' }}>
+
                     {suggestions.map((s, i) => (
                         <button
                             key={i}

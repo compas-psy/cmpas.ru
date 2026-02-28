@@ -199,6 +199,63 @@ export default function SettingsPage() {
                 </div>
             </div>
 
+            {/* Date & Time Format */}
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Clock className="w-5 h-5" />
+                    </div>
+                    Формат даты и времени
+                </h2>
+                <div className="space-y-5">
+                    <div>
+                        <label className="text-sm font-semibold text-foreground/80 ml-1 mb-2 block">Формат времени</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSettings(s => ({ ...s, timeFormat: '24h' } as any))}
+                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).timeFormat !== '12h' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
+                            >24 часа (14:00)</button>
+                            <button
+                                type="button"
+                                onClick={() => setSettings(s => ({ ...s, timeFormat: '12h' } as any))}
+                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).timeFormat === '12h' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
+                            >AM/PM (2:00 PM)</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-foreground/80 ml-1 mb-2 block">Формат даты</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSettings(s => ({ ...s, dateFormat: 'dd.MM.yyyy' } as any))}
+                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).dateFormat !== 'MM/dd/yyyy' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
+                            >ДД.ММ.ГГГГ</button>
+                            <button
+                                type="button"
+                                onClick={() => setSettings(s => ({ ...s, dateFormat: 'MM/dd/yyyy' } as any))}
+                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).dateFormat === 'MM/dd/yyyy' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
+                            >ММ/ДД/ГГГГ</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-foreground/80 ml-1 mb-2 block">Начало недели</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSettings(s => ({ ...s, weekStartsOn: 'monday' } as any))}
+                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).weekStartsOn !== 'sunday' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
+                            >Понедельник</button>
+                            <button
+                                type="button"
+                                onClick={() => setSettings(s => ({ ...s, weekStartsOn: 'sunday' } as any))}
+                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).weekStartsOn === 'sunday' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
+                            >Воскресенье</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Рабочий процесс и Уведомления */}
             <div className="bg-card rounded-3xl border border-border shadow-sm p-6 space-y-6">
                 <div className="flex items-center gap-3 border-b border-border/50 pb-4">

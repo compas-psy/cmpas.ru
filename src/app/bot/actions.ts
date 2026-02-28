@@ -292,6 +292,19 @@ export async function bookSession(psychologistId: string, userDetails: any, form
 
     return session.id;
 }
+
+export async function getClientByTelegram(psychologistId: string, telegramUserId: string) {
+    if (!telegramUserId) return null;
+    const client = await db.diaryClient.findFirst({
+        where: {
+            psychologistId,
+            telegramChatId: telegramUserId,
+        },
+        select: { name: true, phone: true }
+    });
+    return client;
+}
+
 export async function getClientSessions(telegramChatId: string) {
     if (!telegramChatId) return [];
 
