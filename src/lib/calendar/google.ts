@@ -238,6 +238,53 @@ export async function createGoogleCalendarEvent(
 }
 
 /**
+ * Delete a calendar event from Google Calendar by session ID
+ */
+export async function deleteGoogleCalendarEvent(
+    integrationId: string,
+    sessionId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({
+            where: { id: integrationId },
+        });
+        if (!integration?.calendarId) {
+            return { success: false, error: 'Календарь не выбран' };
+        }
+
+        const accessToken = await getValidToken(integrationId);
+
+        // Search for the event by extendedProperties
+        const searchUrl = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events?privateExtendedProperty=compasSessionId%3D${sessionId}`;
+        const searchRes = await fetch(searchUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!searchRes.ok) {
+            return { success: false, error: 'Не удалось найти событие' };
+        }
+
+        const searchData = await searchRes.json();
+        const events = searchData.items || [];
+
+        for (const event of events) {
+            await fetch(
+                `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events/${event.id}`,
+                {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                }
+            );
+        }
+
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка удаления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
  * Sync all upcoming sessions to Google Calendar
  */
 export async function syncAllSessionsToGoogle(

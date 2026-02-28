@@ -290,6 +290,20 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         }
     }
 
+    // Auto-sync to calendars
+    try {
+        const { autoSyncSessionToCalendars } = await import('@/lib/calendar/auto-sync');
+        const fullSession = await db.diarySession.findUnique({
+            where: { id: session.id },
+            include: { client: { select: { name: true } } },
+        });
+        if (fullSession) {
+            autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
+        }
+    } catch (e) {
+        console.error('Auto-sync after booking failed:', e);
+    }
+
     return session.id;
 }
 

@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
+import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -112,6 +113,16 @@ export async function createSession(data: {
     });
 
     revalidatePath('/diary');
+
+    // Auto-sync to calendars
+    const fullSession = await db.diarySession.findUnique({
+        where: { id: session.id },
+        include: { client: { select: { name: true } } },
+    });
+    if (fullSession) {
+        autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
+    }
+
     return session;
 }
 
@@ -121,12 +132,20 @@ export async function updateSession(id: string, data: { status?: string; notes?:
         where: { id },
         data: { ...data, psychologistId },
     });
+
+    // If cancelled, delete from calendars
+    if (data.status === 'cancelled') {
+        autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
+    }
+
     revalidatePath('/diary');
     return session;
 }
 
 export async function deleteSession(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    // Delete from calendars before deleting session
+    autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
     await db.diarySession.delete({ where: { id } });
     revalidatePath('/diary');
 }
@@ -172,6 +191,9 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
         }
     }
 
+    // Delete old event from calendars
+    autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
+
     const session = await db.diarySession.update({
         where: { id },
         data: {
@@ -180,6 +202,15 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
             endTime,
         },
     });
+
+    // Create new event in calendars with updated data
+    const fullSession = await db.diarySession.findUnique({
+        where: { id },
+        include: { client: { select: { name: true } } },
+    });
+    if (fullSession) {
+        autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
+    }
 
     revalidatePath('/diary');
     return session;
