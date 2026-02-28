@@ -28,6 +28,7 @@ model User {
   timeBlocks           TimeBlock[]
   calendarIntegrations   CalendarIntegration[]
   psychologistSettings   PsychologistSettings?
+  notificationSettings   NotificationSettings?
   psychologistAddresses  PsychologistAddress[]
   diaryBlocks          DiaryBlock[]
   
@@ -379,6 +380,32 @@ model PsychologistSettings {
   updatedAt             DateTime @updatedAt
 
   psychologist          User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+}
+
+model NotificationSettings {
+  id                 String   @id @default(cuid())
+  psychologistId     String   @unique
+
+  // Для психолога
+  newBookingEnabled       Boolean @default(true)
+  newBookingTemplate      String  @default("🔥 Новая запись!\n\nКлиент: {clientName}\n📅 {date} в {time}\n📍 {format}")
+  reminderEnabled         Boolean @default(true)
+  reminderMinutesBefore   Int     @default(60)
+  reminderTemplate        String  @default("⏰ Напоминание: сессия через {time} с {clientName}")
+  clientRescheduleEnabled Boolean @default(true)
+  clientCancelEnabled     Boolean @default(true)
+
+  // Для клиента
+  clientReminder25hEnabled    Boolean @default(true)
+  clientReminder25hTemplate   String  @default("Напоминаем: завтра у вас сессия с {psyName} в {time}")
+  clientReminder1hEnabled     Boolean @default(true)
+  clientReminder1hTemplate    String  @default("Через час начнётся ваша сессия с {psyName}")
+  clientPsyCancelEnabled      Boolean @default(true)
+  clientPsyCancelTemplate     String  @default("К сожалению, специалист отменил сессию {date} в {time}. {cancelLink}")
+
+  psychologist       User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model PsychologistAddress {

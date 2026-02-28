@@ -163,9 +163,10 @@ export default function ClientBookingPage() {
     return (
         <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <div className="p-4 max-w-md mx-auto">
-                <h1 className="text-3xl font-bold tracking-tight mb-2">Запись на сессию</h1>
+                <h1 className="text-3xl font-bold tracking-tight mb-1">Запись на сессию</h1>
+                <p className="text-primary font-semibold text-sm mb-1">Специалист — {psy.name}</p>
                 <p className="text-muted-foreground mb-6 text-sm">
-                    К специалисту {psy.name}. Выберите удобное время.
+                    Выберите удобную дату и время.
                 </p>
 
                 {/* Calendar */}

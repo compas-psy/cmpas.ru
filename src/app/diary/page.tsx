@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
+import { RescheduleModal } from './components/RescheduleModal';
 
 type Session = {
     id: string;
@@ -61,6 +62,7 @@ export default function DiaryCalendarPage() {
     const [loading, setLoading] = useState(true);
 
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
+    const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -106,9 +108,15 @@ export default function DiaryCalendarPage() {
 
     const handleStatusChange = async (id: string, status: string) => {
         try {
-            const { updateSession } = await import('./actions/sessions');
-            await updateSession(id, { status });
-            toast.success('Статус обновлён');
+            if (status === 'cancelled') {
+                const { deleteSession } = await import('./actions/sessions');
+                await deleteSession(id);
+                toast.success('Запись удалена из календаря');
+            } else {
+                const { updateSession } = await import('./actions/sessions');
+                await updateSession(id, { status });
+                toast.success('Статус обновлён');
+            }
             fetchSessions();
         } catch {
             toast.error('Ошибка');
@@ -333,7 +341,7 @@ export default function DiaryCalendarPage() {
                                 {/* Week View Body */}
                                 <div className="flex-1 overflow-auto">
                                     {/* Desktop Grid */}
-                                    <div className="hidden md:grid grid-cols-7 min-h-full">
+                                    <div className="hidden md:grid grid-cols-7 min-h-full" style={{ tableLayout: 'fixed' }}>
                                         {weekDaysList.map((date, i) => {
                                             const daySessions = sessions.filter(s => new Date(s.date).toDateString() === date.toDateString());
                                             const isToday = new Date().toDateString() === date.toDateString();
@@ -345,14 +353,14 @@ export default function DiaryCalendarPage() {
                                                             return (
                                                                 <div key={session.id}
                                                                     onClick={() => setEditingSession(session)}
-                                                                    className="p-3 bg-background border border-border rounded-xl shadow-sm hover:shadow-md transition-all group relative cursor-pointer hover:border-primary/30 flex flex-col justify-between"
+                                                                    className="p-2.5 bg-background border border-border rounded-xl shadow-sm hover:shadow-md transition-all group relative cursor-pointer hover:border-primary/30 flex flex-col justify-between overflow-hidden"
                                                                 >
                                                                     <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${statusColors[session.status] || 'bg-border'}`} />
                                                                     <div>
                                                                         <div className="text-xs font-bold text-foreground/90 mb-1 pl-2 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> {session.time}</div>
                                                                         <button
                                                                             onClick={(e) => { e.stopPropagation(); window.location.href = `/diary/clients?clientId=${client?.id}`; }}
-                                                                            className="text-sm font-semibold max-w-[120px] truncate pl-2 hover:text-primary transition-colors text-left active:scale-95 z-10 relative"
+                                                                            className="text-sm font-semibold w-full truncate pl-2 hover:text-primary transition-colors text-left active:scale-95 z-10 relative block"
                                                                         >
                                                                             {client?.name || 'Нет клиента'}
                                                                         </button>
@@ -552,15 +560,20 @@ export default function DiaryCalendarPage() {
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex gap-3 mt-4 pt-4 border-t border-border/50">
+                                        <div className="flex gap-2 mt-4 pt-4 border-t border-border/50">
                                             {s.status !== 'completed' && (
                                                 <button onClick={() => handleStatusChange(s.id, 'completed')} className="text-sm px-4 py-2 min-h-[40px] font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all flex-1 active:scale-[0.98]">
-                                                    Завершить
+                                                    Проведена ✓
+                                                </button>
+                                            )}
+                                            {s.status !== 'completed' && s.status !== 'cancelled' && (
+                                                <button onClick={() => setRescheduleTarget(s)} className="text-sm px-4 py-2 min-h-[40px] font-semibold bg-accent/10 text-accent rounded-xl hover:bg-accent/20 transition-all flex-1 active:scale-[0.98] flex items-center justify-center gap-1.5">
+                                                    <ArrowRightLeft className="w-3.5 h-3.5" /> Перенести
                                                 </button>
                                             )}
                                             {s.status !== 'cancelled' && (
-                                                <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-sm px-4 py-2 min-h-[40px] font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-all flex-1 active:scale-[0.98]">
-                                                    Отменить
+                                                <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-sm px-4 py-2 min-h-[40px] font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-all active:scale-[0.98]">
+                                                    ✕
                                                 </button>
                                             )}
                                         </div>
@@ -581,5 +594,17 @@ export default function DiaryCalendarPage() {
                 editSession={editingSession}
                 clients={clients}
             />
+
+            {rescheduleTarget && (
+                <RescheduleModal
+                    isOpen={!!rescheduleTarget}
+                    onClose={() => setRescheduleTarget(null)}
+                    onSave={() => { fetchSessions(); setRescheduleTarget(null); }}
+                    sessionId={rescheduleTarget.id}
+                    currentDate={new Date(rescheduleTarget.date).toISOString().split('T')[0]}
+                    currentTime={rescheduleTarget.time}
+                    clientName={rescheduleTarget.client.name}
+                />
+            )}
         </div>);
 }

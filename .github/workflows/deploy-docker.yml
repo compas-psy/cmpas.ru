@@ -254,6 +254,29 @@ jobs:
               ALTER TABLE \"PsychologistSettings\" ADD COLUMN IF NOT EXISTS \"methods\" TEXT[] DEFAULT ARRAY[]::TEXT[];
               ALTER TABLE \"PsychologistSettings\" ADD COLUMN IF NOT EXISTS \"basePrice\" INTEGER;
 
+              -- NotificationSettings table
+              CREATE TABLE IF NOT EXISTS \"NotificationSettings\" (
+                \"id\" TEXT NOT NULL,
+                \"psychologistId\" TEXT NOT NULL,
+                \"newBookingEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"newBookingTemplate\" TEXT NOT NULL DEFAULT '',
+                \"reminderEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"reminderMinutesBefore\" INTEGER NOT NULL DEFAULT 60,
+                \"reminderTemplate\" TEXT NOT NULL DEFAULT '',
+                \"clientRescheduleEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"clientCancelEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"clientReminder25hEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"clientReminder25hTemplate\" TEXT NOT NULL DEFAULT '',
+                \"clientReminder1hEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"clientReminder1hTemplate\" TEXT NOT NULL DEFAULT '',
+                \"clientPsyCancelEnabled\" BOOLEAN NOT NULL DEFAULT true,
+                \"clientPsyCancelTemplate\" TEXT NOT NULL DEFAULT '',
+                \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \"updatedAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT \"NotificationSettings_pkey\" PRIMARY KEY (\"id\"),
+                CONSTRAINT \"NotificationSettings_psychologistId_key\" UNIQUE (\"psychologistId\")
+              );
+
               DO \$\$ BEGIN
                 -- Indexes
                 IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'DiaryBlock_psychologistId_idx') THEN
@@ -275,6 +298,9 @@ jobs:
                 END IF;
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'DiarySession_addressId_fkey') THEN
                   ALTER TABLE \"DiarySession\" ADD CONSTRAINT \"DiarySession_addressId_fkey\" FOREIGN KEY (\"addressId\") REFERENCES \"PsychologistAddress\"(\"id\") ON DELETE SET NULL ON UPDATE CASCADE;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'NotificationSettings_psychologistId_fkey') THEN
+                  ALTER TABLE \"NotificationSettings\" ADD CONSTRAINT \"NotificationSettings_psychologistId_fkey\" FOREIGN KEY (\"psychologistId\") REFERENCES \"User\"(\"id\") ON DELETE CASCADE ON UPDATE CASCADE;
                 END IF;
               END \$\$;
             " || echo "WARNING: Direct SQL fixup failed"

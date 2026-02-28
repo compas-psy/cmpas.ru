@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Link2, RefreshCw, ShieldCheck, ExternalLink, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Link2, RefreshCw, ShieldCheck, ExternalLink, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, MonitorPlay } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Integration = {
@@ -197,7 +197,13 @@ export default function IntegrationsPage() {
         <div className="space-y-8 pb-12 max-w-3xl mx-auto">
             <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Интеграции</h1>
-                <p className="text-muted-foreground text-base mt-2">Подключите внешние календари для автоматической синхронизации сессий</p>
+                <p className="text-muted-foreground text-base mt-2">Календари и сервисы видеоконференций</p>
+            </div>
+
+            {/* Section: Calendars */}
+            <div className="flex items-center gap-3 mt-2">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><RefreshCw className="w-4 h-4" /></div>
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">Календари</h2>
             </div>
 
             {/* Connected */}
@@ -293,6 +299,35 @@ export default function IntegrationsPage() {
                             </div>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* Section: Video Conferencing */}
+            <div className="flex items-center gap-3 mt-4">
+                <div className="w-8 h-8 rounded-xl bg-accent/10 text-accent flex items-center justify-center"><MonitorPlay className="w-4 h-4" /></div>
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">Видеоконференции</h2>
+            </div>
+
+            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <p className="text-sm font-medium text-muted-foreground mb-5">Подключите сервис видеоконференций для автоматического создания ссылок на встречи</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {[
+                        { name: 'Zoom', icon: '🎥', color: 'bg-[#2D8CFF]', desc: 'Автоматическое создание Zoom-встреч' },
+                        { name: 'Google Meet', icon: '📹', color: 'bg-[#00897B]', desc: 'Встречи через Google Meet' },
+                        { name: 'Яндекс Телемост', icon: '📺', color: 'bg-[#FC3F1D]', desc: 'Встречи через Яндекс Телемост' },
+                    ].map(vc => (
+                        <div key={vc.name} className="bg-background rounded-2xl border border-border p-5 flex flex-col items-center text-center relative overflow-hidden">
+                            <div className="absolute top-3 right-3">
+                                <span className="text-[10px] font-bold bg-accent/10 text-accent px-2 py-1 rounded-lg">Скоро</span>
+                            </div>
+                            <div className={`w-12 h-12 ${vc.color} rounded-2xl flex items-center justify-center text-white text-xl mb-3 shadow-sm`}>{vc.icon}</div>
+                            <h3 className="font-bold text-sm text-foreground mb-1">{vc.name}</h3>
+                            <p className="text-xs font-medium text-muted-foreground mb-4">{vc.desc}</p>
+                            <button disabled className="w-full px-4 py-2.5 min-h-[40px] bg-muted text-muted-foreground rounded-xl text-sm font-semibold cursor-not-allowed opacity-60">
+                                В разработке
+                            </button>
+                        </div>
+                    ))}
                 </div>
             </div>
 

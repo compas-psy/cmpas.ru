@@ -193,18 +193,67 @@ export async function bookSession(psychologistId: string, userDetails: any, form
                 telegramChatId: tgUserId,
             }
         });
-    } else if (tgUserId && !client.telegramChatId) {
-        client = await db.diaryClient.update({
-            where: { id: client.id },
-            data: { telegramChatId: tgUserId }
+    } else {
+        // Объединение: обновляем telegramChatId и имя если нужно
+        const updateData: any = {};
+        if (tgUserId && !client.telegramChatId) updateData.telegramChatId = tgUserId;
+        if (form.name && form.name !== client.name) updateData.name = form.name;
+        if (Object.keys(updateData).length > 0) {
+            client = await db.diaryClient.update({
+                where: { id: client.id },
+                data: updateData
+            });
+        }
+    }
+
+    // Привязать TelegramClient → DiaryClient если есть
+    if (tgUserId) {
+        const tgClient = await db.telegramClient.findUnique({
+            where: { telegramUserId: tgUserId }
         });
+        if (tgClient && !tgClient.diaryClientId) {
+            await db.telegramClient.update({
+                where: { id: tgClient.id },
+                data: { diaryClientId: client.id, psychologistId }
+            });
+        }
     }
 
     const [y, m, d] = form.date.split('-').map(Number);
-    const dateObj = new Date(Date.UTC(y, m - 1, d)); // Use UTC so 00:00 stays 00:00
+    const dateObj = new Date(Date.UTC(y, m - 1, d));
 
+    const dayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
+
+    // Валидация: слот не занят
     const duration = 50;
     const [h, min] = form.time.split(':').map(Number);
+    const newStartMins = h * 60 + min;
+    const newEndMins = newStartMins + duration;
+
+    const existingSessions = await db.diarySession.findMany({
+        where: {
+            psychologistId,
+            date: { gte: dayStart, lte: dayEnd },
+            status: { not: 'cancelled' },
+        },
+    });
+
+    for (const existing of existingSessions) {
+        const [eH, eM] = existing.time.split(':').map(Number);
+        const eStartMins = eH * 60 + eM;
+        const eEndMins = eStartMins + (existing.duration || 50);
+        if (newStartMins < eEndMins && newEndMins > eStartMins) {
+            throw new Error('Это время уже занято');
+        }
+    }
+
+    // Валидация: один клиент не может записаться 2+ раз в один день
+    const clientSessionsToday = existingSessions.filter(s => s.clientId === client!.id);
+    if (clientSessionsToday.length > 0) {
+        throw new Error('Вы уже записаны на этот день');
+    }
+
     const endMinutes = h * 60 + min + duration;
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 

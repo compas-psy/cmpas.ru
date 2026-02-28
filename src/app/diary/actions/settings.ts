@@ -120,3 +120,59 @@ export async function linkTelegramAccount(telegramChatId: string, telegramUserna
     revalidatePath('/diary/integrations');
     return { success: true };
 }
+
+export async function getProfile() {
+    try {
+        const psychologistId = await getPsychologistId();
+        const user = await db.user.findUnique({ where: { id: psychologistId } });
+        const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+
+        if (!user) throw new Error('User not found');
+
+        return {
+            success: true,
+            data: {
+                fullName: user.name || '',
+                email: user.email || '',
+                image: user.image || null,
+                methods: (settings as any)?.methods || [],
+                basePrice: (settings as any)?.basePrice || null,
+            }
+        };
+    } catch (e: any) {
+        console.error('getProfile error:', e);
+        return { success: false, error: e.message || 'Ошибка' };
+    }
+}
+
+export async function updateProfile(data: {
+    fullName?: string;
+    methods?: string[];
+    basePrice?: number | null;
+}) {
+    const psychologistId = await getPsychologistId();
+
+    if (data.fullName !== undefined) {
+        await db.user.update({
+            where: { id: psychologistId },
+            data: { name: data.fullName },
+        });
+    }
+
+    // methods/basePrice — upsert into settings
+    const settingsData: any = {};
+    if (data.methods !== undefined) settingsData.methods = data.methods;
+    if (data.basePrice !== undefined) settingsData.basePrice = data.basePrice;
+
+    if (Object.keys(settingsData).length > 0) {
+        await db.psychologistSettings.upsert({
+            where: { psychologistId },
+            create: { psychologistId, ...settingsData },
+            update: settingsData,
+        });
+    }
+
+    revalidatePath('/diary/profile');
+    revalidatePath('/diary/settings');
+    return { success: true };
+}

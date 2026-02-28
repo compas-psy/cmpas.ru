@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, Clock, Link2, Settings } from 'lucide-react';
+import { Calendar, Users, Clock, Link2, Settings, UserCircle, Bell } from 'lucide-react';
 
 const navItems = [
     { href: '/diary', label: 'Календарь', icon: Calendar },
     { href: '/diary/clients', label: 'Клиенты', icon: Users },
     { href: '/diary/availability', label: 'Расписание', icon: Clock },
+    { href: '/diary/profile', label: 'Мой профиль', icon: UserCircle },
+    { href: '/diary/notifications', label: 'Уведомления', icon: Bell },
     { href: '/diary/integrations', label: 'Интеграции', icon: Link2 },
     { href: '/diary/settings', label: 'Настройки', icon: Settings },
 ];

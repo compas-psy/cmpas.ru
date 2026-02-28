@@ -53,6 +53,39 @@ export async function createSession(data: {
     const endMinutes = h * 60 + m + duration;
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
+    const sessionDate = new Date(data.date);
+    const dayStart = new Date(sessionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // Валидация: нет ли уже записи на пересекающийся временной слот
+    const existingSessions = await db.diarySession.findMany({
+        where: {
+            psychologistId,
+            date: { gte: dayStart, lte: dayEnd },
+            status: { not: 'cancelled' },
+        },
+    });
+
+    const newStartMins = h * 60 + m;
+    const newEndMins = newStartMins + duration;
+
+    for (const existing of existingSessions) {
+        const [eH, eM] = existing.time.split(':').map(Number);
+        const eStartMins = eH * 60 + eM;
+        const eEndMins = eStartMins + (existing.duration || 50);
+        if (newStartMins < eEndMins && newEndMins > eStartMins) {
+            throw new Error('Это время уже занято другой сессией');
+        }
+    }
+
+    // Валидация: один клиент не может быть записан 2+ раз в один день
+    const clientSessionsToday = existingSessions.filter(s => s.clientId === data.clientId);
+    if (clientSessionsToday.length > 0) {
+        throw new Error('Этот клиент уже записан на данный день');
+    }
+
     const session = await db.diarySession.create({
         data: {
             psychologistId,
@@ -96,4 +129,58 @@ export async function deleteSession(id: string) {
     await getPsychologistId();
     await db.diarySession.delete({ where: { id } });
     revalidatePath('/diary');
+}
+
+export async function rescheduleSession(id: string, newDate: string, newTime: string) {
+    const psychologistId = await getPsychologistId();
+
+    const existing = await db.diarySession.findUnique({ where: { id } });
+    if (!existing || existing.psychologistId !== psychologistId) {
+        throw new Error('Сессия не найдена');
+    }
+
+    const duration = existing.duration || 50;
+    const [h, m] = newTime.split(':').map(Number);
+    const endMinutes = h * 60 + m + duration;
+    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+    const dateObj = new Date(newDate);
+    const dayStart = new Date(dateObj);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dateObj);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // Проверка пересечений (исключая текущую сессию)
+    const daySessionsOnTarget = await db.diarySession.findMany({
+        where: {
+            psychologistId,
+            id: { not: id },
+            date: { gte: dayStart, lte: dayEnd },
+            status: { not: 'cancelled' },
+        },
+    });
+
+    const newStartMins = h * 60 + m;
+    const newEndMins = newStartMins + duration;
+
+    for (const sess of daySessionsOnTarget) {
+        const [sH, sM] = sess.time.split(':').map(Number);
+        const sStartMins = sH * 60 + sM;
+        const sEndMins = sStartMins + (sess.duration || 50);
+        if (newStartMins < sEndMins && newEndMins > sStartMins) {
+            throw new Error('Это время уже занято другой сессией');
+        }
+    }
+
+    const session = await db.diarySession.update({
+        where: { id },
+        data: {
+            date: dateObj,
+            time: newTime,
+            endTime,
+        },
+    });
+
+    revalidatePath('/diary');
+    return session;
 }

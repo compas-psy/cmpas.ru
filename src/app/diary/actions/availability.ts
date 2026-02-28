@@ -77,6 +77,41 @@ export async function createAvailabilitySlot(data: {
         }
 
         const isRecurring = start.getTime() !== end.getTime();
+
+        // Валидация: проверяем пересечения с существующими слотами
+        const existingSlots = await db.availabilitySlot.findMany({
+            where: { psychologistId, isActive: true },
+        });
+
+        const [newStartH, newStartM] = data.startTime.split(':').map(Number);
+        const [newEndH, newEndM] = data.endTime.split(':').map(Number);
+        const newStartMins = newStartH * 60 + newStartM;
+        const newEndMins = newEndH * 60 + newEndM;
+
+        for (const existing of existingSlots) {
+            // Проверяем пересечение по дням недели
+            if (!data.daysOfWeek.includes(existing.dayOfWeek)) continue;
+
+            // Проверяем пересечение по датам
+            const existStart = existing.startDate ? existing.startDate.getTime() : 0;
+            const existEnd = existing.endDate ? existing.endDate.getTime() : Infinity;
+            const newStart = start.getTime();
+            const newEnd = end.getTime();
+
+            if (newStart > existEnd || newEnd < existStart) continue;
+
+            // Проверяем пересечение по времени
+            const [exStartH, exStartM] = existing.startTime.split(':').map(Number);
+            const [exEndH, exEndM] = existing.endTime.split(':').map(Number);
+            const exStartMins = exStartH * 60 + exStartM;
+            const exEndMins = exEndH * 60 + exEndM;
+
+            if (newStartMins < exEndMins && newEndMins > exStartMins) {
+                const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+                throw new Error(`Расписание пересекается с существующим: ${dayNames[existing.dayOfWeek]} ${existing.startTime}–${existing.endTime}`);
+            }
+        }
+
         const slotsToCreate = [];
 
         for (const dayOfWeek of data.daysOfWeek) {
