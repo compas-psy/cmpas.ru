@@ -3,9 +3,10 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Calendar, Users, Clock, Link2, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { SidebarNav } from './sidebar-nav';
+import { MobileSidebar } from './mobile-sidebar';
 
 export const metadata: Metadata = {
     title: 'Ежедневник | Compas',
@@ -15,7 +16,6 @@ export const metadata: Metadata = {
 function SidebarContent({ userName, userInitials }: { userName: string; userInitials: string }) {
     return (
         <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
-            {/* Logo & User */}
             {/* Logo */}
             <div className="p-6">
                 <div className="flex items-center gap-3">
@@ -88,30 +88,10 @@ export default async function DiaryLayout({
                 <SidebarContent userName={userName} userInitials={userInitials} />
             </aside>
 
-            {/* Mobile header */}
-            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-card/80 backdrop-blur-md border-b border-border z-40 flex items-center px-4 gap-3 shadow-sm">
-                <label htmlFor="diary-sidebar-toggle" className="p-2 -ml-2 cursor-pointer rounded-xl hover:bg-muted transition-colors active:scale-95">
-                    <Menu className="w-6 h-6" />
-                </label>
-                <div className="font-bold text-lg tracking-tight">Ежедневник</div>
-            </div>
-
-            {/* Mobile sidebar overlay */}
-            <input type="checkbox" id="diary-sidebar-toggle" className="hidden peer" />
-            <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 opacity-0 pointer-events-none peer-checked:opacity-100 peer-checked:pointer-events-auto transition-opacity duration-300">
-                <label htmlFor="diary-sidebar-toggle" className="absolute inset-0" />
-            </div>
-            <aside className="md:hidden fixed top-0 left-0 right-0 max-h-[50vh] z-50 flex flex-col -translate-y-full peer-checked:translate-y-0 transition-transform duration-300 rounded-b-3xl shadow-2xl bg-sidebar border-b border-sidebar-border">
-                <div className="flex items-center justify-between p-4 shrink-0 shadow-sm z-10">
-                    <span className="font-bold text-lg text-sidebar-foreground px-2">Меню</span>
-                    <label htmlFor="diary-sidebar-toggle" className="p-2 cursor-pointer hover:bg-sidebar-accent rounded-xl transition-colors active:scale-95 flex-shrink-0">
-                        <X className="w-6 h-6 text-sidebar-foreground" />
-                    </label>
-                </div>
-                <div className="overflow-y-auto flex-1">
-                    <SidebarContent userName={userName} userInitials={userInitials} />
-                </div>
-            </aside>
+            {/* Mobile sidebar */}
+            <MobileSidebar>
+                <SidebarContent userName={userName} userInitials={userInitials} />
+            </MobileSidebar>
 
             {/* Main content */}
             <main className="flex-1 md:ml-72 pt-16 md:pt-0 min-h-screen">

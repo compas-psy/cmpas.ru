@@ -12,9 +12,10 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '';
 const REDIRECT_URI = `${process.env.AUTH_URL || 'https://cmpas.ru'}/api/calendar/google/callback`;
 
 const SCOPES = [
-    'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'openid',
+    'email',
 ].join(' ');
 
 /**
