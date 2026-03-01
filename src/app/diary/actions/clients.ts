@@ -10,14 +10,28 @@ async function getPsychologistId() {
     return session.user.id;
 }
 
-export async function getClients(search?: string) {
+export async function getClients(search?: string, statusFilter?: string) {
     const psychologistId = await getPsychologistId();
     return db.diaryClient.findMany({
         where: {
             psychologistId,
-            ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+            ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+            ...(search ? {
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' as const } },
+                    { questionnaire: { data: { path: ['fullName'], string_contains: search } } },
+                ],
+            } : {}),
         },
-        include: { questionnaire: true },
+        include: {
+            questionnaire: true,
+            sessions: {
+                where: { status: { not: 'cancelled' } },
+                orderBy: { date: 'asc' },
+                select: { id: true, date: true, time: true, status: true },
+                take: 5,
+            },
+        },
         orderBy: { updatedAt: 'desc' },
     });
 }
@@ -69,6 +83,24 @@ export async function updateClient(id: string, data: Record<string, unknown>) {
     return client;
 }
 
+export async function archiveClient(id: string) {
+    await getPsychologistId();
+    await db.diaryClient.update({
+        where: { id },
+        data: { status: 'archived' },
+    });
+    revalidatePath('/diary/clients');
+}
+
+export async function restoreClient(id: string) {
+    await getPsychologistId();
+    await db.diaryClient.update({
+        where: { id },
+        data: { status: 'active' },
+    });
+    revalidatePath('/diary/clients');
+}
+
 export async function deleteClient(id: string) {
     await getPsychologistId();
     await db.diaryClient.delete({ where: { id } });
@@ -86,4 +118,13 @@ export async function saveQuestionnaire(clientId: string, data: any) {
     });
     revalidatePath('/diary/clients');
     return result;
+}
+
+export async function updateSessionNotes(sessionId: string, notes: string) {
+    await getPsychologistId();
+    await db.diarySession.update({
+        where: { id: sessionId },
+        data: { notes },
+    });
+    revalidatePath('/diary/clients');
 }
