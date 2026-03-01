@@ -239,7 +239,7 @@ export default function AvailabilityPage() {
             {/* Schedule Mode Toggle */}
             <div className="bg-card rounded-3xl border border-border p-5 shadow-sm overflow-hidden">
                 <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
                         <Calendar className="w-5 h-5" />
                     </div>
                     <div>
@@ -266,8 +266,8 @@ export default function AvailabilityPage() {
                                 setSavingMode(false);
                             }}
                             className={`p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${scheduleMode === m.value
-                                    ? 'border-primary bg-primary/5 shadow-sm'
-                                    : 'border-border hover:border-primary/30'
+                                ? 'border-primary bg-primary/5 shadow-sm'
+                                : 'border-border hover:border-primary/30'
                                 }`}
                         >
                             <div className="font-bold text-sm mb-0.5">{m.label}</div>
@@ -393,7 +393,7 @@ export default function AvailabilityPage() {
                             const Icon = blockIcons[b.type] || Coffee;
                             return (
                                 <div key={b.id} className="bg-card rounded-2xl border border-border p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-all group">
-                                    <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center ${b.type === 'vacation' ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary'}`}>
+                                    <div className={`w-12 h-12 shrink-0 rounded-2xl border-2 bg-transparent flex items-center justify-center ${b.type === 'vacation' ? 'border-accent/30 text-accent' : 'border-primary/30 text-primary'}`}>
                                         <Icon className="w-6 h-6" />
                                     </div>
                                     <div className="flex-1 min-w-0 pt-0.5">
@@ -504,7 +504,7 @@ export default function AvailabilityPage() {
                     </>
                 ) : (
                     <div className="space-y-4">
-                        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-2xl">
+                        <div className="p-4 border-2 border-destructive/30 bg-transparent rounded-2xl">
                             <h3 className="text-destructive font-semibold text-sm mb-2">Внимание! Есть пересечения</h3>
                             <p className="text-sm text-foreground/80">
                                 В выбранный период попадают уже запланированные сессии ({intersectingSessions.length} шт.).

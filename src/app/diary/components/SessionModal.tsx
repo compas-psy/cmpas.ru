@@ -66,7 +66,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
         try {
             const { getAvailableDatesForReschedule } = await import('../actions/sessions');
             const year = calendarMonth.getFullYear();
-            const month = calendarMonth.getMonth() + 1;
+            const month = calendarMonth.getMonth(); // 0-indexed, matching getAvailableDates expectation
             const dates = await getAvailableDatesForReschedule(year, month);
             setAvailableDates(dates);
         } catch { setAvailableDates([]); }
@@ -239,8 +239,8 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                             type="button"
                                             onClick={() => setFormData(s => ({ ...s, time: slot.time }))}
                                             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[40px] ${formData.time === slot.time
-                                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                                    : 'border border-border hover:border-primary/50 hover:bg-muted text-foreground'
+                                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                                : 'border border-border hover:border-primary/50 hover:bg-muted text-foreground'
                                                 }`}
                                         >
                                             {slot.time}

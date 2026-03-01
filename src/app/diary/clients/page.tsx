@@ -183,7 +183,7 @@ export default function ClientsPage() {
                         <ChevronLeft className="w-4 h-4" /> Клиенты
                     </button>
                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg uppercase shrink-0">
+                        <div className="w-14 h-14 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-lg uppercase shrink-0">
                             {clientInitials(selectedClient)}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -376,7 +376,7 @@ export default function ClientsPage() {
                                 {showLetter && <div id={`client-letter-${letter}`} className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1 pt-3 pb-1">{letter}</div>}
                                 <button onClick={() => { setSelectedClient(c); fetchClientDetail(c.id); setMobileTab('sessions'); setDesktopTab('sessions'); }}
                                     className={`w-full p-4 bg-card rounded-2xl border text-left hover:shadow-md transition-all flex items-center gap-4 ${selectedClient?.id === c.id ? 'border-primary ring-2 ring-primary ring-inset shadow-sm' : 'border-border shadow-sm'}`}>
-                                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-base shrink-0 uppercase">
+                                    <div className="w-12 h-12 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-base shrink-0 uppercase">
                                         {clientInitials(c)}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -410,7 +410,7 @@ export default function ClientsPage() {
                             {/* Header */}
                             <div className="p-6 pb-0">
                                 <div className="flex items-center gap-5">
-                                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl uppercase">{clientInitials(selectedClient)}</div>
+                                    <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-xl uppercase">{clientInitials(selectedClient)}</div>
                                     <div className="flex-1">
                                         <h2 className="text-2xl font-bold text-foreground mb-1">{clientName(selectedClient)}</h2>
                                         <div className="flex gap-4 text-sm text-muted-foreground">
@@ -429,10 +429,10 @@ export default function ClientsPage() {
                                 </div>
                                 {/* Next session highlight */}
                                 {futureSessions.length > 0 && (
-                                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-2xl flex items-center gap-4">
-                                        <Calendar className="w-8 h-8 text-green-600 dark:text-green-400 shrink-0" />
+                                    <div className="mt-4 p-4 border border-border rounded-2xl flex items-center gap-4 bg-transparent shadow-sm">
+                                        <Calendar className="w-8 h-8 text-primary shrink-0 opacity-80" />
                                         <div>
-                                            <div className="text-sm font-bold text-green-700 dark:text-green-300">Ближайшая запись</div>
+                                            <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Ближайшая запись</div>
                                             <div className="text-base font-semibold text-foreground">
                                                 {new Date(futureSessions[0].date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} · {futureSessions[0].time}
                                             </div>

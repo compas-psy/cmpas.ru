@@ -68,7 +68,7 @@ export default function TelegramBotConnectionPage() {
 
             {status === 'success' && (
                 <>
-                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                    <div className="w-16 h-16 border-2 border-green-600/30 text-green-600 bg-transparent rounded-full flex items-center justify-center mb-4">
                         <CheckCircle2 className="w-8 h-8" />
                     </div>
                     <h2 className="text-xl font-semibold">Успешно!</h2>

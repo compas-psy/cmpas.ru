@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { User, Mail, Save, Briefcase, DollarSign, Camera } from 'lucide-react';
+import { User, Mail, Save, Briefcase, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 const METHODS = [
@@ -107,7 +107,7 @@ export default function ProfilePage() {
             {/* Avatar and Name */}
             <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
                         <User className="w-5 h-5" />
                     </div>
                     Основная информация
@@ -153,7 +153,7 @@ export default function ProfilePage() {
             {/* Methods */}
             <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
                         <Briefcase className="w-5 h-5" />
                     </div>
                     Методы работы
@@ -205,8 +205,8 @@ export default function ProfilePage() {
             {/* Pricing */}
             <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                        <DollarSign className="w-5 h-5" />
+                    <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                        <span className="text-lg font-bold">₽</span>
                     </div>
                     Стоимость
                 </h2>

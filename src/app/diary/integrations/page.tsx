@@ -202,7 +202,7 @@ export default function IntegrationsPage() {
 
             {/* Section: Calendars */}
             <div className="flex items-center gap-3 mt-2">
-                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><RefreshCw className="w-4 h-4" /></div>
+                <div className="w-8 h-8 rounded-xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center"><RefreshCw className="w-4 h-4" /></div>
                 <h2 className="text-2xl font-bold tracking-tight text-foreground">Календари</h2>
             </div>
 
@@ -304,7 +304,7 @@ export default function IntegrationsPage() {
 
             {/* Section: Video Conferencing */}
             <div className="flex items-center gap-3 mt-4">
-                <div className="w-8 h-8 rounded-xl bg-accent/10 text-accent flex items-center justify-center"><MonitorPlay className="w-4 h-4" /></div>
+                <div className="w-8 h-8 rounded-xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center"><MonitorPlay className="w-4 h-4" /></div>
                 <h2 className="text-2xl font-bold tracking-tight text-foreground">Видеоконференции</h2>
             </div>
 
@@ -416,7 +416,7 @@ export default function IntegrationsPage() {
             {/* Sync Settings */}
             <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
                 <h2 className="text-xl font-semibold mb-6 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
                         <ShieldCheck className="w-5 h-5" />
                     </div>
                     Настройки синхронизации
