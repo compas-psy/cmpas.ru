@@ -226,8 +226,8 @@ export default function AvailabilityPage() {
                 </div>
             </div>
 
-            {/* Weekly Grid */}
-            <div className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm">
+            {/* Weekly Grid — Desktop */}
+            <div className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm hidden md:block">
                 <div className="grid grid-cols-7 divide-x divide-border">
                     {dayShort.map((day, i) => (
                         <div key={day} className="flex flex-col">
@@ -267,6 +267,63 @@ export default function AvailabilityPage() {
                         </div>
                     ))}
                 </div>
+            </div>
+
+            {/* Weekly Slots — Mobile (Card Layout) */}
+            <div className="md:hidden space-y-3">
+                {slots.length === 0 ? (
+                    <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
+                        <p className="text-sm text-muted-foreground">Нет окон расписания. Нажмите «Новое окно» для добавления.</p>
+                    </div>
+                ) : (
+                    /* Group unique slot configs */
+                    (() => {
+                        // Group slots by startTime-endTime-duration-startDate-endDate-format
+                        const groups = new Map<string, { slots: Slot[]; days: number[] }>();
+                        slots.forEach(slot => {
+                            const key = `${slot.startTime}-${slot.endTime}-${slot.duration}-${slot.startDate || ''}-${slot.endDate || ''}-${slot.format || 'online'}`;
+                            if (!groups.has(key)) {
+                                groups.set(key, { slots: [], days: [] });
+                            }
+                            const g = groups.get(key)!;
+                            g.slots.push(slot);
+                            if (!g.days.includes(slot.dayOfWeek)) g.days.push(slot.dayOfWeek);
+                        });
+                        return Array.from(groups.entries()).map(([key, group]) => {
+                            const sample = group.slots[0];
+                            const sortedDays = [...group.days].sort();
+                            const daysLabel = sortedDays.map(d => dayShort[d]).join(', ');
+                            const formatLabel = sample.format === 'offline' ? 'Кабинет' : sample.format === 'both' ? 'Онлайн + Кабинет' : 'Онлайн';
+                            return (
+                                <div key={key} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md">{daysLabel}</span>
+                                                <span className="text-xs font-medium text-muted-foreground">{formatLabel}</span>
+                                            </div>
+                                            <div className="text-base font-bold text-foreground">{sample.startTime} – {sample.endTime}</div>
+                                            <div className="text-xs text-muted-foreground mt-0.5">{sample.duration} мин</div>
+                                            {sample.startDate && sample.endDate && (
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                    {new Date(sample.startDate).toLocaleDateString('ru-RU')} – {new Date(sample.endDate).toLocaleDateString('ru-RU')}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-1.5 ml-2">
+                                            <button onClick={() => setEditingSlot(sample)} className="p-2 bg-muted/50 rounded-xl hover:bg-muted transition-colors">
+                                                <Edit2 className="w-4 h-4 text-muted-foreground" />
+                                            </button>
+                                            <button onClick={() => { group.slots.forEach(s => rmSlot(s.id)); }} className="p-2 bg-destructive/10 rounded-xl hover:bg-destructive/20 transition-colors">
+                                                <Trash2 className="w-4 h-4 text-destructive" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        });
+                    })()
+                )}
             </div>
 
             {/* Time Blocks */}

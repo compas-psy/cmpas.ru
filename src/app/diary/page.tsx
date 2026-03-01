@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
@@ -63,6 +63,8 @@ export default function DiaryCalendarPage() {
 
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
     const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
+    const [mobileFreeTimes, setMobileFreeTimes] = useState<{ time: string; format: string; addressId: string | null }[]>([]);
+    const [loadingFreeTimes, setLoadingFreeTimes] = useState(false);
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -100,6 +102,21 @@ export default function DiaryCalendarPage() {
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => { fetchClients(); }, [fetchClients]);
     useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+    // Fetch free times for mobile timeline
+    useEffect(() => {
+        const loadFreeTimes = async () => {
+            setLoadingFreeTimes(true);
+            try {
+                const { getAvailableTimesForReschedule } = await import('./actions/sessions');
+                const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+                const times = await getAvailableTimesForReschedule(dateStr);
+                setMobileFreeTimes(times);
+            } catch { setMobileFreeTimes([]); }
+            setLoadingFreeTimes(false);
+        };
+        loadFreeTimes();
+    }, [selectedDate, sessions.length]);
 
     const handleSessionSave = () => {
         fetchSessions();
@@ -198,13 +215,13 @@ export default function DiaryCalendarPage() {
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <button
                         onClick={() => window.location.href = '/diary/availability'}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-foreground hover:bg-muted font-semibold rounded-lg transition-all md:w-auto w-full"
+                        className="hidden md:flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-foreground hover:bg-muted font-semibold rounded-lg transition-all"
                     >
                         <Plus className="w-4 h-4" /> Окно
                     </button>
                     <button
                         onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
-                        className="flex items-center justify-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.98] md:w-auto w-full"
+                        className="hidden md:flex items-center justify-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.98]"
                     >
                         <Plus className="w-4 h-4" /> Запись
                     </button>
@@ -212,7 +229,7 @@ export default function DiaryCalendarPage() {
             </div>
 
             {/* Widgets */}
-            <div className="grid grid-cols-3 gap-2 md:gap-4">
+            <div className="hidden md:grid grid-cols-3 gap-2 md:gap-4">
                 <div className="bg-card py-2 md:py-3 px-2 md:px-4 rounded-xl border border-border bg-white flex flex-col items-center justify-center md:flex-row md:items-start md:justify-start gap-1 md:gap-4 transition-all hover:shadow-sm text-center md:text-left">
                     <div className="md:mt-1 text-muted-foreground hidden md:block">
                         <CalendarIcon className="w-5 h-5" />
@@ -250,7 +267,168 @@ export default function DiaryCalendarPage() {
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-2 rounded-2xl border border-border shadow-sm">
+            {/* ============ MOBILE TIMELINE ============ */}
+            <div className="md:hidden">
+                {/* Date navigation */}
+                <div className="flex items-center justify-between bg-card rounded-2xl border border-border p-3 mb-4 shadow-sm">
+                    <button onClick={() => {
+                        const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d); setCurrentDate(d);
+                    }} className="p-2.5 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="text-center">
+                        <div className="text-lg font-bold capitalize">
+                            {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-medium">
+                            {selectedDate.toLocaleDateString('ru-RU', { weekday: 'long' })}
+                            {isSameDay(selectedDate, new Date()) && <span className="text-primary ml-1">· Сегодня</span>}
+                        </div>
+                    </div>
+                    <button onClick={() => {
+                        const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d); setCurrentDate(d);
+                    }} className="p-2.5 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Stats bar */}
+                <div className="flex gap-3 mb-4">
+                    <div className="flex-1 bg-card rounded-xl border border-border px-3 py-2 text-center">
+                        <div className="text-lg font-bold text-foreground">{selectedSessions.length}</div>
+                        <div className="text-[10px] font-medium text-muted-foreground">Сессий</div>
+                    </div>
+                    <div className="flex-1 bg-card rounded-xl border border-border px-3 py-2 text-center">
+                        <div className="text-lg font-bold text-primary">{mobileFreeTimes.length}</div>
+                        <div className="text-[10px] font-medium text-muted-foreground">Свободных</div>
+                    </div>
+                </div>
+
+                {/* Timeline */}
+                <div className="space-y-3">
+                    {(() => {
+                        // Merge sessions and free times into a sorted timeline
+                        type TimelineItem = { type: 'session'; data: Session; time: string } | { type: 'free'; data: typeof mobileFreeTimes[0]; time: string };
+                        const items: TimelineItem[] = [];
+
+                        selectedSessions.forEach(s => items.push({ type: 'session', data: s, time: s.time }));
+                        mobileFreeTimes.forEach(t => items.push({ type: 'free', data: t, time: t.time }));
+                        items.sort((a, b) => a.time.localeCompare(b.time));
+
+                        if (items.length === 0 && !loadingFreeTimes) {
+                            return (
+                                <div className="bg-card rounded-2xl border border-border p-10 text-center shadow-sm">
+                                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <CalendarIcon className="w-8 h-8 text-muted-foreground/50" />
+                                    </div>
+                                    <p className="font-bold text-foreground mb-1">Нет записей</p>
+                                    <p className="text-sm text-muted-foreground">{formatDate(selectedDate)}</p>
+                                </div>
+                            );
+                        }
+
+                        if (loadingFreeTimes && selectedSessions.length === 0) {
+                            return (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                                </div>
+                            );
+                        }
+
+                        return items.map((item, idx) => {
+                            if (item.type === 'session') {
+                                const s = item.data;
+                                const client = clients.find(c => c.id === s.clientId);
+                                const clientName = s.client?.questionnaire?.data && (s.client.questionnaire.data as any).fullName
+                                    ? (s.client.questionnaire.data as any).fullName
+                                    : (client?.name || s.client?.name || 'Клиент');
+                                return (
+                                    <div key={`s-${s.id}`} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                                        <div className="flex items-stretch">
+                                            <div className={`w-1.5 ${statusColors[s.status] || 'bg-border'} shrink-0`} />
+                                            <div className="flex-1 p-4">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Clock className="w-4 h-4 text-primary" />
+                                                        <span className="font-bold text-foreground">{s.time}</span>
+                                                        <span className="text-muted-foreground text-sm">– {s.endTime || ''}</span>
+                                                    </div>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${s.status === 'confirmed' ? 'bg-primary/10 text-primary' : s.status === 'completed' ? 'bg-muted text-muted-foreground' : s.status === 'pending' ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
+                                                        {statusLabels[s.status]}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => window.location.href = `/diary/clients?clientId=${s.client?.id || s.clientId}`}
+                                                    className="font-bold text-foreground text-base mb-1 hover:text-primary transition-colors text-left active:scale-95 block"
+                                                >
+                                                    {clientName}
+                                                </button>
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                                                    {s.format === 'online'
+                                                        ? <><Video className="w-3.5 h-3.5" /> Онлайн</>
+                                                        : <><MapPin className="w-3.5 h-3.5" /> Офлайн</>
+                                                    }
+                                                    <span>·</span>
+                                                    <span>{s.duration} мин</span>
+                                                    {s.format === 'online' && settings?.onlineSessionLink && (
+                                                        <a href={settings.onlineSessionLink} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline ml-1">Ссылка</a>
+                                                    )}
+                                                </div>
+                                                {/* Quick actions */}
+                                                <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
+                                                    {s.status !== 'completed' && (
+                                                        <button onClick={() => handleStatusChange(s.id, 'completed')} className="text-xs px-3 py-2 rounded-xl bg-primary text-primary-foreground font-semibold active:scale-95 transition-all">
+                                                            Проведена ✓
+                                                        </button>
+                                                    )}
+                                                    {s.status !== 'completed' && s.status !== 'cancelled' && (
+                                                        <button onClick={() => setRescheduleTarget(s)} className="text-xs px-3 py-2 rounded-xl bg-accent/10 text-accent font-semibold active:scale-95 transition-all flex items-center gap-1">
+                                                            <ArrowRightLeft className="w-3 h-3" /> Перенести
+                                                        </button>
+                                                    )}
+                                                    {s.status !== 'cancelled' && (
+                                                        <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-xs px-3 py-2 rounded-xl bg-destructive/10 text-destructive font-semibold active:scale-95 transition-all ml-auto">
+                                                            ✕
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            } else {
+                                const t = item.data;
+                                return (
+                                    <button
+                                        key={`f-${t.time}-${idx}`}
+                                        className="w-full bg-card/50 rounded-2xl border border-dashed border-border/80 p-4 flex items-center gap-3 hover:bg-primary/5 hover:border-primary/30 transition-all active:scale-[0.98] group"
+                                        onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                                    >
+                                        <div className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                                            <Plus className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors">{t.time}</div>
+                                            <div className="text-[10px] text-muted-foreground/70">Свободное окно</div>
+                                        </div>
+                                    </button>
+                                );
+                            }
+                        });
+                    })()}
+                </div>
+
+                {/* FAB — New Session */}
+                <button
+                    onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                    className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+                >
+                    <Plus className="w-6 h-6" />
+                </button>
+            </div>
+
+            {/* ============ DESKTOP LAYOUT ============ */}
+            <div className="hidden md:flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-2 rounded-2xl border border-border shadow-sm">
                 {/* View Mode Tabs */}
                 <div className="flex gap-1 bg-muted/50 p-1.5 rounded-xl w-full md:w-auto">
                     {(['day', 'week', 'month'] as ViewMode[]).map(mode => (
@@ -281,7 +459,7 @@ export default function DiaryCalendarPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="hidden md:grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Calendar Grid / Week / List */}
                 <div className="lg:col-span-2">
                     {viewMode === 'month' && (

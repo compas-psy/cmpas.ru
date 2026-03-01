@@ -300,15 +300,6 @@ export default function SettingsPage() {
                 </h2>
                 <div className="space-y-6">
                     <div>
-                        <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1 flex items-center gap-2">Основной адрес офиса</label>
-                        <AddressAutocomplete
-                            value={settings.officeAddress || ''}
-                            onChange={(val) => setSettings(s => ({ ...s, officeAddress: val }))}
-                            className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all"
-                            placeholder="Начните вводить адрес..."
-                        />
-                    </div>
-                    <div>
                         <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1">Временные интервалы по умолчанию</label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <select value={settings.defaultSessionDuration} onChange={e => setSettings(s => ({ ...s, defaultSessionDuration: Number(e.target.value) }))}
@@ -346,12 +337,33 @@ export default function SettingsPage() {
                     ) : (
                         <div className="space-y-3">
                             {addresses.map(a => (
-                                <div key={a.id} className="flex justify-between items-center p-4 bg-background border border-border rounded-2xl hover:border-primary/30 transition-colors group shadow-sm">
-                                    <div>
-                                        <p className="font-bold text-sm text-foreground">{a.name}</p>
-                                        <p className="text-sm font-medium text-muted-foreground mt-0.5">{a.address}</p>
+                                <div key={a.id} className={`flex justify-between items-center p-4 bg-background border rounded-2xl transition-colors group shadow-sm ${(a as any).isPrimary ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30'}`}>
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const { setPrimaryAddress } = await import('../actions/settings');
+                                                    await setPrimaryAddress(a.id);
+                                                    toast.success('Основной кабинет установлен');
+                                                    fetchSettings();
+                                                } catch {
+                                                    toast.error('Ошибка');
+                                                }
+                                            }}
+                                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${(a as any).isPrimary ? 'border-primary bg-primary' : 'border-muted-foreground/40 hover:border-primary'}`}
+                                            title={(a as any).isPrimary ? 'Основной кабинет' : 'Сделать основным'}
+                                        >
+                                            {(a as any).isPrimary && <div className="w-2 h-2 rounded-full bg-white" />}
+                                        </button>
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-sm text-foreground flex items-center gap-2">
+                                                {a.name}
+                                                {(a as any).isPrimary && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">основной</span>}
+                                            </p>
+                                            <p className="text-sm font-medium text-muted-foreground mt-0.5 truncate">{a.address}</p>
+                                        </div>
                                     </div>
-                                    <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity bg-destructive/10 hover:bg-destructive/20 px-3 py-2 rounded-xl">Удалить</button>
+                                    <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity bg-destructive/10 hover:bg-destructive/20 px-3 py-2 rounded-xl ml-2 shrink-0">Удалить</button>
                                 </div>
                             ))}
                         </div>

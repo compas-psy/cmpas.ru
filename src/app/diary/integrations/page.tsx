@@ -312,15 +312,17 @@ export default function IntegrationsPage() {
                 <p className="text-sm font-medium text-muted-foreground mb-5">Подключите сервис видеоконференций для автоматического создания ссылок на встречи</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {[
-                        { name: 'Zoom', icon: '🎥', color: 'bg-[#2D8CFF]', desc: 'Автоматическое создание Zoom-встреч' },
-                        { name: 'Google Meet', icon: '📹', color: 'bg-[#00897B]', desc: 'Встречи через Google Meet' },
-                        { name: 'Яндекс Телемост', icon: '📺', color: 'bg-[#FC3F1D]', desc: 'Встречи через Яндекс Телемост' },
+                        { name: 'Zoom', image: '/images/zoom.svg', color: 'bg-[#2D8CFF]', desc: 'Автоматическое создание Zoom-встреч' },
+                        { name: 'Google Meet', image: '/images/google meet.svg', color: 'bg-white', desc: 'Встречи через Google Meet' },
+                        { name: 'Яндекс Телемост', image: '/images/telemost.svg', color: 'bg-white', desc: 'Встречи через Яндекс Телемост' },
                     ].map(vc => (
                         <div key={vc.name} className="bg-background rounded-2xl border border-border p-5 flex flex-col items-center text-center relative overflow-hidden">
                             <div className="absolute top-3 right-3">
                                 <span className="text-[10px] font-bold bg-accent/10 text-accent px-2 py-1 rounded-lg">Скоро</span>
                             </div>
-                            <div className={`w-12 h-12 ${vc.color} rounded-2xl flex items-center justify-center text-white text-xl mb-3 shadow-sm`}>{vc.icon}</div>
+                            <div className={`w-12 h-12 ${vc.color} rounded-2xl flex items-center justify-center text-white text-xl mb-3 shadow-sm overflow-hidden border border-border/50`}>
+                                <Image src={vc.image} alt={vc.name} width={48} height={48} className="w-full h-full object-contain p-1" />
+                            </div>
                             <h3 className="font-bold text-sm text-foreground mb-1">{vc.name}</h3>
                             <p className="text-xs font-medium text-muted-foreground mb-4">{vc.desc}</p>
                             <button disabled className="w-full px-4 py-2.5 min-h-[40px] bg-muted text-muted-foreground rounded-xl text-sm font-semibold cursor-not-allowed opacity-60">

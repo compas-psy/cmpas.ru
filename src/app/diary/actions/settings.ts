@@ -31,8 +31,16 @@ export async function getSettings() {
 export async function getAddresses() {
     try {
         const psychologistId = await getPsychologistId();
-        const addresses = await db.psychologistAddress.findMany({ where: { psychologistId } });
-        return { success: true, data: addresses };
+        const [addresses, settings] = await Promise.all([
+            db.psychologistAddress.findMany({ where: { psychologistId } }),
+            db.psychologistSettings.findUnique({ where: { psychologistId }, select: { officeAddress: true } }),
+        ]);
+        // officeAddress stores the primary address ID
+        const primaryId = settings?.officeAddress || null;
+        return {
+            success: true,
+            data: addresses.map(a => ({ ...a, isPrimary: a.id === primaryId })),
+        };
     } catch (e: any) {
         console.error('getAddresses error:', e);
         return { success: false, error: e.message || 'Ошибка при получении адресов' };
@@ -44,13 +52,35 @@ export async function createAddress(data: { name: string; address: string }) {
     const result = await db.psychologistAddress.create({
         data: { psychologistId, name: data.name, address: data.address }
     });
+    // If this is the first address, make it primary
+    const count = await db.psychologistAddress.count({ where: { psychologistId } });
+    if (count === 1) {
+        await db.psychologistSettings.update({
+            where: { psychologistId },
+            data: { officeAddress: result.id },
+        });
+    }
     revalidatePath('/diary/settings');
     return result;
 }
 
 export async function deleteAddress(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    // If deleting primary, clear it
+    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId }, select: { officeAddress: true } });
+    if (settings?.officeAddress === id) {
+        await db.psychologistSettings.update({ where: { psychologistId }, data: { officeAddress: null } });
+    }
     await db.psychologistAddress.delete({ where: { id } });
+    revalidatePath('/diary/settings');
+}
+
+export async function setPrimaryAddress(addressId: string) {
+    const psychologistId = await getPsychologistId();
+    await db.psychologistSettings.update({
+        where: { psychologistId },
+        data: { officeAddress: addressId },
+    });
     revalidatePath('/diary/settings');
 }
 

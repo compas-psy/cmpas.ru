@@ -1,8 +1,7 @@
 
-import { useState, useEffect } from 'react';
-import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { DatePicker, TimePicker } from '@/components/ui/date-picker';
 
 type SessionModalProps = {
     isOpen: boolean;
@@ -18,7 +17,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
     const [formData, setFormData] = useState({
         clientId: '',
         date: '',
-        time: '10:00',
+        time: '',
         duration: 50,
         type: 'individual',
         format: 'online',
@@ -26,6 +25,10 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
         status: 'confirmed'
     });
     const [loading, setLoading] = useState(false);
+    const [availableSlots, setAvailableSlots] = useState<{ time: string; format: string; addressId: string | null }[]>([]);
+    const [loadingSlots, setLoadingSlots] = useState(false);
+    const [calendarMonth, setCalendarMonth] = useState(new Date());
+    const [availableDates, setAvailableDates] = useState<string[]>([]);
 
     useEffect(() => {
         if (isOpen) {
@@ -41,19 +44,53 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     status: editSession.status
                 });
             } else {
+                const dateStr = initialDate ? initialDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
                 setFormData({
                     clientId: initialClient?.id || '',
-                    date: initialDate ? initialDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-                    time: '10:00',
+                    date: dateStr,
+                    time: '',
                     duration: 50,
                     type: 'individual',
                     format: 'online',
                     notes: '',
                     status: 'confirmed'
                 });
+                setCalendarMonth(initialDate || new Date());
             }
         }
     }, [isOpen, editSession, initialDate, initialClient]);
+
+    // Load available dates when month changes
+    const fetchAvailableDates = useCallback(async () => {
+        if (editSession) return;
+        try {
+            const { getAvailableDatesForReschedule } = await import('../actions/sessions');
+            const year = calendarMonth.getFullYear();
+            const month = calendarMonth.getMonth() + 1;
+            const dates = await getAvailableDatesForReschedule(year, month);
+            setAvailableDates(dates);
+        } catch { setAvailableDates([]); }
+    }, [calendarMonth, editSession]);
+
+    useEffect(() => {
+        if (isOpen) fetchAvailableDates();
+    }, [isOpen, fetchAvailableDates]);
+
+    // Load available times when date changes
+    useEffect(() => {
+        if (!formData.date || editSession) return;
+        const fetchTimes = async () => {
+            setLoadingSlots(true);
+            try {
+                const { getAvailableTimesForReschedule } = await import('../actions/sessions');
+                const times = await getAvailableTimesForReschedule(formData.date, formData.clientId || undefined);
+                setAvailableSlots(times);
+                setFormData(s => ({ ...s, time: '' })); // Reset time selection
+            } catch { setAvailableSlots([]); }
+            setLoadingSlots(false);
+        };
+        fetchTimes();
+    }, [formData.date, formData.clientId, editSession]);
 
     const handleSubmit = async () => {
         if (!formData.clientId || !formData.date || !formData.time) {
@@ -67,9 +104,6 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                 await updateSession(editSession.id, {
                     status: formData.status,
                     notes: formData.notes
-                    // Note: Full update might need more fields in updateSession action if we want to change time/date too. 
-                    // For now user requested "fill notes". We can assume basic updates. 
-                    // But let's check if updateSession supports other fields. The action takes "data".
                 });
                 toast.success('Запись обновлена');
             } else {
@@ -79,14 +113,23 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
             }
             onSave();
             onClose();
-        } catch (e) {
-            toast.error('Ошибка сохранении');
+        } catch (e: any) {
+            toast.error(e?.message || 'Ошибка сохранения');
         } finally {
             setLoading(false);
         }
     };
 
     if (!isOpen) return null;
+
+    // Calendar generation
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startOffset = (firstDay.getDay() + 6) % 7; // Monday start
+    const monthName = calendarMonth.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    const today = new Date().toISOString().slice(0, 10);
 
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -115,29 +158,98 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         </div>
                     )}
 
-                    {/* Read-only info if editing, or editable if new */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className={editSession ? 'opacity-50 pointer-events-none' : ''}>
-                            <DatePicker
-                                label="Дата"
-                                value={formData.date}
-                                onChange={date => {
-                                    if (date) {
-                                        const offset = date.getTimezoneOffset();
-                                        const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-                                        setFormData(s => ({ ...s, date: adjustedDate.toISOString().split('T')[0] }));
-                                    }
-                                }}
-                            />
+                    {/* Calendar for date selection (new session only) */}
+                    {!editSession && (
+                        <div>
+                            <label className="block text-sm font-semibold mb-3 ml-1 text-foreground/90">
+                                <CalendarIcon className="w-4 h-4 inline mr-1 text-muted-foreground" />Дата
+                            </label>
+                            <div className="border border-border rounded-2xl p-3">
+                                {/* Month nav */}
+                                <div className="flex items-center justify-between mb-3">
+                                    <button onClick={() => setCalendarMonth(new Date(year, month - 1, 1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <span className="text-sm font-bold capitalize">{monthName}</span>
+                                    <button onClick={() => setCalendarMonth(new Date(year, month + 1, 1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                {/* Day headers */}
+                                <div className="grid grid-cols-7 mb-1">
+                                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
+                                        <div key={d} className="text-center text-[10px] font-bold text-muted-foreground py-1">{d}</div>
+                                    ))}
+                                </div>
+                                {/* Days */}
+                                <div className="grid grid-cols-7">
+                                    {Array.from({ length: startOffset }).map((_, i) => (
+                                        <div key={`empty-${i}`} />
+                                    ))}
+                                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                                        const day = i + 1;
+                                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                        const isAvailable = availableDates.includes(dateStr);
+                                        const isSelected = formData.date === dateStr;
+                                        const isPast = dateStr < today;
+                                        const isToday = dateStr === today;
+                                        return (
+                                            <button
+                                                key={day}
+                                                type="button"
+                                                disabled={!isAvailable || isPast}
+                                                onClick={() => setFormData(s => ({ ...s, date: dateStr, time: '' }))}
+                                                className={`w-full aspect-square flex items-center justify-center text-xs font-semibold rounded-lg transition-all ${isSelected
+                                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                                    : isToday
+                                                        ? 'bg-accent/20 text-accent-foreground font-bold'
+                                                        : isAvailable && !isPast
+                                                            ? 'hover:bg-muted text-foreground cursor-pointer'
+                                                            : 'text-muted-foreground/30 cursor-not-allowed'
+                                                    }`}
+                                            >
+                                                {day}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
-                        <div className={editSession ? 'opacity-50 pointer-events-none' : ''}>
-                            <TimePicker
-                                label="Время"
-                                value={formData.time}
-                                onChange={time => setFormData(s => ({ ...s, time }))}
-                            />
+                    )}
+
+                    {/* Time slots (new session only) */}
+                    {!editSession && formData.date && (
+                        <div>
+                            <label className="block text-sm font-semibold mb-3 ml-1 text-foreground/90">
+                                <Clock className="w-4 h-4 inline mr-1 text-muted-foreground" />Свободное время
+                            </label>
+                            {loadingSlots ? (
+                                <div className="flex items-center justify-center py-6">
+                                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : availableSlots.length === 0 ? (
+                                <div className="text-center py-4 text-sm text-muted-foreground bg-muted/30 rounded-xl">
+                                    Нет свободных окон на эту дату
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {availableSlots.map(slot => (
+                                        <button
+                                            key={slot.time}
+                                            type="button"
+                                            onClick={() => setFormData(s => ({ ...s, time: slot.time }))}
+                                            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[40px] ${formData.time === slot.time
+                                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                                    : 'border border-border hover:border-primary/50 hover:bg-muted text-foreground'
+                                                }`}
+                                        >
+                                            {slot.time}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    </div>
+                    )}
 
                     {editSession && (
                         <div>
@@ -166,18 +278,6 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
 
                     {!editSession && (
                         <>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Длительность</label>
-                                    <select value={formData.duration} onChange={e => setFormData(s => ({ ...s, duration: Number(e.target.value) }))}
-                                        className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-sm font-medium transition-all">
-                                        <option value={50}>50 мин</option>
-                                        <option value={60}>60 мин</option>
-                                        <option value={80}>80 мин</option>
-                                        <option value={90}>90 мин</option>
-                                    </select>
-                                </div>
-                            </div>
                             <div>
                                 <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Тип</label>
                                 <div className="flex gap-2">
@@ -209,7 +309,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-all active:scale-[0.98]">
                         Отмена
                     </button>
-                    <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]">
+                    <button onClick={handleSubmit} disabled={loading || (!editSession && !formData.time)} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]">
                         {loading ? 'Сохранение...' : 'Сохранить'}
                     </button>
                 </div>
