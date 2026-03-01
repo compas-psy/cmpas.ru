@@ -124,10 +124,12 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
     return Object.values(timesObj).sort((a, b) => a.time.localeCompare(b.time));
 }
 
-export async function getAvailableDates(psychologistId: string, year: number, month: number) {
-    // Check schedule mode — if private, return empty
-    const mode = await getScheduleMode(psychologistId);
-    if (mode === 'private') return [];
+export async function getAvailableDates(psychologistId: string, year: number, month: number, skipModeCheck = false) {
+    // Check schedule mode — if private, return empty (only for client-facing calls)
+    if (!skipModeCheck) {
+        const mode = await getScheduleMode(psychologistId);
+        if (mode === 'private') return [];
+    }
 
     // Use UTC dates for DB queries to match how dates are stored
     const startDate = new Date(Date.UTC(year, month, 1));
@@ -170,10 +172,12 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
     return availableDates;
 }
 
-export async function getAvailableTimes(psychologistId: string, dateStr: string) {
-    // Check schedule mode — if private, return empty
-    const mode = await getScheduleMode(psychologistId);
-    if (mode === 'private') return [];
+export async function getAvailableTimes(psychologistId: string, dateStr: string, skipModeCheck = false) {
+    // Check schedule mode — if private, return empty (only for client-facing calls)
+    if (!skipModeCheck) {
+        const mode = await getScheduleMode(psychologistId);
+        if (mode === 'private') return [];
+    }
 
     const [year, month, day] = dateStr.split('-').map(Number);
     // Use UTC date for DB queries — this matches how bookSession creates dates

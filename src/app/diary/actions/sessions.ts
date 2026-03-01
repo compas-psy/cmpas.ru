@@ -219,13 +219,13 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
 export async function getAvailableDatesForReschedule(year: number, month: number) {
     const psychologistId = await getPsychologistId();
     const { getAvailableDates } = await import('@/app/bot/actions');
-    return getAvailableDates(psychologistId, year, month);
+    return getAvailableDates(psychologistId, year, month, true); // skipModeCheck for psychologist's own diary
 }
 
 export async function getAvailableTimesForReschedule(dateStr: string, clientId?: string) {
     const psychologistId = await getPsychologistId();
     const { getAvailableTimes } = await import('@/app/bot/actions');
-    const slots = await getAvailableTimes(psychologistId, dateStr);
+    const slots = await getAvailableTimes(psychologistId, dateStr, true); // skipModeCheck for psychologist's own diary
 
     // If clientId provided, check if this client is already booked on this date
     if (clientId) {
