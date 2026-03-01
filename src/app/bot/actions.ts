@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { bot } from '@/lib/telegram-bot';
-import { addDays, format, isBefore, startOfDay } from 'date-fns';
+import { addDays } from 'date-fns';
 
 export async function getPsychologist(id: string) {
     const user = await db.user.findUnique({
@@ -11,7 +11,7 @@ export async function getPsychologist(id: string) {
             name: true,
             image: true,
             psychologistSettings: {
-                select: { fullName: true }
+                select: { fullName: true, scheduleMode: true }
             }
         }
     });
@@ -20,37 +20,50 @@ export async function getPsychologist(id: string) {
 
     return {
         ...user,
-        name: user.psychologistSettings?.fullName || user.name || 'Специалист'
+        name: user.psychologistSettings?.fullName || user.name || 'Специалист',
+        scheduleMode: user.psychologistSettings?.scheduleMode || 'private'
     };
+}
+
+export async function getScheduleMode(psychologistId: string): Promise<string> {
+    const settings = await db.psychologistSettings.findUnique({
+        where: { psychologistId },
+        select: { scheduleMode: true }
+    });
+    return settings?.scheduleMode || 'private';
+}
+
+// Helper: convert any Date to 'yyyy-MM-dd' string in UTC to avoid timezone issues
+function toDateStr(d: Date): string {
+    return d.toISOString().slice(0, 10);
 }
 
 function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], sessionBreak: number) {
     // Expected dateStr format: 'yyyy-MM-dd'
     const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    const today = startOfDay(new Date());
-    const isToday = date.getTime() === today.getTime();
-    const nowHours = new Date().getHours() + (new Date().getMinutes() / 60);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    const now = new Date();
+    const todayStr = toDateStr(now);
+    const isToday = dateStr === todayStr;
+    const nowHours = now.getHours() + (now.getMinutes() / 60);
 
-    const dayOfWeek = (date.getDay() + 6) % 7;
-
-    // Check blocks logic moved inside the times loop
+    const dayOfWeek = (date.getUTCDay() + 6) % 7;
 
     const daySlots = slots.filter(s => {
         if (s.dayOfWeek !== dayOfWeek) return false;
 
         if (s.startDate) {
-            const slotStartStr = format(s.startDate, 'yyyy-MM-dd');
+            const slotStartStr = toDateStr(new Date(s.startDate));
             if (dateStr < slotStartStr) return false;
         }
         if (s.endDate) {
-            const slotEndStr = format(s.endDate, 'yyyy-MM-dd');
+            const slotEndStr = toDateStr(new Date(s.endDate));
             if (dateStr > slotEndStr) return false;
         }
         return true;
     });
 
-    const daySessions = sessions.filter(s => format(s.date, 'yyyy-MM-dd') === dateStr);
+    const daySessions = sessions.filter(s => toDateStr(new Date(s.date)) === dateStr);
 
     let timesObj: Record<string, { time: string, format: string, addressId: string | null }> = {};
 
@@ -85,7 +98,7 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
 
             // Check if clashes with any block
             const hasBlock = blocks.some(b => {
-                if (format(b.date, 'yyyy-MM-dd') !== dateStr) return false;
+                if (toDateStr(new Date(b.date)) !== dateStr) return false;
                 const [bSH, bSM] = b.startTime.split(':').map(Number);
                 const [bEH, bEM] = b.endTime.split(':').map(Number);
                 const blockStartMins = bSH * 60 + bSM;
@@ -112,9 +125,14 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
 }
 
 export async function getAvailableDates(psychologistId: string, year: number, month: number) {
-    const startDate = new Date(year, month, 1);
-    const endDate = new Date(year, month + 1, 0);
-    const today = startOfDay(new Date());
+    // Check schedule mode — if private, return empty
+    const mode = await getScheduleMode(psychologistId);
+    if (mode === 'private') return [];
+
+    // Use UTC dates for DB queries to match how dates are stored
+    const startDate = new Date(Date.UTC(year, month, 1));
+    const endDate = new Date(Date.UTC(year, month + 1, 0));
+    const todayStr = toDateStr(new Date());
 
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     if (!slots.length) return [];
@@ -140,9 +158,9 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
     const availableDates: string[] = [];
 
     for (let d = new Date(startDate); d <= endDate; d = addDays(d, 1)) {
-        if (isBefore(d, today)) continue;
+        const dateStr = toDateStr(d);
+        if (dateStr < todayStr) continue;
 
-        const dateStr = format(d, 'yyyy-MM-dd');
         const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions, sessionBreak);
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
@@ -153,8 +171,14 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 }
 
 export async function getAvailableTimes(psychologistId: string, dateStr: string) {
+    // Check schedule mode — if private, return empty
+    const mode = await getScheduleMode(psychologistId);
+    if (mode === 'private') return [];
+
     const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
+    // Use UTC date for DB queries — this matches how bookSession creates dates
+    const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
 
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     const sessionBreak = 15;
@@ -162,13 +186,13 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string)
     const blocks = await db.diaryBlock.findMany({
         where: {
             psychologistId,
-            date
+            date: { gte: dayStart, lte: dayEnd }
         }
     });
     const sessions = await db.diarySession.findMany({
         where: {
             psychologistId,
-            date,
+            date: { gte: dayStart, lte: dayEnd },
             status: { not: 'cancelled' }
         },
         select: { date: true, time: true, duration: true }

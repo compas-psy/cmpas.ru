@@ -14,7 +14,7 @@ import {
     createTimeBlock,
     checkBlockIntersections
 } from '../actions/availability';
-import { getAddresses } from '../actions/settings';
+import { getAddresses, getSettings, updateSettings } from '../actions/settings';
 
 type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string; duration: number; isRecurring: boolean; startDate?: string | null; endDate?: string | null; format?: string; addressId?: string | null; };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
@@ -32,6 +32,8 @@ export default function AvailabilityPage() {
     const [showNewBlock, setShowNewBlock] = useState(false);
     const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
     const [loading, setLoading] = useState(true);
+    const [scheduleMode, setScheduleMode] = useState<string>('private');
+    const [savingMode, setSavingMode] = useState(false);
     const initialSlot = {
         startDate: '', endDate: '',
         daysOfWeek: [] as number[],
@@ -75,6 +77,14 @@ export default function AvailabilityPage() {
             } else if (!addrs.success) {
                 toast.error(addrs.error || 'Ошибка при загрузке адресов');
             }
+
+            // Fetch schedule mode
+            try {
+                const settingsRes = await getSettings();
+                if (settingsRes.success && settingsRes.data) {
+                    setScheduleMode((settingsRes.data as any).scheduleMode || 'private');
+                }
+            } catch { }
         } catch (e: any) {
             console.error('fetchData error:', e);
             toast.error('Ошибка при загрузке данных: ' + (e?.message || 'Неизвестная ошибка'));
@@ -223,6 +233,47 @@ export default function AvailabilityPage() {
                     <button onClick={() => setShowNewSlot(true)} className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.98] min-h-[44px]">
                         <Plus className="w-4 h-4" />Новое окно
                     </button>
+                </div>
+            </div>
+
+            {/* Schedule Mode Toggle */}
+            <div className="bg-card rounded-3xl border border-border p-5 shadow-sm overflow-hidden">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
+                        <Calendar className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold tracking-tight text-foreground">Режим записи</h2>
+                        <p className="text-xs text-muted-foreground">Как клиенты взаимодействуют с вашим расписанием через Telegram</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    {[
+                        { value: 'private', label: '🔒 Приватный', desc: 'Только вы видите расписание' },
+                        { value: 'readonly', label: '👁 Просмотр', desc: 'Клиенты видят, но не могут записаться' },
+                        { value: 'booking', label: '✅ Запись', desc: 'Клиенты могут записаться сами' },
+                    ].map(m => (
+                        <button
+                            key={m.value}
+                            disabled={savingMode}
+                            onClick={async () => {
+                                setSavingMode(true);
+                                try {
+                                    await updateSettings({ scheduleMode: m.value });
+                                    setScheduleMode(m.value);
+                                    toast.success(`Режим изменён: ${m.label}`);
+                                } catch { toast.error('Ошибка'); }
+                                setSavingMode(false);
+                            }}
+                            className={`p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${scheduleMode === m.value
+                                    ? 'border-primary bg-primary/5 shadow-sm'
+                                    : 'border-border hover:border-primary/30'
+                                }`}
+                        >
+                            <div className="font-bold text-sm mb-0.5">{m.label}</div>
+                            <div className="text-xs text-muted-foreground">{m.desc}</div>
+                        </button>
+                    ))}
                 </div>
             </div>
 

@@ -65,6 +65,7 @@ export default function DiaryCalendarPage() {
     const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
     const [mobileFreeTimes, setMobileFreeTimes] = useState<{ time: string; format: string; addressId: string | null }[]>([]);
     const [loadingFreeTimes, setLoadingFreeTimes] = useState(false);
+    const [mobileViewMode, setMobileViewMode] = useState<ViewMode>('day');
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -269,154 +270,308 @@ export default function DiaryCalendarPage() {
 
             {/* ============ MOBILE TIMELINE ============ */}
             <div className="md:hidden">
-                {/* Date navigation */}
-                <div className="flex items-center justify-between bg-card rounded-2xl border border-border p-3 mb-4 shadow-sm">
-                    <button onClick={() => {
-                        const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d); setCurrentDate(d);
-                    }} className="p-2.5 hover:bg-muted rounded-xl transition-colors active:scale-95">
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <div className="text-center">
-                        <div className="text-lg font-bold capitalize">
-                            {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-medium">
-                            {selectedDate.toLocaleDateString('ru-RU', { weekday: 'long' })}
-                            {isSameDay(selectedDate, new Date()) && <span className="text-primary ml-1">· Сегодня</span>}
-                        </div>
-                    </div>
-                    <button onClick={() => {
-                        const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d); setCurrentDate(d);
-                    }} className="p-2.5 hover:bg-muted rounded-xl transition-colors active:scale-95">
-                        <ChevronRight className="w-5 h-5" />
-                    </button>
+                {/* Mobile View Toggle */}
+                <div className="flex gap-1 bg-muted/50 p-1 rounded-xl mb-3">
+                    {(['day', 'week', 'month'] as ViewMode[]).map(mode => (
+                        <button
+                            key={mode}
+                            onClick={() => {
+                                setMobileViewMode(mode);
+                                if (mode === 'day') setCurrentDate(selectedDate);
+                            }}
+                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${mobileViewMode === mode ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'}`}
+                        >
+                            {mode === 'month' ? 'Месяц' : mode === 'week' ? 'Неделя' : 'День'}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Stats bar */}
-                <div className="flex gap-3 mb-4">
-                    <div className="flex-1 bg-card rounded-xl border border-border px-3 py-2 text-center">
-                        <div className="text-lg font-bold text-foreground">{selectedSessions.length}</div>
-                        <div className="text-[10px] font-medium text-muted-foreground">Сессий</div>
-                    </div>
-                    <div className="flex-1 bg-card rounded-xl border border-border px-3 py-2 text-center">
-                        <div className="text-lg font-bold text-primary">{mobileFreeTimes.length}</div>
-                        <div className="text-[10px] font-medium text-muted-foreground">Свободных</div>
-                    </div>
-                </div>
-
-                {/* Timeline */}
-                <div className="space-y-3">
-                    {(() => {
-                        // Merge sessions and free times into a sorted timeline
-                        type TimelineItem = { type: 'session'; data: Session; time: string } | { type: 'free'; data: typeof mobileFreeTimes[0]; time: string };
-                        const items: TimelineItem[] = [];
-
-                        selectedSessions.forEach(s => items.push({ type: 'session', data: s, time: s.time }));
-                        mobileFreeTimes.forEach(t => items.push({ type: 'free', data: t, time: t.time }));
-                        items.sort((a, b) => a.time.localeCompare(b.time));
-
-                        if (items.length === 0 && !loadingFreeTimes) {
-                            return (
-                                <div className="bg-card rounded-2xl border border-border p-10 text-center shadow-sm">
-                                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <CalendarIcon className="w-8 h-8 text-muted-foreground/50" />
-                                    </div>
-                                    <p className="font-bold text-foreground mb-1">Нет записей</p>
-                                    <p className="text-sm text-muted-foreground">{formatDate(selectedDate)}</p>
+                {/* === MOBILE DAY VIEW === */}
+                {mobileViewMode === 'day' && (
+                    <>
+                        {/* Date navigation */}
+                        <div className="flex items-center justify-between bg-card rounded-2xl border border-border p-3 mb-4 shadow-sm">
+                            <button onClick={() => {
+                                const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d); setCurrentDate(d);
+                            }} className="p-2.5 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div className="text-center">
+                                <div className="text-lg font-bold capitalize">
+                                    {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
                                 </div>
-                            );
-                        }
-
-                        if (loadingFreeTimes && selectedSessions.length === 0) {
-                            return (
-                                <div className="flex items-center justify-center py-12">
-                                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                                <div className="text-xs text-muted-foreground font-medium">
+                                    {selectedDate.toLocaleDateString('ru-RU', { weekday: 'long' })}
+                                    {isSameDay(selectedDate, new Date()) && <span className="text-primary ml-1">· Сегодня</span>}
                                 </div>
-                            );
-                        }
+                            </div>
+                            <button onClick={() => {
+                                const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d); setCurrentDate(d);
+                            }} className="p-2.5 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
 
-                        return items.map((item, idx) => {
-                            if (item.type === 'session') {
-                                const s = item.data;
-                                const client = clients.find(c => c.id === s.clientId);
-                                const clientName = s.client?.questionnaire?.data && (s.client.questionnaire.data as any).fullName
-                                    ? (s.client.questionnaire.data as any).fullName
-                                    : (client?.name || s.client?.name || 'Клиент');
-                                return (
-                                    <div key={`s-${s.id}`} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-                                        <div className="flex items-stretch">
-                                            <div className={`w-1.5 ${statusColors[s.status] || 'bg-border'} shrink-0`} />
-                                            <div className="flex-1 p-4">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock className="w-4 h-4 text-primary" />
-                                                        <span className="font-bold text-foreground">{s.time}</span>
-                                                        <span className="text-muted-foreground text-sm">– {s.endTime || ''}</span>
+                        {/* Stats bar */}
+                        <div className="flex gap-3 mb-4">
+                            <div className="flex-1 bg-card rounded-xl border border-border px-3 py-2 text-center">
+                                <div className="text-lg font-bold text-foreground">{selectedSessions.length}</div>
+                                <div className="text-[10px] font-medium text-muted-foreground">Сессий</div>
+                            </div>
+                            <div className="flex-1 bg-card rounded-xl border border-border px-3 py-2 text-center">
+                                <div className="text-lg font-bold text-primary">{mobileFreeTimes.length}</div>
+                                <div className="text-[10px] font-medium text-muted-foreground">Свободных</div>
+                            </div>
+                        </div>
+
+                        {/* Timeline */}
+                        <div className="space-y-3">
+                            {(() => {
+                                // Merge sessions and free times into a sorted timeline
+                                type TimelineItem = { type: 'session'; data: Session; time: string } | { type: 'free'; data: typeof mobileFreeTimes[0]; time: string };
+                                const items: TimelineItem[] = [];
+
+                                selectedSessions.forEach(s => items.push({ type: 'session', data: s, time: s.time }));
+                                mobileFreeTimes.forEach(t => items.push({ type: 'free', data: t, time: t.time }));
+                                items.sort((a, b) => a.time.localeCompare(b.time));
+
+                                if (items.length === 0 && !loadingFreeTimes) {
+                                    return (
+                                        <div className="bg-card rounded-2xl border border-border p-10 text-center shadow-sm">
+                                            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <CalendarIcon className="w-8 h-8 text-muted-foreground/50" />
+                                            </div>
+                                            <p className="font-bold text-foreground mb-1">Нет записей</p>
+                                            <p className="text-sm text-muted-foreground">{formatDate(selectedDate)}</p>
+                                        </div>
+                                    );
+                                }
+
+                                if (loadingFreeTimes && selectedSessions.length === 0) {
+                                    return (
+                                        <div className="flex items-center justify-center py-12">
+                                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                                        </div>
+                                    );
+                                }
+
+                                return items.map((item, idx) => {
+                                    if (item.type === 'session') {
+                                        const s = item.data;
+                                        const client = clients.find(c => c.id === s.clientId);
+                                        const clientName = s.client?.questionnaire?.data && (s.client.questionnaire.data as any).fullName
+                                            ? (s.client.questionnaire.data as any).fullName
+                                            : (client?.name || s.client?.name || 'Клиент');
+                                        return (
+                                            <div key={`s-${s.id}`} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                                                <div className="flex items-stretch">
+                                                    <div className={`w-1.5 ${statusColors[s.status] || 'bg-border'} shrink-0`} />
+                                                    <div className="flex-1 p-4">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock className="w-4 h-4 text-primary" />
+                                                                <span className="font-bold text-foreground">{s.time}</span>
+                                                                <span className="text-muted-foreground text-sm">– {s.endTime || ''}</span>
+                                                            </div>
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${s.status === 'confirmed' ? 'bg-primary/10 text-primary' : s.status === 'completed' ? 'bg-muted text-muted-foreground' : s.status === 'pending' ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
+                                                                {statusLabels[s.status]}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => window.location.href = `/diary/clients?clientId=${s.client?.id || s.clientId}`}
+                                                            className="font-bold text-foreground text-base mb-1 hover:text-primary transition-colors text-left active:scale-95 block"
+                                                        >
+                                                            {clientName}
+                                                        </button>
+                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                                                            {s.format === 'online'
+                                                                ? <><Video className="w-3.5 h-3.5" /> Онлайн</>
+                                                                : <><MapPin className="w-3.5 h-3.5" /> Офлайн</>
+                                                            }
+                                                            <span>·</span>
+                                                            <span>{s.duration} мин</span>
+                                                            {s.format === 'online' && settings?.onlineSessionLink && (
+                                                                <a href={settings.onlineSessionLink} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline ml-1">Ссылка</a>
+                                                            )}
+                                                        </div>
+                                                        {/* Quick actions */}
+                                                        <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
+                                                            {s.status !== 'completed' && (
+                                                                <button onClick={() => handleStatusChange(s.id, 'completed')} className="text-xs px-3 py-2 rounded-xl bg-primary text-primary-foreground font-semibold active:scale-95 transition-all">
+                                                                    Проведена ✓
+                                                                </button>
+                                                            )}
+                                                            {s.status !== 'completed' && s.status !== 'cancelled' && (
+                                                                <button onClick={() => setRescheduleTarget(s)} className="text-xs px-3 py-2 rounded-xl bg-accent/10 text-accent font-semibold active:scale-95 transition-all flex items-center gap-1">
+                                                                    <ArrowRightLeft className="w-3 h-3" /> Перенести
+                                                                </button>
+                                                            )}
+                                                            {s.status !== 'cancelled' && (
+                                                                <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-xs px-3 py-2 rounded-xl bg-destructive/10 text-destructive font-semibold active:scale-95 transition-all ml-auto">
+                                                                    ✕
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${s.status === 'confirmed' ? 'bg-primary/10 text-primary' : s.status === 'completed' ? 'bg-muted text-muted-foreground' : s.status === 'pending' ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
-                                                        {statusLabels[s.status]}
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    onClick={() => window.location.href = `/diary/clients?clientId=${s.client?.id || s.clientId}`}
-                                                    className="font-bold text-foreground text-base mb-1 hover:text-primary transition-colors text-left active:scale-95 block"
-                                                >
-                                                    {clientName}
-                                                </button>
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-                                                    {s.format === 'online'
-                                                        ? <><Video className="w-3.5 h-3.5" /> Онлайн</>
-                                                        : <><MapPin className="w-3.5 h-3.5" /> Офлайн</>
-                                                    }
-                                                    <span>·</span>
-                                                    <span>{s.duration} мин</span>
-                                                    {s.format === 'online' && settings?.onlineSessionLink && (
-                                                        <a href={settings.onlineSessionLink} target="_blank" rel="noopener noreferrer" className="text-primary font-bold hover:underline ml-1">Ссылка</a>
-                                                    )}
-                                                </div>
-                                                {/* Quick actions */}
-                                                <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
-                                                    {s.status !== 'completed' && (
-                                                        <button onClick={() => handleStatusChange(s.id, 'completed')} className="text-xs px-3 py-2 rounded-xl bg-primary text-primary-foreground font-semibold active:scale-95 transition-all">
-                                                            Проведена ✓
-                                                        </button>
-                                                    )}
-                                                    {s.status !== 'completed' && s.status !== 'cancelled' && (
-                                                        <button onClick={() => setRescheduleTarget(s)} className="text-xs px-3 py-2 rounded-xl bg-accent/10 text-accent font-semibold active:scale-95 transition-all flex items-center gap-1">
-                                                            <ArrowRightLeft className="w-3 h-3" /> Перенести
-                                                        </button>
-                                                    )}
-                                                    {s.status !== 'cancelled' && (
-                                                        <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-xs px-3 py-2 rounded-xl bg-destructive/10 text-destructive font-semibold active:scale-95 transition-all ml-auto">
-                                                            ✕
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                );
-                            } else {
-                                const t = item.data;
-                                return (
-                                    <button
-                                        key={`f-${t.time}-${idx}`}
-                                        className="w-full bg-card/50 rounded-2xl border border-dashed border-border/80 p-4 flex items-center gap-3 hover:bg-primary/5 hover:border-primary/30 transition-all active:scale-[0.98] group"
-                                        onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
-                                    >
-                                        <div className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                                            <Plus className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors">{t.time}</div>
-                                            <div className="text-[10px] text-muted-foreground/70">Свободное окно</div>
-                                        </div>
-                                    </button>
-                                );
-                            }
-                        });
-                    })()}
-                </div>
+                                        );
+                                    } else {
+                                        const t = item.data;
+                                        return (
+                                            <button
+                                                key={`f-${t.time}-${idx}`}
+                                                className="w-full bg-card/50 rounded-2xl border border-dashed border-border/80 p-4 flex items-center gap-3 hover:bg-primary/5 hover:border-primary/30 transition-all active:scale-[0.98] group"
+                                                onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                                            >
+                                                <div className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                                                    <Plus className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors">{t.time}</div>
+                                                    <div className="text-[10px] text-muted-foreground/70">Свободное окно</div>
+                                                </div>
+                                            </button>
+                                        );
+                                    }
+                                });
+                            })()}
+                        </div>
+                    </>
+                )}
+
+                {/* === MOBILE WEEK VIEW === */}
+                {mobileViewMode === 'week' && (() => {
+                    const weekDaysList = getWeekDays();
+                    return (
+                        <>
+                            {/* Week navigation */}
+                            <div className="flex items-center justify-between bg-card rounded-2xl border border-border p-3 mb-3 shadow-sm">
+                                <button onClick={() => {
+                                    const d = new Date(currentDate); d.setDate(d.getDate() - 7); setCurrentDate(d);
+                                }} className="p-2 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                                    <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                <div className="text-sm font-bold text-foreground capitalize">
+                                    {weekDaysList[0].toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} – {weekDaysList[6].toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                                </div>
+                                <button onClick={() => {
+                                    const d = new Date(currentDate); d.setDate(d.getDate() + 7); setCurrentDate(d);
+                                }} className="p-2 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                                    <ChevronRight className="w-5 h-5" />
+                                </button>
+                            </div>
+                            {/* Week days strip */}
+                            <div className="grid grid-cols-7 gap-1.5 mb-4">
+                                {weekDaysList.map((date, i) => {
+                                    const daySessions = getSessionsForDay(date);
+                                    const isToday = isSameDay(date, new Date());
+                                    const isSelected = isSameDay(date, selectedDate);
+                                    return (
+                                        <button
+                                            key={i}
+                                            onClick={() => { setSelectedDate(date); setMobileViewMode('day'); setCurrentDate(date); }}
+                                            className={`flex flex-col items-center py-2.5 rounded-xl transition-all active:scale-95 ${isSelected ? 'bg-primary/10 border border-primary/30' : 'bg-card border border-border'}`}
+                                        >
+                                            <span className="text-[10px] font-semibold text-muted-foreground uppercase">
+                                                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][i]}
+                                            </span>
+                                            <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-lg mt-0.5 ${isToday ? 'bg-primary text-primary-foreground' : isSelected ? 'text-primary' : 'text-foreground'}`}>
+                                                {date.getDate()}
+                                            </span>
+                                            {daySessions.length > 0 && (
+                                                <div className="flex gap-0.5 mt-1">
+                                                    {daySessions.slice(0, 3).map((s, si) => (
+                                                        <div key={si} className={`w-1.5 h-1.5 rounded-full ${statusColors[s.status] || 'bg-border'}`} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {/* Quick list for the week */}
+                            <div className="space-y-2">
+                                {weekDaysList.map((date, i) => {
+                                    const daySessions = getSessionsForDay(date);
+                                    if (daySessions.length === 0) return null;
+                                    return (
+                                        <button
+                                            key={i}
+                                            onClick={() => { setSelectedDate(date); setMobileViewMode('day'); setCurrentDate(date); }}
+                                            className="w-full bg-card rounded-xl border border-border p-3 flex items-center gap-3 shadow-sm hover:border-primary/30 transition-colors active:scale-[0.98]"
+                                        >
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${isSameDay(date, new Date()) ? 'bg-primary text-primary-foreground' : 'bg-muted/50 text-foreground'}`}>
+                                                {date.getDate()}
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <div className="text-sm font-bold text-foreground">{date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                                                <div className="text-xs text-muted-foreground font-medium">{daySessions.length} {daySessions.length === 1 ? 'сессия' : daySessions.length < 5 ? 'сессии' : 'сессий'}</div>
+                                            </div>
+                                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    );
+                })()}
+
+                {/* === MOBILE MONTH VIEW === */}
+                {mobileViewMode === 'month' && (
+                    <>
+                        {/* Month navigation */}
+                        <div className="flex items-center justify-between bg-card rounded-2xl border border-border p-3 mb-3 shadow-sm">
+                            <button onClick={() => {
+                                const d = new Date(currentDate); d.setMonth(d.getMonth() - 1); setCurrentDate(d);
+                            }} className="p-2 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div className="text-sm font-bold text-foreground capitalize">
+                                {currentDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+                            </div>
+                            <button onClick={() => {
+                                const d = new Date(currentDate); d.setMonth(d.getMonth() + 1); setCurrentDate(d);
+                            }} className="p-2 hover:bg-muted rounded-xl transition-colors active:scale-95">
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {/* Mini calendar grid */}
+                        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                            <div className="grid grid-cols-7">
+                                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
+                                    <div key={d} className="p-2 text-center text-[10px] font-bold text-muted-foreground border-b border-border/50">{d}</div>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-7">
+                                {calendarDays.map((day, i) => {
+                                    const daySessions = getSessionsForDay(day);
+                                    const isToday = isSameDay(day, new Date());
+                                    const isCurrentMonth = day.getMonth() === month;
+                                    const isSelected = isSameDay(day, selectedDate);
+                                    return (
+                                        <button
+                                            key={i}
+                                            onClick={() => { setSelectedDate(day); setMobileViewMode('day'); setCurrentDate(day); }}
+                                            className={`p-1.5 text-center relative min-h-[44px] transition-colors active:scale-95 ${!isCurrentMonth ? 'opacity-30' : ''} ${isSelected ? 'bg-primary/10' : ''}`}
+                                        >
+                                            <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-lg mx-auto ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+                                                {day.getDate()}
+                                            </span>
+                                            {daySessions.length > 0 && (
+                                                <div className="flex gap-0.5 justify-center mt-0.5">
+                                                    {daySessions.slice(0, 3).map((s, si) => (
+                                                        <div key={si} className={`w-1 h-1 rounded-full ${statusColors[s.status] || 'bg-border'}`} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 {/* FAB — New Session */}
                 <button
@@ -773,17 +928,19 @@ export default function DiaryCalendarPage() {
                 clients={clients}
             />
 
-            {rescheduleTarget && (
-                <RescheduleModal
-                    isOpen={!!rescheduleTarget}
-                    onClose={() => setRescheduleTarget(null)}
-                    onSave={() => { fetchSessions(); setRescheduleTarget(null); }}
-                    sessionId={rescheduleTarget.id}
-                    currentDate={new Date(rescheduleTarget.date).toISOString().split('T')[0]}
-                    currentTime={rescheduleTarget.time}
-                    clientName={rescheduleTarget.client.name}
-                    clientId={rescheduleTarget.client.id}
-                />
-            )}
-        </div>);
+            {
+                rescheduleTarget && (
+                    <RescheduleModal
+                        isOpen={!!rescheduleTarget}
+                        onClose={() => setRescheduleTarget(null)}
+                        onSave={() => { fetchSessions(); setRescheduleTarget(null); }}
+                        sessionId={rescheduleTarget.id}
+                        currentDate={new Date(rescheduleTarget.date).toISOString().split('T')[0]}
+                        currentTime={rescheduleTarget.time}
+                        clientName={rescheduleTarget.client.name}
+                        clientId={rescheduleTarget.client.id}
+                    />
+                )
+            }
+        </div >);
 }

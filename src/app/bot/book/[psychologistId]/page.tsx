@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getPsychologist, getAvailableDates, getAvailableTimes, bookSession, getClientByTelegram } from '../../actions';
+import { getPsychologist, getAvailableDates, getAvailableTimes, bookSession, getClientByTelegram, getScheduleMode } from '../../actions';
 
 registerLocale('ru', ru);
 
@@ -43,6 +43,7 @@ export default function ClientBookingPage() {
 
     // Auto-navigate to first available month
     const [startDate, setStartDate] = useState<Date | null>(null);
+    const [scheduleMode, setScheduleMode] = useState<string>('booking');
 
     // Fetch initial data
     useEffect(() => {
@@ -64,6 +65,17 @@ export default function ClientBookingPage() {
             try {
                 const user = await getPsychologist(psychologistId);
                 setPsy(user);
+
+                // Get schedule mode
+                if (user?.scheduleMode) {
+                    setScheduleMode(user.scheduleMode);
+                }
+
+                // If private mode, don't load dates
+                if (user?.scheduleMode === 'private') {
+                    setLoading(false);
+                    return;
+                }
 
                 // Fetch dates for current and next 3 months to find first available
                 const now = new Date();
@@ -207,6 +219,29 @@ export default function ClientBookingPage() {
             <div className="flex flex-col items-center justify-center min-h-screen mobile-full-height bg-background p-4 text-center safe-top safe-bottom">
                 <h2 className="text-xl font-bold mb-2 text-foreground">Специалист не найден</h2>
                 <p className="text-muted-foreground text-sm">Проверьте ссылку и попробуйте еще раз.</p>
+            </div>
+        );
+    }
+
+    // Private mode — booking closed
+    if (scheduleMode === 'private') {
+        return (
+            <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+                <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
+                    <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center">
+                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-5">
+                            <span className="text-3xl">🔒</span>
+                        </div>
+                        <h2 className="text-xl font-bold mb-2 text-foreground">Запись закрыта</h2>
+                        <p className="text-muted-foreground text-sm">Специалист пока не принимает запись онлайн. Попробуйте позже или свяжитесь напрямую.</p>
+                        <button
+                            onClick={() => { const tg = (window as any).Telegram?.WebApp; if (tg) tg.close(); else window.location.href = '/'; }}
+                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[#1e3a2f] text-white bg-[#1e3a2f] dark:border-[#b89a4e] dark:text-gray-900 dark:bg-[#b89a4e] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                        >
+                            Назад
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -373,15 +408,20 @@ export default function ClientBookingPage() {
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking}
-                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking
+                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'}
+                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'
                             ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
                             : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}
                     >
                         {booking ? <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> : null}
-                        {booking ? 'Оформление...' : 'Записаться'}
+                        {scheduleMode === 'readonly' ? 'Только просмотр' : booking ? 'Оформление...' : 'Записаться'}
                     </button>
+                    {scheduleMode === 'readonly' && (
+                        <p className="text-xs text-center text-muted-foreground mt-2">
+                            Специалист пока принимает запись только лично. Вы можете посмотреть свободные окна и связаться напрямую.
+                        </p>
+                    )}
                 </form>
                 <style dangerouslySetInnerHTML={{
                     __html: `

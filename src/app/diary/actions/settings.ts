@@ -96,6 +96,7 @@ export async function updateSettings(data: {
     autoSync?: boolean;
     blockConflicts?: boolean;
     notifyTelegram?: boolean;
+    scheduleMode?: string;
 }) {
     const psychologistId = await getPsychologistId();
     const settings = await db.psychologistSettings.upsert({
