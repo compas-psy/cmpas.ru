@@ -15,11 +15,13 @@ export async function savePsychologistConsent(data: {
 
     const dt = new Date();
 
+    const userId = session.user.id;
+
     // Simplistic hash generation for demonstration purposes
     const generateHash = (type: string) => {
         return crypto
             .createHash('sha256')
-            .update(`${session.user.id}-${type}-${dt.toISOString()}-${data.userAgent}`)
+            .update(`${userId}-${type}-${dt.toISOString()}-${data.userAgent}`)
             .digest('hex');
     };
 
