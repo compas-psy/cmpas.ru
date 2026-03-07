@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import { bot } from '@/lib/telegram-bot';
 import { addDays } from 'date-fns';
+import { createHash } from 'crypto';
 
 export async function getPsychologist(id: string) {
     const user = await db.user.findUnique({
@@ -222,10 +223,9 @@ export async function bookSession(psychologistId: string, userDetails: any, form
             }
         });
     } else {
-        // Объединение: обновляем telegramChatId и имя если нужно
+        // Клиент найден по телефону — обновляем только telegramChatId, имя НЕ меняем
         const updateData: any = {};
         if (tgUserId && !client.telegramChatId) updateData.telegramChatId = tgUserId;
-        if (form.name && form.name !== client.name) updateData.name = form.name;
         if (Object.keys(updateData).length > 0) {
             client = await db.diaryClient.update({
                 where: { id: client.id },
@@ -337,14 +337,51 @@ export async function bookSession(psychologistId: string, userDetails: any, form
 
 export async function getClientByTelegram(psychologistId: string, telegramUserId: string) {
     if (!telegramUserId) return null;
+
+    // 1. Прямой поиск по DiaryClient.telegramChatId
     const client = await db.diaryClient.findFirst({
         where: {
             psychologistId,
             telegramChatId: telegramUserId,
         },
-        select: { name: true, phone: true }
+        select: { id: true, name: true, phone: true, consentVersion: true }
     });
-    return client;
+    if (client) return client;
+
+    // 2. Fallback: TelegramClient → DiaryClient (для inline-режима)
+    const tgClient = await db.telegramClient.findUnique({
+        where: { telegramUserId },
+        include: {
+            diaryClient: {
+                select: { id: true, name: true, phone: true, consentVersion: true, psychologistId: true }
+            }
+        }
+    });
+    if (tgClient?.diaryClient && tgClient.diaryClient.psychologistId === psychologistId) {
+        // Привязать telegramChatId к DiaryClient для будущих поисков
+        await db.diaryClient.update({
+            where: { id: tgClient.diaryClient.id },
+            data: { telegramChatId: telegramUserId }
+        });
+        return tgClient.diaryClient;
+    }
+
+    // 3. Fallback: DiaryClient без telegramChatId, но связанный через TelegramClient
+    if (tgClient?.diaryClientId) {
+        const linkedClient = await db.diaryClient.findUnique({
+            where: { id: tgClient.diaryClientId },
+            select: { id: true, name: true, phone: true, consentVersion: true, psychologistId: true }
+        });
+        if (linkedClient && linkedClient.psychologistId === psychologistId) {
+            await db.diaryClient.update({
+                where: { id: linkedClient.id },
+                data: { telegramChatId: telegramUserId }
+            });
+            return linkedClient;
+        }
+    }
+
+    return null;
 }
 
 export async function getClientSessions(telegramChatId: string) {
@@ -391,4 +428,159 @@ export async function getClientSessions(telegramChatId: string) {
         psychologistId: s.psychologistId,
         psychologistName: s.psychologist.psychologistSettings?.fullName || s.psychologist.name || 'Специалист'
     }));
+}
+
+export async function getClientUpcomingSessions(psychologistId: string, telegramUserId: string) {
+    if (!telegramUserId) return [];
+
+    // Find client for this psychologist
+    const client = await db.diaryClient.findFirst({
+        where: {
+            psychologistId,
+            OR: [
+                { telegramChatId: telegramUserId },
+            ]
+        }
+    });
+
+    if (!client) {
+        // Try through TelegramClient
+        const tgClient = await db.telegramClient.findUnique({
+            where: { telegramUserId },
+        });
+        if (!tgClient?.diaryClientId) return [];
+
+        const linkedClient = await db.diaryClient.findUnique({
+            where: { id: tgClient.diaryClientId }
+        });
+        if (!linkedClient || linkedClient.psychologistId !== psychologistId) return [];
+
+        return getSessionsForClient(linkedClient.id);
+    }
+
+    return getSessionsForClient(client.id);
+}
+
+async function getSessionsForClient(clientId: string) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const sessions = await db.diarySession.findMany({
+        where: {
+            clientId,
+            date: { gte: now },
+            status: { not: 'cancelled' }
+        },
+        include: {
+            address: { select: { name: true, address: true } }
+        },
+        orderBy: [
+            { date: 'asc' },
+            { time: 'asc' }
+        ],
+        take: 10
+    });
+
+    return sessions.map(s => ({
+        id: s.id,
+        date: s.date,
+        time: s.time,
+        endTime: s.endTime,
+        status: s.status,
+        format: s.format,
+        addressName: s.address?.name || null,
+        addressFull: s.address?.address || null,
+    }));
+}
+
+export async function getAddressById(addressId: string) {
+    if (!addressId) return null;
+    const address = await db.psychologistAddress.findUnique({
+        where: { id: addressId },
+        select: { name: true, address: true }
+    });
+    return address;
+}
+
+export async function checkConsentRequired(telegramUserId: string, psychologistId: string) {
+    if (!telegramUserId) return { required: true, text: '', version: '' };
+
+    // Get active consent version
+    const activeConsent = await db.consentVersion.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    if (!activeConsent) return { required: false, text: '', version: '' };
+
+    // Check if client already consented to this version
+    const client = await db.diaryClient.findFirst({
+        where: {
+            psychologistId,
+            OR: [
+                { telegramChatId: telegramUserId },
+            ]
+        },
+        select: { consentVersion: true }
+    });
+
+    // Also check via TelegramClient
+    if (!client) {
+        const tgClient = await db.telegramClient.findUnique({
+            where: { telegramUserId },
+            include: { diaryClient: { select: { consentVersion: true } } }
+        });
+        if (tgClient?.diaryClient?.consentVersion === activeConsent.version) {
+            return { required: false, text: activeConsent.text, version: activeConsent.version };
+        }
+    } else if (client.consentVersion === activeConsent.version) {
+        return { required: false, text: activeConsent.text, version: activeConsent.version };
+    }
+
+    return { required: true, text: activeConsent.text, version: activeConsent.version };
+}
+
+export async function saveConsent(
+    psychologistId: string,
+    telegramUserId: string,
+    consentVersion: string
+) {
+    const timestamp = new Date().toISOString();
+    const hashInput = `${telegramUserId}:${consentVersion}:${timestamp}`;
+    const consentHash = createHash('sha256').update(hashInput).digest('hex');
+
+    // Find or prepare to update client
+    let client = await db.diaryClient.findFirst({
+        where: {
+            psychologistId,
+            OR: [
+                { telegramChatId: telegramUserId },
+            ]
+        }
+    });
+
+    if (client) {
+        await db.diaryClient.update({
+            where: { id: client.id },
+            data: {
+                consentVersion,
+                consentHash,
+                consentDate: new Date(),
+            }
+        });
+    }
+
+    // Also update TelegramClient consent
+    await db.telegramClient.upsert({
+        where: { telegramUserId },
+        update: { consentGiven: true, consentDate: new Date() },
+        create: {
+            telegramUserId,
+            psychologistId,
+            consentGiven: true,
+            consentDate: new Date(),
+        }
+    });
+
+    return { hash: consentHash, timestamp };
 }

@@ -74,7 +74,7 @@ export default async function DiaryLayout({
         );
     }
 
-    if (!dbUser?.psychologistSettings) {
+    if (!dbUser?.psychologistSettings?.onboardingCompleted) {
         redirect('/onboarding');
     }
 

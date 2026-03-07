@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2, CheckCircle2, MapPin, Video } from 'lucide-react';
+import { Loader2, CheckCircle2, MapPin, Video, Calendar, Clock, X, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ru } from 'date-fns/locale/ru';
@@ -10,7 +10,18 @@ import { format } from 'date-fns';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getPsychologist, getAvailableDates, getAvailableTimes, bookSession, getClientByTelegram, getScheduleMode } from '../../actions';
+import {
+    getPsychologist,
+    getAvailableDates,
+    getAvailableTimes,
+    bookSession,
+    getClientByTelegram,
+    getScheduleMode,
+    getClientUpcomingSessions,
+    getAddressById,
+    checkConsentRequired,
+    saveConsent
+} from '../../actions';
 
 registerLocale('ru', ru);
 
@@ -23,6 +34,10 @@ export default function ClientBookingPage() {
     const [psy, setPsy] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
+    // Client state
+    const [isKnownClient, setIsKnownClient] = useState(false);
+    const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
+
     // Booking state
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -33,12 +48,22 @@ export default function ClientBookingPage() {
     const [form, setForm] = useState({ name: '', phone: '' });
     const [booking, setBooking] = useState(false);
 
+    // Consent state
+    const [consentRequired, setConsentRequired] = useState(false);
+    const [consentText, setConsentText] = useState('');
+    const [consentVersion, setConsentVersionState] = useState('');
+    const [showConsentModal, setShowConsentModal] = useState(false);
+    const [consentAccepted, setConsentAccepted] = useState(false);
+    const [consentSaving, setConsentSaving] = useState(false);
+
     // Success state
     const [bookingSuccess, setBookingSuccess] = useState<{
         date: string;
         time: string;
         format: string;
         psyName: string;
+        addressName?: string | null;
+        addressFull?: string | null;
     } | null>(null);
 
     // Auto-navigate to first available month
@@ -100,16 +125,35 @@ export default function ClientBookingPage() {
                     try {
                         const client = await getClientByTelegram(psychologistId, String(tgUserId));
                         if (client) {
+                            setIsKnownClient(true);
                             setForm({
                                 name: client.name || tg?.initDataUnsafe?.user?.first_name || '',
                                 phone: client.phone || ''
                             });
+
+                            // Load upcoming sessions for known client
+                            const sessions = await getClientUpcomingSessions(psychologistId, String(tgUserId));
+                            setUpcomingSessions(sessions);
                         } else {
                             setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
                         }
+
+                        // Check consent requirement
+                        const consent = await checkConsentRequired(String(tgUserId), psychologistId);
+                        setConsentRequired(consent.required);
+                        setConsentText(consent.text);
+                        setConsentVersionState(consent.version);
                     } catch {
                         setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
                     }
+                } else {
+                    // Unknown client without TG — consent always required
+                    try {
+                        const consent = await checkConsentRequired('', psychologistId);
+                        setConsentRequired(true);
+                        setConsentText(consent.text);
+                        setConsentVersionState(consent.version);
+                    } catch { }
                 }
             } catch (err) {
                 toast.error('Не удалось загрузить данные специалиста');
@@ -145,7 +189,6 @@ export default function ClientBookingPage() {
     const handleMonthChange = async (date: Date) => {
         const year = date.getFullYear();
         const month = date.getMonth();
-        // Check if we already have dates for this month
         const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
         const hasMonth = availableDates.some(d => d.startsWith(monthPrefix));
         if (!hasMonth) {
@@ -157,13 +200,13 @@ export default function ClientBookingPage() {
     const handleTimeSlotSelect = (slot: TimeSlot) => {
         setSelectedTimeSlot(slot);
         if (slot.format === 'both') {
-            setSelectedFormat(null); // Force user to choose
+            setSelectedFormat(null);
         } else {
             setSelectedFormat(slot.format as 'online' | 'offline');
         }
     };
 
-    const handleBooking = async (e: React.FormEvent) => {
+    const handleBookingAttempt = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedDate || !selectedTimeSlot || !selectedFormat) {
             toast.error('Выберите дату, время и формат встречи');
@@ -173,6 +216,38 @@ export default function ClientBookingPage() {
             toast.error('Введите корректный номер телефона');
             return;
         }
+
+        // If consent is required, show modal first
+        if (consentRequired && !consentAccepted) {
+            setShowConsentModal(true);
+            return;
+        }
+
+        await performBooking();
+    };
+
+    const handleConsentAccept = async () => {
+        if (!consentAccepted) {
+            toast.error('Необходимо принять согласие');
+            return;
+        }
+
+        setConsentSaving(true);
+        try {
+            const tgUserId = tgUser?.id ? String(tgUser.id) : '';
+            await saveConsent(psychologistId, tgUserId, consentVersion);
+            setConsentRequired(false);
+            setShowConsentModal(false);
+            await performBooking();
+        } catch (e) {
+            toast.error('Ошибка при сохранении согласия');
+        } finally {
+            setConsentSaving(false);
+        }
+    };
+
+    const performBooking = async () => {
+        if (!selectedDate || !selectedTimeSlot || !selectedFormat) return;
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         setBooking(true);
@@ -186,6 +261,17 @@ export default function ClientBookingPage() {
                 addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
             });
 
+            // Get address details for success screen
+            let addressName: string | null = null;
+            let addressFull: string | null = null;
+            if (selectedFormat === 'offline' && selectedTimeSlot.addressId) {
+                const addr = await getAddressById(selectedTimeSlot.addressId);
+                if (addr) {
+                    addressName = addr.name;
+                    addressFull = addr.address;
+                }
+            }
+
             // Show success screen
             const dayOfWeek = selectedDate.toLocaleDateString('ru-RU', { weekday: 'long' });
             const formattedDate = selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -194,6 +280,8 @@ export default function ClientBookingPage() {
                 time: selectedTimeSlot.time,
                 format: selectedFormat,
                 psyName: psy?.name || 'Специалист',
+                addressName,
+                addressFull,
             });
         } catch (e: any) {
             toast.error(e?.message || 'Ошибка записи');
@@ -277,13 +365,22 @@ export default function ClientBookingPage() {
                                     )}
                                 </p>
                             </div>
+                            {/* Issue #5: Show address if offline */}
+                            {bookingSuccess.format === 'offline' && bookingSuccess.addressFull && (
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground">Адрес</p>
+                                    <p className="font-bold text-foreground flex items-center gap-1.5">
+                                        <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                                        {bookingSuccess.addressName ? `${bookingSuccess.addressName}: ` : ''}{bookingSuccess.addressFull}
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
+                        {/* Issue #6: Navigate to client calendar instead of closing */}
                         <button
                             onClick={() => {
-                                const tg = (window as any).Telegram?.WebApp;
-                                if (tg) tg.close();
-                                else window.location.href = '/';
+                                router.push('/bot/client');
                             }}
                             className="w-full mt-6 py-3.5 rounded-xl border-2 border-[#1e3a2f] text-white bg-[#1e3a2f] dark:border-[#b89a4e] dark:text-gray-900 dark:bg-[#b89a4e] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
@@ -303,6 +400,37 @@ export default function ClientBookingPage() {
                 <p className="text-muted-foreground mb-6 text-sm">
                     Выберите удобную дату и время.
                 </p>
+
+                {/* Issue #2: Upcoming sessions for known client */}
+                {isKnownClient && upcomingSessions.length > 0 && (
+                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <h3 className="font-medium mb-3 text-foreground flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-primary" />
+                            Ваши предстоящие записи
+                        </h3>
+                        <div className="space-y-2">
+                            {upcomingSessions.map((s) => (
+                                <div key={s.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-xl border border-border/50">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm text-foreground">
+                                            {format(new Date(s.date), 'd MMM', { locale: ru })} в {s.time}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                            {s.format === 'offline' ? (
+                                                <><MapPin className="w-3 h-3" /> {s.addressName || 'В кабинете'}</>
+                                            ) : (
+                                                <><Video className="w-3 h-3" /> Онлайн</>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium flex-shrink-0">
+                                        {s.status === 'confirmed' ? 'Подтв.' : 'Ожид.'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Calendar */}
                 <div className="mb-6">
@@ -375,7 +503,7 @@ export default function ClientBookingPage() {
                     </div>
                 )}
 
-                <form onSubmit={handleBooking} className="space-y-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
+                <form onSubmit={handleBookingAttempt} className="space-y-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
                     <div>
                         <label className="block text-sm font-medium mb-1.5 text-foreground">Имя</label>
                         <input
@@ -385,7 +513,13 @@ export default function ClientBookingPage() {
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                             className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-foreground transition-all"
                             placeholder="Ваше имя"
+                            readOnly={isKnownClient}
                         />
+                        {isKnownClient && (
+                            <p className="text-xs text-primary mt-1.5 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Данные заполнены автоматически
+                            </p>
+                        )}
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1.5 text-foreground">Телефон</label>
@@ -400,6 +534,7 @@ export default function ClientBookingPage() {
                             inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-border !rounded-xl focus:!ring-2 focus:!ring-ring/50 !bg-background !text-foreground !transition-all"
                             buttonClass="!bg-background !border-border !rounded-l-xl focus:!ring-ring/50 hover:!bg-muted"
                             dropdownClass="!bg-card !text-foreground !border !border-border !rounded-xl !shadow-lg"
+                            disabled={isKnownClient && !!form.phone}
                         />
                         <p className="text-xs text-muted-foreground mt-2">
                             Телефон нужен для связи. Уведомление о сессии придет в Telegram.
@@ -422,7 +557,87 @@ export default function ClientBookingPage() {
                             Специалист пока принимает запись только лично. Вы можете посмотреть свободные окна и связаться напрямую.
                         </p>
                     )}
+
+                    {/* Issue #4: Consent notice for unknown clients */}
+                    {consentRequired && (
+                        <p className="text-xs text-center text-muted-foreground mt-3 leading-relaxed">
+                            Нажимая кнопку «Записаться», вы принимаете условия{' '}
+                            <button
+                                type="button"
+                                onClick={() => setShowConsentModal(true)}
+                                className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                            >
+                                пользовательского соглашения сервиса
+                            </button>
+                        </p>
+                    )}
                 </form>
+
+                {/* Consent Modal */}
+                {showConsentModal && (
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
+                        <div className="bg-card rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col border border-border shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+                            {/* Header */}
+                            <div className="px-6 pt-6 pb-4 border-b border-border/50 flex items-center justify-between flex-shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-5 h-5 text-primary" />
+                                    <h3 className="text-lg font-bold text-foreground">Согласие на обработку ПДн</h3>
+                                </div>
+                                <button
+                                    onClick={() => setShowConsentModal(false)}
+                                    className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                                >
+                                    <X className="w-5 h-5 text-muted-foreground" />
+                                </button>
+                            </div>
+
+                            {/* Consent text */}
+                            <div className="px-6 py-4 overflow-y-auto flex-1 custom-scrollbar">
+                                <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                                    {consentText}
+                                </div>
+                            </div>
+
+                            {/* Accept section */}
+                            <div className="px-6 py-4 border-t border-border/50 flex-shrink-0 space-y-4">
+                                <label className="flex items-start gap-3 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={consentAccepted}
+                                        onChange={e => setConsentAccepted(e.target.checked)}
+                                    />
+                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5 ${consentAccepted
+                                        ? 'bg-[#1e3a2f] border-[#1e3a2f] dark:bg-[#b89a4e] dark:border-[#b89a4e]'
+                                        : 'border-border group-hover:border-[#1e3a2f]/50 dark:group-hover:border-[#b89a4e]/50'
+                                        }`}>
+                                        {consentAccepted && (
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        )}
+                                    </div>
+                                    <span className="text-sm text-foreground leading-snug">
+                                        Я даю согласие на обработку моих персональных данных
+                                    </span>
+                                </label>
+
+                                <button
+                                    onClick={handleConsentAccept}
+                                    disabled={!consentAccepted || consentSaving}
+                                    className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light ${!consentAccepted || consentSaving
+                                        ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
+                                        : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
+                                        }`}
+                                >
+                                    {consentSaving ? <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> : null}
+                                    {consentSaving ? 'Сохранение...' : 'Подтвердить и записаться'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <style dangerouslySetInnerHTML={{
                     __html: `
                     .react-datepicker { font-family: inherit; border: none; }
@@ -441,6 +656,9 @@ export default function ClientBookingPage() {
                     }
                     .react-datepicker__day:hover { border-radius: 12px; }
                     .react-datepicker__day--disabled { opacity: 0.3; }
+                    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 4px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
                 `}} />
             </div >
         </div >

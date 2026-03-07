@@ -219,6 +219,11 @@ model DiaryClient {
   telegramChatId    String?   // For notifications direct to client
   telegramClient    TelegramClient?
   
+  // Consent (152-FZ)
+  consentVersion    String?   // Version of consent text agreed to
+  consentHash       String?   // SHA-256: tgUserId + version + timestamp
+  consentDate       DateTime? // When consent was given
+  
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -373,6 +378,7 @@ model PsychologistSettings {
   autoSync              Boolean  @default(true)
   blockConflicts        Boolean  @default(true)
   scheduleMode          String   @default("private") // private | readonly | booking
+  onboardingCompleted   Boolean  @default(false)
 
   methods               String[] @default([])
   basePrice             Int?
@@ -445,4 +451,13 @@ model TelegramClient {
   updatedAt       DateTime @updatedAt
 
   @@index([psychologistId])
+}
+
+// Versioned consent text (152-FZ compliance)
+model ConsentVersion {
+  id        String   @id @default(cuid())
+  version   String   @unique  // e.g. "2026-03-07-v1"
+  text      String   // Full consent text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

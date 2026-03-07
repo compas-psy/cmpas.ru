@@ -50,7 +50,8 @@ export async function POST(request: Request) {
                 cancellationFee: cancellationFee !== undefined ? cancellationFee : (psychologistSettings?.cancellationFee ?? 50),
                 cancellationText: cancellationText || psychologistSettings?.cancellationText || null,
                 notifyTelegram: psychologistSettings?.notifyTelegram ?? true,
-                onlineSessionLink: psychologistSettings?.onlineSessionLink || null
+                onlineSessionLink: psychologistSettings?.onlineSessionLink || null,
+                onboardingCompleted: true,
             } as any,
             create: {
                 psychologistId: user.id,
@@ -62,7 +63,8 @@ export async function POST(request: Request) {
                 cancellationFee: cancellationFee !== undefined ? cancellationFee : (psychologistSettings?.cancellationFee ?? 50),
                 cancellationText: cancellationText || psychologistSettings?.cancellationText || null,
                 notifyTelegram: psychologistSettings?.notifyTelegram ?? true,
-                onlineSessionLink: psychologistSettings?.onlineSessionLink || null
+                onlineSessionLink: psychologistSettings?.onlineSessionLink || null,
+                onboardingCompleted: true,
             } as any
         })
 
