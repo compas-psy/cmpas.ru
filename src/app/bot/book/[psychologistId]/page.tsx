@@ -253,13 +253,19 @@ export default function ClientBookingPage() {
         setBooking(true);
 
         try {
-            await bookSession(psychologistId, tgUser, {
+            const res = await bookSession(psychologistId, tgUser, {
                 ...form,
                 date: dateStr,
                 time: selectedTimeSlot.time,
                 format: selectedFormat,
                 addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
             });
+
+            if (res && !res.success) {
+                toast.error(res.error || 'Произошла ошибка при записи');
+                setBooking(false);
+                return;
+            }
 
             // Get address details for success screen
             let addressName: string | null = null;
@@ -380,7 +386,7 @@ export default function ClientBookingPage() {
                         {/* Issue #6: Navigate to client calendar instead of closing */}
                         <button
                             onClick={() => {
-                                router.push('/bot/client');
+                                window.location.href = '/bot/client';
                             }}
                             className="w-full mt-6 py-3.5 rounded-xl border-2 border-[#1e3a2f] text-white bg-[#1e3a2f] dark:border-[#b89a4e] dark:text-gray-900 dark:bg-[#b89a4e] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
@@ -618,7 +624,7 @@ export default function ClientBookingPage() {
                                         )}
                                     </div>
                                     <span className="text-sm text-foreground leading-snug">
-                                        Я даю согласие на обработку моих персональных данных
+                                        Я даю <a href="/legal/privacy" target="_blank" className="text-primary hover:underline" onClick={e => e.stopPropagation()}>согласие</a> на обработку моих персональных данных
                                     </span>
                                 </label>
 

@@ -244,6 +244,16 @@ export async function bookSession(psychologistId: string, userDetails: any, form
                 where: { id: tgClient.id },
                 data: { diaryClientId: client.id, psychologistId }
             });
+            // Also sync consent if they gave it during this flow but not yet applied
+            if (tgClient.consentGiven && tgClient.consentDate && !client.consentDate) {
+                await db.diaryClient.update({
+                    where: { id: client.id },
+                    data: {
+                        consentVersion: '2026-03-07-v1', // Fallback or retrieve latest
+                        consentDate: tgClient.consentDate,
+                    }
+                });
+            }
         }
     }
 
@@ -272,14 +282,14 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         const eStartMins = eH * 60 + eM;
         const eEndMins = eStartMins + (existing.duration || 50);
         if (newStartMins < eEndMins && newEndMins > eStartMins) {
-            throw new Error('Это время уже занято');
+            return { success: false, error: 'Это время уже занято' };
         }
     }
 
     // Валидация: один клиент не может записаться 2+ раз в один день
     const clientSessionsToday = existingSessions.filter(s => s.clientId === client!.id);
     if (clientSessionsToday.length > 0) {
-        throw new Error('Вы уже записаны на этот день');
+        return { success: false, error: 'Вы уже записаны на этот день' };
     }
 
     const endMinutes = h * 60 + min + duration;
@@ -332,7 +342,7 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         console.error('Auto-sync after booking failed:', e);
     }
 
-    return session.id;
+    return { success: true, sessionId: session.id };
 }
 
 export async function getClientByTelegram(psychologistId: string, telegramUserId: string) {
@@ -356,7 +366,8 @@ export async function getClientByTelegram(psychologistId: string, telegramUserId
                 select: { id: true, name: true, phone: true, consentVersion: true, psychologistId: true }
             }
         }
-    });
+    }) as any;
+
     if (tgClient?.diaryClient && tgClient.diaryClient.psychologistId === psychologistId) {
         // Привязать telegramChatId к DiaryClient для будущих поисков
         await db.diaryClient.update({
@@ -571,7 +582,7 @@ export async function saveConsent(
     }
 
     // Also update TelegramClient consent
-    await db.telegramClient.upsert({
+    const tgClient = await db.telegramClient.upsert({
         where: { telegramUserId },
         update: { consentGiven: true, consentDate: new Date() },
         create: {
@@ -581,6 +592,17 @@ export async function saveConsent(
             consentDate: new Date(),
         }
     });
+
+    if (tgClient.diaryClientId && !client) {
+        await db.diaryClient.update({
+            where: { id: tgClient.diaryClientId },
+            data: {
+                consentVersion,
+                consentHash,
+                consentDate: new Date(),
+            }
+        });
+    }
 
     return { hash: consentHash, timestamp };
 }

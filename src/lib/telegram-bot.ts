@@ -264,7 +264,7 @@ export function setupBot() {
                     parse_mode: 'Markdown'
                 },
                 reply_markup: {
-                    inline_keyboard: [[{ text: '📅 Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` }]]
+                    inline_keyboard: [[{ text: '📅 Записаться', web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` } }]]
                 }
             });
 
