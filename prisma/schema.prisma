@@ -36,7 +36,14 @@ model User {
   telegramChatId       String?   @unique
   telegramUsername     String?
   telegramClients      TelegramClient[]
- 
+  // Registration Consent (152-FZ & Ads) for Psychologists
+  pdnConsentVersion    String?
+  pdnConsentHash       String?
+  pdnConsentDate       DateTime?
+  adsConsentVersion    String?
+  adsConsentHash       String?
+  adsConsentDate       DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

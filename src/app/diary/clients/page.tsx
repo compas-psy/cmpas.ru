@@ -26,6 +26,7 @@ type Client = {
     gender: string | null; totalSessions: number; nextSessionDate: string | null;
     status: string; questionnaire: { id: string; data: QuestionnaireData } | null;
     sessions?: Session[];
+    consentVersion?: string | null; consentHash?: string | null; consentDate?: Date | null;
 };
 
 type Session = {
@@ -41,8 +42,8 @@ export default function ClientsPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('active');
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-    const [mobileTab, setMobileTab] = useState<'sessions' | 'notes' | 'questionnaire' | 'manage'>('sessions');
-    const [desktopTab, setDesktopTab] = useState<'sessions' | 'questionnaire' | 'notes'>('sessions');
+    const [mobileTab, setMobileTab] = useState<'sessions' | 'notes' | 'questionnaire' | 'documents' | 'manage'>('sessions');
+    const [desktopTab, setDesktopTab] = useState<'sessions' | 'questionnaire' | 'notes' | 'documents'>('sessions');
     const [showNewClient, setShowNewClient] = useState(false);
     const [showEditQuestionnaire, setShowEditQuestionnaire] = useState(false);
     const [showNewSession, setShowNewSession] = useState(false);
@@ -202,6 +203,7 @@ export default function ClientsPage() {
                         { key: 'sessions' as const, icon: Calendar, label: 'Записи' },
                         { key: 'notes' as const, icon: StickyNote, label: 'Заметки' },
                         { key: 'questionnaire' as const, icon: ClipboardList, label: 'Анкета' },
+                        { key: 'documents' as const, icon: FileText, label: 'Документы' },
                         { key: 'manage' as const, icon: Settings2, label: 'Управление' },
                     ]).map(t => (
                         <button key={t.key} onClick={() => setMobileTab(t.key)}
@@ -279,6 +281,12 @@ export default function ClientsPage() {
                                 className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium shadow-sm active:scale-[0.98]">
                                 {selectedClient.questionnaire?.data ? 'Редактировать' : 'Заполнить анкету'}
                             </button>
+                        </div>
+                    )}
+
+                    {mobileTab === 'documents' && (
+                        <div className="space-y-4">
+                            <DocumentsView client={selectedClient} />
                         </div>
                     )}
 
@@ -447,6 +455,7 @@ export default function ClientsPage() {
                                     { key: 'sessions' as const, label: `Записи (${(selectedClient.sessions?.length || 0)})` },
                                     { key: 'questionnaire' as const, label: 'Анкета' },
                                     { key: 'notes' as const, label: `Заметки (${sessionsWithNotes.length})` },
+                                    { key: 'documents' as const, label: 'Документы' },
                                 ]).map(t => (
                                     <button key={t.key} onClick={() => setDesktopTab(t.key)}
                                         className={`flex-1 px-6 py-4 font-semibold text-sm border-b-2 transition-colors ${desktopTab === t.key ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}>
@@ -493,6 +502,11 @@ export default function ClientsPage() {
                                             </div>
                                         ))}
                                         {!selectedClient.sessions?.length && <div className="text-center py-12 text-muted-foreground text-sm">Нет сессий</div>}
+                                    </div>
+                                )}
+                                {desktopTab === 'documents' && (
+                                    <div className="space-y-6 max-w-2xl">
+                                        <DocumentsView client={selectedClient} />
                                     </div>
                                 )}
                             </div>
@@ -629,6 +643,58 @@ export default function ClientsPage() {
 }
 
 // ======================== SUB-COMPONENTS ========================
+function DocumentsView({ client }: { client: Client }) {
+    if (!client.consentDate) {
+        return (
+            <div className="text-center py-12">
+                <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-muted-foreground font-medium text-sm">Документы не подписаны</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Клиент еще не дал согласие на обработку ПДн.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="bg-muted/30 p-4 rounded-2xl border border-border/50">
+                <div className="flex items-start gap-4 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-foreground text-sm">Согласие на обработку ПДн</h3>
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium mt-0.5">Подписано электронной подписью</p>
+                    </div>
+                </div>
+
+                <div className="space-y-3 bg-background rounded-xl p-4 border border-border">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Версия документа</span>
+                        <span className="text-sm font-mono bg-muted px-2 py-0.5 rounded w-fit">{client.consentVersion}</span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Дата подписания</span>
+                        <span className="text-sm font-medium text-foreground">
+                            {new Date(client.consentDate).toLocaleString('ru-RU', {
+                                day: 'numeric', month: 'long', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
+                            })}
+                        </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Цифровая подпись (SHA-256)</span>
+                        <span className="text-xs font-mono text-muted-foreground break-all bg-muted/50 p-2 rounded-lg border border-border/50">
+                            {client.consentHash}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function SessionCard({ s, onEdit, accent }: { s: Session; onEdit: () => void; accent?: boolean }) {
     return (
         <button onClick={onEdit}

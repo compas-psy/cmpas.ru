@@ -567,7 +567,7 @@ export default function ClientBookingPage() {
                                 onClick={() => setShowConsentModal(true)}
                                 className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
                             >
-                                пользовательского соглашения сервиса
+                                согласия на обработку персональных данных
                             </button>
                         </p>
                     )}

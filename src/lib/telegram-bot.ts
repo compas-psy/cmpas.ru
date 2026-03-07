@@ -22,10 +22,14 @@ async function showPsyMenu(ctx: Context, psy: any) {
     );
 }
 
-async function showClientMenu(ctx: Context, psychologistId: string, clientName: string = 'Клиент') {
+async function showClientMenu(ctx: Context, psychologistId: string, clientName: string = 'Клиент', clientId?: string) {
+    const bookUrl = clientId
+        ? `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?c=${clientId}&v=${Date.now()}`
+        : `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}`;
+
     await ctx.reply(`Добро пожаловать, ${clientName}!\nИспользуйте меню для управления записями.`,
         Markup.keyboard([
-            [Markup.button.webApp('📅 Записаться', `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}`)],
+            [Markup.button.webApp('📅 Записаться', bookUrl)],
             [Markup.button.webApp('🗓 Мои сессии', `${TELEGRAM_APP_URL}/bot/client?v=${Date.now()}`)]
         ]).resize()
     );
@@ -77,12 +81,12 @@ export function setupBot() {
             include: { psychologist: true }
         });
         if (client) {
-            return showClientMenu(ctx, client.psychologistId, client.name);
+            return showClientMenu(ctx, client.psychologistId, client.name, client.id);
         }
 
         const tgClient = await db.telegramClient.findUnique({ where: { telegramUserId: tgId } });
         if (tgClient && tgClient.psychologistId) {
-            return showClientMenu(ctx, tgClient.psychologistId);
+            return showClientMenu(ctx, tgClient.psychologistId, tgClient.fullName || 'Клиент', tgClient.diaryClientId || undefined);
         }
 
         // 4. Default greeting (Unregistered/Unknown)
@@ -155,12 +159,13 @@ export function setupBot() {
             }
 
             for (const s of sessions) {
+                const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?c=${s.clientId}&v=${Date.now()}`;
                 const msg = `📅 <b>Сессия с психологом ${s.psychologist.name}</b>\n\n⏰ Дата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 Формат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}`;
                 await ctx.reply(msg, {
                     parse_mode: 'HTML',
                     reply_markup: {
                         inline_keyboard: [
-                            [{ text: '🔄 Перенести (Новая запись)', web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?v=${Date.now()}` } }],
+                            [{ text: '🔄 Перенести (Новая запись)', web_app: { url: bookUrl } }],
                             [{ text: '❌ Отменить', callback_data: `cancel_${s.id}` }]
                         ]
                     }
@@ -236,19 +241,30 @@ export function setupBot() {
                 return;
             }
 
+            const query = ctx.inlineQuery.query.trim();
+            let matchedClient = null;
+            if (query.length >= 2) {
+                matchedClient = await db.diaryClient.findFirst({
+                    where: { psychologistId: psy.id, name: { contains: query, mode: 'insensitive' } }
+                });
+            }
+
+            const clientQueryParam = matchedClient ? `?c=${matchedClient.id}` : '';
+            const clientQueryParamWithV = matchedClient ? `?c=${matchedClient.id}&v=${Date.now()}` : `?v=${Date.now()}`;
+
             const results = [];
 
             results.push({
                 type: 'article',
                 id: 'booking_link',
-                title: '🔗 Отправить ссылку на запись',
+                title: matchedClient ? `🔗 Отправить ссылку клиенту: ${matchedClient.name}` : '🔗 Отправить ссылку на запись',
                 description: 'Клиент получит ссылку для самостоятельного выбора времени',
                 input_message_content: {
-                    message_text: `👋 Привет! Записаться ко мне на консультацию можно по ссылке ниже:\n\n[Выбрать время и записаться](${TELEGRAM_APP_URL}/bot/book/${psy.id})`,
+                    message_text: `👋 Привет! Записаться ко мне на консультацию можно по ссылке ниже:\n\n[Выбрать время и записаться](${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParam})`,
                     parse_mode: 'Markdown'
                 },
                 reply_markup: {
-                    inline_keyboard: [[{ text: '📅 Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}` }]]
+                    inline_keyboard: [[{ text: '📅 Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` }]]
                 }
             });
 

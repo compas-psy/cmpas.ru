@@ -16,7 +16,13 @@ export default async function UsersPage() {
             isBlocked: true,
             emailVerified: true,
             createdAt: true,
-            psychologistSettings: { select: { id: true } }
+            psychologistSettings: { select: { id: true } },
+            pdnConsentVersion: true,
+            pdnConsentDate: true,
+            pdnConsentHash: true,
+            adsConsentVersion: true,
+            adsConsentDate: true,
+            adsConsentHash: true,
         },
     }).catch(() => []);
 
@@ -102,6 +108,7 @@ export default async function UsersPage() {
                             <TableHead>Роль</TableHead>
                             <TableHead>Статус</TableHead>
                             <TableHead>Онбординг</TableHead>
+                            <TableHead>Согласия (ПДн / Реклама)</TableHead>
                             <TableHead className="text-right">Регистрация</TableHead>
                             <TableHead className="text-right">Действия</TableHead>
                         </TableRow>
@@ -141,6 +148,29 @@ export default async function UsersPage() {
                                         ) : (
                                             <Badge variant="outline" className="text-muted-foreground">Не пройден</Badge>
                                         )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1.5">
+                                            {user.pdnConsentDate ? (
+                                                <Badge variant="outline" className="w-fit text-xs border-green-500/30 text-green-600 bg-green-500/5">
+                                                    ПДн: {user.pdnConsentVersion} ({user.pdnConsentDate.toLocaleDateString('ru-RU')})
+                                                    {user.pdnConsentHash && " 🔒"}
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="w-fit text-xs text-muted-foreground bg-muted/30">
+                                                    ПДн: Нет
+                                                </Badge>
+                                            )}
+                                            {user.adsConsentDate ? (
+                                                <Badge variant="outline" className="w-fit text-xs border-green-500/30 text-green-600 bg-green-500/5">
+                                                    Реклама: {user.adsConsentVersion} ({user.adsConsentDate.toLocaleDateString('ru-RU')})
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="w-fit text-xs text-muted-foreground bg-muted/30">
+                                                    Реклама: Нет
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right text-foreground/70">
                                         {user.createdAt.toLocaleDateString('ru-RU')}

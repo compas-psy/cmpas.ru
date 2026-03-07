@@ -7,6 +7,7 @@ import { LogOut } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { SidebarNav } from './sidebar-nav';
 import { MobileSidebar } from './mobile-sidebar';
+import { PsychologistConsentModal } from '@/components/psidairy/PsychologistConsentModal';
 
 export const metadata: Metadata = {
     title: 'Ежедневник | Compas',
@@ -101,6 +102,11 @@ export default async function DiaryLayout({
             </main>
 
             <Toaster position="top-right" richColors theme="system" />
+
+            {/* Forced Consent Modal for Psychologists */}
+            {dbUser && !dbUser.pdnConsentDate && (
+                <PsychologistConsentModal isOpen={true} />
+            )}
         </div>
     );
 }
