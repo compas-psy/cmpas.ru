@@ -55,7 +55,14 @@ export function setupBot() {
 
         // 2. Check if Client coming directly from booking link
         if (payload?.startsWith('psy_')) {
-            const psychologistId = payload.replace('psy_', '');
+            let psychologistId = payload.replace('psy_', '');
+            let linkClientId: string | undefined;
+
+            if (psychologistId.includes('_c_')) {
+                const parts = psychologistId.split('_c_');
+                psychologistId = parts[0];
+                linkClientId = parts[1];
+            }
 
             const targetPsy = await db.user.findUnique({
                 where: { id: psychologistId },
@@ -65,13 +72,16 @@ export function setupBot() {
             if (targetPsy) {
                 const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
                 // Save them temporarily as TelegramClient so we know their psychologist
+                // if they are not already linked
+                const existingTgClient = await db.telegramClient.findUnique({ where: { telegramUserId: tgId } });
+
                 await db.telegramClient.upsert({
                     where: { telegramUserId: tgId },
-                    update: { psychologistId },
-                    create: { telegramUserId: tgId, psychologistId, telegramUsername: ctx.from?.username }
+                    update: { psychologistId, diaryClientId: existingTgClient?.diaryClientId || linkClientId || null },
+                    create: { telegramUserId: tgId, psychologistId, telegramUsername: ctx.from?.username, diaryClientId: linkClientId || null }
                 });
 
-                return showClientMenu(ctx, psychologistId, psyName);
+                return showClientMenu(ctx, psychologistId, psyName, linkClientId || existingTgClient?.diaryClientId || undefined);
             }
         }
 
@@ -264,20 +274,22 @@ export function setupBot() {
                     parse_mode: 'Markdown'
                 },
                 reply_markup: {
-                    inline_keyboard: [[{ text: '📅 Записаться', web_app: { url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` } }]]
+                    inline_keyboard: [[{ text: '📅 Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` }]]
                 }
             });
+
+            const linkParam = matchedClient ? `psy_${psy.id}_c_${matchedClient.id}` : `psy_${psy.id}`;
 
             results.push({
                 type: 'article',
                 id: 'miniapp_calendar',
-                title: '📅 Выбрать время через Telegram',
+                title: matchedClient ? `📅 Выбрать время через Telegram (для ${matchedClient.name})` : '📅 Выбрать время через Telegram',
                 description: 'Отправит карточку с кнопкой, открывающей календарь внутри Telegram',
                 input_message_content: {
                     message_text: `👋 Привет! Чтобы выбрать удобное время для сессии, нажми на кнопку ниже. Откроется календарь прямо здесь, в Telegram.`,
                 },
                 reply_markup: {
-                    inline_keyboard: [[{ text: '📅 Выбрать время', url: `https://t.me/CompasProBot?start=psy_${psy.id}` }]]
+                    inline_keyboard: [[{ text: '📅 Выбрать время', url: `https://t.me/CompasProBot?start=${linkParam}` }]]
                 }
             });
 
@@ -294,7 +306,7 @@ export function setupBot() {
                         parse_mode: 'Markdown'
                     },
                     reply_markup: {
-                        inline_keyboard: [[{ text: 'Занять это время', url: `https://t.me/CompasProBot?start=psy_${psy.id}` }]]
+                        inline_keyboard: [[{ text: 'Занять это время', url: `https://t.me/CompasProBot?start=${linkParam}` }]]
                     }
                 });
             }
