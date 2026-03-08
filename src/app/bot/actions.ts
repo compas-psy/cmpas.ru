@@ -244,15 +244,26 @@ export async function bookSession(psychologistId: string, userDetails: any, form
                 where: { id: tgClient.id },
                 data: { diaryClientId: client.id, psychologistId }
             });
-            // Also sync consent if they gave it during this flow but not yet applied
-            if (tgClient.consentGiven && tgClient.consentDate && !client.consentDate) {
-                await db.diaryClient.update({
-                    where: { id: client.id },
-                    data: {
-                        consentVersion: '2026-03-07-v1', // Fallback or retrieve latest
-                        consentDate: tgClient.consentDate,
-                    }
+            // Also sync consent from TelegramClient to DiaryClient if given
+            if (tgClient.consentGiven && tgClient.consentDate && !client.consentVersion) {
+                // Get active consent version to store on DiaryClient
+                const activeConsentVer = await db.consentVersion.findFirst({
+                    where: { isActive: true },
+                    orderBy: { createdAt: 'desc' },
+                    select: { version: true }
                 });
+                if (activeConsentVer) {
+                    const hashInput = `${tgUserId}:${activeConsentVer.version}:${tgClient.consentDate.toISOString()}`;
+                    const hash = createHash('sha256').update(hashInput).digest('hex');
+                    await db.diaryClient.update({
+                        where: { id: client.id },
+                        data: {
+                            consentVersion: activeConsentVer.version,
+                            consentHash: hash,
+                            consentDate: tgClient.consentDate,
+                        }
+                    });
+                }
             }
         }
     }
@@ -345,8 +356,28 @@ export async function bookSession(psychologistId: string, userDetails: any, form
     return { success: true, sessionId: session.id };
 }
 
-export async function getClientByTelegram(psychologistId: string, telegramUserId: string) {
+export async function getClientByTelegram(psychologistId: string, telegramUserId: string, explicitClientId?: string) {
     if (!telegramUserId) return null;
+
+    // 0. Если передан точный clientId из ссылки
+    if (explicitClientId) {
+        const exactClient = await db.diaryClient.findFirst({
+            where: {
+                id: explicitClientId,
+                psychologistId
+            },
+            select: { id: true, name: true, phone: true, consentVersion: true }
+        });
+
+        if (exactClient) {
+            // Привязываем телеграмм, если еще не привязан
+            await db.diaryClient.update({
+                where: { id: explicitClientId },
+                data: { telegramChatId: telegramUserId }
+            });
+            return exactClient;
+        }
+    }
 
     // 1. Прямой поиск по DiaryClient.telegramChatId
     const client = await db.diaryClient.findFirst({
@@ -366,7 +397,7 @@ export async function getClientByTelegram(psychologistId: string, telegramUserId
                 select: { id: true, name: true, phone: true, consentVersion: true, psychologistId: true }
             }
         }
-    }) as any;
+    });
 
     if (tgClient?.diaryClient && tgClient.diaryClient.psychologistId === psychologistId) {
         // Привязать telegramChatId к DiaryClient для будущих поисков
@@ -524,27 +555,34 @@ export async function checkConsentRequired(telegramUserId: string, psychologistI
 
     if (!activeConsent) return { required: false, text: '', version: '' };
 
-    // Check if client already consented to this version
-    const client = await db.diaryClient.findFirst({
+    // Check if client already consented to this version via DiaryClient
+    const diaryClient = await db.diaryClient.findFirst({
         where: {
             psychologistId,
-            OR: [
-                { telegramChatId: telegramUserId },
-            ]
+            telegramChatId: telegramUserId,
         },
         select: { consentVersion: true }
     });
 
-    // Also check via TelegramClient
-    if (!client) {
-        const tgClient = await db.telegramClient.findUnique({
-            where: { telegramUserId },
-            include: { diaryClient: { select: { consentVersion: true } } }
-        });
-        if (tgClient?.diaryClient?.consentVersion === activeConsent.version) {
-            return { required: false, text: activeConsent.text, version: activeConsent.version };
+    if (diaryClient?.consentVersion === activeConsent.version) {
+        return { required: false, text: activeConsent.text, version: activeConsent.version };
+    }
+
+    // Also check via TelegramClient → DiaryClient link
+    const tgClient = await db.telegramClient.findUnique({
+        where: { telegramUserId },
+        include: {
+            diaryClient: {
+                select: { consentVersion: true }
+            }
         }
-    } else if (client.consentVersion === activeConsent.version) {
+    });
+    if (tgClient?.diaryClient?.consentVersion === activeConsent.version) {
+        return { required: false, text: activeConsent.text, version: activeConsent.version };
+    }
+
+    // Check consentGiven flag on TelegramClient as last resort
+    if (tgClient?.consentGiven) {
         return { required: false, text: activeConsent.text, version: activeConsent.version };
     }
 
@@ -570,6 +608,7 @@ export async function saveConsent(
         }
     });
 
+    // Save consent data on DiaryClient
     if (client) {
         await db.diaryClient.update({
             where: { id: client.id },

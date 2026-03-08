@@ -1,0 +1,35 @@
+[1mdiff --git a/src/app/bot/actions.ts b/src/app/bot/actions.ts[m
+[1mindex 0d601c7..1bba8ec 100644[m
+[1m--- a/src/app/bot/actions.ts[m
+[1m+++ b/src/app/bot/actions.ts[m
+[36m@@ -345,9 +345,29 @@[m [mexport async function bookSession(psychologistId: string, userDetails: any, form[m
+     return { success: true, sessionId: session.id };[m
+ }[m
+ [m
+[31m-export async function getClientByTelegram(psychologistId: string, telegramUserId: string) {[m
+[32m+[m[32mexport async function getClientByTelegram(psychologistId: string, telegramUserId: string, explicitClientId?: string) {[m
+     if (!telegramUserId) return null;[m
+ [m
+[32m+[m[32m    // 0. Если передан точный clientId из ссылки[m
+[32m+[m[32m    if (explicitClientId) {[m
+[32m+[m[32m        const exactClient = await db.diaryClient.findFirst({[m
+[32m+[m[32m            where: {[m
+[32m+[m[32m                id: explicitClientId,[m
+[32m+[m[32m                psychologistId[m
+[32m+[m[32m            },[m
+[32m+[m[32m            select: { id: true, name: true, phone: true, consentVersion: true }[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        if (exactClient) {[m
+[32m+[m[32m            // Привязываем телеграмм, если еще не привязан[m
+[32m+[m[32m            await db.diaryClient.update({[m
+[32m+[m[32m                where: { id: explicitClientId },[m
+[32m+[m[32m                data: { telegramChatId: telegramUserId }[m
+[32m+[m[32m            });[m
+[32m+[m[32m            return exactClient as any;[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+     // 1. Прямой поиск по DiaryClient.telegramChatId[m
+     const client = await db.diaryClient.findFirst({[m
+         where: {[m

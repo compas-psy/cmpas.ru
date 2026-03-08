@@ -29,6 +29,16 @@ export default function ClientBookingPage() {
     const params = useParams();
     const psychologistId = params.psychologistId as string;
 
+    // Extract clientId from query string if available
+    const [clientId, setClientId] = useState<string | null>(null);
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const c = urlParams.get('c');
+            if (c) setClientId(c);
+        }
+    }, []);
+
     const router = useRouter();
     const [tgUser, setTgUser] = useState<any>(null);
     const [psy, setPsy] = useState<any>(null);
@@ -123,7 +133,7 @@ export default function ClientBookingPage() {
                 const tgUserId = tg?.initDataUnsafe?.user?.id;
                 if (tgUserId && user) {
                     try {
-                        const client = await getClientByTelegram(psychologistId, String(tgUserId));
+                        const client = await getClientByTelegram(psychologistId, String(tgUserId), clientId || undefined);
                         if (client) {
                             setIsKnownClient(true);
                             setForm({
