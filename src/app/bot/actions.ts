@@ -207,8 +207,28 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
 }
 
 export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
+    let normalizedPhone = form.phone.replace(/[^\d+]/g, '');
+    const plainDigits = normalizedPhone.replace(/[^\d]/g, '');
+
+    if (plainDigits.length === 11 && (plainDigits.startsWith('8') || plainDigits.startsWith('7'))) {
+        normalizedPhone = '+7' + plainDigits.slice(1);
+    } else if (plainDigits.length === 10) {
+        normalizedPhone = '+7' + plainDigits;
+    } else if (!normalizedPhone.startsWith('+') && normalizedPhone.length > 0) {
+        normalizedPhone = '+' + plainDigits;
+    }
+
     let client = await db.diaryClient.findFirst({
-        where: { psychologistId, phone: form.phone }
+        where: {
+            psychologistId,
+            OR: [
+                { phone: normalizedPhone },
+                { phone: plainDigits },
+                { phone: '+' + plainDigits },
+                { phone: form.phone } // legacy formats
+            ]
+        },
+        orderBy: { createdAt: 'desc' }
     });
 
     const tgUserId = userDetails?.id ? String(userDetails.id) : null;
@@ -218,7 +238,7 @@ export async function bookSession(psychologistId: string, userDetails: any, form
             data: {
                 psychologistId,
                 name: form.name,
-                phone: form.phone,
+                phone: normalizedPhone,
                 telegramChatId: tgUserId,
             }
         });

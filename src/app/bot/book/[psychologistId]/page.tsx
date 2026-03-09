@@ -469,7 +469,11 @@ export default function ClientBookingPage() {
                         </h3>
                         <div className="space-y-2">
                             {upcomingSessions.map((s) => (
-                                <div key={s.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-xl border border-border/50">
+                                <button
+                                    key={s.id}
+                                    onClick={() => window.location.href = `/bot/client?c=${clientId || ''}`}
+                                    className="w-full text-left flex items-center gap-3 p-2.5 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors active:scale-[0.98]"
+                                >
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium text-sm text-foreground">
                                             {format(new Date(s.date), 'd MMM', { locale: ru })} в {s.time}
@@ -485,7 +489,7 @@ export default function ClientBookingPage() {
                                     <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium flex-shrink-0">
                                         {s.status === 'confirmed' ? 'Подтв.' : 'Ожид.'}
                                     </span>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>

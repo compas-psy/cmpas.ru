@@ -101,7 +101,8 @@ function ClientCalendar() {
             <div className="bg-card px-4 py-5 shadow-sm sticky top-0 z-20 border-b border-border/50">
                 <h1 className="text-xl font-bold text-primary mb-1">Мои записи</h1>
                 <p className="text-muted-foreground text-xs">
-                    {clientContext.isTelegram ? `${clientContext.name}, здесь отображается ваше расписание` : 'Здесь отображается расписание всех ваших сессий'}
+                    {clientContext.isTelegram ? `${clientContext.name}, здесь отображается ваше расписание. ` : 'Здесь отображается расписание всех ваших сессий. '}
+                    <span className="font-bold text-foreground">Нажмите на карточку сессии</span>, чтобы отменить или перенести её.
                 </p>
             </div>
 
@@ -245,6 +246,15 @@ function ClientCalendar() {
                     sessionTime={sessionToCancel.time}
                     clientName={clientContext?.name || ''}
                 />
+            )}
+
+            {/* Instruction Footer */}
+            {!loading && (
+                <div className="px-6 py-8 text-center mt-6">
+                    <p className="text-sm text-muted-foreground/80 leading-relaxed font-medium">
+                        Вы всегда можете вернуться на эту страницу по вашей персональной ссылке или через бота, чтобы управлять своими записями.
+                    </p>
+                </div>
             )}
         </div>
     );

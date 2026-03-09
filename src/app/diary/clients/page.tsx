@@ -301,12 +301,39 @@ export default function ClientsPage() {
                                     {selectedClient.gender && <div>👤 {selectedClient.gender === 'male' ? 'Мужской' : 'Женский'}</div>}
                                 </div>
                             </div>
-                            <button onClick={() => {
-                                navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
-                                toast.success('Персональная ссылка скопирована');
+                            <button onClick={async () => {
+                                const url = `https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`;
+                                try {
+                                    await navigator.clipboard.writeText(url);
+                                    toast.success('Ссылка скопирована. Открываем мессенджер...');
+
+                                    // Deep link priority: Telegram native share logic OR wa.me
+                                    if (selectedClient.phone) {
+                                        const phone = selectedClient.phone.replace(/[^\d]/g, '');
+                                        const text = encodeURIComponent('Здравствуйте! Ваша персональная ссылка для управления записями на сессии: ' + url);
+
+                                        // Give priority to native sharing if on mobile, else fallback to wa.me
+                                        if (navigator.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
+                                            try {
+                                                await navigator.share({
+                                                    title: 'Ссылка для записи',
+                                                    text: 'Персональная ссылка на сессии',
+                                                    url: url
+                                                });
+                                                return; // if native share succeeds, don't open whatsapp directly
+                                            } catch (e) {
+                                                console.log('Share API failed, falling back');
+                                            }
+                                        }
+
+                                        window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+                                    }
+                                } catch (e) {
+                                    toast.error('Не удалось скопировать ссылку');
+                                }
                             }}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium active:scale-[0.98]">
-                                <ClipboardList className="w-4 h-4" /> Скопировать ссылку для бронирования
+                                <ClipboardList className="w-4 h-4" /> Копировать и отправить
                             </button>
                             {selectedClient.status === 'active' ? (
                                 <button onClick={() => handleArchive(selectedClient.id)}
