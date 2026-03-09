@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2, Link as LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
@@ -213,16 +213,28 @@ export default function DiaryCalendarPage() {
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Календарь</h1>
                     <p className="text-muted-foreground text-base mt-2">Управляйте своими записями</p>
                 </div>
-                <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto telegram-miniapp-scrollbar-hide pb-2 md:pb-0">
+                    {settings?.psychologistId && (
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${settings.psychologistId}`);
+                                toast.success('Ссылка на запись скопирована');
+                            }}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 font-semibold rounded-lg transition-all whitespace-nowrap"
+                            title="Скопировать общую ссылку на форму записи"
+                        >
+                            <LinkIcon className="w-4 h-4" /> <span className="hidden sm:inline">Ссылка</span>
+                        </button>
+                    )}
                     <button
                         onClick={() => window.location.href = '/diary/availability'}
-                        className="hidden md:flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-foreground hover:bg-muted font-semibold rounded-lg transition-all"
+                        className="hidden md:flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-foreground hover:bg-muted font-semibold rounded-lg transition-all whitespace-nowrap"
                     >
                         <Plus className="w-4 h-4" /> Окно
                     </button>
                     <button
                         onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
-                        className="hidden md:flex items-center justify-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.98]"
+                        className="flex items-center justify-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.98] whitespace-nowrap"
                     >
                         <Plus className="w-4 h-4" /> Запись
                     </button>

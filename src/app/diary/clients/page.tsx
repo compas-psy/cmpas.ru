@@ -27,6 +27,7 @@ type Client = {
     status: string; questionnaire: { id: string; data: QuestionnaireData } | null;
     sessions?: Session[];
     consentVersion?: string | null; consentHash?: string | null; consentDate?: Date | null;
+    psychologistId?: string;
 };
 
 type Session = {
@@ -300,6 +301,13 @@ export default function ClientsPage() {
                                     {selectedClient.gender && <div>👤 {selectedClient.gender === 'male' ? 'Мужской' : 'Женский'}</div>}
                                 </div>
                             </div>
+                            <button onClick={() => {
+                                navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
+                                toast.success('Персональная ссылка скопирована');
+                            }}
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium active:scale-[0.98]">
+                                <ClipboardList className="w-4 h-4" /> Скопировать ссылку для бронирования
+                            </button>
                             {selectedClient.status === 'active' ? (
                                 <button onClick={() => handleArchive(selectedClient.id)}
                                     className="w-full flex items-center justify-center gap-2 py-3 bg-muted text-foreground rounded-xl font-medium active:scale-[0.98]">
@@ -427,6 +435,10 @@ export default function ClientsPage() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
+                                        <button onClick={() => {
+                                            navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
+                                            toast.success('Персональная ссылка скопирована');
+                                        }} className="p-2 hover:bg-muted rounded-xl transition-colors" title="Скопировать ссылку для клиента"><ClipboardList className="w-5 h-5 text-primary" /></button>
                                         {selectedClient.status === 'active' ? (
                                             <button onClick={() => handleArchive(selectedClient.id)} className="p-2 hover:bg-muted rounded-xl transition-colors" title="В архив"><Archive className="w-5 h-5 text-muted-foreground" /></button>
                                         ) : (

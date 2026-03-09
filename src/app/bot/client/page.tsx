@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
-import { getClientSessions } from '../actions';
+import { getClientSessions, getClientSessionsById } from '../actions';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Video, MapPin, X, Calendar as CalendarIcon } from 'lucide-react';
 import { CancelSessionDialog } from '@/components/psidairy/CancelSessionDialog';
 
 function ClientCalendar() {
-    const [initData, setInitData] = useState<any>(null);
+    const [clientContext, setClientContext] = useState<{ id: string, name: string, isTelegram: boolean } | null>(null);
     const [sessions, setSessions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -26,26 +26,37 @@ function ClientCalendar() {
                 document.documentElement.classList.add('dark');
             }
             if (twa.initDataUnsafe?.user) {
-                setInitData(twa.initDataUnsafe.user);
+                setClientContext({
+                    id: String(twa.initDataUnsafe.user.id),
+                    name: twa.initDataUnsafe.user.first_name || 'Клиент',
+                    isTelegram: true
+                });
             } else {
-                // Mock for testing
-                setInitData({ id: process.env.NEXT_PUBLIC_TEST_TG_ID || '182398258', first_name: 'Test Client' });
+                const savedClientId = localStorage.getItem('compas_clientId');
+                if (savedClientId) {
+                    setClientContext({ id: savedClientId, name: 'Мои записи', isTelegram: false });
+                }
             }
         }
     }, []);
 
     const fetchSessions = useCallback(async () => {
-        if (!initData?.id) return;
+        if (!clientContext) return;
         setLoading(true);
         try {
-            const data = await getClientSessions(String(initData.id));
+            let data = [];
+            if (clientContext.isTelegram) {
+                data = await getClientSessions(clientContext.id);
+            } else {
+                data = await getClientSessionsById(clientContext.id);
+            }
             setSessions(data);
         } catch (e) {
             console.error('Failed to fetch sessions', e);
         } finally {
             setLoading(false);
         }
-    }, [initData]);
+    }, [clientContext]);
 
     useEffect(() => {
         fetchSessions();
@@ -76,10 +87,10 @@ function ClientCalendar() {
         );
     }
 
-    if (!initData) {
+    if (!clientContext) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-                <p className="text-muted-foreground text-center">Пожалуйста, откройте это приложение через Telegram бота.</p>
+                <p className="text-muted-foreground text-center">Пожалуйста, откройте приложение через бота или перейдите по персональной ссылке от психолога.</p>
             </div>
         );
     }
@@ -90,7 +101,7 @@ function ClientCalendar() {
             <div className="bg-card px-4 py-5 shadow-sm sticky top-0 z-20 border-b border-border/50">
                 <h1 className="text-xl font-bold text-primary mb-1">Мои записи</h1>
                 <p className="text-muted-foreground text-xs">
-                    {initData.first_name}, здесь отображается ваше расписание
+                    {clientContext.isTelegram ? `${clientContext.name}, здесь отображается ваше расписание` : 'Здесь отображается расписание всех ваших сессий'}
                 </p>
             </div>
 
@@ -232,7 +243,7 @@ function ClientCalendar() {
                     sessionId={sessionToCancel.id}
                     sessionDate={format(new Date(sessionToCancel.date), 'dd.MM')}
                     sessionTime={sessionToCancel.time}
-                    clientName={initData.first_name}
+                    clientName={clientContext?.name || ''}
                 />
             )}
         </div>

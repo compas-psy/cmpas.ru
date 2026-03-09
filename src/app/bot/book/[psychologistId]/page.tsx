@@ -122,7 +122,7 @@ export default function ClientBookingPage() {
                     setStartDate(firstDate);
                 }
 
-                // Extract c param synchronously
+                // Extract c param synchronously or read from localStorage
                 let currentClientId: string | undefined = undefined;
                 if (typeof window !== 'undefined') {
                     const urlParams = new URLSearchParams(window.location.search);
@@ -130,6 +130,12 @@ export default function ClientBookingPage() {
                     if (c) {
                         currentClientId = c;
                         setClientId(c);
+                    } else {
+                        const savedClientId = localStorage.getItem('compas_clientId');
+                        if (savedClientId) {
+                            currentClientId = savedClientId;
+                            setClientId(savedClientId);
+                        }
                     }
                 }
 
@@ -182,7 +188,7 @@ export default function ClientBookingPage() {
 
                         // Treat as needing consent check
                         const consent = await checkConsentRequired('', psychologistId);
-                        setConsentRequired(client && client.consentVersion ? false : consent.required);
+                        setConsentRequired((client as any)?.consentVersion ? false : consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
                     } catch (e) {
@@ -307,6 +313,11 @@ export default function ClientBookingPage() {
                 toast.error(res.error || 'Произошла ошибка при записи');
                 setBooking(false);
                 return;
+            }
+
+            // Save clientId to local storage for persistent identification
+            if (res && res.clientId && typeof window !== 'undefined') {
+                localStorage.setItem('compas_clientId', res.clientId);
             }
 
             // Get address details for success screen

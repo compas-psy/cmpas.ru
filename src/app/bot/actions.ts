@@ -353,7 +353,7 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         console.error('Auto-sync after booking failed:', e);
     }
 
-    return { success: true, sessionId: session.id };
+    return { success: true, sessionId: session.id, clientId: client.id };
 }
 
 // Direct client lookup by ID (for when MiniApp opens in browser without Telegram context)
@@ -483,13 +483,19 @@ export async function getClientSessions(telegramChatId: string) {
 
     if (!client) return [];
 
+    return getClientSessionsById(client.id);
+}
+
+export async function getClientSessionsById(clientId: string) {
+    if (!clientId) return [];
+
     const now = new Date();
     // Reset time to start of day for comparison so we don't miss today's later sessions
     now.setHours(0, 0, 0, 0);
 
     const sessions = await db.diarySession.findMany({
         where: {
-            clientId: client.id,
+            clientId: clientId,
             date: { gte: now },
             status: { not: 'cancelled' }
         },
