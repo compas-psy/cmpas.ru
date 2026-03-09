@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     try {
-        const psycho = await db.user.findFirst({ where: { role: 'psychologist' } });
+        const psycho = await db.user.findFirst({ where: { email: 'eliah@yandex.ru' } });
         if (!psycho) return NextResponse.json({ error: 'no psycho' });
 
         const dates = await getAvailableDates(psycho.id, 2026, 2, true); // March 2026

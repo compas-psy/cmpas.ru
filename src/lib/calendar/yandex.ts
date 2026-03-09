@@ -222,14 +222,14 @@ export async function fetchYandexCalendarEvents(
             return { success: false, error: 'Календарь не найден' };
         }
 
-        // tsdav calendarQuery requires start/end string dates in iCal format (e.g. 20240101T000000Z)
-        const formatICalDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        // tsdav calendarQuery requires start/end string dates in ISO format (e.g. 2024-01-01T00:00:00.000Z)
+        const formatStrDate = (d: Date) => d.toISOString();
 
         const objects = await client.fetchCalendarObjects({
             calendar,
             timeRange: {
-                start: formatICalDate(startDate),
-                end: formatICalDate(endDate),
+                start: formatStrDate(startDate),
+                end: formatStrDate(endDate),
             },
             expand: true
         });
