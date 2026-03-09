@@ -1,0 +1,93 @@
+[33mcommit 394c184fcda2d0d93e62496a8e142e71aea575fc[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Eliah <eliah.n.martynov@gmail.com>
+Date:   Mon Mar 9 23:56:07 2026 +0300
+
+    chore: add debug api route
+
+[1mdiff --git a/src/app/api/debug/route.ts b/src/app/api/debug/route.ts[m
+[1mindex 501bd12..48b5936 100644[m
+[1m--- a/src/app/api/debug/route.ts[m
+[1m+++ b/src/app/api/debug/route.ts[m
+[36m@@ -1,12 +1,49 @@[m
+[31m-import { NextResponse } from 'next/server';[m
+ import { db } from '@/lib/db';[m
+[31m-[m
+[31m-export const dynamic = 'force-dynamic';[m
+[32m+[m[32mimport { fetchGoogleCalendarEvents } from '@/lib/calendar/google';[m
+[32m+[m[32mimport { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';[m
+[32m+[m[32mimport { NextResponse } from 'next/server';[m
+ [m
+ export async function GET(request: Request) {[m
+[31m-    const user = await db.user.findUnique({ where: { email: 'eliah@yandex.ru' } })[m
+[31m-    if (!user) return NextResponse.json({ error: "Not found" });[m
+[31m-    const slots = await db.availabilitySlot.findMany({ where: { psychologistId: user.id } })[m
+[31m-    const blocks = await db.timeBlock.findMany({ where: { psychologistId: user.id } })[m
+[31m-    return NextResponse.json({ slots, blocks });[m
+[32m+[m[32m    try {[m
+[32m+[m[32m        const integrations = await db.calendarIntegration.findMany({[m
+[32m+[m[32m            where: { isActive: true, syncFrom: true }[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        const dayStart = new Date('2026-03-01T00:00:00.000Z');[m
+[32m+[m[32m        const dayEnd = new Date('2026-03-31T23:59:59.000Z');[m
+[32m+[m
+[32m+[m[32m        const results = [];[m
+[32m+[m[32m        for (const integration of integrations) {[m
+[32m+[m[32m            let res;[m
+[32m+[m[32m            if (integration.provider === 'google') {[m
+[32m+[m[32m                res = await fetchGoogleCalendarEvents(integration.id, dayStart, dayEnd);[m
+[32m+[m[32m            } else if (integration.provider === 'yandex') {[m
+[32m+[m[32m                res = await fetchYandexCalendarEvents(integration.id, dayStart, dayEnd);[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            if (res && res.success && res.events) {[m
+[32m+[m[32m                const mapped = res.events.map((ev: any) => {[m
+[32m+[m[32m                    const localStart = new Date(ev.start);[m
+[32m+[m[32m                    const localEnd = new Date(ev.end);[m
+[32m+[m[32m                    return {[m
+[32m+[m[32m                        date: new Date(Date.UTC(localStart.getFullYear(), localStart.getMonth(), localStart.getDate())).toISOString().slice(0, 10),[m
+[32m+[m[32m                        startTime: `${String(localStart.getHours()).padStart(2, '0')}:${String(localStart.getMinutes()).padStart(2, '0')}`,[m
+[32m+[m[32m                        endTime: `${String(localEnd.getHours()).padStart(2, '0')}:${String(localEnd.getMinutes()).padStart(2, '0')}`,[m
+[32m+[m[32m                    };[m
+[32m+[m[32m                });[m
+[32m+[m[32m                results.push({[m
+[32m+[m[32m                    provider: integration.provider,[m
+[32m+[m[32m                    eventsCount: res.events.length,[m
+[32m+[m[32m                    first3Events: res.events.slice(0, 3),[m
+[32m+[m[32m                    first3Mapped: mapped.slice(0, 3)[m
+[32m+[m[32m                });[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                results.push({ provider: integration.provider, errorOrRes: res });[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return NextResponse.json({ success: true, results });[m
+[32m+[m[32m    } catch (e: any) {[m
+[32m+[m[32m        return NextResponse.json({ success: false, error: e.message });[m
+[32m+[m[32m    }[m
+ }[m
+
+[33mcommit ed1a997e3b9fd0223e979bc668248697733fcd81[m
+Author: Eliah <eliah.n.martynov@gmail.com>
+Date:   Mon Feb 23 00:41:30 2026 +0300
+
+    UI: iOS-style redesign for Psychologist Diary & Bugfixes
+
+[1mdiff --git a/src/app/api/debug/route.ts b/src/app/api/debug/route.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..501bd12[m
+[1m--- /dev/null[m
+[1m+++ b/src/app/api/debug/route.ts[m
+[36m@@ -0,0 +1,12 @@[m
+[32m+[m[32mimport { NextResponse } from 'next/server';[m
+[32m+[m[32mimport { db } from '@/lib/db';[m
+[32m+[m
+[32m+[m[32mexport const dynamic = 'force-dynamic';[m
+[32m+[m
+[32m+[m[32mexport async function GET(request: Request) {[m
+[32m+[m[32m    const user = await db.user.findUnique({ where: { email: 'eliah@yandex.ru' } })[m
+[32m+[m[32m    if (!user) return NextResponse.json({ error: "Not found" });[m
+[32m+[m[32m    const slots = await db.availabilitySlot.findMany({ where: { psychologistId: user.id } })[m
+[32m+[m[32m    const blocks = await db.timeBlock.findMany({ where: { psychologistId: user.id } })[m
+[32m+[m[32m    return NextResponse.json({ slots, blocks });[m
+[32m+[m[32m}[m
