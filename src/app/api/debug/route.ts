@@ -1,51 +1,19 @@
+import { getAvailableDates, getAvailableTimes } from '@/app/bot/actions';
 import { db } from '@/lib/db';
-import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
-import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     try {
-        const integrations = await db.calendarIntegration.findMany({
-            where: { isActive: true, syncFrom: true }
-        });
+        const psycho = await db.user.findFirst({ where: { role: 'psychologist' } });
+        if (!psycho) return NextResponse.json({ error: 'no psycho' });
 
-        const dayStart = new Date('2026-03-01T00:00:00.000Z');
-        const dayEnd = new Date('2026-03-31T23:59:59.000Z');
+        const dates = await getAvailableDates(psycho.id, 2026, 2, true); // March 2026
+        const times = await getAvailableTimes(psycho.id, '2026-03-12', true);
 
-        const results = [];
-        for (const integration of integrations) {
-            let res;
-            if (integration.provider === 'google') {
-                res = await fetchGoogleCalendarEvents(integration.id, dayStart, dayEnd);
-            } else if (integration.provider === 'yandex') {
-                res = await fetchYandexCalendarEvents(integration.id, dayStart, dayEnd);
-            }
-
-            if (res && res.success && res.events) {
-                const mapped = res.events.map((ev: any) => {
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    return {
-                        date: new Date(Date.UTC(localStart.getFullYear(), localStart.getMonth(), localStart.getDate())).toISOString().slice(0, 10),
-                        startTime: `${String(localStart.getHours()).padStart(2, '0')}:${String(localStart.getMinutes()).padStart(2, '0')}`,
-                        endTime: `${String(localEnd.getHours()).padStart(2, '0')}:${String(localEnd.getMinutes()).padStart(2, '0')}`,
-                    };
-                });
-                results.push({
-                    provider: integration.provider,
-                    eventsCount: res.events.length,
-                    first3Events: res.events.slice(0, 3),
-                    first3Mapped: mapped.slice(0, 3)
-                });
-            } else {
-                results.push({ provider: integration.provider, errorOrRes: res });
-            }
-        }
-
-        return NextResponse.json({ success: true, results });
+        return NextResponse.json({ success: true, psycho: psycho.id, dates, times });
     } catch (e: any) {
-        return NextResponse.json({ success: false, error: e.message });
+        return NextResponse.json({ success: false, error: e.message, stack: e.stack });
     }
 }
