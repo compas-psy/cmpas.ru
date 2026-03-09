@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { bot } from '@/lib/telegram-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
+import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
+import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 
 export async function getPsychologist(id: string) {
     const user = await db.user.findUnique({
