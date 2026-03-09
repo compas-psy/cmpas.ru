@@ -29,15 +29,8 @@ export default function ClientBookingPage() {
     const params = useParams();
     const psychologistId = params.psychologistId as string;
 
-    // Extract clientId from query string if available
+    // Extract clientId manually inside the init function to avoid race conditions.
     const [clientId, setClientId] = useState<string | null>(null);
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const urlParams = new URLSearchParams(window.location.search);
-            const c = urlParams.get('c');
-            if (c) setClientId(c);
-        }
-    }, []);
 
     const router = useRouter();
     const [tgUser, setTgUser] = useState<any>(null);
@@ -129,11 +122,23 @@ export default function ClientBookingPage() {
                     setStartDate(firstDate);
                 }
 
+                // Extract c param synchronously
+                let currentClientId: string | undefined = undefined;
+                if (typeof window !== 'undefined') {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const c = urlParams.get('c');
+                    if (c) {
+                        currentClientId = c;
+                        setClientId(c);
+                    }
+                }
+
                 // Pre-fill client data if returning
                 const tgUserId = tg?.initDataUnsafe?.user?.id;
+
                 if (tgUserId && user) {
                     try {
-                        const client = await getClientByTelegram(psychologistId, String(tgUserId), clientId || undefined);
+                        const client = await getClientByTelegram(psychologistId, String(tgUserId), currentClientId);
                         if (client) {
                             setIsKnownClient(true);
                             setForm({
@@ -156,8 +161,35 @@ export default function ClientBookingPage() {
                     } catch {
                         setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
                     }
+                } else if (currentClientId && user) {
+                    // Client loaded from URL, but without Telegram context (e.g. opened in browser)
+                    try {
+                        // Import dynamically to avoid top-level issues if needed, but it's already in actions
+                        const { getClientById, getClientUpcomingSessionsById } = await import('../../actions');
+                        const client = await getClientById(psychologistId, currentClientId);
+
+                        if (client) {
+                            setIsKnownClient(true);
+                            setForm({
+                                name: client.name || '',
+                                phone: client.phone || ''
+                            });
+
+                            // Load upcoming sessions for known client
+                            const sessions = await getClientUpcomingSessionsById(psychologistId, currentClientId);
+                            setUpcomingSessions(sessions);
+                        }
+
+                        // Treat as needing consent check
+                        const consent = await checkConsentRequired('', psychologistId);
+                        setConsentRequired(client && client.consentVersion ? false : consent.required);
+                        setConsentText(consent.text);
+                        setConsentVersionState(consent.version);
+                    } catch (e) {
+                        console.error(e);
+                    }
                 } else {
-                    // Unknown client without TG — consent always required
+                    // Unknown client without TG and without client ID
                     try {
                         const consent = await checkConsentRequired('', psychologistId);
                         setConsentRequired(true);

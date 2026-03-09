@@ -356,6 +356,54 @@ export async function bookSession(psychologistId: string, userDetails: any, form
     return { success: true, sessionId: session.id };
 }
 
+// Direct client lookup by ID (for when MiniApp opens in browser without Telegram context)
+export async function getClientById(psychologistId: string, clientId: string) {
+    if (!clientId || !psychologistId) return null;
+
+    const client = await db.diaryClient.findFirst({
+        where: {
+            id: clientId,
+            psychologistId
+        },
+        select: { id: true, name: true, phone: true, consentVersion: true }
+    });
+
+    return client;
+}
+
+// Get upcoming sessions by clientId (for no-TG context)
+export async function getClientUpcomingSessionsById(psychologistId: string, clientId: string) {
+    if (!clientId) return [];
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const sessions = await db.diarySession.findMany({
+        where: {
+            psychologistId,
+            clientId,
+            date: { gte: now },
+            status: { not: 'cancelled' }
+        },
+        include: {
+            address: { select: { name: true, address: true } }
+        },
+        orderBy: [{ date: 'asc' }, { time: 'asc' }],
+        take: 10
+    });
+
+    return sessions.map(s => ({
+        id: s.id,
+        date: s.date,
+        time: s.time,
+        endTime: s.endTime,
+        status: s.status,
+        format: s.format,
+        addressName: s.address?.name || null,
+        addressFull: s.address?.address || null,
+    }));
+}
+
 export async function getClientByTelegram(psychologistId: string, telegramUserId: string, explicitClientId?: string) {
     if (!telegramUserId) return null;
 
