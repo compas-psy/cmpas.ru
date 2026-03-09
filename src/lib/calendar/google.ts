@@ -327,3 +327,75 @@ export async function syncAllSessionsToGoogle(
         return { success: false, synced: 0, error: message };
     }
 }
+
+/**
+ * Fetch events from Google Calendar within a date range
+ */
+export async function fetchGoogleCalendarEvents(
+    integrationId: string,
+    startDate: Date,
+    endDate: Date
+): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({
+            where: { id: integrationId },
+        });
+        if (!integration?.calendarId) {
+            return { success: false, error: 'Календарь не выбран' };
+        }
+
+        const accessToken = await getValidToken(integrationId);
+
+        // Fetch events in time range, ignoring deleted ones
+        const params = new URLSearchParams({
+            timeMin: startDate.toISOString(),
+            timeMax: endDate.toISOString(),
+            singleEvents: 'true', // Expand recurring events
+            orderBy: 'startTime',
+            showDeleted: 'false',
+        });
+
+        const response = await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events?${params.toString()}`,
+            {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            }
+        );
+
+        if (!response.ok) {
+            const err = await response.text();
+            return { success: false, error: `Google API error: ${err}` };
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+
+        const events = items
+            .filter((item: any) => item.status !== 'cancelled' && item.transparency !== 'transparent') // skip Free slots
+            .map((item: any) => {
+                let start, end;
+                if (item.start.dateTime) {
+                    start = new Date(item.start.dateTime);
+                    end = new Date(item.end.dateTime);
+                } else if (item.start.date) {
+                    // All-day event
+                    start = new Date(item.start.date);
+                    end = new Date(item.end.date);
+                } else {
+                    return null;
+                }
+
+                return {
+                    start,
+                    end,
+                    summary: item.summary || 'Busy',
+                };
+            })
+            .filter(Boolean);
+
+        return { success: true, events };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка запроса Google Calendar';
+        return { success: false, error: message };
+    }
+}

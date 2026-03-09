@@ -12,6 +12,7 @@ type Integration = {
     isActive: boolean;
     lastSynced: string | null;
     conflictsCount: number;
+    syncFrom: boolean;
 };
 
 const providerInfo: Record<string, { name: string; color: string; image?: string; icon: string; description: string }> = {
@@ -164,6 +165,15 @@ export default function IntegrationsPage() {
         } catch { toast.error('Ошибка'); }
     };
 
+    const handleToggleSyncFrom = async (id: string, syncFrom: boolean) => {
+        try {
+            const { toggleIntegrationSyncFrom } = await import('../actions/settings');
+            await toggleIntegrationSyncFrom(id, !syncFrom);
+            toast.success(!syncFrom ? 'Импорт событий включён' : 'Импорт событий отключён');
+            fetchData();
+        } catch { toast.error('Ошибка'); }
+    };
+
     const handleDisconnect = async (id: string, provider: string) => {
         try {
             const { disconnectIntegration } = await import('../actions/settings');
@@ -253,11 +263,26 @@ export default function IntegrationsPage() {
                                             </button>
                                         </div>
                                     </div>
+                                    {/* Import Events Toggle */}
+                                    {i.isActive && (
+                                        <div className="mt-4 pt-4 border-t border-border/40 flex items-center justify-between">
+                                            <div>
+                                                <div className="text-sm font-bold text-foreground">Импортировать события</div>
+                                                <div className="text-xs font-medium text-muted-foreground mt-0.5">Блокировать свободное время событиями из этого календаря</div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleToggleSyncFrom(i.id, i.syncFrom)}
+                                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${i.syncFrom ? 'bg-primary' : 'bg-muted'}`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform ${i.syncFrom ? 'left-[22px]' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+                                    )}
                                     {/* Disconnect button */}
-                                    <div className="mt-5 pt-4 border-t border-border/50 flex justify-end">
+                                    <div className="mt-4 pt-4 border-t border-border/40 flex justify-end">
                                         <button
                                             onClick={() => handleDisconnect(i.id, i.provider)}
-                                            className="text-sm font-semibold text-destructive hover:bg-destructive/10 px-3 py-1.5 rounded-lg transition-colors"
+                                            className="text-sm font-semibold text-destructive/80 hover:text-destructive hover:bg-destructive/10 px-3 py-1.5 rounded-lg transition-colors"
                                         >
                                             Отключить интеграцию
                                         </button>

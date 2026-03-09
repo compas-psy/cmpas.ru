@@ -197,3 +197,88 @@ export async function syncAllSessionsToYandex(
         return { success: false, synced: 0, error: message };
     }
 }
+
+/**
+ * Fetch events from Yandex Calendar within a date range
+ */
+export async function fetchYandexCalendarEvents(
+    integrationId: string,
+    startDate: Date,
+    endDate: Date
+): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({
+            where: { id: integrationId },
+        });
+        if (!integration?.caldavLogin || !integration?.caldavPassword || !integration?.calendarId) {
+            return { success: false, error: 'Интеграция не настроена' };
+        }
+
+        const client = await createYandexClient(integration.caldavLogin, integration.caldavPassword);
+        const calendars = await client.fetchCalendars();
+        const calendar = calendars.find(c => c.url === integration.calendarId) || calendars[0];
+
+        if (!calendar) {
+            return { success: false, error: 'Календарь не найден' };
+        }
+
+        // tsdav calendarQuery requires start/end string dates in iCal format (e.g. 20240101T000000Z)
+        const formatICalDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+        const objects = await client.fetchCalendarObjects({
+            calendar,
+            timeRange: {
+                start: formatICalDate(startDate),
+                end: formatICalDate(endDate),
+            },
+            expand: true
+        });
+
+        const events: { start: Date; end: Date; summary: string }[] = [];
+
+        // Parse rudimentary iCal strings returned by tsdav
+        for (const obj of objects) {
+            if (!obj.data) continue;
+
+            // Check if it's explicitly marked FREE (TRANSP:TRANSPARENT)
+            if (obj.data.includes('TRANSP:TRANSPARENT') || obj.data.includes('STATUS:CANCELLED')) {
+                continue;
+            }
+
+            const dtstartMatch = obj.data.match(/DTSTART(?:;.*?)?:(.*)/);
+            const dtendMatch = obj.data.match(/DTEND(?:;.*?)?:(.*)/);
+            const summaryMatch = obj.data.match(/SUMMARY:(.*)/);
+
+            if (dtstartMatch) {
+                // very simple iCal date parsing
+                const parseIcalDateStr = (str: string) => {
+                    str = str.replace(/Z$/, '').trim();
+                    if (str.length === 8) {
+                        return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00Z`);
+                    }
+                    return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${str.slice(9, 11)}:${str.slice(11, 13)}:${str.slice(13, 15)}Z`);
+                };
+
+                const start = parseIcalDateStr(dtstartMatch[1]);
+                let end = dtendMatch ? parseIcalDateStr(dtendMatch[1]) : new Date(start.getTime() + 60 * 60 * 1000); // default 1h if no end
+
+                // If the event is an all-day event (length 8), it starts at midnight and ends the next midnight.
+                // We should make sure `end` matches that if only one day was given.
+                if (dtstartMatch[1].trim().length === 8 && !dtendMatch) {
+                    end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+                }
+
+                events.push({
+                    start,
+                    end,
+                    summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
+                });
+            }
+        }
+
+        return { success: true, events };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка запроса Yandex Calendar';
+        return { success: false, error: message };
+    }
+}

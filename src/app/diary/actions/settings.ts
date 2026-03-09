@@ -131,6 +131,17 @@ export async function toggleIntegration(id: string, isActive: boolean) {
     return integration;
 }
 
+export async function toggleIntegrationSyncFrom(id: string, syncFrom: boolean) {
+    await getPsychologistId();
+    // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
+    const integration = await db.calendarIntegration.update({
+        where: { id },
+        data: { syncFrom },
+    });
+    revalidatePath('/diary/integrations');
+    return integration;
+}
+
 export async function disconnectIntegration(id: string) {
     await getPsychologistId();
     await db.calendarIntegration.delete({

@@ -361,6 +361,9 @@ model CalendarIntegration {
   calendarId      String?  // provider-specific calendar ID or URL
   syncToken       String?  // for incremental sync (ctag/syncToken)
   
+  // Settings for two-way synchronization
+  syncFrom        Boolean  @default(true) // Whether to import events to block diary slots
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

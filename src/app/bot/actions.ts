@@ -142,12 +142,52 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
     const sessionBreak = 15;
 
+    // Fetch settings to check if we should block conflicts from external calendars
+    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    const blockConflicts = settings?.blockConflicts ?? false;
+
+    let externalBlocks: any[] = [];
+    if (blockConflicts) {
+        // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
+        // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
+        const integrations = await db.calendarIntegration.findMany({
+            // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
+            where: { psychologistId, isActive: true, syncFrom: true }
+        });
+
+        for (const integration of integrations) {
+            let res;
+            if (integration.provider === 'google') {
+                res = await fetchGoogleCalendarEvents(integration.id, startDate, endDate);
+            } else if (integration.provider === 'yandex') {
+                res = await fetchYandexCalendarEvents(integration.id, startDate, endDate);
+            }
+
+            if (res && res.success && res.events) {
+                // Map external events into a structure similar to diaryBlocks
+                const mapped = res.events.map((ev: any) => {
+                    const localStart = new Date(ev.start);
+                    const localEnd = new Date(ev.end);
+                    return {
+                        date: new Date(Date.UTC(localStart.getFullYear(), localStart.getMonth(), localStart.getDate())),
+                        startTime: `${String(localStart.getHours()).padStart(2, '0')}:${String(localStart.getMinutes()).padStart(2, '0')}`,
+                        endTime: `${String(localEnd.getHours()).padStart(2, '0')}:${String(localEnd.getMinutes()).padStart(2, '0')}`,
+                        _external: true
+                    };
+                });
+                externalBlocks.push(...mapped);
+            }
+        }
+    }
+
     const blocks = await db.diaryBlock.findMany({
         where: {
             psychologistId,
             date: { lte: endDate, gte: startDate }
         }
     });
+
+    const allBlocks = [...blocks, ...externalBlocks];
 
     const sessions = await db.diarySession.findMany({
         where: {
@@ -164,7 +204,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
         const dateStr = toDateStr(d);
         if (dateStr < todayStr) continue;
 
-        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions, sessionBreak);
+        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, sessionBreak);
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
         }
@@ -188,12 +228,49 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     const sessionBreak = 15;
 
+    // Fetch settings to check if we should block conflicts from external calendars
+    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    const blockConflicts = settings?.blockConflicts ?? false;
+
+    let externalBlocks: any[] = [];
+    if (blockConflicts) {
+        // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
+        const integrations = await db.calendarIntegration.findMany({
+            where: { psychologistId, isActive: true, syncFrom: true }
+        });
+
+        for (const integration of integrations) {
+            let res;
+            if (integration.provider === 'google') {
+                res = await fetchGoogleCalendarEvents(integration.id, dayStart, dayEnd);
+            } else if (integration.provider === 'yandex') {
+                res = await fetchYandexCalendarEvents(integration.id, dayStart, dayEnd);
+            }
+
+            if (res && res.success && res.events) {
+                const mapped = res.events.map((ev: any) => {
+                    const localStart = new Date(ev.start);
+                    const localEnd = new Date(ev.end);
+                    return {
+                        date: new Date(Date.UTC(localStart.getFullYear(), localStart.getMonth(), localStart.getDate())),
+                        startTime: `${String(localStart.getHours()).padStart(2, '0')}:${String(localStart.getMinutes()).padStart(2, '0')}`,
+                        endTime: `${String(localEnd.getHours()).padStart(2, '0')}:${String(localEnd.getMinutes()).padStart(2, '0')}`,
+                        _external: true
+                    };
+                });
+                externalBlocks.push(...mapped);
+            }
+        }
+    }
+
     const blocks = await db.diaryBlock.findMany({
         where: {
             psychologistId,
             date: { gte: dayStart, lte: dayEnd }
         }
     });
+
+    const allBlocks = [...blocks, ...externalBlocks];
     const sessions = await db.diarySession.findMany({
         where: {
             psychologistId,
@@ -203,7 +280,7 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         select: { date: true, time: true, duration: true }
     });
 
-    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, blocks, sessions, sessionBreak);
+    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, sessionBreak);
 }
 
 export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
