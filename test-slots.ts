@@ -1,20 +1,21 @@
-import { db } from './src/lib/db'
+import { db } from './src/lib/db';
+import { getAvailableTimes } from './src/app/bot/actions';
 
 async function main() {
-    const user = await db.user.findUnique({ where: { email: 'eliah@yandex.ru' } })
-    if (!user) { console.log("Not found"); return }
-    const slots = await db.availabilitySlot.findMany({ where: { psychologistId: user.id } })
-    const blocks = await db.timeBlock.findMany({ where: { psychologistId: user.id } })
-    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId: user.id } })
+    const psycho = await db.user.findFirst({ where: { role: 'psychologist' } });
+    if (!psycho) {
+        console.log('No psycho');
+        return;
+    }
 
-    console.log("------- SLOTS -------")
-    console.log(slots)
-
-    console.log("------- BLOCKS -------")
-    console.log(blocks)
-
-    console.log("------- SETTINGS -------")
-    console.log(settings)
+    console.log('Testing psycho:', psycho.id, psycho.name);
+    try {
+        const times = await getAvailableTimes(psycho.id, '2026-03-12', true);
+        console.log('Available Times for 03-12:', times);
+    } catch (e) {
+        console.error(e);
+    }
+    process.exit(0);
 }
 
-main().catch(console.error).finally(() => process.exit(0))
+main();
