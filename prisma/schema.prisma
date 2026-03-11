@@ -32,6 +32,11 @@ model User {
   psychologistAddresses  PsychologistAddress[]
   diaryBlocks          DiaryBlock[]
   
+  // Therapy process (Smart Notes)
+  therapyGoals         TherapyGoal[]
+  homeworks            Homework[]
+  clientAssessments    ClientAssessment[]
+  
   // Telegram Integration
   telegramChatId       String?   @unique
   telegramUsername     String?
@@ -237,6 +242,13 @@ model DiaryClient {
   psychologist      User      @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   questionnaire     DiaryQuestionnaire?
   sessions          DiarySession[]
+  
+  // Therapy process & Smart Notes
+  therapyGoals      TherapyGoal[]
+  homeworks         Homework[]
+  risk              ClientRisk?
+  assessments       ClientAssessment[]
+  checkIns          ClientCheckIn[]
 
   @@index([psychologistId])
   @@index([status])
@@ -246,6 +258,7 @@ model DiaryQuestionnaire {
   id              String   @id @default(cuid())
   clientId        String   @unique
   data            Json     // All 7 questionnaire sections stored as JSON
+  isCompleted     Boolean  @default(false) // Whether the anamnesis is considered full
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -265,7 +278,10 @@ model DiarySession {
   format          String   @default("online") // online, offline
   addressId       String?  // nullable reference to a PsychologistAddress
   status          String   @default("pending") // pending, confirmed, completed, cancelled
-  notes           String?
+  notes           String?  // Legacy flat notes
+  structuredNotes Json?    // Array of smart tags/blocks (e.g. Anamnesis, Request)
+  privateNotes    Json?    // Array of private blocks for the psychologist only
+  clientSummary   String?  // Text summary to be shown in the client's cabinet
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -273,6 +289,7 @@ model DiarySession {
   psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   address         PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  homeworks       Homework[]
 
   @@index([psychologistId])
   @@index([clientId])
@@ -470,4 +487,102 @@ model ConsentVersion {
   text      String   // Full consent text
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+// ============================================
+// Therapy & Smart Tags Models (Release 1)
+// ============================================
+
+model TherapyGoal {
+  id              String   @id @default(cuid())
+  clientId        String
+  psychologistId  String
+  
+  description     String   // "Запрос" / Goal
+  criteria        String?  // "Критерии успеха"
+  status          String   @default("active") // active, achieved, abandoned
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  
+  @@index([clientId])
+  @@index([psychologistId])
+}
+
+model Homework {
+  id              String   @id @default(cuid())
+  clientId        String
+  psychologistId  String
+  sessionId       String?  // Which session generated this homework
+  
+  title           String
+  description     String
+  status          String   @default("pending") // pending, completed, cancelled
+  dueDate         DateTime?
+  clientFeedback  String?  // Client's input when completing
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          DiaryClient   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  psychologist    User          @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  session         DiarySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([sessionId])
+}
+
+model ClientRisk {
+  id              String   @id @default(cuid())
+  clientId        String   @unique
+  
+  level           String   // low, medium, high, critical
+  description     String?  // Что вызывает опасения
+  safetyPlan      String?  // План безопасности (что делать клиенту/терапевту)
+  nextCheckDate   DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ClientAssessment {
+  id              String   @id @default(cuid())
+  clientId        String
+  psychologistId  String
+  
+  toolName        String   // Название методики (e.g. "PHQ-9", "GAD-7", "BDI")
+  score           Float?   // Баллы
+  resultText      String?  // Интерпретация
+  date            DateTime // Дата заполнения
+  nextAssessment  DateTime? // Когда повторить
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([toolName])
+}
+
+model ClientCheckIn {
+  id              String   @id @default(cuid())
+  clientId        String
+  
+  moodRating      Int?     // e.g. 1-5 or 1-10
+  notes           String?
+  date            DateTime @default(now())
+  
+  createdAt       DateTime @default(now())
+  
+  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  @@index([clientId])
+  @@index([date])
 }
