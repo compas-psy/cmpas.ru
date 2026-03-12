@@ -283,6 +283,9 @@ model DiarySession {
   privateNotes    Json?    // Array of private blocks for the psychologist only
   clientSummary   String?  // Text summary to be shown in the client's cabinet
   
+  notified24h     Boolean  @default(false)
+  notified1h      Boolean  @default(false)
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
