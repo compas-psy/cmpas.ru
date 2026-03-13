@@ -338,19 +338,24 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         const tgClient = await db.telegramClient.findUnique({
             where: { telegramUserId: tgUserId }
         });
-        if (tgClient && !tgClient.diaryClientId) {
-            await db.telegramClient.update({
-                where: { id: tgClient.id },
-                data: { diaryClientId: client.id, psychologistId }
-            });
-            // Also sync consent from TelegramClient to DiaryClient if given
+        
+        if (tgClient) {
+            // Update the link if it doesn't exist yet
+            if (!tgClient.diaryClientId) {
+                await db.telegramClient.update({
+                    where: { id: tgClient.id },
+                    data: { diaryClientId: client.id, psychologistId }
+                });
+            }
+
+            // Sync consent from TelegramClient to DiaryClient if given
             if (tgClient.consentGiven && tgClient.consentDate && !client.consentVersion) {
-                // Get active consent version to store on DiaryClient
                 const activeConsentVer = await db.consentVersion.findFirst({
                     where: { isActive: true },
                     orderBy: { createdAt: 'desc' },
                     select: { version: true }
                 });
+
                 if (activeConsentVer) {
                     const hashInput = `${tgUserId}:${activeConsentVer.version}:${tgClient.consentDate.toISOString()}`;
                     const hash = createHash('sha256').update(hashInput).digest('hex');

@@ -49,7 +49,6 @@ export async function POST(request: Request) {
                 cancellationHours: cancellationHours !== undefined ? cancellationHours : (psychologistSettings?.cancellationHours ?? 24),
                 cancellationFee: cancellationFee !== undefined ? cancellationFee : (psychologistSettings?.cancellationFee ?? 50),
                 cancellationText: cancellationText || psychologistSettings?.cancellationText || null,
-                notifyTelegram: psychologistSettings?.notifyTelegram ?? true,
                 onlineSessionLink: psychologistSettings?.onlineSessionLink || null,
                 onboardingCompleted: true,
             } as any,
@@ -62,7 +61,6 @@ export async function POST(request: Request) {
                 cancellationHours: cancellationHours !== undefined ? cancellationHours : (psychologistSettings?.cancellationHours ?? 24),
                 cancellationFee: cancellationFee !== undefined ? cancellationFee : (psychologistSettings?.cancellationFee ?? 50),
                 cancellationText: cancellationText || psychologistSettings?.cancellationText || null,
-                notifyTelegram: psychologistSettings?.notifyTelegram ?? true,
                 onlineSessionLink: psychologistSettings?.onlineSessionLink || null,
                 onboardingCompleted: true,
             } as any
