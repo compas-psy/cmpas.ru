@@ -779,7 +779,6 @@ export async function saveConsent(
         update: { consentGiven: true, consentDate: new Date() },
         create: {
             telegramUserId,
-            psychologistId,
             consentGiven: true,
             consentDate: new Date(),
         }

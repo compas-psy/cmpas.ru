@@ -103,6 +103,7 @@ export default function OnboardingPage() {
                 })
             })
             if (res.ok) {
+                router.refresh()
                 router.push("/diary")
             }
         } catch (error) {
