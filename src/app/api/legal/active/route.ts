@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { getActiveDocuments, DocType } from "@/app/legal/actions"
+import { getActiveDocuments } from "@/app/legal/actions"
+import { DocType } from "@/app/legal/types"
 
 export async function GET(request: Request) {
     try {

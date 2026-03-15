@@ -3,14 +3,7 @@
 import { db } from "@/lib/db"
 import { headers } from "next/headers"
 
-// Types of legal documents
-export const DOC_TYPES = {
-    TERMS: "TERMS",
-    PRIVACY: "PRIVACY",
-    ADS: "ADS"
-} as const
-
-export type DocType = keyof typeof DOC_TYPES
+import { DOC_TYPES, DocType } from "./types"
 
 /**
  * Ensures that a user has accepted the currently active versions of the specified documents.
