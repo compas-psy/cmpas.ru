@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { ClientTimeline } from '@/components/psidairy/ClientTimeline';
 
 type QuestionnaireData = {
     fullName?: string; dateOfBirth?: string; age?: number; gender?: string;
@@ -33,6 +34,7 @@ type Client = {
 type Session = {
     id: string; date: string; time: string; endTime: string | null;
     duration: number; type: string; format: string; status: string; notes: string | null;
+    structuredNotes?: any; privateNotes?: any; clientSummary?: string | null;
 };
 
 const statusLabels: Record<string, string> = { confirmed: 'Подтверждено', pending: 'Ожидает', completed: 'Завершено', cancelled: 'Отменено' };
@@ -43,8 +45,8 @@ export default function ClientsPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('active');
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-    const [mobileTab, setMobileTab] = useState<'sessions' | 'notes' | 'questionnaire' | 'documents' | 'manage'>('sessions');
-    const [desktopTab, setDesktopTab] = useState<'sessions' | 'questionnaire' | 'notes' | 'documents'>('sessions');
+    const [mobileTab, setMobileTab] = useState<'sessions' | 'timeline' | 'questionnaire' | 'documents' | 'manage'>('sessions');
+    const [desktopTab, setDesktopTab] = useState<'sessions' | 'questionnaire' | 'timeline' | 'documents'>('sessions');
     const [showNewClient, setShowNewClient] = useState(false);
     const [showEditQuestionnaire, setShowEditQuestionnaire] = useState(false);
     const [showNewSession, setShowNewSession] = useState(false);
@@ -202,7 +204,7 @@ export default function ClientsPage() {
                 <div className="flex bg-card border-b border-border px-1 overflow-x-auto telegram-miniapp-scrollbar-hide">
                     {([
                         { key: 'sessions' as const, icon: Calendar, label: 'Записи' },
-                        { key: 'notes' as const, icon: StickyNote, label: 'Заметки' },
+                        { key: 'timeline' as const, icon: StickyNote, label: 'Таймлайн' },
                         { key: 'questionnaire' as const, icon: ClipboardList, label: 'Анкета' },
                         { key: 'documents' as const, icon: FileText, label: 'Документы' },
                         { key: 'manage' as const, icon: Settings2, label: 'Управление' },
@@ -240,39 +242,11 @@ export default function ClientsPage() {
                         </div>
                     )}
 
-                    {mobileTab === 'notes' && (
-                        <div className="space-y-3">
-                            {editingNotes ? (
-                                <div className="fixed inset-0 z-50 bg-background flex flex-col">
-                                    <div className="flex items-center justify-between p-4 border-b border-border">
-                                        <button onClick={() => { saveNotes(editingNotes.sessionId, editingNotes.notes); setEditingNotes(null); fetchClientDetail(selectedClient.id); }}
-                                            className="text-primary font-semibold text-sm">← Назад</button>
-                                        <span className="text-xs text-muted-foreground">Автосохранение</span>
-                                    </div>
-                                    <textarea autoFocus value={editingNotes.notes}
-                                        onChange={e => handleNotesChange(editingNotes.sessionId, e.target.value)}
-                                        className="flex-1 p-4 text-foreground bg-background resize-none focus:outline-none text-base leading-relaxed"
-                                        placeholder="Заметки о сессии..." />
-                                </div>
-                            ) : (
-                                <>
-                                    {selectedClient.sessions?.map(s => (
-                                        <button key={s.id} onClick={() => setEditingNotes({ sessionId: s.id, notes: s.notes || '' })}
-                                            className="w-full text-left p-4 bg-card border border-border rounded-2xl transition-all active:scale-[0.98]">
-                                            <div className="text-xs font-semibold text-muted-foreground mb-1">
-                                                {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} · {s.time}
-                                            </div>
-                                            <div className="text-sm text-foreground line-clamp-2">
-                                                {s.notes || <span className="text-muted-foreground italic">Нет заметок — нажмите, чтобы добавить</span>}
-                                            </div>
-                                        </button>
-                                    ))}
-                                    {!selectedClient.sessions?.length && (
-                                        <div className="text-center py-12 text-muted-foreground text-sm">Нет сессий для заметок</div>
-                                    )}
-                                </>
-                            )}
-                        </div>
+                    {mobileTab === 'timeline' && (
+                        <ClientTimeline
+                            sessions={selectedClient.sessions || []}
+                            onOpenSession={(s: Session) => { setEditingSession(s); setShowNewSession(true); }}
+                        />
                     )}
 
                     {mobileTab === 'questionnaire' && (
@@ -493,7 +467,7 @@ export default function ClientsPage() {
                                 {([
                                     { key: 'sessions' as const, label: `Записи (${(selectedClient.sessions?.length || 0)})` },
                                     { key: 'questionnaire' as const, label: 'Анкета' },
-                                    { key: 'notes' as const, label: `Заметки (${sessionsWithNotes.length})` },
+                                    { key: 'timeline' as const, label: 'Таймлайн' },
                                     { key: 'documents' as const, label: 'Документы' },
                                 ]).map(t => (
                                     <button key={t.key} onClick={() => setDesktopTab(t.key)}
@@ -525,23 +499,11 @@ export default function ClientsPage() {
                                         </button>
                                     </div>
                                 )}
-                                {desktopTab === 'notes' && (
-                                    <div className="space-y-3">
-                                        {selectedClient.sessions?.map(s => (
-                                            <div key={s.id} className="p-4 bg-muted/30 border border-border rounded-2xl">
-                                                <div className="text-xs font-semibold text-muted-foreground mb-2">
-                                                    {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} · {s.time} · {statusLabels[s.status]}
-                                                </div>
-                                                <textarea value={editingNotes?.sessionId === s.id ? editingNotes.notes : (s.notes || '')}
-                                                    onFocus={() => setEditingNotes({ sessionId: s.id, notes: s.notes || '' })}
-                                                    onChange={e => handleNotesChange(s.id, e.target.value)}
-                                                    onBlur={() => { if (editingNotes) { saveNotes(editingNotes.sessionId, editingNotes.notes); setEditingNotes(null); fetchClientDetail(selectedClient.id); } }}
-                                                    className="w-full bg-background border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring/50 min-h-[80px] transition-all"
-                                                    placeholder="Добавить заметки..." />
-                                            </div>
-                                        ))}
-                                        {!selectedClient.sessions?.length && <div className="text-center py-12 text-muted-foreground text-sm">Нет сессий</div>}
-                                    </div>
+                                {desktopTab === 'timeline' && (
+                                    <ClientTimeline
+                                        sessions={selectedClient.sessions || []}
+                                        onOpenSession={(s: Session) => { setEditingSession(s); setShowNewSession(true); }}
+                                    />
                                 )}
                                 {desktopTab === 'documents' && (
                                     <div className="space-y-6 max-w-2xl">

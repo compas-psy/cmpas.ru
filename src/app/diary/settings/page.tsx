@@ -15,6 +15,7 @@ type Settings = {
     cancellationFee: number;
     cancellationText: string;
     notifyTelegram: boolean;
+    notifyAds: boolean;
 };
 
 type Address = {
@@ -72,7 +73,8 @@ export default function SettingsPage() {
         cancellationHours: 24,
         cancellationFee: 50,
         cancellationText: '',
-        notifyTelegram: true
+        notifyTelegram: true,
+        notifyAds: false
     });
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [newAddress, setNewAddress] = useState({ name: '', address: '' });
@@ -97,10 +99,17 @@ export default function SettingsPage() {
                     cancellationHours: data.cancellationHours,
                     cancellationFee: data.cancellationFee,
                     cancellationText: data.cancellationText || '',
-                    notifyTelegram: (data as any).notifyTelegram !== false
+                    notifyTelegram: (data as any).notifyTelegram !== false,
+                    notifyAds: settings.notifyAds
                 });
             } else if (!settingsRes.success) {
                 toast.error(settingsRes.error || 'Ошибка при загрузке настроек');
+            }
+
+            const { getAdsConsentForUser } = await import('../actions/settings');
+            const adsRes = await getAdsConsentForUser();
+            if (adsRes.success) {
+                setSettings(s => ({ ...s, notifyAds: !!adsRes.isAccepted }));
             }
 
             if (addrsRes.success && addrsRes.data) {
@@ -119,8 +128,11 @@ export default function SettingsPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const { updateSettings } = await import('../actions/settings');
-            await updateSettings(settings);
+            const { updateSettings, toggleAdsConsentForUser } = await import('../actions/settings');
+            await Promise.all([
+                updateSettings(settings),
+                toggleAdsConsentForUser(settings.notifyAds)
+            ]);
             toast.success('Настройки сохранены');
         } catch { toast.error('Ошибка при сохранении'); }
         setSaving(false);
@@ -284,6 +296,20 @@ export default function SettingsPage() {
                             <div className="flex flex-col">
                                 <span className="text-sm font-bold text-foreground/90 group-hover:text-primary transition-colors">Telegram уведомления психологу</span>
                                 <span className="text-xs font-medium text-muted-foreground">Получать напоминания о предстоящих сессиях (за 24 часа)</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div className="pt-2">
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={settings.notifyAds}
+                                onChange={e => setSettings(s => ({ ...s, notifyAds: e.target.checked }))}
+                                className="w-5 h-5 rounded border-border text-accent focus:ring-accent/50 transition-all cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-foreground/90 group-hover:text-accent transition-colors">Согласие на рекламные рассылки</span>
+                                <span className="text-xs font-medium text-muted-foreground">Получать подборки статей, анонсы супервизий и программ от партнеров</span>
                             </div>
                         </label>
                     </div>

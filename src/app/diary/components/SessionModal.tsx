@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { SmartNotesEditor, SmartNotesData } from '@/components/psidairy/SmartNotesEditor';
 
 type SessionModalProps = {
     isOpen: boolean;
@@ -24,6 +25,11 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
         notes: '',
         status: 'confirmed'
     });
+    const [smartNotesData, setSmartNotesData] = useState<SmartNotesData>({
+        blocks: [],
+        privateNotes: '',
+        clientSummary: '',
+    });
     const [loading, setLoading] = useState(false);
     const [availableSlots, setAvailableSlots] = useState<{ time: string; format: string; addressId: string | null }[]>([]);
     const [loadingSlots, setLoadingSlots] = useState(false);
@@ -43,6 +49,12 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     notes: editSession.notes || '',
                     status: editSession.status
                 });
+                // Load structured notes if exist
+                setSmartNotesData({
+                    blocks: editSession.structuredNotes?.blocks || [],
+                    privateNotes: editSession.privateNotes?.text || '',
+                    clientSummary: editSession.clientSummary || '',
+                });
             } else {
                 const dateStr = initialDate ? initialDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
                 setFormData({
@@ -55,6 +67,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     notes: '',
                     status: 'confirmed'
                 });
+                setSmartNotesData({ blocks: [], privateNotes: '', clientSummary: '' });
                 setCalendarMonth(initialDate || new Date());
             }
         }
@@ -103,7 +116,10 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                 const { updateSession } = await import('../actions/sessions');
                 await updateSession(editSession.id, {
                     status: formData.status,
-                    notes: formData.notes
+                    notes: formData.notes,
+                    structuredNotes: { blocks: smartNotesData.blocks },
+                    privateNotes: { text: smartNotesData.privateNotes },
+                    clientSummary: smartNotesData.clientSummary || undefined,
                 });
                 toast.success('Запись обновлена');
             } else {
@@ -131,9 +147,12 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
     const monthName = calendarMonth.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
     const today = new Date().toISOString().slice(0, 10);
 
+    // Determine if this is a first session for the client
+    const isFirstSession = editSession?.client?.totalSessions === 1 || false;
+
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-card rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-border/50 bg-muted/10">
                     <h2 className="text-xl font-bold tracking-tight">{editSession ? 'Редактировать запись' : 'Новая запись'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors active:scale-95">
@@ -251,28 +270,17 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         </div>
                     )}
 
+                    {/* Smart Notes Editor (edit mode) */}
                     {editSession && (
                         <div>
-                            <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90"><FileText className="w-4 h-4 inline mr-1 text-muted-foreground" />Заметки по сессии</label>
-                            <textarea
-                                value={formData.notes}
-                                onChange={e => setFormData(s => ({ ...s, notes: e.target.value }))}
-                                rows={6}
-                                className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background resize-none text-sm font-medium transition-all placeholder:text-muted-foreground/50"
-                                placeholder="Ход сессии, домашнее задание, наблюдения..."
+                            <label className="block text-sm font-semibold mb-3 ml-1 text-foreground/90">
+                                <FileText className="w-4 h-4 inline mr-1 text-muted-foreground" />Заметки по сессии
+                            </label>
+                            <SmartNotesEditor
+                                initialData={smartNotesData}
+                                onChange={setSmartNotesData}
+                                isFirstSession={isFirstSession}
                             />
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {["Тревожность", "Апатия", "Сопротивление", "Инсайт", "Выдано ДЗ", "Ресурсное состояние", "Прогресс", "Требует внимания"].map(tag => (
-                                    <button
-                                        key={tag}
-                                        type="button"
-                                        onClick={() => setFormData(s => ({ ...s, notes: s.notes ? `${s.notes} #${tag}` : `#${tag}` }))}
-                                        className="text-xs px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors active:scale-95"
-                                    >
-                                        +{tag}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
                     )}
 

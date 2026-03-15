@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { html, text } from "@/lib/email-template"
 // @ts-expect-error - nodemailer types not installed due to peer dep conflict
 import { createTransport } from "nodemailer"
+import { acceptActiveDocuments } from "@/app/legal/actions"
 
 // ============================================
 // AUTH_SECRET VALIDATION (CRITICAL!)
@@ -101,6 +102,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }),
     ],
     callbacks: {
+        async signIn({ user }) {
+            // After successful sign in (or registration via sign in), 
+            // implicitly accept the currently active TERMS and PRIVACY documents.
+            if (user?.id) {
+                // We don't await this to avoid blocking the login flow unnecessarily, 
+                // or we can await it if we want strict consistency. Let's await to be safe, it's fast.
+                await acceptActiveDocuments(user.id);
+            }
+            return true;
+        },
         async session({ session, user }) {
             if (session.user) {
                 session.user.id = user.id;

@@ -126,11 +126,26 @@ export async function createSession(data: {
     return session;
 }
 
-export async function updateSession(id: string, data: { status?: string; notes?: string }) {
+export async function updateSession(id: string, data: {
+    status?: string;
+    notes?: string;
+    structuredNotes?: any;
+    privateNotes?: any;
+    clientSummary?: string;
+}) {
     const psychologistId = await getPsychologistId();
+
+    // Build update payload — only include defined fields
+    const updatePayload: Record<string, any> = { psychologistId };
+    if (data.status !== undefined) updatePayload.status = data.status;
+    if (data.notes !== undefined) updatePayload.notes = data.notes;
+    if (data.structuredNotes !== undefined) updatePayload.structuredNotes = data.structuredNotes;
+    if (data.privateNotes !== undefined) updatePayload.privateNotes = data.privateNotes;
+    if (data.clientSummary !== undefined) updatePayload.clientSummary = data.clientSummary;
+
     const session = await db.diarySession.update({
         where: { id },
-        data: { ...data, psychologistId },
+        data: updatePayload,
     });
 
     // If cancelled, delete from calendars

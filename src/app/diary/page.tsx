@@ -17,6 +17,9 @@ type Session = {
     format: string;
     status: string;
     notes: string | null;
+    structuredNotes: any;
+    privateNotes: any;
+    clientSummary: string | null;
     client: { id: string; name: string; questionnaire?: { data: any } | null };
 };
 

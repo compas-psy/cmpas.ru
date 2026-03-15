@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
+import { getAdsConsentStatus, toggleAdsConsent } from '@/app/legal/actions';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -217,4 +218,14 @@ export async function updateProfile(data: {
     revalidatePath('/diary/profile');
     revalidatePath('/diary/settings');
     return { success: true };
+}
+
+export async function getAdsConsentForUser() {
+    const userId = await getPsychologistId();
+    return getAdsConsentStatus(userId);
+}
+
+export async function toggleAdsConsentForUser(accept: boolean) {
+    const userId = await getPsychologistId();
+    return toggleAdsConsent(userId, accept);
 }

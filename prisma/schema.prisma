@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
@@ -12,42 +12,37 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  role          String    @default("USER")
-  isBlocked     Boolean   @default(false)
-  accounts      Account[]
-  authSessions  Session[]
+  id                    String                @id @default(cuid())
+  name                  String?
+  email                 String                @unique
+  emailVerified         DateTime?
+  image                 String?
+  role                  String                @default("USER")
+  isBlocked             Boolean               @default(false)
+  accounts              Account[]
+  authSessions          Session[]
   // Diary relations
-  clients              DiaryClient[]
-  diarySessions        DiarySession[]
-  availabilitySlots    AvailabilitySlot[]
-  timeBlocks           TimeBlock[]
-  calendarIntegrations   CalendarIntegration[]
-  psychologistSettings   PsychologistSettings?
-  notificationSettings   NotificationSettings?
-  psychologistAddresses  PsychologistAddress[]
-  diaryBlocks          DiaryBlock[]
-  
+  clients               DiaryClient[]
+  diarySessions         DiarySession[]
+  availabilitySlots     AvailabilitySlot[]
+  timeBlocks            TimeBlock[]
+  calendarIntegrations  CalendarIntegration[]
+  psychologistSettings  PsychologistSettings?
+  notificationSettings  NotificationSettings?
+  psychologistAddresses PsychologistAddress[]
+  diaryBlocks           DiaryBlock[]
+
   // Therapy process (Smart Notes)
-  therapyGoals         TherapyGoal[]
-  homeworks            Homework[]
-  clientAssessments    ClientAssessment[]
-  
-  // Telegram Integration
-  telegramChatId       String?   @unique
-  telegramUsername     String?
-  telegramClients      TelegramClient[]
-  // Registration Consent (152-FZ & Ads) for Psychologists
-  pdnConsentVersion    String?
-  pdnConsentHash       String?
-  pdnConsentDate       DateTime?
-  adsConsentVersion    String?
-  adsConsentHash       String?
-  adsConsentDate       DateTime?
+  therapyGoals      TherapyGoal[]
+  homeworks         Homework[]
+  clientAssessments ClientAssessment[]
+
+  telegramChatId   String?          @unique
+  telegramUsername String?
+  telegramClients  TelegramClient[]
+
+  // Legal Documents (152-FZ, Advertising)
+  legalAcceptances LegalDocumentAcceptance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -65,12 +60,12 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
- 
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
- 
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
   @@id([provider, providerAccountId])
 }
 
@@ -79,7 +74,7 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -88,21 +83,21 @@ model VerificationToken {
   identifier String
   token      String
   expires    DateTime
- 
+
   @@id([identifier, token])
 }
 
 // OWASP Security Logging: Track all authentication events
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?  // null for failed attempts
-  email     String?  // email used in attempt
-  action    String   // "LOGIN_SUCCESS", "LOGIN_FAILED", "LOGOUT", "OTP_SENT", "OTP_VERIFIED"
-  provider  String?  // "yandex", "email", null
+  id        String  @id @default(cuid())
+  userId    String? // null for failed attempts
+  email     String? // email used in attempt
+  action    String // "LOGIN_SUCCESS", "LOGIN_FAILED", "LOGOUT", "OTP_SENT", "OTP_VERIFIED"
+  provider  String? // "yandex", "email", null
   ipAddress String?
   userAgent String?
-  metadata  String?  // JSON string for additional context
-  
+  metadata  String? // JSON string for additional context
+
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -111,67 +106,103 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// ============================================
+// Legal Documents & Consents
+// ============================================
+
+model LegalDocument {
+  id          String    @id @default(cuid())
+  type        String // "TERMS", "PRIVACY", "ADS"
+  version     String // "1.0"
+  url         String // Path or URL to the PDF document
+  isActive    Boolean   @default(false)
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  acceptances LegalDocumentAcceptance[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model LegalDocumentAcceptance {
+  id         String   @id @default(cuid())
+  userId     String
+  documentId String
+  acceptedAt DateTime @default(now())
+  ipAddress  String?
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId])
+  @@index([userId])
+  @@index([documentId])
+}
+
 // Visitor Analytics for LAL Audience Building
 model VisitorAnalytics {
-  id                   String   @id @default(cuid())
-  visitorId            String   @unique // FingerprintJS visitor ID
-  ip                   String?
+  id                    String    @id @default(cuid())
+  visitorId             String    @unique // FingerprintJS visitor ID
+  ip                    String?
   // GEO data from IP (enhanced with district)
-  country              String?
-  countryCode          String?
-  city                 String?
-  region               String?
-  district             String?  // Neighborhood/district within city
-  postalCode           String?
-  lat                  Float?
-  lon                  Float?
-  timezone             String?
-  isp                  String?  // Internet Service Provider
-  org                  String?  // Organization
-  asn                  String?  // Autonomous System Number
+  country               String?
+  countryCode           String?
+  city                  String?
+  region                String?
+  district              String? // Neighborhood/district within city
+  postalCode            String?
+  lat                   Float?
+  lon                   Float?
+  timezone              String?
+  isp                   String? // Internet Service Provider
+  org                   String? // Organization
+  asn                   String? // Autonomous System Number
   // Device details (from ua-parser-js)
-  userAgent            String?
-  deviceType           String?  // "mobile", "tablet", "desktop", "console", etc.
-  deviceVendor         String?  // "Apple", "Samsung", "Huawei", etc.
-  deviceModel          String?  // "iPhone", "Galaxy S23", etc.
+  userAgent             String?
+  deviceType            String? // "mobile", "tablet", "desktop", "console", etc.
+  deviceVendor          String? // "Apple", "Samsung", "Huawei", etc.
+  deviceModel           String? // "iPhone", "Galaxy S23", etc.
   // Browser details
-  browserName          String?  // "Chrome", "Safari", "Firefox", etc.
-  browserVersion       String?  // "120.0.0"
-  browserMajor         String?  // "120"
+  browserName           String? // "Chrome", "Safari", "Firefox", etc.
+  browserVersion        String? // "120.0.0"
+  browserMajor          String? // "120"
   // Engine details
-  engineName           String?  // "Blink", "WebKit", "Gecko"
-  engineVersion        String?
+  engineName            String? // "Blink", "WebKit", "Gecko"
+  engineVersion         String?
   // OS details
-  osName               String?  // "Android", "iOS", "Windows", "macOS"
-  osVersion            String?
+  osName                String? // "Android", "iOS", "Windows", "macOS"
+  osVersion             String?
   // CPU architecture
-  cpuArchitecture      String?  // "amd64", "arm", etc.
+  cpuArchitecture       String? // "amd64", "arm", etc.
   // Screen & hardware
-  language             String?
-  platform             String?
-  screenWidth          Int?
-  screenHeight         Int?
-  devicePixelRatio     Float?
-  touchSupport         Boolean?
-  deviceMemory         Float?
-  hardwareConcurrency  Int?
-  connectionType       String?  // "4g", "wifi", etc.
-  connectionDownlink   Float?   // Mbps
+  language              String?
+  platform              String?
+  screenWidth           Int?
+  screenHeight          Int?
+  devicePixelRatio      Float?
+  touchSupport          Boolean?
+  deviceMemory          Float?
+  hardwareConcurrency   Int?
+  connectionType        String? // "4g", "wifi", etc.
+  connectionDownlink    Float? // Mbps
   // Session data
-  referrer             String?
-  referrerDomain       String?  // Extracted domain from referrer
-  currentUrl           String?
-  pathname             String?
-  utmSource            String?
-  utmMedium            String?
-  utmCampaign          String?
-  utmContent           String?
-  utmTerm              String?
-  sessionStart         DateTime?
-  timestamp            DateTime?
-  fingerprintComponents String?  // JSON string of all fingerprint components
-  visits               Int      @default(1)
-  
+  referrer              String?
+  referrerDomain        String? // Extracted domain from referrer
+  currentUrl            String?
+  pathname              String?
+  utmSource             String?
+  utmMedium             String?
+  utmCampaign           String?
+  utmContent            String?
+  utmTerm               String?
+  sessionStart          DateTime?
+  timestamp             DateTime?
+  fingerprintComponents String? // JSON string of all fingerprint components
+  visits                Int       @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -188,20 +219,20 @@ model VisitorAnalytics {
 
 // Orders from the website
 model Order {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   name          String
   phone         String
-  contactMethod String   // telegram, whatsapp, max
-  status        String   @default("NEW") // NEW, CONTACTED, PROCESSING, COMPLETED, CANCELLED
+  contactMethod String // telegram, whatsapp, max
+  status        String  @default("NEW") // NEW, CONTACTED, PROCESSING, COMPLETED, CANCELLED
   notes         String?
   // Tracking
-  visitorId     String?  // Link to VisitorAnalytics
+  visitorId     String? // Link to VisitorAnalytics
   ipAddress     String?
   userAgent     String?
   // GEO
   country       String?
   city          String?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -215,55 +246,55 @@ model Order {
 // ============================================
 
 model DiaryClient {
-  id                String    @id @default(cuid())
-  psychologistId    String
-  name              String
-  phone             String?
-  email             String?
-  dateOfBirth       DateTime?
-  age               Int?
-  gender            String?   // male, female, other
-  totalSessions     Int       @default(0)
-  nextSessionDate   DateTime?
-  status            String    @default("active") // active, paused, archived
-  
-  // Telegram Integration
-  telegramChatId    String?   // For notifications direct to client
-  telegramClient    TelegramClient?
-  
-  // Consent (152-FZ)
-  consentVersion    String?   // Version of consent text agreed to
-  consentHash       String?   // SHA-256: tgUserId + version + timestamp
-  consentDate       DateTime? // When consent was given
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  psychologistId  String
+  name            String
+  phone           String?
+  email           String?
+  dateOfBirth     DateTime?
+  age             Int?
+  gender          String? // male, female, other
+  totalSessions   Int       @default(0)
+  nextSessionDate DateTime?
+  status          String    @default("active") // active, paused, archived
 
-  psychologist      User      @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  questionnaire     DiaryQuestionnaire?
-  sessions          DiarySession[]
-  
+  // Telegram Integration
+  telegramChatId String? // For notifications direct to client
+  telegramClient TelegramClient?
+
+  // Consent (152-FZ)
+  consentVersion String? // Version of consent text agreed to
+  consentHash    String? // SHA-256: tgUserId + version + timestamp
+  consentDate    DateTime? // When consent was given
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist  User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  questionnaire DiaryQuestionnaire?
+  sessions      DiarySession[]
+
   // Therapy process & Smart Notes
-  therapyGoals      TherapyGoal[]
-  homeworks         Homework[]
-  risk              ClientRisk?
-  assessments       ClientAssessment[]
-  checkIns          ClientCheckIn[]
+  therapyGoals TherapyGoal[]
+  homeworks    Homework[]
+  risk         ClientRisk?
+  assessments  ClientAssessment[]
+  checkIns     ClientCheckIn[]
 
   @@index([psychologistId])
   @@index([status])
 }
 
 model DiaryQuestionnaire {
-  id              String   @id @default(cuid())
-  clientId        String   @unique
-  data            Json     // All 7 questionnaire sections stored as JSON
-  isCompleted     Boolean  @default(false) // Whether the anamnesis is considered full
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String  @id @default(cuid())
+  clientId    String  @unique
+  data        Json // All 7 questionnaire sections stored as JSON
+  isCompleted Boolean @default(false) // Whether the anamnesis is considered full
 
-  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model DiarySession {
@@ -271,28 +302,28 @@ model DiarySession {
   psychologistId  String
   clientId        String
   date            DateTime
-  time            String   // "10:00"
-  endTime         String?  // "10:50"
-  duration        Int      @default(50)  // minutes
+  time            String // "10:00"
+  endTime         String? // "10:50"
+  duration        Int      @default(50) // minutes
   type            String   @default("individual") // individual, couple, family
   format          String   @default("online") // online, offline
-  addressId       String?  // nullable reference to a PsychologistAddress
+  addressId       String? // nullable reference to a PsychologistAddress
   status          String   @default("pending") // pending, confirmed, completed, cancelled
-  notes           String?  // Legacy flat notes
-  structuredNotes Json?    // Array of smart tags/blocks (e.g. Anamnesis, Request)
-  privateNotes    Json?    // Array of private blocks for the psychologist only
-  clientSummary   String?  // Text summary to be shown in the client's cabinet
-  
-  notified24h     Boolean  @default(false)
-  notified1h      Boolean  @default(false)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  notes           String? // Legacy flat notes
+  structuredNotes Json? // Array of smart tags/blocks (e.g. Anamnesis, Request)
+  privateNotes    Json? // Array of private blocks for the psychologist only
+  clientSummary   String? // Text summary to be shown in the client's cabinet
 
-  psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  address         PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  homeworks       Homework[]
+  notified24h Boolean @default(false)
+  notified1h  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  client       DiaryClient          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  address      PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  homeworks    Homework[]
 
   @@index([psychologistId])
   @@index([clientId])
@@ -301,127 +332,127 @@ model DiarySession {
 }
 
 model DiaryBlock {
-  id              String   @id @default(cuid())
-  psychologistId  String
-  date            DateTime // Дата блокировки
-  startTime       String   // "10:00"
-  endTime         String   // "12:00"
-  reason          String?  // Причина, например "Отпуск" или "Обед"
-  type            String   @default("personal") // В будущем можно делить на 'personal', 'holiday', 'sick_leave'
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  psychologistId String
+  date           DateTime // Дата блокировки
+  startTime      String // "10:00"
+  endTime        String // "12:00"
+  reason         String? // Причина, например "Отпуск" или "Обед"
+  type           String   @default("personal") // В будущем можно делить на 'personal', 'holiday', 'sick_leave'
 
-  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
   @@index([psychologistId])
   @@index([date])
 }
 
 model AvailabilitySlot {
-  id              String   @id @default(cuid())
-  psychologistId  String
-  dayOfWeek       Int      // 0=Mon ... 6=Sun
-  startTime       String   // "09:00"
-  endTime         String   // "13:00"
-  duration        Int      @default(50)
-  format          String   @default("online") // online, offline, both
-  addressId       String?  // nullable reference to a PsychologistAddress
-  isRecurring     Boolean  @default(true)
-  startDate       DateTime?
-  endDate         DateTime?
-  isActive        Boolean  @default(true)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  psychologistId String
+  dayOfWeek      Int // 0=Mon ... 6=Sun
+  startTime      String // "09:00"
+  endTime        String // "13:00"
+  duration       Int       @default(50)
+  format         String    @default("online") // online, offline, both
+  addressId      String? // nullable reference to a PsychologistAddress
+  isRecurring    Boolean   @default(true)
+  startDate      DateTime?
+  endDate        DateTime?
+  isActive       Boolean   @default(true)
 
-  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  address         PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  address      PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
 
   @@index([psychologistId])
   @@index([dayOfWeek])
 }
 
 model TimeBlock {
-  id              String   @id @default(cuid())
-  psychologistId  String
-  startDate       DateTime
-  endDate         DateTime
-  type            String   // vacation, personal, other
-  reason          String?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  psychologistId String
+  startDate      DateTime
+  endDate        DateTime
+  type           String // vacation, personal, other
+  reason         String?
 
-  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
   @@index([psychologistId])
 }
 
 model CalendarIntegration {
-  id              String   @id @default(cuid())
-  psychologistId  String
-  provider        String   // google, yandex, apple
-  accountEmail    String?
-  isActive        Boolean  @default(false)
-  lastSynced      DateTime?
-  conflictsCount  Int      @default(0)
+  id             String    @id @default(cuid())
+  psychologistId String
+  provider       String // google, yandex, apple
+  accountEmail   String?
+  isActive       Boolean   @default(false)
+  lastSynced     DateTime?
+  conflictsCount Int       @default(0)
 
   // OAuth tokens (Google Calendar)
-  accessToken     String?  // encrypted
-  refreshToken    String?  // encrypted
-  tokenExpiry     DateTime?
+  accessToken  String? // encrypted
+  refreshToken String? // encrypted
+  tokenExpiry  DateTime?
 
   // CalDAV credentials (Yandex Calendar)
-  caldavLogin     String?  // encrypted
-  caldavPassword  String?  // encrypted (app password)
-  caldavUrl       String?  // CalDAV server URL
+  caldavLogin    String? // encrypted
+  caldavPassword String? // encrypted (app password)
+  caldavUrl      String? // CalDAV server URL
 
   // Calendar identifiers
-  calendarId      String?  // provider-specific calendar ID or URL
-  syncToken       String?  // for incremental sync (ctag/syncToken)
-  
-  // Settings for two-way synchronization
-  syncFrom        Boolean  @default(true) // Whether to import events to block diary slots
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  calendarId String? // provider-specific calendar ID or URL
+  syncToken  String? // for incremental sync (ctag/syncToken)
 
-  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  // Settings for two-way synchronization
+  syncFrom Boolean @default(true) // Whether to import events to block diary slots
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
   @@unique([psychologistId, provider])
   @@index([psychologistId])
 }
 
 model PsychologistSettings {
-  id                    String   @id @default(cuid())
-  psychologistId        String   @unique
-  fullName              String?
-  timezone              String   @default("Europe/Moscow")
+  id                     String  @id @default(cuid())
+  psychologistId         String  @unique
+  fullName               String?
+  timezone               String  @default("Europe/Moscow")
   defaultSessionDuration Int     @default(50)
-  sessionBreak          Int      @default(15) // Minutes buffer between sessions
-  onlineSessionLink     String?
-  officeAddress         String?
-  cancellationHours     Int      @default(24)
-  cancellationFee       Int      @default(50)
-  cancellationText      String?
-  autoSync              Boolean  @default(true)
-  blockConflicts        Boolean  @default(true)
-  scheduleMode          String   @default("private") // private | readonly | booking
-  onboardingCompleted   Boolean  @default(false)
+  sessionBreak           Int     @default(15) // Minutes buffer between sessions
+  onlineSessionLink      String?
+  officeAddress          String?
+  cancellationHours      Int     @default(24)
+  cancellationFee        Int     @default(50)
+  cancellationText       String?
+  autoSync               Boolean @default(true)
+  blockConflicts         Boolean @default(true)
+  scheduleMode           String  @default("private") // private | readonly | booking
+  onboardingCompleted    Boolean @default(false)
 
-  methods               String[] @default([])
-  basePrice             Int?
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  methods   String[] @default([])
+  basePrice Int?
 
-  psychologist          User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 }
 
 model NotificationSettings {
-  id                 String   @id @default(cuid())
-  psychologistId     String   @unique
+  id             String @id @default(cuid())
+  psychologistId String @unique
 
   // Для психолога
   newBookingEnabled       Boolean @default(true)
@@ -433,52 +464,52 @@ model NotificationSettings {
   clientCancelEnabled     Boolean @default(true)
 
   // Для клиента
-  clientReminder25hEnabled    Boolean @default(true)
-  clientReminder25hTemplate   String  @default("Напоминаем: завтра у вас сессия с {psyName} в {time}")
-  clientReminder1hEnabled     Boolean @default(true)
-  clientReminder1hTemplate    String  @default("Через час начнётся ваша сессия с {psyName}")
-  clientPsyCancelEnabled      Boolean @default(true)
-  clientPsyCancelTemplate     String  @default("К сожалению, специалист отменил сессию {date} в {time}. {cancelLink}")
+  clientReminder25hEnabled  Boolean @default(true)
+  clientReminder25hTemplate String  @default("Напоминаем: завтра у вас сессия с {psyName} в {time}")
+  clientReminder1hEnabled   Boolean @default(true)
+  clientReminder1hTemplate  String  @default("Через час начнётся ваша сессия с {psyName}")
+  clientPsyCancelEnabled    Boolean @default(true)
+  clientPsyCancelTemplate   String  @default("К сожалению, специалист отменил сессию {date} в {time}. {cancelLink}")
 
-  psychologist       User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  psychologist User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model PsychologistAddress {
-  id              String   @id @default(cuid())
-  psychologistId  String
-  name            String   // e.g. "Центр", "Кабинет на Ленина"
-  address         String   // Actual physical address
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String @id @default(cuid())
+  psychologistId String
+  name           String // e.g. "Центр", "Кабинет на Ленина"
+  address        String // Actual physical address
 
-  psychologist    User     @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist      User               @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   availabilitySlots AvailabilitySlot[]
-  sessions        DiarySession[]
+  sessions          DiarySession[]
 }
 
 // Telegram Bot specific tables
 model TelegramClient {
-  id              String   @id @default(cuid())
-  telegramUserId  String   @unique
+  id               String    @id @default(cuid())
+  telegramUserId   String    @unique
   telegramUsername String?
-  phone           String?
-  email           String?
-  fullName        String?
-  consentGiven    Boolean  @default(false)
-  consentDate     DateTime?
+  phone            String?
+  email            String?
+  fullName         String?
+  consentGiven     Boolean   @default(false)
+  consentDate      DateTime?
 
   // Linking to potential actual entities
-  diaryClientId   String?  @unique
-  diaryClient     DiaryClient? @relation(fields: [diaryClientId], references: [id])
-  
-  psychologistId  String?  // The primary psychologist this client interacts with
-  psychologist    User?    @relation(fields: [psychologistId], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  diaryClientId String?      @unique
+  diaryClient   DiaryClient? @relation(fields: [diaryClientId], references: [id])
+
+  psychologistId String? // The primary psychologist this client interacts with
+  psychologist   User?   @relation(fields: [psychologistId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([psychologistId])
 }
@@ -486,8 +517,8 @@ model TelegramClient {
 // Versioned consent text (152-FZ compliance)
 model ConsentVersion {
   id        String   @id @default(cuid())
-  version   String   @unique  // e.g. "2026-03-07-v1"
-  text      String   // Full consent text
+  version   String   @unique // e.g. "2026-03-07-v1"
+  text      String // Full consent text
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 }
@@ -497,95 +528,95 @@ model ConsentVersion {
 // ============================================
 
 model TherapyGoal {
-  id              String   @id @default(cuid())
-  clientId        String
-  psychologistId  String
-  
-  description     String   // "Запрос" / Goal
-  criteria        String?  // "Критерии успеха"
-  status          String   @default("active") // active, achieved, abandoned
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String @id @default(cuid())
+  clientId       String
+  psychologistId String
 
-  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  
+  description String // "Запрос" / Goal
+  criteria    String? // "Критерии успеха"
+  status      String  @default("active") // active, achieved, abandoned
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client       DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  psychologist User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
   @@index([clientId])
   @@index([psychologistId])
 }
 
 model Homework {
-  id              String   @id @default(cuid())
-  clientId        String
-  psychologistId  String
-  sessionId       String?  // Which session generated this homework
-  
-  title           String
-  description     String
-  status          String   @default("pending") // pending, completed, cancelled
-  dueDate         DateTime?
-  clientFeedback  String?  // Client's input when completing
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String  @id @default(cuid())
+  clientId       String
+  psychologistId String
+  sessionId      String? // Which session generated this homework
 
-  client          DiaryClient   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  psychologist    User          @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  session         DiarySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  title          String
+  description    String
+  status         String    @default("pending") // pending, completed, cancelled
+  dueDate        DateTime?
+  clientFeedback String? // Client's input when completing
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client       DiaryClient   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  psychologist User          @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  session      DiarySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([clientId])
   @@index([sessionId])
 }
 
 model ClientRisk {
-  id              String   @id @default(cuid())
-  clientId        String   @unique
-  
-  level           String   // low, medium, high, critical
-  description     String?  // Что вызывает опасения
-  safetyPlan      String?  // План безопасности (что делать клиенту/терапевту)
-  nextCheckDate   DateTime?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id       String @id @default(cuid())
+  clientId String @unique
 
-  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  level         String // low, medium, high, critical
+  description   String? // Что вызывает опасения
+  safetyPlan    String? // План безопасности (что делать клиенту/терапевту)
+  nextCheckDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model ClientAssessment {
-  id              String   @id @default(cuid())
-  clientId        String
-  psychologistId  String
-  
-  toolName        String   // Название методики (e.g. "PHQ-9", "GAD-7", "BDI")
-  score           Float?   // Баллы
-  resultText      String?  // Интерпретация
-  date            DateTime // Дата заполнения
-  nextAssessment  DateTime? // Когда повторить
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String @id @default(cuid())
+  clientId       String
+  psychologistId String
 
-  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  psychologist    User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  toolName       String // Название методики (e.g. "PHQ-9", "GAD-7", "BDI")
+  score          Float? // Баллы
+  resultText     String? // Интерпретация
+  date           DateTime // Дата заполнения
+  nextAssessment DateTime? // Когда повторить
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client       DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  psychologist User        @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([toolName])
 }
 
 model ClientCheckIn {
-  id              String   @id @default(cuid())
-  clientId        String
-  
-  moodRating      Int?     // e.g. 1-5 or 1-10
-  notes           String?
-  date            DateTime @default(now())
-  
-  createdAt       DateTime @default(now())
-  
-  client          DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  clientId String
+
+  moodRating Int? // e.g. 1-5 or 1-10
+  notes      String?
+  date       DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  client DiaryClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
   @@index([clientId])
   @@index([date])
 }

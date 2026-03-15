@@ -10,7 +10,8 @@ import {
     Eye,
     Shield,
     Settings,
-    LogOut
+    LogOut,
+    FileText
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -25,6 +26,7 @@ const navItems = [
     { href: '/admin/visitors', label: 'Посетители', icon: Eye },
     { href: '/admin/users', label: 'Пользователи', icon: Users },
     { href: '/admin/audit', label: 'Безопасность', icon: Shield },
+    { href: '/admin/legal', label: 'Документы', icon: FileText },
     { href: '/admin/system', label: 'Настройки', icon: Settings },
 ];
 

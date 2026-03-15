@@ -7,7 +7,8 @@ import { LogOut } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { SidebarNav } from './sidebar-nav';
 import { MobileSidebar } from './mobile-sidebar';
-import { PsychologistConsentModal } from '@/components/psidairy/PsychologistConsentModal';
+import { checkUserAcceptance } from '@/app/legal/actions';
+import { AdsConsentWrapper } from '@/components/legal/AdsConsentWrapper';
 
 export const metadata: Metadata = {
     title: 'Ежедневник | Compas',
@@ -79,6 +80,13 @@ export default async function DiaryLayout({
         redirect('/onboarding');
     }
 
+    // Check if user has accepted the latest mandatory documents
+    const acceptanceCheck = await checkUserAcceptance(dbUser.id, ["TERMS", "PRIVACY"]);
+    if (acceptanceCheck.success && acceptanceCheck.needsAcceptance && acceptanceCheck.needsAcceptance.length > 0) {
+        // We redirect to a page OUTSIDE of /diary to avoid layout loops
+        redirect('/legal-acceptance');
+    }
+
     const userName = session.user.name || session.user.email?.split('@')[0] || 'Психолог';
     const userInitials = userName.slice(0, 2).toUpperCase();
 
@@ -103,10 +111,8 @@ export default async function DiaryLayout({
 
             <Toaster position="top-right" richColors theme="system" />
 
-            {/* Forced Consent Modal for Psychologists */}
-            {dbUser && !dbUser.pdnConsentDate && (
-                <PsychologistConsentModal isOpen={true} />
-            )}
+            {/* Deferred Ads Consent Modal */}
+            <AdsConsentWrapper userId={dbUser.id} />
         </div>
     );
 }
