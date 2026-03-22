@@ -17,12 +17,11 @@ export default async function UsersPage() {
             emailVerified: true,
             createdAt: true,
             psychologistSettings: { select: { id: true } },
-            pdnConsentVersion: true,
-            pdnConsentDate: true,
-            pdnConsentHash: true,
-            adsConsentVersion: true,
-            adsConsentDate: true,
-            adsConsentHash: true,
+            legalAcceptances: {
+                include: {
+                    document: true
+                }
+            }
         },
     }).catch(() => []);
 
@@ -151,25 +150,32 @@ export default async function UsersPage() {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col gap-1.5">
-                                            {user.pdnConsentDate ? (
-                                                <Badge variant="outline" className="w-fit text-xs border-green-500/30 text-green-600 bg-green-500/5">
-                                                    ПДн: {user.pdnConsentVersion} ({user.pdnConsentDate.toLocaleDateString('ru-RU')})
-                                                    {user.pdnConsentHash && " 🔒"}
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="w-fit text-xs text-muted-foreground bg-muted/30">
-                                                    ПДн: Нет
-                                                </Badge>
-                                            )}
-                                            {user.adsConsentDate ? (
-                                                <Badge variant="outline" className="w-fit text-xs border-green-500/30 text-green-600 bg-green-500/5">
-                                                    Реклама: {user.adsConsentVersion} ({user.adsConsentDate.toLocaleDateString('ru-RU')})
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="w-fit text-xs text-muted-foreground bg-muted/30">
-                                                    Реклама: Нет
-                                                </Badge>
-                                            )}
+                                            {(() => {
+                                                const pdn = user.legalAcceptances?.find(a => a.document.type === 'PRIVACY' || a.document.type === 'TERMS');
+                                                const ads = user.legalAcceptances?.find(a => a.document.type === 'ADS');
+                                                return (
+                                                    <>
+                                                        {pdn ? (
+                                                            <Badge variant="outline" className="w-fit text-xs border-green-500/30 text-green-600 bg-green-500/5">
+                                                                ПДн: {pdn.document.version} ({pdn.acceptedAt.toLocaleDateString('ru-RU')})
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="w-fit text-xs text-muted-foreground bg-muted/30">
+                                                                ПДн: Нет
+                                                            </Badge>
+                                                        )}
+                                                        {ads ? (
+                                                            <Badge variant="outline" className="w-fit text-xs border-green-500/30 text-green-600 bg-green-500/5">
+                                                                Реклама: {ads.document.version} ({ads.acceptedAt.toLocaleDateString('ru-RU')})
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="w-fit text-xs text-muted-foreground bg-muted/30">
+                                                                Реклама: Нет
+                                                            </Badge>
+                                                        )}
+                                                    </>
+                                                )
+                                            })()}
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right text-foreground/70">
