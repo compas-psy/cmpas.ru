@@ -222,8 +222,10 @@ export async function fetchYandexCalendarEvents(
             return { success: false, error: 'Календарь не найден' };
         }
 
-        // tsdav calendarQuery requires start/end string dates in ISO format (e.g. 2024-01-01T00:00:00.000Z)
-        const formatStrDate = (d: Date) => d.toISOString();
+        // tsdav calendarQuery requires start/end string dates in iCal format (e.g. 20240101T000000Z)
+        const formatStrDate = (d: Date) => {
+            return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        };
 
         const objects = await client.fetchCalendarObjects({
             calendar,
@@ -250,29 +252,50 @@ export async function fetchYandexCalendarEvents(
             const summaryMatch = obj.data.match(/SUMMARY:(.*)/);
 
             if (dtstartMatch) {
-                // very simple iCal date parsing
+                // Return date + optional localStr if the timezone is missing/local
                 const parseIcalDateStr = (str: string) => {
+                    const isUTC = str.endsWith('Z');
                     str = str.replace(/Z$/, '').trim();
+                    let date, localStr = undefined;
+                    
                     if (str.length === 8) {
-                        return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00Z`);
+                        date = new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00Z`);
+                        return { date, localStr: `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00` };
                     }
-                    return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${str.slice(9, 11)}:${str.slice(11, 13)}:${str.slice(13, 15)}Z`);
+                    
+                    const time = `${str.slice(9, 11)}:${str.slice(11, 13)}:${str.slice(13, 15)}`;
+                    date = new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${time}Z`);
+                    
+                    if (!isUTC) {
+                        localStr = `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${time}`;
+                    }
+                    
+                    return { date, localStr };
                 };
 
-                const start = parseIcalDateStr(dtstartMatch[1]);
-                let end = dtendMatch ? parseIcalDateStr(dtendMatch[1]) : new Date(start.getTime() + 60 * 60 * 1000); // default 1h if no end
+                const startParsed = parseIcalDateStr(dtstartMatch[1]);
+                let endParsed = dtendMatch ? parseIcalDateStr(dtendMatch[1]) : { 
+                    date: new Date(startParsed.date.getTime() + 60 * 60 * 1000), 
+                    localStr: undefined as string | undefined
+                };
 
-                // If the event is an all-day event (length 8), it starts at midnight and ends the next midnight.
-                // We should make sure `end` matches that if only one day was given.
+                // If the event is an all-day event (length 8) and no explicit end was given
                 if (dtstartMatch[1].trim().length === 8 && !dtendMatch) {
-                    end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+                    endParsed.date = new Date(startParsed.date.getTime() + 24 * 60 * 60 * 1000);
+                    // Generate localStr for next day
+                    const ny = endParsed.date.getUTCFullYear();
+                    const nm = String(endParsed.date.getUTCMonth() + 1).padStart(2, '0');
+                    const nd = String(endParsed.date.getUTCDate()).padStart(2, '0');
+                    endParsed.localStr = `${ny}-${nm}-${nd}T00:00:00`;
                 }
 
                 events.push({
-                    start,
-                    end,
+                    start: startParsed.date,
+                    end: endParsed.date,
                     summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
-                });
+                    ...(startParsed.localStr && { startLocalStr: startParsed.localStr }),
+                    ...(endParsed.localStr && { endLocalStr: endParsed.localStr }),
+                } as any);
             }
         }
 
