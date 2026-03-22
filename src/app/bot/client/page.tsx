@@ -209,6 +209,19 @@ function ClientCalendar() {
                             </div>
                         </div>
 
+                        {selectedSession.format === 'online' && selectedSession.onlineSessionLink && (
+                            <div className="px-6 pb-4">
+                                <a 
+                                    href={selectedSession.onlineSessionLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex w-full items-center justify-center py-3.5 rounded-xl border-2 font-bold transition-colors text-sm bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:border-primary/90 haptic-light"
+                                >
+                                    Присоединиться к встрече
+                                </a>
+                            </div>
+                        )}
+
                         <div className="px-6 pb-6 grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => {

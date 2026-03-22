@@ -41,6 +41,29 @@ function toDateStr(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
+// Helper: robust date parsing to specified timezone without relying on server's local time
+function getPartsInTz(date: Date, timeZone: string) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    const parts = formatter.formatToParts(date);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
+    
+    // Some runtimes return "24" instead of "00" for midnight with hour12: false
+    let hour = get('hour');
+    if (hour === '24') hour = '00';
+
+    return {
+        year: Number(get('year')),
+        month: Number(get('month')),
+        day: Number(get('day')),
+        hour,
+        minute: get('minute')
+    };
+}
+
 function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], sessionBreak: number) {
     // Expected dateStr format: 'yyyy-MM-dd'
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -166,14 +189,18 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
             }
 
             if (res && res.success && res.events) {
+                const tz = settings?.timezone || 'Europe/Moscow';
                 // Map external events into a structure similar to diaryBlocks
                 const mapped = res.events.map((ev: any) => {
                     const localStart = new Date(ev.start);
                     const localEnd = new Date(ev.end);
+                    const startParts = getPartsInTz(localStart, tz);
+                    const endParts = getPartsInTz(localEnd, tz);
+
                     return {
-                        date: new Date(Date.UTC(localStart.getFullYear(), localStart.getMonth(), localStart.getDate())),
-                        startTime: `${String(localStart.getHours()).padStart(2, '0')}:${String(localStart.getMinutes()).padStart(2, '0')}`,
-                        endTime: `${String(localEnd.getHours()).padStart(2, '0')}:${String(localEnd.getMinutes()).padStart(2, '0')}`,
+                        date: new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day)),
+                        startTime: `${startParts.hour}:${startParts.minute}`,
+                        endTime: `${endParts.hour}:${endParts.minute}`,
                         _external: true
                     };
                 });
@@ -250,13 +277,17 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
             }
 
             if (res && res.success && res.events) {
+                const tz = settings?.timezone || 'Europe/Moscow';
                 const mapped = res.events.map((ev: any) => {
                     const localStart = new Date(ev.start);
                     const localEnd = new Date(ev.end);
+                    const startParts = getPartsInTz(localStart, tz);
+                    const endParts = getPartsInTz(localEnd, tz);
+
                     return {
-                        date: new Date(Date.UTC(localStart.getFullYear(), localStart.getMonth(), localStart.getDate())),
-                        startTime: `${String(localStart.getHours()).padStart(2, '0')}:${String(localStart.getMinutes()).padStart(2, '0')}`,
-                        endTime: `${String(localEnd.getHours()).padStart(2, '0')}:${String(localEnd.getMinutes()).padStart(2, '0')}`,
+                        date: new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day)),
+                        startTime: `${startParts.hour}:${startParts.minute}`,
+                        endTime: `${endParts.hour}:${endParts.minute}`,
                         _external: true
                     };
                 });
@@ -430,7 +461,14 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         data: { totalSessions: sessionsCount }
     });
 
-    const psy = await db.user.findUnique({ where: { id: psychologistId } }) as any;
+    const psy = await db.user.findUnique({ 
+        where: { id: psychologistId },
+        include: { psychologistSettings: true }
+    }) as any;
+
+    const onlineLink = form.format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
+    const linkText = onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
+
     if (psy?.telegramChatId && bot) {
         try {
             await bot.telegram.sendMessage(
@@ -440,6 +478,20 @@ export async function bookSession(psychologistId: string, userDetails: any, form
             );
         } catch (e) {
             console.error("Failed to send telegram notification:", e);
+        }
+    }
+
+    // Оповещение клиенту о записи (если есть telegramChatId)
+    if (client.telegramChatId && bot) {
+        try {
+            const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
+            await bot.telegram.sendMessage(
+                client.telegramChatId,
+                clientMsg,
+                { parse_mode: 'HTML' }
+            );
+        } catch (e) {
+            console.error("Failed to send telegram notification to client:", e);
         }
     }
 
@@ -608,7 +660,7 @@ export async function getClientSessionsById(clientId: string) {
                 select: {
                     name: true,
                     psychologistSettings: {
-                        select: { fullName: true }
+                        select: { fullName: true, onlineSessionLink: true }
                     }
                 }
             }
@@ -626,7 +678,8 @@ export async function getClientSessionsById(clientId: string) {
         status: s.status,
         format: s.format,
         psychologistId: s.psychologistId,
-        psychologistName: s.psychologist.psychologistSettings?.fullName || s.psychologist.name || 'Специалист'
+        psychologistName: s.psychologist.psychologistSettings?.fullName || s.psychologist.name || 'Специалист',
+        onlineSessionLink: s.psychologist.psychologistSettings?.onlineSessionLink || null
     }));
 }
 

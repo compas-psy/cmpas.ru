@@ -26,7 +26,7 @@ export async function processReminders() {
             } as any,
             include: {
                 client: { include: { telegramClient: true } },
-                psychologist: true,
+                psychologist: { include: { psychologistSettings: true } },
                 address: true
             }
         });
@@ -37,11 +37,14 @@ export async function processReminders() {
             if (!clientData) continue;
 
             const psychName = session.psychologist?.name || 'Ваш психолог';
+            const psychSettings = session.psychologist?.psychologistSettings;
+            const onlineLink = psychSettings?.onlineSessionLink;
+            const linkText = (session.format === 'online' && onlineLink) ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
 
             // Уведомление клиенту
             const clientChatId = clientData.telegramClient?.telegramUserId || clientData.telegramChatId;
             if (clientChatId) {
-                const msg = `❗️Напоминание о сессии❗️\n\nЗдравствуйте, ${clientData.name}! Напоминаем о вашей встрече с психологом (${psychName}) завтра в ${session.time}.\nФормат: ${session.format === 'online' ? 'Онлайн' : 'Офлайн (кабинет: ' + (session.address?.name || 'Кабинет') + ')'}.`;
+                const msg = `❗️Напоминание о сессии❗️\n\nЗдравствуйте, ${clientData.name}! Напоминаем о вашей встрече с психологом (${psychName}) завтра в ${session.time}.\nФормат: ${session.format === 'online' ? 'Онлайн' : 'Офлайн (кабинет: ' + (session.address?.name || 'Кабинет') + ')'}.${linkText}`;
 
                 await sendTelegramMessage(clientChatId, msg, {
                     reply_markup: {
@@ -89,7 +92,7 @@ export async function processReminders() {
             } as any,
             include: {
                 client: { include: { telegramClient: true } },
-                psychologist: true,
+                psychologist: { include: { psychologistSettings: true } },
                 address: true
             }
         });
@@ -98,10 +101,14 @@ export async function processReminders() {
             const session = rawSession as any;
             const clientData = session.client;
             if (!clientData) continue;
+            
+            const psychSettings = session.psychologist?.psychologistSettings;
+            const onlineLink = psychSettings?.onlineSessionLink;
+            const linkText = (session.format === 'online' && onlineLink) ? `\n🔗 Подключение: ${onlineLink}` : '';
 
             const chatId = clientData.telegramClient?.telegramUserId || clientData.telegramChatId;
             if (chatId) {
-                const msg = `⏳ Сессия начнется через 1 час!\n\nЖдем вас в ${session.time}.`;
+                const msg = `⏳ Сессия начнется через 1 час!\n\nЖдем вас в ${session.time}.${linkText}`;
                 await sendTelegramMessage(chatId, msg);
 
                 await db.diarySession.update({

@@ -284,6 +284,10 @@ export default function SettingsPage() {
                             placeholder="https://zoom.us/j/..."
                             className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background transition-all font-medium text-sm"
                         />
+                        <p className="text-xs text-muted-foreground mt-2 ml-1 leading-relaxed">
+                            Вставьте сюда постоянную ссылку на вашу переговорку из Zoom, Google Meet или Яндекс.Телемост.<br/>
+                            Клиенты увидят её в своем расписании и в напоминаниях перед сессией.
+                        </p>
                     </div>
                     <div className="pt-2">
                         <label className="flex items-center gap-3 cursor-pointer group">
