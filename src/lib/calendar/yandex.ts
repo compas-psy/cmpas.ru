@@ -266,17 +266,16 @@ export async function fetchYandexCalendarEvents(
                 continue;
             }
 
-            // VFREEBUSY components: Yandex returns these with DTSTART=1880-01-01 (sentinel for
-            // "from beginning of time") and actual busy intervals in FREEBUSY lines.
-            // Parse FREEBUSY lines to get the real occupied periods.
+            // VFREEBUSY components: parse FREEBUSY lines for actual busy intervals.
             if (obj.data.includes('BEGIN:VFREEBUSY')) {
-                const summaryMatch = obj.data.match(/(?:SUMMARY|COMMENT):(.*)/);
+                const vfbMatch = obj.data.match(/BEGIN:VFREEBUSY[\s\S]*?END:VFREEBUSY/);
+                const vfbData = vfbMatch ? vfbMatch[0] : obj.data;
+                const summaryMatch = vfbData.match(/(?:SUMMARY|COMMENT):(.*)/);
                 const summary = summaryMatch ? summaryMatch[1].trim() : 'BUSY';
                 const freebusyRegex = /^FREEBUSY(?:;([^:]+))?:(.+)$/mg;
                 let fbMatch;
-                while ((fbMatch = freebusyRegex.exec(obj.data)) !== null) {
+                while ((fbMatch = freebusyRegex.exec(vfbData)) !== null) {
                     const params = (fbMatch[1] || '').toUpperCase();
-                    // Skip explicitly FREE periods
                     if (params.includes('FBTYPE=FREE')) continue;
                     const periods = fbMatch[2].trim().split(',');
                     for (const period of periods) {
@@ -286,7 +285,6 @@ export async function fetchYandexCalendarEvents(
                         const endStr = parts[1].trim();
                         let endDate: Date, endLocalStr: string | undefined;
                         if (endStr.startsWith('P')) {
-                            // Duration format e.g. PT1H, PT30M, P1DT2H
                             const dm = endStr.match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
                             if (!dm) continue;
                             const ms = (parseInt(dm[1] || '0') * 86400 + parseInt(dm[2] || '0') * 3600 + parseInt(dm[3] || '0') * 60 + parseInt(dm[4] || '0')) * 1000;
@@ -306,12 +304,19 @@ export async function fetchYandexCalendarEvents(
                         } as any);
                     }
                 }
-                continue; // VFREEBUSY handled — skip DTSTART/DTEND path
+                continue;
             }
 
-            const dtstartMatch = obj.data.match(/DTSTART(?:;.*?)?:(.*)/);
-            const dtendMatch = obj.data.match(/DTEND(?:;.*?)?:(.*)/);
-            const summaryMatch = obj.data.match(/SUMMARY:(.*)/);
+            // Extract only the VEVENT block to avoid matching DTSTART/DTEND values
+            // inside VTIMEZONE definitions (Yandex includes historical tz data starting 1880-01-01
+            // which caused the regex to pick up DTSTART:18800101T000000 instead of the real event).
+            const veventMatch = obj.data.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/);
+            if (!veventMatch) continue;
+            const eventData = veventMatch[0];
+
+            const dtstartMatch = eventData.match(/DTSTART(?:;.*?)?:(.*)/);
+            const dtendMatch = eventData.match(/DTEND(?:;.*?)?:(.*)/);
+            const summaryMatch = eventData.match(/SUMMARY:(.*)/);
 
             if (dtstartMatch) {
                 const startParsed = parseIcalDateStr(dtstartMatch[1]);
