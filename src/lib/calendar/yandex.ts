@@ -344,9 +344,7 @@ export async function fetchYandexCalendarEvents(
             }
         }
 
-        // DEBUG: expose first 1000 chars of raw iCal per object so we can diagnose DTSTART issues
-        const _rawSamples = objects.slice(0, 3).map((o: any) => (o.data || '').slice(0, 1000));
-        return { success: true, events, _rawSamples };
+        return { success: true, events };
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Ошибка запроса Yandex Calendar';
         return { success: false, error: message };
