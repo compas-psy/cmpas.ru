@@ -187,19 +187,31 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
             if (res && res.success && res.events) {
                 const tz = settings?.timezone || 'Europe/Moscow';
-                // Map external events into a structure similar to diaryBlocks
+                // Map external events into a structure similar to diaryBlocks.
+                // Yandex iCal events without 'Z' suffix are "floating" local time —
+                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
                 const mapped = res.events.map((ev: any) => {
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    const startParts = getPartsInTz(localStart, tz);
-                    const endParts = getPartsInTz(localEnd, tz);
+                    let date: Date, startTime: string, endTime: string;
 
-                    return {
-                        date: new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day)),
-                        startTime: `${startParts.hour}:${startParts.minute}`,
-                        endTime: `${endParts.hour}:${endParts.minute}`,
-                        _external: true
-                    };
+                    if (ev.startLocalStr) {
+                        const [datePart, timePart] = ev.startLocalStr.split('T');
+                        const [y, m, d] = datePart.split('-').map(Number);
+                        date = new Date(Date.UTC(y, m - 1, d));
+                        startTime = timePart.slice(0, 5);
+                    } else {
+                        const p = getPartsInTz(new Date(ev.start), tz);
+                        date = new Date(Date.UTC(p.year, p.month - 1, p.day));
+                        startTime = `${p.hour}:${p.minute}`;
+                    }
+
+                    if (ev.endLocalStr) {
+                        endTime = ev.endLocalStr.split('T')[1].slice(0, 5);
+                    } else {
+                        const p = getPartsInTz(new Date(ev.end), tz);
+                        endTime = `${p.hour}:${p.minute}`;
+                    }
+
+                    return { date, startTime, endTime, _external: true };
                 });
                 externalBlocks.push(...mapped);
             }
@@ -274,18 +286,30 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
 
             if (res && res.success && res.events) {
                 const tz = settings?.timezone || 'Europe/Moscow';
+                // Yandex iCal events without 'Z' suffix are "floating" local time —
+                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
                 const mapped = res.events.map((ev: any) => {
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    const startParts = getPartsInTz(localStart, tz);
-                    const endParts = getPartsInTz(localEnd, tz);
+                    let date: Date, startTime: string, endTime: string;
 
-                    return {
-                        date: new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day)),
-                        startTime: `${startParts.hour}:${startParts.minute}`,
-                        endTime: `${endParts.hour}:${endParts.minute}`,
-                        _external: true
-                    };
+                    if (ev.startLocalStr) {
+                        const [datePart, timePart] = ev.startLocalStr.split('T');
+                        const [y, m, d] = datePart.split('-').map(Number);
+                        date = new Date(Date.UTC(y, m - 1, d));
+                        startTime = timePart.slice(0, 5);
+                    } else {
+                        const p = getPartsInTz(new Date(ev.start), tz);
+                        date = new Date(Date.UTC(p.year, p.month - 1, p.day));
+                        startTime = `${p.hour}:${p.minute}`;
+                    }
+
+                    if (ev.endLocalStr) {
+                        endTime = ev.endLocalStr.split('T')[1].slice(0, 5);
+                    } else {
+                        const p = getPartsInTz(new Date(ev.end), tz);
+                        endTime = `${p.hour}:${p.minute}`;
+                    }
+
+                    return { date, startTime, endTime, _external: true };
                 });
                 externalBlocks.push(...mapped);
             }
