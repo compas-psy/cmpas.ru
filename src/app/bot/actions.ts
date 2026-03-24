@@ -251,7 +251,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
     return availableDates;
 }
 
-export async function getAvailableTimes(psychologistId: string, dateStr: string, skipModeCheck = false) {
+export async function getAvailableTimes(psychologistId: string, dateStr: string, skipModeCheck = false, excludeSessionId?: string) {
     // Check schedule mode — if private, return empty (only for client-facing calls)
     if (!skipModeCheck) {
         const mode = await getScheduleMode(psychologistId);
@@ -328,7 +328,8 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         where: {
             psychologistId,
             date: { gte: dayStart, lte: dayEnd },
-            status: { not: 'cancelled' }
+            status: { not: 'cancelled' },
+            ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
         },
         select: { date: true, time: true, duration: true }
     });

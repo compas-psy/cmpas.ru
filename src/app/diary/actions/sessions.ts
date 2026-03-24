@@ -215,6 +215,8 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
             date: dateObj,
             time: newTime,
             endTime,
+            notified24h: false,
+            notified1h: false,
         },
     });
 
@@ -237,32 +239,9 @@ export async function getAvailableDatesForReschedule(year: number, month: number
     return getAvailableDates(psychologistId, year, month, true); // skipModeCheck for psychologist's own diary
 }
 
-export async function getAvailableTimesForReschedule(dateStr: string, clientId?: string) {
+export async function getAvailableTimesForReschedule(dateStr: string, sessionId?: string, clientId?: string) {
     const psychologistId = await getPsychologistId();
     const { getAvailableTimes } = await import('@/app/bot/actions');
-    const slots = await getAvailableTimes(psychologistId, dateStr, true); // skipModeCheck for psychologist's own diary
-
-    // If clientId provided, check if this client is already booked on this date
-    if (clientId) {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        const dayStart = new Date(date);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(date);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const clientSessions = await db.diarySession.findMany({
-            where: {
-                psychologistId,
-                clientId,
-                date: { gte: dayStart, lte: dayEnd },
-                status: { not: 'cancelled' },
-            },
-        });
-
-        // If client already has sessions on this date, still show slots (it's a reschedule)
-        // But filter out slots that overlap with OTHER clients' sessions
-    }
-
-    return slots;
+    // Pass sessionId so the session being rescheduled doesn't block its own original slot
+    return getAvailableTimes(psychologistId, dateStr, true, sessionId);
 }

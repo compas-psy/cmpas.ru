@@ -96,7 +96,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
             setLoadingSlots(true);
             try {
                 const { getAvailableTimesForReschedule } = await import('../actions/sessions');
-                const times = await getAvailableTimesForReschedule(formData.date, formData.clientId || undefined);
+                const times = await getAvailableTimesForReschedule(formData.date, undefined, formData.clientId || undefined);
                 setAvailableSlots(times);
                 setFormData(s => ({ ...s, time: '' })); // Reset time selection
             } catch { setAvailableSlots([]); }

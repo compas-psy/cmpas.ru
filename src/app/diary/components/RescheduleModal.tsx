@@ -60,7 +60,7 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
         setLoadingSlots(true);
         try {
             const { getAvailableTimesForReschedule } = await import('../actions/sessions');
-            const slots = await getAvailableTimesForReschedule(dateStr, clientId);
+            const slots = await getAvailableTimesForReschedule(dateStr, sessionId, clientId);
             setAvailableSlots(slots);
         } catch {
             setAvailableSlots([]);
