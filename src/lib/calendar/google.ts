@@ -371,7 +371,7 @@ export async function fetchGoogleCalendarEvents(
         const items = data.items || [];
 
         const events = items
-            .filter((item: any) => item.status !== 'cancelled' && item.transparency !== 'transparent') // skip Free slots
+            .filter((item: any) => item.status !== 'cancelled' && item.transparency !== 'transparent' && !item.extendedProperties?.private?.compasSessionId) // skip Free slots and КОМПАС-synced sessions
             .map((item: any) => {
                 let start, end;
                 if (item.start.dateTime) {

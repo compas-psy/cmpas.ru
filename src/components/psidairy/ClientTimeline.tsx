@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import {
-    Calendar, FileText, ClipboardCheck, AlertTriangle, 
-    ChevronDown, ChevronUp, Search, Filter, Lock, UserCircle
+    Calendar,
+    ChevronDown, ChevronUp, Search, Lock, UserCircle, BookOpen
 } from 'lucide-react';
 import { getDefinitionById, SmartBlock } from '@/lib/smart-notes/config';
 
@@ -101,7 +101,7 @@ function TimelineSessionCard({ session, onOpenSession }: {
     const hasLegacyNotes = !!session.notes?.trim();
     const hasContent = hasBlocks || hasPrivateNotes || hasClientSummary || hasLegacyNotes;
 
-    const homeworkBlocks = blocks.filter(b => b.definitionId === 'homework');
+    const hasHomework = blocks.some(b => b.definitionId === 'homework');
 
     return (
         <div className="relative pl-8">
@@ -130,6 +130,7 @@ function TimelineSessionCard({ session, onOpenSession }: {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        {hasHomework && <BookOpen className="w-3.5 h-3.5 text-amber-500" title="Есть домашнее задание" />}
                         {hasPrivateNotes && <Lock className="w-3.5 h-3.5 text-muted-foreground" />}
                         {hasClientSummary && <UserCircle className="w-3.5 h-3.5 text-muted-foreground" />}
                         {hasContent && (
@@ -307,8 +308,16 @@ export function ClientTimeline({ sessions, onOpenSession }: {
                 <span>{events.length} записей</span>
                 <span>·</span>
                 <span>
-                    {events.filter(s => (s.structuredNotes?.blocks?.length || 0) > 0).length} с заметками
+                    {events.filter(s => (s.structuredNotes?.blocks?.length || 0) > 0 || !!s.notes?.trim()).length} с заметками
                 </span>
+                {events.some(s => s.structuredNotes?.blocks?.some(b => b.definitionId === 'homework')) && (
+                    <>
+                        <span>·</span>
+                        <span>
+                            {events.filter(s => s.structuredNotes?.blocks?.some(b => b.definitionId === 'homework')).length} с ДЗ
+                        </span>
+                    </>
+                )}
             </div>
 
             {/* Timeline */}
