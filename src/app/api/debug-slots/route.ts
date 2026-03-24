@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
             entry.success = res?.success;
             entry.error = res?.error || null;
             entry.eventCount = res?.events?.length || 0;
+            entry._rawSamples = res?._rawSamples || [];
             entry.rawEvents = (res?.events || []).slice(0, 5).map((ev: any) => ({
                 start: ev.start?.toISOString?.() || String(ev.start),
                 end: ev.end?.toISOString?.() || String(ev.end),
