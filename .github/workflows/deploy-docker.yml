@@ -248,6 +248,9 @@ jobs:
               -- DiarySession columns
               ALTER TABLE \"DiarySession\" ADD COLUMN IF NOT EXISTS \"addressId\" TEXT;
 
+              -- CalendarIntegration columns
+              ALTER TABLE "CalendarIntegration" ADD COLUMN IF NOT EXISTS "syncFrom" BOOLEAN NOT NULL DEFAULT true;
+
               -- PsychologistSettings columns
               ALTER TABLE \"PsychologistSettings\" ADD COLUMN IF NOT EXISTS \"fullName\" TEXT;
               ALTER TABLE \"PsychologistSettings\" ADD COLUMN IF NOT EXISTS \"sessionBreak\" INTEGER NOT NULL DEFAULT 15;

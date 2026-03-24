@@ -169,14 +169,11 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
     // Fetch settings to check if we should block conflicts from external calendars
     const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
-    const blockConflicts = settings?.blockConflicts ?? false;
+    const blockConflicts = settings?.blockConflicts ?? true;
 
     let externalBlocks: any[] = [];
     if (blockConflicts) {
-        // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
-        // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
         const integrations = await db.calendarIntegration.findMany({
-            // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
             where: { psychologistId, isActive: true, syncFrom: true }
         });
 
@@ -259,11 +256,10 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
 
     // Fetch settings to check if we should block conflicts from external calendars
     const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
-    const blockConflicts = settings?.blockConflicts ?? false;
+    const blockConflicts = settings?.blockConflicts ?? true;
 
     let externalBlocks: any[] = [];
     if (blockConflicts) {
-        // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
         const integrations = await db.calendarIntegration.findMany({
             where: { psychologistId, isActive: true, syncFrom: true }
         });
