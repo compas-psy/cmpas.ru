@@ -69,6 +69,7 @@ export default function DiaryCalendarPage() {
     const [mobileFreeTimes, setMobileFreeTimes] = useState<{ time: string; format: string; addressId: string | null }[]>([]);
     const [loadingFreeTimes, setLoadingFreeTimes] = useState(false);
     const [mobileViewMode, setMobileViewMode] = useState<ViewMode>('day');
+    const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -422,9 +423,15 @@ export default function DiaryCalendarPage() {
                                                                 </button>
                                                             )}
                                                             {s.status !== 'cancelled' && (
-                                                                <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-xs px-3 py-2 rounded-xl bg-destructive/10 text-destructive font-semibold active:scale-95 transition-all ml-auto">
-                                                                    ✕
-                                                                </button>
+                                                                confirmCancelId === s.id ? (
+                                                                    <button onClick={() => { handleStatusChange(s.id, 'cancelled'); setConfirmCancelId(null); }} className="text-xs px-3 py-2 rounded-xl bg-destructive text-destructive-foreground font-semibold active:scale-95 transition-all ml-auto">
+                                                                        Отменить?
+                                                                    </button>
+                                                                ) : (
+                                                                    <button onClick={() => setConfirmCancelId(s.id)} className="text-xs px-3 py-2 rounded-xl bg-destructive/10 text-destructive font-semibold active:scale-95 transition-all ml-auto">
+                                                                        ✕
+                                                                    </button>
+                                                                )
                                                             )}
                                                         </div>
                                                     </div>
@@ -920,9 +927,15 @@ export default function DiaryCalendarPage() {
                                                 </button>
                                             )}
                                             {s.status !== 'cancelled' && (
-                                                <button onClick={() => handleStatusChange(s.id, 'cancelled')} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-all active:scale-[0.98]">
-                                                    ✕
-                                                </button>
+                                                confirmCancelId === s.id ? (
+                                                    <button onClick={() => { handleStatusChange(s.id, 'cancelled'); setConfirmCancelId(null); }} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-destructive text-destructive-foreground rounded-xl transition-all active:scale-[0.98]">
+                                                        Отменить?
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => setConfirmCancelId(s.id)} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-all active:scale-[0.98]">
+                                                        ✕
+                                                    </button>
+                                                )
                                             )}
                                         </div>
                                     </div>

@@ -16,6 +16,7 @@ type Settings = {
     cancellationText: string;
     notifyTelegram: boolean;
     notifyAds: boolean;
+    blockConflicts: boolean;
 };
 
 type Address = {
@@ -74,7 +75,8 @@ export default function SettingsPage() {
         cancellationFee: 50,
         cancellationText: '',
         notifyTelegram: true,
-        notifyAds: false
+        notifyAds: false,
+        blockConflicts: true,
     });
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [newAddress, setNewAddress] = useState({ name: '', address: '' });
@@ -100,7 +102,8 @@ export default function SettingsPage() {
                     cancellationFee: data.cancellationFee,
                     cancellationText: data.cancellationText || '',
                     notifyTelegram: (data as any).notifyTelegram !== false,
-                    notifyAds: settings.notifyAds
+                    notifyAds: settings.notifyAds,
+                    blockConflicts: (data as any).blockConflicts !== false,
                 });
             } else if (!settingsRes.success) {
                 toast.error(settingsRes.error || 'Ошибка при загрузке настроек');
@@ -300,6 +303,20 @@ export default function SettingsPage() {
                             <div className="flex flex-col">
                                 <span className="text-sm font-bold text-foreground/90 group-hover:text-primary transition-colors">Telegram уведомления психологу</span>
                                 <span className="text-xs font-medium text-muted-foreground">Получать напоминания о предстоящих сессиях (за 24 часа)</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div className="pt-2">
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={settings.blockConflicts}
+                                onChange={e => setSettings(s => ({ ...s, blockConflicts: e.target.checked }))}
+                                className="w-5 h-5 rounded border-border text-primary focus:ring-primary/50 transition-all cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-foreground/90 group-hover:text-primary transition-colors">Блокировать занятые слоты из календаря</span>
+                                <span className="text-xs font-medium text-muted-foreground">События из Google / Яндекс Календаря автоматически закрывают соответствующее время для записи</span>
                             </div>
                         </label>
                     </div>
