@@ -237,6 +237,27 @@ export async function fetchYandexCalendarEvents(
         const events: { start: Date; end: Date; summary: string }[] = [];
 
         // Parse rudimentary iCal strings returned by tsdav
+        // Parse iCal date string: returns UTC date + optional localStr for floating (no Z) times
+        const parseIcalDateStr = (str: string) => {
+            const isUTC = str.endsWith('Z');
+            str = str.replace(/Z$/, '').trim();
+            let date, localStr = undefined;
+
+            if (str.length === 8) {
+                date = new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00Z`);
+                return { date, localStr: `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00` };
+            }
+
+            const time = `${str.slice(9, 11)}:${str.slice(11, 13)}:${str.slice(13, 15)}`;
+            date = new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${time}Z`);
+
+            if (!isUTC) {
+                localStr = `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${time}`;
+            }
+
+            return { date, localStr };
+        };
+
         for (const obj of objects) {
             if (!obj.data) continue;
 
@@ -245,42 +266,63 @@ export async function fetchYandexCalendarEvents(
                 continue;
             }
 
+            // VFREEBUSY components: Yandex returns these with DTSTART=1880-01-01 (sentinel for
+            // "from beginning of time") and actual busy intervals in FREEBUSY lines.
+            // Parse FREEBUSY lines to get the real occupied periods.
+            if (obj.data.includes('BEGIN:VFREEBUSY')) {
+                const summaryMatch = obj.data.match(/(?:SUMMARY|COMMENT):(.*)/);
+                const summary = summaryMatch ? summaryMatch[1].trim() : 'BUSY';
+                const freebusyRegex = /^FREEBUSY(?:;([^:]+))?:(.+)$/mg;
+                let fbMatch;
+                while ((fbMatch = freebusyRegex.exec(obj.data)) !== null) {
+                    const params = (fbMatch[1] || '').toUpperCase();
+                    // Skip explicitly FREE periods
+                    if (params.includes('FBTYPE=FREE')) continue;
+                    const periods = fbMatch[2].trim().split(',');
+                    for (const period of periods) {
+                        const parts = period.trim().split('/');
+                        if (parts.length !== 2) continue;
+                        const startParsed = parseIcalDateStr(parts[0].trim());
+                        const endStr = parts[1].trim();
+                        let endDate: Date, endLocalStr: string | undefined;
+                        if (endStr.startsWith('P')) {
+                            // Duration format e.g. PT1H, PT30M, P1DT2H
+                            const dm = endStr.match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                            if (!dm) continue;
+                            const ms = (parseInt(dm[1] || '0') * 86400 + parseInt(dm[2] || '0') * 3600 + parseInt(dm[3] || '0') * 60 + parseInt(dm[4] || '0')) * 1000;
+                            endDate = new Date(startParsed.date.getTime() + ms);
+                            endLocalStr = undefined;
+                        } else {
+                            const ep = parseIcalDateStr(endStr);
+                            endDate = ep.date;
+                            endLocalStr = ep.localStr;
+                        }
+                        events.push({
+                            start: startParsed.date,
+                            end: endDate,
+                            summary,
+                            ...(startParsed.localStr && { startLocalStr: startParsed.localStr }),
+                            ...(endLocalStr && { endLocalStr }),
+                        } as any);
+                    }
+                }
+                continue; // VFREEBUSY handled — skip DTSTART/DTEND path
+            }
+
             const dtstartMatch = obj.data.match(/DTSTART(?:;.*?)?:(.*)/);
             const dtendMatch = obj.data.match(/DTEND(?:;.*?)?:(.*)/);
             const summaryMatch = obj.data.match(/SUMMARY:(.*)/);
 
             if (dtstartMatch) {
-                // Return date + optional localStr if the timezone is missing/local
-                const parseIcalDateStr = (str: string) => {
-                    const isUTC = str.endsWith('Z');
-                    str = str.replace(/Z$/, '').trim();
-                    let date, localStr = undefined;
-                    
-                    if (str.length === 8) {
-                        date = new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00Z`);
-                        return { date, localStr: `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T00:00:00` };
-                    }
-                    
-                    const time = `${str.slice(9, 11)}:${str.slice(11, 13)}:${str.slice(13, 15)}`;
-                    date = new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${time}Z`);
-                    
-                    if (!isUTC) {
-                        localStr = `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}T${time}`;
-                    }
-                    
-                    return { date, localStr };
-                };
-
                 const startParsed = parseIcalDateStr(dtstartMatch[1]);
-                let endParsed = dtendMatch ? parseIcalDateStr(dtendMatch[1]) : { 
-                    date: new Date(startParsed.date.getTime() + 60 * 60 * 1000), 
+                let endParsed = dtendMatch ? parseIcalDateStr(dtendMatch[1]) : {
+                    date: new Date(startParsed.date.getTime() + 60 * 60 * 1000),
                     localStr: undefined as string | undefined
                 };
 
                 // If the event is an all-day event (length 8) and no explicit end was given
                 if (dtstartMatch[1].trim().length === 8 && !dtendMatch) {
                     endParsed.date = new Date(startParsed.date.getTime() + 24 * 60 * 60 * 1000);
-                    // Generate localStr for next day
                     const ny = endParsed.date.getUTCFullYear();
                     const nm = String(endParsed.date.getUTCMonth() + 1).padStart(2, '0');
                     const nd = String(endParsed.date.getUTCDate()).padStart(2, '0');

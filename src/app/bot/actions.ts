@@ -191,7 +191,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
                 // Yandex iCal events without 'Z' suffix are "floating" local time —
                 // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
                 const mapped = res.events.map((ev: any) => {
-                    let date: Date, startTime: string, endTime: string, endDateObj: Date;
+                    let date: Date, startTime: string, endTime: string;
 
                     if (ev.startLocalStr) {
                         const [datePart, timePart] = ev.startLocalStr.split('T');
@@ -205,22 +205,10 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
                     }
 
                     if (ev.endLocalStr) {
-                        const [endDatePart, endTimePart] = ev.endLocalStr.split('T');
-                        const [ey, em, ed] = endDatePart.split('-').map(Number);
-                        endDateObj = new Date(Date.UTC(ey, em - 1, ed));
-                        endTime = endTimePart.slice(0, 5);
+                        endTime = ev.endLocalStr.split('T')[1].slice(0, 5);
                     } else {
                         const p = getPartsInTz(new Date(ev.end), tz);
-                        endDateObj = new Date(Date.UTC(p.year, p.month - 1, p.day));
                         endTime = `${p.hour}:${p.minute}`;
-                    }
-
-                    // Yandex CalDAV sometimes returns BUSY blocks with an ancient DTSTART
-                    // (e.g. 1880-01-01) meaning "busy from beginning of time until DTEND".
-                    // Snap such events to their end date so block matching works correctly.
-                    if (date < startDate) {
-                        date = endDateObj;
-                        startTime = '00:00';
                     }
 
                     return { date, startTime, endTime, _external: true };
@@ -319,14 +307,6 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
                     } else {
                         const p = getPartsInTz(new Date(ev.end), tz);
                         endTime = `${p.hour}:${p.minute}`;
-                    }
-
-                    // Yandex CalDAV sometimes returns BUSY blocks with an ancient DTSTART
-                    // (e.g. 1880-01-01) meaning "busy from beginning of time until DTEND".
-                    // Snap such events to the query date so block matching works correctly.
-                    if (date < dayStart) {
-                        date = dayStart;
-                        startTime = '00:00';
                     }
 
                     return { date, startTime, endTime, _external: true };
