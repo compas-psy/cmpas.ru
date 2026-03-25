@@ -89,6 +89,11 @@ export default function ClientsPage() {
     useEffect(() => { fetchClients(); }, [fetchClients]);
 
     useEffect(() => {
+        const clientId = new URLSearchParams(window.location.search).get('clientId');
+        if (clientId) fetchClientDetail(clientId);
+    }, [fetchClientDetail]);
+
+    useEffect(() => {
         if (questionnaireForm.dateOfBirth) {
             const bd = new Date(questionnaireForm.dateOfBirth), today = new Date();
             let age = today.getFullYear() - bd.getFullYear();

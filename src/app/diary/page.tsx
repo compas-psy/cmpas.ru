@@ -815,11 +815,14 @@ export default function DiaryCalendarPage() {
                                     <div key={s.id} onClick={() => { setEditingSession(s); setShowNewSession(true); }} className="bg-card rounded-3xl border border-border shadow-sm p-6 flex flex-col sm:flex-row sm:items-center gap-5 transition-all hover:border-primary/30 cursor-pointer">
                                         <div className={`hidden sm:block w-1.5 h-16 rounded-full ${statusColors[s.status]}`} />
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-foreground text-xl mb-1.5">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); window.location.href = `/diary/clients?clientId=${s.client.id}`; }}
+                                                className="font-bold text-foreground text-xl mb-1.5 hover:text-primary transition-colors text-left block"
+                                            >
                                                 {s.client.questionnaire?.data && (s.client.questionnaire.data as any).fullName
                                                     ? (s.client.questionnaire.data as any).fullName
                                                     : s.client.name}
-                                            </div>
+                                            </button>
                                             <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2.5">
                                                 <div className="flex items-center gap-1.5 text-foreground">
                                                     <Clock className="w-4 h-4 text-primary" />
