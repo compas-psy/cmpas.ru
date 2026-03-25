@@ -424,9 +424,14 @@ export default function DiaryCalendarPage() {
                                                             )}
                                                             {s.status !== 'cancelled' && (
                                                                 confirmCancelId === s.id ? (
-                                                                    <button onClick={() => { handleStatusChange(s.id, 'cancelled'); setConfirmCancelId(null); }} className="text-xs px-3 py-2 rounded-xl bg-destructive text-destructive-foreground font-semibold active:scale-95 transition-all ml-auto">
-                                                                        Отменить?
-                                                                    </button>
+                                                                    <>
+                                                                        <button onClick={() => setConfirmCancelId(null)} className="text-xs px-3 py-2 rounded-xl bg-secondary text-secondary-foreground font-semibold active:scale-95 transition-all ml-auto">
+                                                                            Нет
+                                                                        </button>
+                                                                        <button onClick={() => { handleStatusChange(s.id, 'cancelled'); setConfirmCancelId(null); }} className="text-xs px-3 py-2 rounded-xl bg-destructive text-destructive-foreground font-semibold active:scale-95 transition-all">
+                                                                            Да, отменить
+                                                                        </button>
+                                                                    </>
                                                                 ) : (
                                                                     <button onClick={() => setConfirmCancelId(s.id)} className="text-xs px-3 py-2 rounded-xl bg-destructive/10 text-destructive font-semibold active:scale-95 transition-all ml-auto">
                                                                         ✕
@@ -707,7 +712,7 @@ export default function DiaryCalendarPage() {
                                                             const client = clients.find(c => c.id === session.clientId);
                                                             return (
                                                                 <div key={session.id}
-                                                                    onClick={() => setEditingSession(session)}
+                                                                    onClick={() => setSelectedDate(new Date(session.date))}
                                                                     className="p-2.5 bg-background border border-border rounded-xl shadow-sm hover:shadow-md transition-all group relative cursor-pointer hover:border-primary/30 flex flex-col justify-between overflow-hidden"
                                                                 >
                                                                     <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${statusColors[session.status] || 'bg-border'}`} />
@@ -753,7 +758,7 @@ export default function DiaryCalendarPage() {
                                                                 const client = clients.find(c => c.id === session.clientId);
                                                                 return (
                                                                     <div key={session.id}
-                                                                        onClick={() => setEditingSession(session)}
+                                                                        onClick={() => { const d = new Date(session.date); setSelectedDate(d); setCurrentDate(d); setMobileViewMode('day'); }}
                                                                         className="p-3 bg-background border border-border rounded-xl shadow-sm hover:shadow-md transition-all relative cursor-pointer active:scale-[0.98]">
                                                                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${statusColors[session.status] || 'bg-border'}`} />
                                                                         <div className="flex justify-between items-start pl-2">
@@ -807,7 +812,7 @@ export default function DiaryCalendarPage() {
                                 </div>
                             ) : (
                                 selectedSessions.map(s => (
-                                    <div key={s.id} className="bg-card rounded-3xl border border-border shadow-sm p-6 flex flex-col sm:flex-row sm:items-center gap-5 transition-all hover:border-primary/30">
+                                    <div key={s.id} onClick={() => { setEditingSession(s); setShowNewSession(true); }} className="bg-card rounded-3xl border border-border shadow-sm p-6 flex flex-col sm:flex-row sm:items-center gap-5 transition-all hover:border-primary/30 cursor-pointer">
                                         <div className={`hidden sm:block w-1.5 h-16 rounded-full ${statusColors[s.status]}`} />
                                         <div className="flex-1 min-w-0">
                                             <div className="font-bold text-foreground text-xl mb-1.5">
@@ -928,9 +933,14 @@ export default function DiaryCalendarPage() {
                                             )}
                                             {s.status !== 'cancelled' && (
                                                 confirmCancelId === s.id ? (
-                                                    <button onClick={() => { handleStatusChange(s.id, 'cancelled'); setConfirmCancelId(null); }} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-destructive text-destructive-foreground rounded-xl transition-all active:scale-[0.98]">
-                                                        Отменить?
-                                                    </button>
+                                                    <>
+                                                        <button onClick={() => setConfirmCancelId(null)} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-secondary text-secondary-foreground rounded-xl transition-all active:scale-[0.98]">
+                                                            Нет
+                                                        </button>
+                                                        <button onClick={() => { handleStatusChange(s.id, 'cancelled'); setConfirmCancelId(null); }} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-destructive text-destructive-foreground rounded-xl transition-all active:scale-[0.98]">
+                                                            Да, отменить
+                                                        </button>
+                                                    </>
                                                 ) : (
                                                     <button onClick={() => setConfirmCancelId(s.id)} className="text-xs px-3 py-2 min-h-[36px] font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-all active:scale-[0.98]">
                                                         ✕

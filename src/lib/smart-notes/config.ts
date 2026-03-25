@@ -141,7 +141,6 @@ export const SMART_BLOCK_DEFINITIONS: SmartBlockDefinition[] = [
             { key: 'format', label: 'Формат выполнения', placeholder: 'Как именно выполнять...', type: 'text' },
             { key: 'deadline', label: 'Срок', placeholder: 'До когда...', type: 'text' },
             { key: 'obstacles', label: 'Возможные препятствия', placeholder: 'Что может помешать...', type: 'textarea' },
-            { key: 'show_to_client', label: 'Показать клиенту?', placeholder: '', type: 'select', options: ['Да', 'Нет'] },
         ],
     },
     {
