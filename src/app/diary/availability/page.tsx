@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2 } from 'lucide-react';
+import { Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2, Lock, Eye, CalendarCheck, RefreshCw, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
 import {
@@ -34,6 +34,7 @@ export default function AvailabilityPage() {
     const [loading, setLoading] = useState(true);
     const [scheduleMode, setScheduleMode] = useState<string>('private');
     const [savingMode, setSavingMode] = useState(false);
+    const [showExpired, setShowExpired] = useState(false);
     const initialSlot = {
         startDate: '', endDate: '',
         daysOfWeek: [] as number[],
@@ -217,7 +218,26 @@ export default function AvailabilityPage() {
 
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
-    const slotsByDay = dayShort.map((_, i) => slots.filter(s => s.dayOfWeek === i));
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    const activeSlots = slots.filter(s => {
+        if (s.endDate && new Date(s.endDate) < today) return false;
+        if (s.startDate && new Date(s.startDate) > today) return false;
+        return true;
+    });
+    const upcomingSlots = slots.filter(s => s.startDate && new Date(s.startDate) > today);
+    const expiredSlots = slots.filter(s => s.endDate && new Date(s.endDate) < today);
+
+    // Nearest expiry of currently active slots
+    const nearestExpiry = activeSlots
+        .filter(s => s.endDate)
+        .map(s => new Date(s.endDate!))
+        .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+    const daysUntilExpiry = nearestExpiry ? Math.ceil((nearestExpiry.getTime() - today.getTime()) / 86400000) : null;
+
+    const visibleSlots = [...activeSlots, ...upcomingSlots];
+    const slotsByDay = dayShort.map((_, i) => visibleSlots.filter(s => s.dayOfWeek === i));
+    const expiredByDay = dayShort.map((_, i) => expiredSlots.filter(s => s.dayOfWeek === i));
 
     return (
         <div className="space-y-8 pb-12">
@@ -249,9 +269,9 @@ export default function AvailabilityPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     {[
-                        { value: 'private', label: '🔒 Приватный', desc: 'Только вы видите расписание' },
-                        { value: 'readonly', label: '👁 Просмотр', desc: 'Клиенты видят, но не могут записаться' },
-                        { value: 'booking', label: '✅ Запись', desc: 'Клиенты могут записаться сами' },
+                        { value: 'private', label: 'Приватный', desc: 'Только вы видите расписание', Icon: Lock },
+                        { value: 'readonly', label: 'Просмотр', desc: 'Клиенты видят, но не могут записаться', Icon: Eye },
+                        { value: 'booking', label: 'Запись', desc: 'Клиенты могут записаться сами', Icon: CalendarCheck },
                     ].map(m => (
                         <button
                             key={m.value}
@@ -270,12 +290,32 @@ export default function AvailabilityPage() {
                                 : 'border-border hover:border-primary/30'
                                 }`}
                         >
+                            <m.Icon className={`w-4 h-4 mb-2 ${scheduleMode === m.value ? 'text-primary' : 'text-muted-foreground'}`} />
                             <div className="font-bold text-sm mb-0.5">{m.label}</div>
                             <div className="text-xs text-muted-foreground">{m.desc}</div>
                         </button>
                     ))}
                 </div>
             </div>
+
+            {/* Status banner — no active slots */}
+            {activeSlots.length === 0 && slots.length > 0 && (
+                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-semibold">Активного расписания нет — истёк срок действия. Добавьте новые окна.</span>
+                    <button onClick={() => setShowNewSlot(true)} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">+ Новое окно</button>
+                </div>
+            )}
+            {/* Expiry warning — active slots expire soon */}
+            {activeSlots.length > 0 && daysUntilExpiry !== null && daysUntilExpiry <= 14 && (
+                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-semibold">
+                        Расписание действует ещё {daysUntilExpiry} {daysUntilExpiry === 1 ? 'день' : daysUntilExpiry < 5 ? 'дня' : 'дней'} — до {nearestExpiry!.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </span>
+                    <button onClick={() => setShowNewSlot(true)} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">Продлить</button>
+                </div>
+            )}
 
             {/* Weekly Grid — Desktop */}
             <div className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm hidden md:block">
@@ -286,29 +326,32 @@ export default function AvailabilityPage() {
                                 <span className="text-sm font-semibold text-foreground/80">{day}</span>
                             </div>
                             <div className="p-3 min-h-[200px] space-y-2 bg-background/50">
-                                {slotsByDay[i].map(slot => (
-                                    <div key={slot.id} className="bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-2xl p-3 group relative transition-colors shadow-sm">
-                                        <div className="text-sm font-bold text-primary">{slot.startTime} - {slot.endTime}</div>
-                                        <div className="text-xs font-medium text-muted-foreground mt-0.5">{slot.duration} мин</div>
-                                        <div className="text-[10px] font-medium text-primary/80 mt-2 bg-primary/10 px-2 py-1 rounded-md inline-block">
-                                            {slot.isRecurring && slot.startDate && slot.endDate ? (
-                                                `♻ ${new Date(slot.startDate).toLocaleDateString('ru-RU')} - ${new Date(slot.endDate).toLocaleDateString('ru-RU')}`
-                                            ) : slot.startDate ? (
-                                                `📅 ${new Date(slot.startDate).toLocaleDateString('ru-RU')}`
-                                            ) : (
-                                                `♻ Постоянно`
-                                            )}
+                                {slotsByDay[i].map(slot => {
+                                    const isUpcoming = slot.startDate && new Date(slot.startDate) > today;
+                                    return (
+                                        <div key={slot.id} className={`border rounded-2xl p-3 group relative transition-colors shadow-sm ${isUpcoming ? 'bg-amber-50/50 border-amber-200/50 hover:bg-amber-50' : 'bg-primary/5 hover:bg-primary/10 border-primary/10'}`}>
+                                            <div className={`text-sm font-bold ${isUpcoming ? 'text-amber-700' : 'text-primary'}`}>{slot.startTime} – {slot.endTime}</div>
+                                            <div className="text-xs font-medium text-muted-foreground mt-0.5">{slot.duration} мин</div>
+                                            <div className={`text-[10px] font-medium mt-2 px-2 py-1 rounded-md inline-flex items-center gap-1 ${isUpcoming ? 'bg-amber-100/70 text-amber-700' : 'bg-primary/10 text-primary/80'}`}>
+                                                {isUpcoming ? (
+                                                    <><CalendarCheck className="w-2.5 h-2.5" />с {new Date(slot.startDate!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</>
+                                                ) : slot.endDate ? (
+                                                    <><RefreshCw className="w-2.5 h-2.5" />{new Date(slot.startDate!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} – {new Date(slot.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</>
+                                                ) : (
+                                                    <><RefreshCw className="w-2.5 h-2.5" />Постоянно</>
+                                                )}
+                                            </div>
+                                            <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => setEditingSlot(slot)} className="p-1.5 bg-card border border-border rounded-lg hover:bg-muted transition-colors shadow-sm">
+                                                    <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                                </button>
+                                                <button onClick={() => rmSlot(slot.id)} className="p-1.5 bg-card border border-border rounded-lg hover:bg-destructive/10 transition-colors shadow-sm group/btn">
+                                                    <Trash2 className="w-3.5 h-3.5 text-destructive group-hover/btn:text-destructive" />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => setEditingSlot(slot)} className="p-1.5 bg-card border border-border rounded-lg hover:bg-muted transition-colors shadow-sm">
-                                                <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                            </button>
-                                            <button onClick={() => rmSlot(slot.id)} className="p-1.5 bg-card border border-border rounded-lg hover:bg-destructive/10 transition-colors shadow-sm group/btn">
-                                                <Trash2 className="w-3.5 h-3.5 text-destructive group-hover/btn:text-destructive" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                                 {slotsByDay[i].length === 0 && (
                                     <div className="h-full flex items-center justify-center pt-8">
                                         <span className="text-xs text-muted-foreground/50 font-medium">Нет слотов</span>
@@ -320,6 +363,50 @@ export default function AvailabilityPage() {
                 </div>
             </div>
 
+            {/* Expired slots section */}
+            {expiredSlots.length > 0 && (
+                <div>
+                    <button
+                        onClick={() => setShowExpired(v => !v)}
+                        className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors py-1"
+                    >
+                        {showExpired ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        История расписания ({expiredSlots.length} {expiredSlots.length === 1 ? 'окно' : expiredSlots.length < 5 ? 'окна' : 'окон'})
+                    </button>
+                    {showExpired && (
+                        <div className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm hidden md:block mt-3 opacity-60">
+                            <div className="grid grid-cols-7 divide-x divide-border">
+                                {dayShort.map((day, i) => (
+                                    <div key={day} className="flex flex-col">
+                                        <div className="p-3 bg-muted/20 text-center border-b border-border">
+                                            <span className="text-xs font-semibold text-muted-foreground">{day}</span>
+                                        </div>
+                                        <div className="p-3 min-h-[120px] space-y-2">
+                                            {expiredByDay[i].map(slot => (
+                                                <div key={slot.id} className="bg-muted/30 border border-border/50 rounded-xl p-3 group relative">
+                                                    <div className="text-sm font-bold text-muted-foreground">{slot.startTime} – {slot.endTime}</div>
+                                                    <div className="text-[10px] text-muted-foreground/70 mt-1">
+                                                        {slot.endDate && new Date(slot.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </div>
+                                                    <button onClick={() => rmSlot(slot.id)} className="absolute top-2 right-2 p-1 rounded-lg hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all">
+                                                        <Trash2 className="w-3 h-3 text-destructive" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {expiredByDay[i].length === 0 && (
+                                                <div className="h-full flex items-center justify-center pt-4">
+                                                    <span className="text-xs text-muted-foreground/30">—</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Weekly Slots — Mobile (Card Layout) */}
             <div className="md:hidden space-y-3">
                 {slots.length === 0 ? (
@@ -327,11 +414,11 @@ export default function AvailabilityPage() {
                         <p className="text-sm text-muted-foreground">Нет окон расписания. Нажмите «Новое окно» для добавления.</p>
                     </div>
                 ) : (
-                    /* Group unique slot configs */
+                    /* Group unique slot configs — active + upcoming only */
                     (() => {
                         // Group slots by startTime-endTime-duration-startDate-endDate-format
                         const groups = new Map<string, { slots: Slot[]; days: number[] }>();
-                        slots.forEach(slot => {
+                        visibleSlots.forEach(slot => {
                             const key = `${slot.startTime}-${slot.endTime}-${slot.duration}-${slot.startDate || ''}-${slot.endDate || ''}-${slot.format || 'online'}`;
                             if (!groups.has(key)) {
                                 groups.set(key, { slots: [], days: [] });
@@ -345,19 +432,24 @@ export default function AvailabilityPage() {
                             const sortedDays = [...group.days].sort();
                             const daysLabel = sortedDays.map(d => dayShort[d]).join(', ');
                             const formatLabel = sample.format === 'offline' ? 'Кабинет' : sample.format === 'both' ? 'Онлайн + Кабинет' : 'Онлайн';
+                            const isUpcoming = sample.startDate && new Date(sample.startDate) > today;
                             return (
-                                <div key={key} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+                                <div key={key} className={`rounded-2xl border p-4 shadow-sm ${isUpcoming ? 'bg-amber-50/50 border-amber-200/60' : 'bg-card border-border'}`}>
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md">{daysLabel}</span>
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isUpcoming ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>{daysLabel}</span>
                                                 <span className="text-xs font-medium text-muted-foreground">{formatLabel}</span>
                                             </div>
                                             <div className="text-base font-bold text-foreground">{sample.startTime} – {sample.endTime}</div>
                                             <div className="text-xs text-muted-foreground mt-0.5">{sample.duration} мин</div>
                                             {sample.startDate && sample.endDate && (
-                                                <div className="text-xs text-muted-foreground mt-1">
-                                                    {new Date(sample.startDate).toLocaleDateString('ru-RU')} – {new Date(sample.endDate).toLocaleDateString('ru-RU')}
+                                                <div className={`flex items-center gap-1 text-xs mt-1 ${isUpcoming ? 'text-amber-700' : 'text-muted-foreground'}`}>
+                                                    {isUpcoming ? <CalendarCheck className="w-3 h-3" /> : <RefreshCw className="w-3 h-3" />}
+                                                    {isUpcoming
+                                                        ? `с ${new Date(sample.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
+                                                        : `${new Date(sample.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} – ${new Date(sample.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`
+                                                    }
                                                 </div>
                                             )}
                                         </div>
