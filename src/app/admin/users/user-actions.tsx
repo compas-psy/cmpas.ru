@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Shield, ShieldAlert, UserCheck, Trash2, RotateCcw } from "lucide-react"
-import { toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount } from "../actions/users"
+import { Shield, ShieldAlert, UserCheck, Trash2, RotateCcw, CalendarPlus } from "lucide-react"
+import { toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount, extendUserTrial } from "../actions/users"
 import { useRouter } from "next/navigation"
 
 export function UserActions({
@@ -48,6 +48,19 @@ export function UserActions({
                 title={user.role === 'ADMIN' ? "Забрать права админа" : "Сделать админом"}
             >
                 <UserCheck className="w-4 h-4" />
+            </button>
+
+            <button
+                disabled={isLoading}
+                onClick={() => {
+                    if (confirm("Продлить триал на 30 дней от текущей даты окончания?")) {
+                        handleAction(() => extendUserTrial(user.id, 30))
+                    }
+                }}
+                className="p-2 rounded-md hover:bg-muted transition-colors text-foreground/60 hover:text-amber-600"
+                title="Продлить триал на 30 дней"
+            >
+                <CalendarPlus className="w-4 h-4" />
             </button>
 
             <button
