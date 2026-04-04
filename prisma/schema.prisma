@@ -41,6 +41,9 @@ model User {
   telegramUsername String?
   telegramClients  TelegramClient[]
 
+  // Trial & Billing
+  trialEndsAt DateTime?
+
   // Legal Documents (152-FZ, Advertising)
   legalAcceptances LegalDocumentAcceptance[]
 

@@ -9,6 +9,7 @@ import { SidebarNav } from './sidebar-nav';
 import { MobileSidebar } from './mobile-sidebar';
 import { checkUserAcceptance } from '@/app/legal/actions';
 import { AdsConsentWrapper } from '@/components/legal/AdsConsentWrapper';
+import { TrialBanner } from '@/components/psidairy/TrialBanner';
 
 export const metadata: Metadata = {
     title: 'Ежедневник | Compas',
@@ -83,9 +84,18 @@ export default async function DiaryLayout({
     // Check if user has accepted the latest mandatory documents
     const acceptanceCheck = await checkUserAcceptance(dbUser.id, ["TERMS", "PRIVACY"]);
     if (acceptanceCheck.success && acceptanceCheck.needsAcceptance && acceptanceCheck.needsAcceptance.length > 0) {
-        // We redirect to a page OUTSIDE of /diary to avoid layout loops
         redirect('/legal-acceptance');
     }
+
+    // Trial check
+    const trialEndsAt = (dbUser as any).trialEndsAt as Date | null;
+    const now = new Date();
+    if (trialEndsAt && trialEndsAt < now) {
+        redirect('/billing');
+    }
+    const daysLeft = trialEndsAt
+        ? Math.ceil((trialEndsAt.getTime() - now.getTime()) / 86400000)
+        : null;
 
     const userName = session.user.name || session.user.email?.split('@')[0] || 'Психолог';
     const userInitials = userName.slice(0, 2).toUpperCase();
@@ -104,6 +114,7 @@ export default async function DiaryLayout({
 
             {/* Main content */}
             <main className="flex-1 md:ml-72 pt-16 md:pt-0 min-h-screen">
+                {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
                 <div className="p-4 md:p-8 max-w-6xl mx-auto">
                     {children}
                 </div>
