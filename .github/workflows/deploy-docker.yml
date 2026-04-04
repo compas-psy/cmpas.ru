@@ -215,7 +215,9 @@ jobs:
             echo "Applying idempotent schema fixes..."
             docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
               -- User table
-              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"isBlocked\" BOOLEAN NOT NULL DEFAULT false;
+              ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isBlocked" BOOLEAN NOT NULL DEFAULT false;
+              ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "trialEndsAt" TIMESTAMP(3);
+              ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "maxChatId" TEXT;
               
               -- PsychologistAddress table
               CREATE TABLE IF NOT EXISTS \"PsychologistAddress\" (
