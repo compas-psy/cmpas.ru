@@ -40,6 +40,7 @@ model User {
   telegramChatId   String?          @unique
   telegramUsername String?
   telegramClients  TelegramClient[]
+  maxChatId        String?          @unique
 
   // Legal Documents (152-FZ, Advertising)
   legalAcceptances LegalDocumentAcceptance[]

@@ -106,9 +106,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             // After successful sign in (or registration via sign in), 
             // implicitly accept the currently active TERMS and PRIVACY documents.
             if (user?.id) {
-                // We don't await this to avoid blocking the login flow unnecessarily, 
-                // or we can await it if we want strict consistency. Let's await to be safe, it's fast.
-                await acceptActiveDocuments(user.id);
+                try {
+                    await acceptActiveDocuments(user.id);
+                } catch (e) {
+                    console.error("[auth] acceptActiveDocuments failed:", e);
+                }
+                // Set 30-day trial for new users (trialEndsAt not yet set)
+                try {
+                    const dbUser = await db.user.findUnique({
+                        where: { id: user.id },
+                        select: { trialEndsAt: true },
+                    });
+                    if (!dbUser?.trialEndsAt) {
+                        const trialEnd = new Date();
+                        trialEnd.setDate(trialEnd.getDate() + 30);
+                        await db.user.update({ where: { id: user.id }, data: { trialEndsAt: trialEnd } });
+                    }
+                } catch (e) {
+                    console.error("[auth] trial init failed (migration may be pending):", e);
+                }
             }
             return true;
         },

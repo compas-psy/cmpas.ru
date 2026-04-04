@@ -164,6 +164,28 @@ export async function linkTelegramAccount(telegramChatId: string, telegramUserna
     return { success: true };
 }
 
+export async function linkMaxAccount(maxChatId: string) {
+    const psychologistId = await getPsychologistId();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db as any).user.update({
+        where: { id: psychologistId },
+        data: { maxChatId: maxChatId.toString() },
+    });
+    revalidatePath('/diary/integrations');
+    return { success: true };
+}
+
+export async function unlinkMaxAccount() {
+    const psychologistId = await getPsychologistId();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db as any).user.update({
+        where: { id: psychologistId },
+        data: { maxChatId: null },
+    });
+    revalidatePath('/diary/integrations');
+    return { success: true };
+}
+
 export async function getProfile() {
     try {
         const psychologistId = await getPsychologistId();
