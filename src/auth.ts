@@ -104,16 +104,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     callbacks: {
         async signIn({ user }) {
             if (user?.id) {
-                await acceptActiveDocuments(user.id);
+                try {
+                    await acceptActiveDocuments(user.id);
+                } catch (e) {
+                    console.error("[auth] acceptActiveDocuments failed:", e);
+                }
                 // Set 30-day trial for new users (trialEndsAt not yet set)
-                const dbUser = await db.user.findUnique({
-                    where: { id: user.id },
-                    select: { trialEndsAt: true },
-                });
-                if (!dbUser?.trialEndsAt) {
-                    const trialEnd = new Date();
-                    trialEnd.setDate(trialEnd.getDate() + 30);
-                    await db.user.update({ where: { id: user.id }, data: { trialEndsAt: trialEnd } });
+                try {
+                    const dbUser = await db.user.findUnique({
+                        where: { id: user.id },
+                        select: { trialEndsAt: true },
+                    });
+                    if (!dbUser?.trialEndsAt) {
+                        const trialEnd = new Date();
+                        trialEnd.setDate(trialEnd.getDate() + 30);
+                        await db.user.update({ where: { id: user.id }, data: { trialEndsAt: trialEnd } });
+                    }
+                } catch (e) {
+                    console.error("[auth] trial init failed (migration may be pending):", e);
                 }
             }
             return true;

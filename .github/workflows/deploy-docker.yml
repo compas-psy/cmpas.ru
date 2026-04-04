@@ -48,6 +48,7 @@ jobs:
             AUTH_URL=https://cmpas.ru
             TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN || '7728157706:AAEZMpN66PSXd7GkyIhKK4Fz4vTi5lxJYI8' }}
             TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}
+            MAX_BOT_TOKEN=f9LHodD0cOKrt8cFAnV2oYzsTPF3ekmaQmWooGBgMSh8R0uxwmRKOeFjDZrOnKvAg3dsNwSpISfo4c92XRM9
             GOOGLE_CALENDAR_CLIENT_ID=649610920409-i5orvlp14u9qo882fqd6caji868o603c.apps.googleusercontent.com
             GOOGLE_CALENDAR_CLIENT_SECRET=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
             DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}
@@ -84,7 +85,11 @@ jobs:
               if [ -z "$(grep '^TELEGRAM_CHAT_ID=' .env | cut -d= -f2)" ]; then
                 sed -i "s|^TELEGRAM_CHAT_ID=.*|TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}|" .env
               fi
-              
+              # Ensure MAX_BOT_TOKEN is set
+              if ! grep -q '^MAX_BOT_TOKEN=' .env; then
+                echo "MAX_BOT_TOKEN=f9LHodD0cOKrt8cFAnV2oYzsTPF3ekmaQmWooGBgMSh8R0uxwmRKOeFjDZrOnKvAg3dsNwSpISfo4c92XRM9" >> .env
+              fi
+
               # Update non-secret env vars that may have changed
               # (these don't affect sessions, safe to update)
               sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db|' .env
@@ -343,8 +348,24 @@ jobs:
             AUTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/auth/session)
             echo "Auth endpoint status: $AUTH_STATUS"
             
+            # ============================================
+            # REGISTER MAX BOT WEBHOOK
+            # ============================================
+            MAX_TOKEN=$(grep '^MAX_BOT_TOKEN=' .env | cut -d= -f2)
+            if [ -n "$MAX_TOKEN" ]; then
+              echo "Registering MAX webhook..."
+              MAX_WEBHOOK_RESULT=$(curl -s -X POST \
+                "https://botapi.max.ru/subscriptions?access_token=${MAX_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d '{"url":"https://cmpas.ru/api/max/webhook","version":"1","update_types":["bot_started","message_created","callback_button_pressed"]}' \
+                2>/dev/null || echo "curl failed")
+              echo "MAX webhook result: $MAX_WEBHOOK_RESULT"
+            else
+              echo "MAX_BOT_TOKEN not found, skipping webhook registration."
+            fi
+
             # Cleanup old images
             docker image prune -f
-            
+
             echo "Deployment complete!"
 
