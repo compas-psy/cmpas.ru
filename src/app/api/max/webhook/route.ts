@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { maxBot } from '@/lib/max-bot';
+import { handleMaxUpdate } from '@/lib/max-bot';
 
 export async function POST(request: NextRequest) {
-    if (!maxBot) {
+    if (!process.env.MAX_BOT_TOKEN) {
         return NextResponse.json({ error: 'MAX bot not configured' }, { status: 500 });
     }
 
     try {
-        const body = await request.json();
-        await maxBot.handleUpdate(body);
-        return NextResponse.json({ success: true });
+        // MAX sends individual update objects
+        const update = await request.json();
+        await handleMaxUpdate(update);
+        return NextResponse.json({ ok: true });
     } catch (error) {
-        console.error('[MAX webhook error]:', error);
+        console.error('[MAX webhook]:', error);
         return NextResponse.json({ error: 'Failed to process update' }, { status: 500 });
     }
 }
 
 export async function GET() {
-    return NextResponse.json({ status: 'MAX webhook endpoint active' });
+    return NextResponse.json({ status: 'MAX webhook active' });
 }
