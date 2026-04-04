@@ -298,11 +298,20 @@ export default function AvailabilityPage() {
                 </div>
             </div>
 
-            {/* Status banner — no active slots */}
-            {activeSlots.length === 0 && slots.length > 0 && (
+            {/* Status banner — upcoming only (no slots today) */}
+            {activeSlots.length === 0 && upcomingSlots.length > 0 && (
                 <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span className="text-sm font-semibold">Активного расписания нет — истёк срок действия. Добавьте новые окна.</span>
+                    <span className="text-sm font-semibold">
+                        Сегодня нет активных окон — расписание начнётся с {new Date(upcomingSlots.slice().sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime())[0].startDate!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </span>
+                </div>
+            )}
+            {/* Status banner — truly expired (no active, no upcoming) */}
+            {activeSlots.length === 0 && upcomingSlots.length === 0 && expiredSlots.length > 0 && (
+                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-semibold">Расписание истекло — добавьте новые окна.</span>
                     <button onClick={() => setShowNewSlot(true)} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">+ Новое окно</button>
                 </div>
             )}
