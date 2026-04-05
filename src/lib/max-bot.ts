@@ -17,7 +17,7 @@ const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 /** Raw MAX update structure */
 export type MaxUpdate = {
     update_id: number;
-    update_type: string; // 'bot_started' | 'message_created' | 'callback_button_pressed'
+    update_type: string; // 'bot_started' | 'message_created' | 'message_callback' | 'message_edited' | 'bot_added' etc.
     timestamp: number;
     message?: {
         sender: { user_id: number; name?: string; username?: string };
@@ -52,10 +52,16 @@ async function maxApi(path: string, body?: Record<string, unknown>, query: Recor
             body: body ? JSON.stringify(body) : undefined,
         });
         if (!res.ok) {
-            console.error(`[MAX API] ${path} → ${res.status}:`, await res.text());
+            const text = await res.text();
+            console.error(`[MAX API] ${path} → ${res.status}:`, text);
             return null;
         }
-        return res.json();
+        const result = await res.json();
+        // Log success=false from MAX API (subscription registration failures etc.)
+        if (result && result.success === false) {
+            console.error(`[MAX API] ${path} returned success=false:`, JSON.stringify(result));
+        }
+        return result;
     } catch (e) {
         console.error(`[MAX API] ${path} fetch error:`, e);
         return null;
@@ -90,9 +96,11 @@ export async function sendMaxMessage(
 /** Register webhook with MAX */
 export async function registerMaxWebhook() {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
+    // NOTE: correct MAX API update_type names:
+    //   'message_created', 'bot_started', 'message_callback' (NOT 'callback_button_pressed')
     const result = await maxApi('/subscriptions', {
         url: webhookUrl,
-        update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
+        update_types: ['bot_started', 'message_created', 'message_callback'],
     });
     console.log('[MAX Bot] Webhook registration result:', JSON.stringify(result));
     return result;
@@ -321,7 +329,7 @@ export async function handleMaxUpdate(update: MaxUpdate) {
             }
         }
 
-        if (update.update_type === 'callback_button_pressed' && update.callback) {
+        if (update.update_type === 'message_callback' && update.callback) {
             await handleCallback(
                 update.callback.callback_id,
                 update.callback.user.user_id,

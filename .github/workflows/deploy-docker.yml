@@ -379,7 +379,7 @@ jobs:
               MAX_WEBHOOK_RESULT=$(curl -s -X POST "https://botapi.max.ru/subscriptions" \
                 -H "Authorization: ${MAX_TOKEN}" \
                 -H "Content-Type: application/json" \
-                -d '{"url":"https://cmpas.ru/api/max/webhook","update_types":["bot_started","message_created","callback_button_pressed"]}' \
+                -d '{"url":"https://cmpas.ru/api/max/webhook","update_types":["bot_started","message_created","message_callback"]}' \
                 2>/dev/null || echo "curl failed")
               echo "MAX webhook result: $MAX_WEBHOOK_RESULT"
             else

@@ -36,7 +36,8 @@ export async function register() {
                         },
                         body: JSON.stringify({
                             url: `${APP_URL}/api/max/webhook`,
-                            update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
+                            // Correct MAX API names: 'message_callback' not 'callback_button_pressed'
+                            update_types: ['bot_started', 'message_created', 'message_callback'],
                         }),
                     });
                     const result = await res.json();

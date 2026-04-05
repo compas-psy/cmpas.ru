@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 url: webhookUrl,
-                update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
+                // Correct MAX API update_type names (NOT 'callback_button_pressed')
+                update_types: ['bot_started', 'message_created', 'message_callback'],
             }),
         });
 
