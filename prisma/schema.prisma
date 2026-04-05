@@ -266,6 +266,9 @@ model DiaryClient {
   telegramChatId String? // For notifications direct to client
   telegramClient TelegramClient?
 
+  // MAX Integration
+  maxChatId String? // For MAX messenger notifications
+
   // Consent (152-FZ)
   consentVersion String? // Version of consent text agreed to
   consentHash    String? // SHA-256: tgUserId + version + timestamp

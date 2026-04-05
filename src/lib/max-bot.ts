@@ -143,6 +143,18 @@ async function handleStart(userId: number, payload: string | undefined) {
                 create: { telegramUserId: mid, psychologistId, diaryClientId: linkClientId || null }
             });
 
+            // Save maxChatId to DiaryClient so MAX notifications work
+            if (linkClientId) {
+                try {
+                    await db.diaryClient.update({
+                        where: { id: linkClientId },
+                        data: { maxChatId: mid } as any,
+                    });
+                } catch (e) {
+                    console.error('[MAX Bot] Failed to update DiaryClient.maxChatId:', e);
+                }
+            }
+
             const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
             const bookUrl = linkClientId
                 ? `${APP_URL}/bot/book/${psychologistId}?c=${linkClientId}`

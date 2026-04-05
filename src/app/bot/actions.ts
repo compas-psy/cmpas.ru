@@ -2,8 +2,25 @@
 
 import { db } from '@/lib/db';
 import { bot } from '@/lib/telegram-bot';
+import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
+
+/** Send to Telegram and/or MAX depending on which IDs are set */
+async function notifyUser(
+    tgId: string | null | undefined,
+    maxId: string | null | undefined,
+    text: string
+) {
+    if (tgId && bot) {
+        try { await bot.telegram.sendMessage(tgId, text, { parse_mode: 'HTML' }); }
+        catch (e) { console.error('[notify] Telegram error:', e); }
+    }
+    if (maxId) {
+        try { await sendMaxMessage(maxId, text); }
+        catch (e) { console.error('[notify] MAX error:', e); }
+    }
+}
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 
@@ -490,31 +507,20 @@ export async function bookSession(psychologistId: string, userDetails: any, form
     const onlineLink = form.format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
     const linkText = onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
 
-    if (psy?.telegramChatId && bot) {
-        try {
-            await bot.telegram.sendMessage(
-                psy.telegramChatId,
-                `🔥 <b>Новая запись через Telegram!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}\n\nСвяжитесь с клиентом в Telegram или по телефону для подтверждения, если это необходимо.`,
-                { parse_mode: 'HTML' }
-            );
-        } catch (e) {
-            console.error("Failed to send telegram notification:", e);
-        }
-    }
+    // Notify psychologist (Telegram + MAX)
+    await notifyUser(
+        psy?.telegramChatId,
+        (psy as any)?.maxChatId,
+        `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
+    );
 
-    // Оповещение клиенту о записи (если есть telegramChatId)
-    if (client.telegramChatId && bot) {
-        try {
-            const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
-            await bot.telegram.sendMessage(
-                client.telegramChatId,
-                clientMsg,
-                { parse_mode: 'HTML' }
-            );
-        } catch (e) {
-            console.error("Failed to send telegram notification to client:", e);
-        }
-    }
+    // Notify client (Telegram + MAX)
+    const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
+    await notifyUser(
+        client.telegramChatId,
+        (client as any).maxChatId,
+        clientMsg
+    );
 
     // Auto-sync to calendars
     try {

@@ -18,7 +18,8 @@ function unauthorized() {
 
 function checkAuth(request: NextRequest) {
     const secret = request.nextUrl.searchParams.get('secret');
-    return secret && secret === ADMIN_SECRET;
+    // Accept either AUTH_SECRET or MAX_BOT_TOKEN as the secret
+    return secret && (secret === ADMIN_SECRET || secret === MAX_TOKEN);
 }
 
 export async function GET(request: NextRequest) {

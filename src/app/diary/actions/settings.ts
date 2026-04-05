@@ -151,6 +151,36 @@ export async function disconnectIntegration(id: string) {
     revalidatePath('/diary/integrations');
 }
 
+export async function getMessengerStatus() {
+    try {
+        const psychologistId = await getPsychologistId();
+        const user = await (db as any).user.findUnique({
+            where: { id: psychologistId },
+            select: { telegramChatId: true, telegramUsername: true, maxChatId: true },
+        });
+        return {
+            success: true,
+            data: {
+                telegramLinked: !!user?.telegramChatId,
+                telegramUsername: user?.telegramUsername || null,
+                maxLinked: !!user?.maxChatId,
+            },
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function unlinkTelegramAccount() {
+    const psychologistId = await getPsychologistId();
+    await db.user.update({
+        where: { id: psychologistId },
+        data: { telegramChatId: null, telegramUsername: null },
+    });
+    revalidatePath('/diary/integrations');
+    return { success: true };
+}
+
 export async function linkTelegramAccount(telegramChatId: string, telegramUsername?: string) {
     const psychologistId = await getPsychologistId();
     await db.user.update({

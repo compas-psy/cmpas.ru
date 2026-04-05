@@ -16,6 +16,7 @@ export default async function UsersPage() {
             isBlocked: true,
             emailVerified: true,
             createdAt: true,
+            trialEndsAt: true,
             psychologistSettings: { select: { id: true } },
             legalAcceptances: {
                 include: {
@@ -107,6 +108,7 @@ export default async function UsersPage() {
                             <TableHead>Роль</TableHead>
                             <TableHead>Статус</TableHead>
                             <TableHead>Онбординг</TableHead>
+                            <TableHead>Триал</TableHead>
                             <TableHead>Согласия (ПДн / Реклама)</TableHead>
                             <TableHead className="text-right">Регистрация</TableHead>
                             <TableHead className="text-right">Действия</TableHead>
@@ -115,7 +117,7 @@ export default async function UsersPage() {
                     <TableBody>
                         {users.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center">
+                                <TableCell colSpan={9} className="h-24 text-center">
                                     <div className="flex flex-col items-center gap-2 text-foreground/50">
                                         <Users className="w-8 h-8" />
                                         <p>Нет пользователей</p>
@@ -147,6 +149,16 @@ export default async function UsersPage() {
                                         ) : (
                                             <Badge variant="outline" className="text-muted-foreground">Не пройден</Badge>
                                         )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {user.trialEndsAt ? (() => {
+                                            const now = new Date();
+                                            const diff = user.trialEndsAt.getTime() - now.getTime();
+                                            const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                                            if (daysLeft <= 0) return <Badge variant="destructive" className="text-xs">Истёк</Badge>;
+                                            if (daysLeft <= 7) return <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">{daysLeft} дн.</Badge>;
+                                            return <Badge variant="outline" className="text-xs border-emerald-500 text-emerald-600">{daysLeft} дн.</Badge>;
+                                        })() : <span className="text-muted-foreground text-xs">—</span>}
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col gap-1.5">

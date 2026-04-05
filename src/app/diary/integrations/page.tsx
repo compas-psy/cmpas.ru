@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Link2, RefreshCw, ShieldCheck, ExternalLink, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, MonitorPlay } from 'lucide-react';
+import { Link2, RefreshCw, ShieldCheck, ExternalLink, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, MonitorPlay, MessageCircle, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Integration = {
@@ -46,10 +46,15 @@ export default function IntegrationsPage() {
     const [blockConflicts, setBlockConflicts] = useState(true);
     const [updatingSettings, setUpdatingSettings] = useState(false);
 
+    const [telegramLinked, setTelegramLinked] = useState(false);
+    const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
+    const [maxLinked, setMaxLinked] = useState(false);
+    const [messengerLoading, setMessengerLoading] = useState<'telegram' | 'max' | null>(null);
+
     const fetchData = useCallback(async () => {
         try {
-            const { getIntegrations, getSettings } = await import('../actions/settings');
-            const [integrationsRes, settingsRes] = await Promise.all([getIntegrations(), getSettings()]);
+            const { getIntegrations, getSettings, getMessengerStatus } = await import('../actions/settings');
+            const [integrationsRes, settingsRes, messengerRes] = await Promise.all([getIntegrations(), getSettings(), getMessengerStatus()]);
 
             if (integrationsRes.success && integrationsRes.data) {
                 setIntegrations(integrationsRes.data.map((d: any) => ({
@@ -66,6 +71,12 @@ export default function IntegrationsPage() {
                 setBlockConflicts(s.blockConflicts);
             } else if (!settingsRes.success) {
                 toast.error(settingsRes.error || 'Ошибка при загрузке настроек');
+            }
+
+            if (messengerRes.success && messengerRes.data) {
+                setTelegramLinked(messengerRes.data.telegramLinked);
+                setTelegramUsername(messengerRes.data.telegramUsername);
+                setMaxLinked(messengerRes.data.maxLinked);
             }
         } catch (e: any) {
             console.error('fetchData error:', e);
@@ -183,6 +194,29 @@ export default function IntegrationsPage() {
         } catch { toast.error('Ошибка'); }
     };
 
+    const handleUnlinkTelegram = async () => {
+        setMessengerLoading('telegram');
+        try {
+            const { unlinkTelegramAccount } = await import('../actions/settings');
+            await unlinkTelegramAccount();
+            setTelegramLinked(false);
+            setTelegramUsername(null);
+            toast.success('Telegram отключён');
+        } catch { toast.error('Ошибка'); }
+        setMessengerLoading(null);
+    };
+
+    const handleUnlinkMax = async () => {
+        setMessengerLoading('max');
+        try {
+            const { unlinkMaxAccount } = await import('../actions/settings');
+            await unlinkMaxAccount();
+            setMaxLinked(false);
+            toast.success('MAX отключён');
+        } catch { toast.error('Ошибка'); }
+        setMessengerLoading(null);
+    };
+
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
     const handleToggleSetting = async (field: 'autoSync' | 'blockConflicts', currentValue: boolean) => {
@@ -207,7 +241,101 @@ export default function IntegrationsPage() {
         <div className="space-y-8 pb-12 max-w-3xl mx-auto">
             <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Интеграции</h1>
-                <p className="text-muted-foreground text-base mt-2">Календари и сервисы видеоконференций</p>
+                <p className="text-muted-foreground text-base mt-2">Мессенджеры, календари и сервисы</p>
+            </div>
+
+            {/* Section: Messengers */}
+            <div>
+                <div className="flex items-center gap-3 mb-5">
+                    <div className="w-8 h-8 rounded-xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center"><MessageCircle className="w-4 h-4" /></div>
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground">Мессенджеры</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Telegram */}
+                    <div className="bg-card rounded-3xl border border-border p-5 shadow-sm flex flex-col gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-[#2AABEE] flex items-center justify-center shrink-0 shadow-sm">
+                                <svg viewBox="0 0 24 24" className="w-7 h-7 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                            </div>
+                            <div>
+                                <div className="font-bold text-base text-foreground">Telegram</div>
+                                {telegramLinked ? (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        <div className="w-2 h-2 rounded-full bg-green-500" />
+                                        <span className="text-sm text-muted-foreground">{telegramUsername ? `@${telegramUsername}` : 'Подключён'}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        <div className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                                        <span className="text-sm text-muted-foreground">Не подключён</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        {telegramLinked ? (
+                            <button
+                                onClick={handleUnlinkTelegram}
+                                disabled={messengerLoading === 'telegram'}
+                                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl border border-border text-sm font-semibold text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-colors disabled:opacity-50"
+                            >
+                                {messengerLoading === 'telegram' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                                Отключить
+                            </button>
+                        ) : (
+                            <a
+                                href="https://t.me/CompasProBot"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl bg-[#2AABEE] text-white text-sm font-semibold hover:bg-[#2AABEE]/90 transition-colors"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                                Открыть бот
+                            </a>
+                        )}
+                        {!telegramLinked && (
+                            <p className="text-xs text-muted-foreground -mt-2 text-center">Напишите боту <span className="font-mono">/start</span> и войдите в кабинет</p>
+                        )}
+                    </div>
+
+                    {/* MAX */}
+                    <div className="bg-card rounded-3xl border border-border p-5 shadow-sm flex flex-col gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-[#005FF9] flex items-center justify-center shrink-0 shadow-sm">
+                                <span className="text-white font-black text-lg leading-none">M</span>
+                            </div>
+                            <div>
+                                <div className="font-bold text-base text-foreground">MAX</div>
+                                {maxLinked ? (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        <div className="w-2 h-2 rounded-full bg-green-500" />
+                                        <span className="text-sm text-muted-foreground">Подключён</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        <div className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                                        <span className="text-sm text-muted-foreground">Не подключён</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        {maxLinked ? (
+                            <button
+                                onClick={handleUnlinkMax}
+                                disabled={messengerLoading === 'max'}
+                                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl border border-border text-sm font-semibold text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-colors disabled:opacity-50"
+                            >
+                                {messengerLoading === 'max' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                                Отключить
+                            </button>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="bg-muted/50 rounded-2xl px-4 py-3 text-xs text-muted-foreground leading-relaxed">
+                                    Откройте бота <span className="font-semibold text-foreground">«Ежедневник Психолога»</span> в MAX и напишите <span className="font-mono font-semibold">/connect</span>. Перейдите по ссылке из бота.
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Section: Calendars */}

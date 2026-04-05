@@ -49,8 +49,11 @@ export async function testNotification(type: string) {
         const psychologistId = await getPsychologistId();
         const user = await db.user.findUnique({ where: { id: psychologistId } });
 
-        if (!user?.telegramChatId) {
-            return { success: false, error: 'Telegram не привязан. Привяжите аккаунт в интеграциях.' };
+        const tgId = user?.telegramChatId;
+        const maxId = (user as any)?.maxChatId;
+
+        if (!tgId && !maxId) {
+            return { success: false, error: 'Ни Telegram, ни MAX не привязаны. Привяжите аккаунт в интеграциях.' };
         }
 
         const settings = await (db as any).notificationSettings.findUnique({
@@ -64,7 +67,7 @@ export async function testNotification(type: string) {
             '{date}': now.toLocaleDateString('ru-RU'),
             '{time}': '14:00',
             '{format}': 'Онлайн',
-            '{psyName}': user.name || 'Психолог',
+            '{psyName}': user?.name || 'Психолог',
             '{cancelLink}': 'https://t.me/your_bot',
         };
 
@@ -95,9 +98,30 @@ export async function testNotification(type: string) {
 
         message = `[ТЕСТ] ${message}`;
 
-        const { Telegraf } = await import('telegraf');
-        const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
-        await bot.telegram.sendMessage(user.telegramChatId, message, { parse_mode: 'HTML' });
+        const errors: string[] = [];
+
+        if (tgId) {
+            try {
+                const { Telegraf } = await import('telegraf');
+                const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
+                await bot.telegram.sendMessage(tgId, message, { parse_mode: 'HTML' });
+            } catch (e: any) {
+                errors.push(`Telegram: ${e.message}`);
+            }
+        }
+
+        if (maxId) {
+            try {
+                const { sendMaxMessage } = await import('@/lib/max-bot');
+                await sendMaxMessage(maxId, message);
+            } catch (e: any) {
+                errors.push(`MAX: ${e.message}`);
+            }
+        }
+
+        if (errors.length && errors.length === [tgId, maxId].filter(Boolean).length) {
+            return { success: false, error: errors.join('; ') };
+        }
 
         return { success: true };
     } catch (e: any) {
