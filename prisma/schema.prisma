@@ -631,6 +631,7 @@ model ClientCheckIn {
   @@index([date])
 }
 
+
 model Payment {
   id              String   @id @default(cuid())
   userId          String

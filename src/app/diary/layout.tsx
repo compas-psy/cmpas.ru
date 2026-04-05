@@ -88,18 +88,11 @@ export default async function DiaryLayout({
     }
 
     // Trial & subscription check
-    const trialEndsAt = (dbUser as any).trialEndsAt as Date | null;
+    const trialEndsAt = dbUser.trialEndsAt;
     const now = new Date();
     const isForever = trialEndsAt && trialEndsAt.getFullYear() >= 2099;
 
-    // Check subscription from DB (column may not exist yet — use raw SQL)
-    let subscriptionEndsAt: Date | null = null;
-    try {
-        const rows = await db.$queryRaw<{ subscriptionEndsAt: Date | null }[]>`
-            SELECT "subscriptionEndsAt" FROM "User" WHERE id = ${dbUser.id} LIMIT 1
-        `;
-        subscriptionEndsAt = rows[0]?.subscriptionEndsAt ?? null;
-    } catch { /* column not yet in DB */ }
+    const subscriptionEndsAt = dbUser.subscriptionEndsAt;
 
     const hasActiveSub = subscriptionEndsAt && subscriptionEndsAt > now;
     const effectiveEnd = hasActiveSub ? subscriptionEndsAt : trialEndsAt;
