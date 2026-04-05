@@ -62,7 +62,6 @@ export async function POST(request: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 url: webhookUrl,
-                version: '1',
                 update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
             }),
         });

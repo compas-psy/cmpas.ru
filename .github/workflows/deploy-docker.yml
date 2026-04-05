@@ -379,7 +379,7 @@ jobs:
               MAX_WEBHOOK_RESULT=$(curl -s -X POST "https://botapi.max.ru/subscriptions" \
                 -H "Authorization: ${MAX_TOKEN}" \
                 -H "Content-Type: application/json" \
-                -d '{"url":"https://cmpas.ru/api/max/webhook","version":"1","update_types":["bot_started","message_created","callback_button_pressed"]}' \
+                -d '{"url":"https://cmpas.ru/api/max/webhook","update_types":["bot_started","message_created","callback_button_pressed"]}' \
                 2>/dev/null || echo "curl failed")
               echo "MAX webhook result: $MAX_WEBHOOK_RESULT"
             else
@@ -395,6 +395,14 @@ jobs:
               ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
               ALTER TABLE \"DiaryClient\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
             " && echo "Schema columns: OK" || echo "WARNING: schema columns step failed"
+
+            # Set 30-day trial for all existing users who don't have one yet
+            echo "Initializing trial for existing users..."
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
+              UPDATE \"User\" SET \"trialEndsAt\" = NOW() + INTERVAL '30 days'
+              WHERE \"trialEndsAt\" IS NULL;
+            " && echo "Trial init: OK" || echo "WARNING: trial init step failed"
+
 
             # Cleanup old images
             docker image prune -f
