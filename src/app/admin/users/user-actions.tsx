@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Shield, ShieldAlert, UserCheck, Trash2, RotateCcw, CalendarPlus } from "lucide-react"
-import { toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount, extendUserTrial } from "../actions/users"
+import { Shield, ShieldAlert, UserCheck, Trash2, RotateCcw, CalendarPlus, Infinity, RefreshCw } from "lucide-react"
+import { toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount, extendUserTrial, resetUserTrialFromNow, setUserTrialForever } from "../actions/users"
 import { useRouter } from "next/navigation"
 
 export function UserActions({
@@ -31,7 +31,7 @@ export function UserActions({
     }
 
     return (
-        <div className="flex justify-end gap-1">
+        <div className="flex justify-end gap-1 flex-wrap">
             <button
                 disabled={isLoading}
                 onClick={() => handleAction(() => toggleUserBlock(user.id, !user.isBlocked))}
@@ -50,6 +50,21 @@ export function UserActions({
                 <UserCheck className="w-4 h-4" />
             </button>
 
+            {/* Trial: reset to 30 days from today */}
+            <button
+                disabled={isLoading}
+                onClick={() => {
+                    if (confirm("Сбросить триал: установить 30 дней от сегодня?")) {
+                        handleAction(() => resetUserTrialFromNow(user.id, 30))
+                    }
+                }}
+                className="p-2 rounded-md hover:bg-muted transition-colors text-foreground/60 hover:text-amber-600"
+                title="Сбросить триал: 30 дней от сегодня"
+            >
+                <RefreshCw className="w-4 h-4" />
+            </button>
+
+            {/* Trial: extend by 30 days from current end */}
             <button
                 disabled={isLoading}
                 onClick={() => {
@@ -63,10 +78,24 @@ export function UserActions({
                 <CalendarPlus className="w-4 h-4" />
             </button>
 
+            {/* Trial: set forever */}
             <button
                 disabled={isLoading}
                 onClick={() => {
-                    if (confirm("Вы уверены, что хотите сбросить настройки онбординга этого пользователя? Он потеряет свое расписание.")) {
+                    if (confirm("Установить бесконечный бесплатный доступ для этого пользователя?")) {
+                        handleAction(() => setUserTrialForever(user.id))
+                    }
+                }}
+                className="p-2 rounded-md hover:bg-muted transition-colors text-foreground/60 hover:text-emerald-600"
+                title="Бесплатно навсегда"
+            >
+                <Infinity className="w-4 h-4" />
+            </button>
+
+            <button
+                disabled={isLoading}
+                onClick={() => {
+                    if (confirm("Сбросить настройки онбординга? Пользователь потеряет своё расписание.")) {
                         handleAction(() => resetUserSettings(user.id))
                     }
                 }}
@@ -79,7 +108,7 @@ export function UserActions({
             <button
                 disabled={isLoading}
                 onClick={() => {
-                    if (confirm("Вы ТОЧНО хотите удалить этого пользователя навсегда? Это действие необратимо и удалит всех его клиентов и сессии!")) {
+                    if (confirm("Удалить этого пользователя навсегда? Это необратимо и удалит всех его клиентов и сессии!")) {
                         handleAction(() => deleteUserAccount(user.id))
                     }
                 }}

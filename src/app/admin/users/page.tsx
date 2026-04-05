@@ -6,43 +6,19 @@ import { Users, Shield, UserCheck, ShieldAlert } from 'lucide-react';
 import { UserActions } from './user-actions';
 
 export default async function UsersPage() {
+    // Use (db as any) to avoid TypeScript errors if trialEndsAt/maxChatId columns
+    // haven't been added to DB yet (pre-migration may not have run on first deploy)
     let users: any[] = [];
     try {
-        users = await db.user.findMany({
+        users = await (db as any).user.findMany({
             orderBy: { createdAt: 'desc' },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-                isBlocked: true,
-                emailVerified: true,
-                createdAt: true,
-                trialEndsAt: true,
+            include: {
                 psychologistSettings: { select: { id: true } },
-                legalAcceptances: { include: { document: true } }
+                legalAcceptances: { include: { document: true } },
             },
         });
     } catch (e) {
-        console.error('[admin/users] findMany with trialEndsAt failed, retrying without:', e);
-        try {
-            users = await db.user.findMany({
-                orderBy: { createdAt: 'desc' },
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    role: true,
-                    isBlocked: true,
-                    emailVerified: true,
-                    createdAt: true,
-                    psychologistSettings: { select: { id: true } },
-                    legalAcceptances: { include: { document: true } }
-                },
-            });
-        } catch (e2) {
-            console.error('[admin/users] fallback query also failed:', e2);
-        }
+        console.error('[admin/users] findMany failed:', e);
     }
 
     const roleVariants: Record<string, 'default' | 'secondary' | 'new'> = {

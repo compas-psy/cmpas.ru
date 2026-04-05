@@ -65,18 +65,37 @@ export async function resetUserSettings(userId: string) {
 export async function extendUserTrial(userId: string, days: number) {
     await ensureAdmin()
 
-    const user = await db.user.findUnique({ where: { id: userId }, select: { trialEndsAt: true } })
+    const user = await (db as any).user.findUnique({ where: { id: userId }, select: { trialEndsAt: true } })
     const base = (user?.trialEndsAt && user.trialEndsAt > new Date()) ? user.trialEndsAt : new Date()
     const newEnd = new Date(base)
     newEnd.setDate(newEnd.getDate() + days)
 
-    await (db as any).user.update({
-        where: { id: userId },
-        data: { trialEndsAt: newEnd }
-    })
+    await (db as any).user.update({ where: { id: userId }, data: { trialEndsAt: newEnd } })
 
     revalidatePath("/admin/users")
     return { success: true, trialEndsAt: newEnd }
+}
+
+export async function resetUserTrialFromNow(userId: string, days: number) {
+    await ensureAdmin()
+
+    const newEnd = new Date()
+    newEnd.setDate(newEnd.getDate() + days)
+
+    await (db as any).user.update({ where: { id: userId }, data: { trialEndsAt: newEnd } })
+
+    revalidatePath("/admin/users")
+    return { success: true, trialEndsAt: newEnd }
+}
+
+export async function setUserTrialForever(userId: string) {
+    await ensureAdmin()
+
+    const forever = new Date('2099-01-01')
+    await (db as any).user.update({ where: { id: userId }, data: { trialEndsAt: forever } })
+
+    revalidatePath("/admin/users")
+    return { success: true }
 }
 
 export async function deleteUserAccount(userId: string) {

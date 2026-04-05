@@ -39,12 +39,16 @@ function maxId(uid: number | string) { return `${MAX_PREFIX}${uid}`; }
 /** Call the MAX Bot API */
 async function maxApi(path: string, body?: Record<string, unknown>, query: Record<string, string> = {}) {
     if (!MAX_TOKEN) return null;
-    const qs = new URLSearchParams({ access_token: MAX_TOKEN, ...query });
-    const url = `${MAX_API}${path}?${qs}`;
+    const qs = new URLSearchParams(query);
+    const qsStr = qs.toString();
+    const url = `${MAX_API}${path}${qsStr ? '?' + qsStr : ''}`;
     try {
         const res = await fetch(url, {
             method: body ? 'POST' : 'GET',
-            headers: body ? { 'Content-Type': 'application/json' } : undefined,
+            headers: {
+                'Authorization': `Bearer ${MAX_TOKEN}`,
+                ...(body ? { 'Content-Type': 'application/json' } : {}),
+            },
             body: body ? JSON.stringify(body) : undefined,
         });
         if (!res.ok) {
@@ -97,7 +101,7 @@ export async function registerMaxWebhook() {
 
 /** Get bot info */
 export async function getMaxBotInfo() {
-    return maxApi('/bots/me');
+    return maxApi('/me');
 }
 
 // ─────────────────────────────────────────────

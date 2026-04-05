@@ -18,8 +18,17 @@ function unauthorized() {
 
 function checkAuth(request: NextRequest) {
     const secret = request.nextUrl.searchParams.get('secret');
-    // Accept either AUTH_SECRET or MAX_BOT_TOKEN as the secret
     return secret && (secret === ADMIN_SECRET || secret === MAX_TOKEN);
+}
+
+function maxFetch(path: string, options: RequestInit = {}) {
+    return fetch(`${MAX_API}${path}`, {
+        ...options,
+        headers: {
+            'Authorization': `Bearer ${MAX_TOKEN}`,
+            ...(options.headers || {}),
+        },
+    });
 }
 
 export async function GET(request: NextRequest) {
@@ -35,20 +44,16 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ ...status, error: 'MAX_BOT_TOKEN not set in env' });
     }
 
-    // Check bot info
     try {
-        const meRes = await fetch(`${MAX_API}/bots/me?access_token=${MAX_TOKEN}`);
-        const me = await meRes.json();
-        status.bot_info = me;
+        const meRes = await maxFetch('/me');
+        status.bot_info = await meRes.json();
     } catch (e: any) {
         status.bot_info_error = e.message;
     }
 
-    // Check current subscriptions
     try {
-        const subRes = await fetch(`${MAX_API}/subscriptions?access_token=${MAX_TOKEN}`);
-        const subs = await subRes.json();
-        status.subscriptions = subs;
+        const subRes = await maxFetch('/subscriptions');
+        status.subscriptions = await subRes.json();
     } catch (e: any) {
         status.subscriptions_error = e.message;
     }
@@ -66,13 +71,9 @@ export async function POST(request: NextRequest) {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
 
     try {
-        // First remove existing subscription
-        await fetch(`${MAX_API}/subscriptions?access_token=${MAX_TOKEN}`, {
-            method: 'DELETE',
-        }).catch(() => {});
+        await maxFetch('/subscriptions', { method: 'DELETE' }).catch(() => {});
 
-        // Register new webhook
-        const res = await fetch(`${MAX_API}/subscriptions?access_token=${MAX_TOKEN}`, {
+        const res = await maxFetch('/subscriptions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -83,11 +84,7 @@ export async function POST(request: NextRequest) {
         });
 
         const result = await res.json();
-        return NextResponse.json({
-            webhook_url: webhookUrl,
-            status: res.status,
-            result,
-        });
+        return NextResponse.json({ webhook_url: webhookUrl, status: res.status, result });
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 });
     }
