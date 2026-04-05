@@ -208,25 +208,24 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
                 // Yandex iCal events without 'Z' suffix are "floating" local time —
                 // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
                 const mapped = res.events.map((ev: any) => {
-                    let date: Date, startTime: string, endTime: string;
+                    const getParts = (dateInput: Date, localStr?: string) => {
+                        if (localStr) {
+                            const [d, t] = localStr.split('T');
+                            const [y, m, day] = d.split('-');
+                            const [h, min] = t.split(':');
+                            return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
+                        }
+                        return getPartsInTz(dateInput, tz);
+                    };
 
-                    if (ev.startLocalStr) {
-                        const [datePart, timePart] = ev.startLocalStr.split('T');
-                        const [y, m, d] = datePart.split('-').map(Number);
-                        date = new Date(Date.UTC(y, m - 1, d));
-                        startTime = timePart.slice(0, 5);
-                    } else {
-                        const p = getPartsInTz(new Date(ev.start), tz);
-                        date = new Date(Date.UTC(p.year, p.month - 1, p.day));
-                        startTime = `${p.hour}:${p.minute}`;
-                    }
+                    const localStart = new Date(ev.start);
+                    const localEnd = new Date(ev.end);
+                    const startParts = getParts(localStart, ev.startLocalStr);
+                    const endParts = getParts(localEnd, ev.endLocalStr);
 
-                    if (ev.endLocalStr) {
-                        endTime = ev.endLocalStr.split('T')[1].slice(0, 5);
-                    } else {
-                        const p = getPartsInTz(new Date(ev.end), tz);
-                        endTime = `${p.hour}:${p.minute}`;
-                    }
+                    const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
+                    const startTime = `${startParts.hour}:${startParts.minute}`;
+                    const endTime = `${endParts.hour}:${endParts.minute}`;
 
                     return { date, startTime, endTime, _external: true };
                 });
@@ -306,25 +305,24 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
                 // Yandex iCal events without 'Z' suffix are "floating" local time —
                 // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
                 const mapped = res.events.map((ev: any) => {
-                    let date: Date, startTime: string, endTime: string;
+                    const getParts = (dateInput: Date, localStr?: string) => {
+                        if (localStr) {
+                            const [d, t] = localStr.split('T');
+                            const [y, m, day] = d.split('-');
+                            const [h, min] = t.split(':');
+                            return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
+                        }
+                        return getPartsInTz(dateInput, tz);
+                    };
 
-                    if (ev.startLocalStr) {
-                        const [datePart, timePart] = ev.startLocalStr.split('T');
-                        const [y, m, d] = datePart.split('-').map(Number);
-                        date = new Date(Date.UTC(y, m - 1, d));
-                        startTime = timePart.slice(0, 5);
-                    } else {
-                        const p = getPartsInTz(new Date(ev.start), tz);
-                        date = new Date(Date.UTC(p.year, p.month - 1, p.day));
-                        startTime = `${p.hour}:${p.minute}`;
-                    }
+                    const localStart = new Date(ev.start);
+                    const localEnd = new Date(ev.end);
+                    const startParts = getParts(localStart, ev.startLocalStr);
+                    const endParts = getParts(localEnd, ev.endLocalStr);
 
-                    if (ev.endLocalStr) {
-                        endTime = ev.endLocalStr.split('T')[1].slice(0, 5);
-                    } else {
-                        const p = getPartsInTz(new Date(ev.end), tz);
-                        endTime = `${p.hour}:${p.minute}`;
-                    }
+                    const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
+                    const startTime = `${startParts.hour}:${startParts.minute}`;
+                    const endTime = `${endParts.hour}:${endParts.minute}`;
 
                     return { date, startTime, endTime, _external: true };
                 });

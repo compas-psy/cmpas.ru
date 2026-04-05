@@ -67,6 +67,7 @@ export default function ClientBookingPage() {
         psyName: string;
         addressName?: string | null;
         addressFull?: string | null;
+        onlineLink?: string | null;
     } | null>(null);
 
     // Auto-navigate to first available month
@@ -341,6 +342,7 @@ export default function ClientBookingPage() {
                 psyName: psy?.name || 'Специалист',
                 addressName,
                 addressFull,
+                onlineLink: psy?.psychologistSettings?.onlineSessionLink || null
             });
         } catch (e: any) {
             toast.error(e?.message || 'Ошибка записи');
@@ -432,6 +434,14 @@ export default function ClientBookingPage() {
                                         <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
                                         {bookingSuccess.addressName ? `${bookingSuccess.addressName}: ` : ''}{bookingSuccess.addressFull}
                                     </p>
+                                </div>
+                            )}
+                            {bookingSuccess.format === 'online' && bookingSuccess.onlineLink && (
+                                <div className="mt-2">
+                                    <p className="text-xs font-medium text-muted-foreground">Ссылка на переговорку</p>
+                                    <a href={bookingSuccess.onlineLink} target="_blank" rel="noopener noreferrer" className="font-bold text-primary hover:underline flex items-center gap-1.5 break-all mt-0.5">
+                                        {bookingSuccess.onlineLink}
+                                    </a>
                                 </div>
                             )}
                         </div>

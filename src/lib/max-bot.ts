@@ -179,7 +179,7 @@ async function handleStart(userId: number, payload: string | undefined) {
     }
 
     // Known client? (look up by maxChatId)
-    const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } as any });
+    const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } });
     if (client) {
         return sendMaxMessage(userId,
             `Добро пожаловать, ${client.name}!`,
@@ -206,8 +206,8 @@ async function handleStart(userId: number, payload: string | undefined) {
 
     // Unknown user
     return sendMaxMessage(userId,
-        'Добро пожаловать в КОМПАС!\n\nЕсли вы психолог — войдите в кабинет, чтобы привязать аккаунт.',
-        [[{ text: '💼 Войти в кабинет', url: `${APP_URL}/diary/bot` }]]
+        'Добро пожаловать в КОМПАС!\n\nЕсли вы психолог — войдите в кабинет и привяжите MAX через раздел Интеграции.',
+        [[{ text: '💼 Войти в кабинет', url: `${APP_URL}/diary/integrations` }]]
     );
 }
 
@@ -251,7 +251,7 @@ async function handleSessions(userId: number) {
         return sendMaxMessage(userId, msg);
     }
 
-    const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } as any });
+    const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } });
     if (client) {
         const sessions = await db.diarySession.findMany({
             where: { clientId: client.id, status: 'confirmed', date: { gte: new Date() } },
@@ -276,7 +276,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
             where: { id: sessionId },
             include: { client: true }
         });
-        if (!session || (session.client as any).maxChatId !== mid) {
+        if (!session || session.client.maxChatId !== mid) {
             return sendMaxMessage(userId, 'Сессия не найдена или нет доступа.');
         }
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
@@ -293,8 +293,9 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
         }
     }
 
-    // Answer callback (suppress loading state)
-    await maxApi('/answers', {}, { callback_id: callbackId });
+    // MAX API: answer callback to dismiss loading spinner on button
+    // Endpoint: POST /answers/{callback_id}
+    await maxApi(`/answers/${callbackId}`, {});
 }
 
 /** Main entry point — called from webhook route */
@@ -303,9 +304,15 @@ export async function handleMaxUpdate(update: MaxUpdate) {
 
     try {
         if (update.update_type === 'bot_started') {
-            const userId = update.user?.user_id;
+            // In MAX API, bot_started can carry payload in several places depending on version
+            const userId = update.user?.user_id ?? update.message?.sender?.user_id;
             if (!userId) return;
-            const payload = (update as any).payload; // deep link param
+            // Try top-level payload field, then message text (some MAX versions put deeplink there)
+            const payload =
+                (update as any).payload ||
+                (update as any).start_payload ||
+                update.message?.body?.text?.replace('/start ', '').trim() ||
+                undefined;
             await handleStart(userId, payload);
         }
 
