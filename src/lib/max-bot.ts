@@ -2,10 +2,10 @@
  * MAX Messenger Bot (botapi.max.ru)
  *
  * MAX uses its own REST API (not Telegram-compatible):
- *   Auth: ?access_token=TOKEN  (query param)
+ *   Auth: Authorization: TOKEN  (bare token in header — no Bearer/Token prefix)
  *   Webhook: POST /subscriptions
  *   Send: POST /messages/send?user_id=UID
- *   Incoming events: { updates: [{ type, payload }] }
+ *   Incoming events: { update_type, message, callback, user, ... }
  */
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
@@ -36,15 +36,19 @@ export type MaxUpdate = {
 const MAX_PREFIX = 'max_';
 function maxId(uid: number | string) { return `${MAX_PREFIX}${uid}`; }
 
-/** Call the MAX Bot API */
+/** Call the MAX Bot API — uses bare Authorization header (no Bearer/Token prefix) */
 async function maxApi(path: string, body?: Record<string, unknown>, query: Record<string, string> = {}) {
     if (!MAX_TOKEN) return null;
-    const qs = new URLSearchParams({ access_token: MAX_TOKEN, ...query });
-    const url = `${MAX_API}${path}?${qs}`;
+    const qs = new URLSearchParams(query);
+    const qsStr = qs.toString();
+    const url = `${MAX_API}${path}${qsStr ? '?' + qsStr : ''}`;
     try {
         const res = await fetch(url, {
             method: body ? 'POST' : 'GET',
-            headers: body ? { 'Content-Type': 'application/json' } : undefined,
+            headers: {
+                'Authorization': MAX_TOKEN,
+                ...(body ? { 'Content-Type': 'application/json' } : {}),
+            },
             body: body ? JSON.stringify(body) : undefined,
         });
         if (!res.ok) {
@@ -88,7 +92,6 @@ export async function registerMaxWebhook() {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
     const result = await maxApi('/subscriptions', {
         url: webhookUrl,
-        version: '1',
         update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
     });
     console.log('[MAX Bot] Webhook registration result:', JSON.stringify(result));
@@ -97,7 +100,7 @@ export async function registerMaxWebhook() {
 
 /** Get bot info */
 export async function getMaxBotInfo() {
-    return maxApi('/bots/me');
+    return maxApi('/me');
 }
 
 // ─────────────────────────────────────────────
@@ -143,6 +146,18 @@ async function handleStart(userId: number, payload: string | undefined) {
                 create: { telegramUserId: mid, psychologistId, diaryClientId: linkClientId || null }
             });
 
+            // Save maxChatId to DiaryClient so MAX notifications work
+            if (linkClientId) {
+                try {
+                    await db.diaryClient.update({
+                        where: { id: linkClientId },
+                        data: { maxChatId: mid } as any,
+                    });
+                } catch (e) {
+                    console.error('[MAX Bot] Failed to update DiaryClient.maxChatId:', e);
+                }
+            }
+
             const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
             const bookUrl = linkClientId
                 ? `${APP_URL}/bot/book/${psychologistId}?c=${linkClientId}`
@@ -155,8 +170,8 @@ async function handleStart(userId: number, payload: string | undefined) {
         }
     }
 
-    // Known client?
-    const client = await db.diaryClient.findFirst({ where: { telegramChatId: mid } });
+    // Known client? (look up by maxChatId)
+    const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } as any });
     if (client) {
         return sendMaxMessage(userId,
             `Добро пожаловать, ${client.name}!`,
@@ -228,7 +243,7 @@ async function handleSessions(userId: number) {
         return sendMaxMessage(userId, msg);
     }
 
-    const client = await db.diaryClient.findFirst({ where: { telegramChatId: mid } });
+    const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } as any });
     if (client) {
         const sessions = await db.diarySession.findMany({
             where: { clientId: client.id, status: 'confirmed', date: { gte: new Date() } },
@@ -253,7 +268,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
             where: { id: sessionId },
             include: { client: true }
         });
-        if (!session || session.client.telegramChatId !== mid) {
+        if (!session || (session.client as any).maxChatId !== mid) {
             return sendMaxMessage(userId, 'Сессия не найдена или нет доступа.');
         }
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
@@ -261,7 +276,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
 
         // Notify psychologist
         if (session.client.psychologistId) {
-            const psy = await (db as any).user.findUnique({ where: { id: session.client.psychologistId } });
+            const psy = await db.user.findUnique({ where: { id: session.client.psychologistId } });
             if (psy?.maxChatId) {
                 await sendMaxMessage(psy.maxChatId,
                     `❌ Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`
