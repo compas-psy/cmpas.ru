@@ -90,7 +90,7 @@ export async function sendMaxMessage(
             }
         }];
     }
-    return maxApi('/messages/send', body, { user_id: uid });
+    return maxApi('/messages', body, { user_id: uid });
 }
 
 /** Register webhook with MAX */
