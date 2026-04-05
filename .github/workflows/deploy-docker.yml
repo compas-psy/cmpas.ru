@@ -371,12 +371,13 @@ jobs:
             # ============================================
             MAX_TOKEN=$(grep '^MAX_BOT_TOKEN=' .env | cut -d= -f2)
             if [ -n "$MAX_TOKEN" ]; then
-              echo "Registering MAX webhook..."
-              # Delete existing subscription first (use access_token param - Bearer not working)
-              curl -s -X DELETE "https://botapi.max.ru/subscriptions?access_token=${MAX_TOKEN}" 2>/dev/null || true
+              echo "Registering MAX webhook (bare Authorization header)..."
+              # Delete existing subscription
+              curl -s -X DELETE "https://botapi.max.ru/subscriptions" \
+                -H "Authorization: ${MAX_TOKEN}" 2>/dev/null || true
               # Register new webhook
-              MAX_WEBHOOK_RESULT=$(curl -s -X POST \
-                "https://botapi.max.ru/subscriptions?access_token=${MAX_TOKEN}" \
+              MAX_WEBHOOK_RESULT=$(curl -s -X POST "https://botapi.max.ru/subscriptions" \
+                -H "Authorization: ${MAX_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -d '{"url":"https://cmpas.ru/api/max/webhook","version":"1","update_types":["bot_started","message_created","callback_button_pressed"]}' \
                 2>/dev/null || echo "curl failed")
@@ -384,6 +385,16 @@ jobs:
             else
               echo "MAX_BOT_TOKEN not found, skipping webhook registration."
             fi
+
+            # ============================================
+            # ENSURE trialEndsAt AND maxChatId COLUMNS EXIST
+            # ============================================
+            echo "Ensuring new schema columns exist..."
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
+              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"trialEndsAt\" TIMESTAMP(3);
+              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
+              ALTER TABLE \"DiaryClient\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
+            " && echo "Schema columns: OK" || echo "WARNING: schema columns step failed"
 
             # Cleanup old images
             docker image prune -f

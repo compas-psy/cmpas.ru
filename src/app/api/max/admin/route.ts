@@ -14,23 +14,20 @@ function checkAuth(request: NextRequest) {
     return secret && (secret === ADMIN_SECRET || secret === MAX_TOKEN);
 }
 
-async function tryFetch(url: string, headers: Record<string, string> = {}) {
-    try {
-        const res = await fetch(url, { headers });
-        const text = await res.text();
-        try { return { status: res.status, body: JSON.parse(text) }; }
-        catch { return { status: res.status, body: text }; }
-    } catch (e: any) {
-        return { error: e.message };
-    }
+// MAX API uses bare token in Authorization header (no Bearer/Token prefix)
+function maxFetch(path: string, options: RequestInit = {}) {
+    return fetch(`${MAX_API}${path}`, {
+        ...options,
+        headers: {
+            'Authorization': MAX_TOKEN!,
+            ...(options.headers || {}),
+        },
+    });
 }
 
 export async function GET(request: NextRequest) {
     if (!checkAuth(request)) return unauthorized();
-
-    if (!MAX_TOKEN) {
-        return NextResponse.json({ error: 'MAX_BOT_TOKEN not set in env' });
-    }
+    if (!MAX_TOKEN) return NextResponse.json({ error: 'MAX_BOT_TOKEN not set' });
 
     const status: Record<string, unknown> = {
         MAX_BOT_TOKEN_set: true,
@@ -38,19 +35,17 @@ export async function GET(request: NextRequest) {
         webhook_url: `${APP_URL}/api/max/webhook`,
     };
 
-    // Try all auth methods to find which one MAX accepts
-    const meUrl = `${MAX_API}/me`;
-    status.auth_tests = {
-        query_param:    await tryFetch(`${MAX_API}/me?access_token=${MAX_TOKEN}`),
-        bearer:         await tryFetch(meUrl, { 'Authorization': `Bearer ${MAX_TOKEN}` }),
-        token_prefix:   await tryFetch(meUrl, { 'Authorization': `Token ${MAX_TOKEN}` }),
-        bare:           await tryFetch(meUrl, { 'Authorization': MAX_TOKEN }),
-    };
+    try {
+        const r = await maxFetch('/me');
+        status.bot_info = await r.json();
+    } catch (e: any) { status.bot_info_error = e.message; }
 
-    // Also test subscriptions endpoint with query param
-    status.subscriptions_query_param = await tryFetch(`${MAX_API}/subscriptions?access_token=${MAX_TOKEN}`);
+    try {
+        const r = await maxFetch('/subscriptions');
+        status.subscriptions = await r.json();
+    } catch (e: any) { status.subscriptions_error = e.message; }
 
-    return NextResponse.json(status, { status: 200 });
+    return NextResponse.json(status);
 }
 
 export async function POST(request: NextRequest) {
@@ -58,43 +53,23 @@ export async function POST(request: NextRequest) {
     if (!MAX_TOKEN) return NextResponse.json({ error: 'MAX_BOT_TOKEN not set' }, { status: 500 });
 
     const webhookUrl = `${APP_URL}/api/max/webhook`;
-    const results: Record<string, unknown> = { webhook_url: webhookUrl };
 
-    // Try to register webhook with all auth methods
-    const body = JSON.stringify({
-        url: webhookUrl,
-        version: '1',
-        update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
-    });
+    try {
+        await maxFetch('/subscriptions', { method: 'DELETE' }).catch(() => {});
 
-    for (const [name, headers] of [
-        ['query_param', {}] as const,
-        ['bearer', { 'Authorization': `Bearer ${MAX_TOKEN}` }] as const,
-        ['token_prefix', { 'Authorization': `Token ${MAX_TOKEN}` }] as const,
-        ['bare', { 'Authorization': MAX_TOKEN }] as const,
-    ]) {
-        const url = name === 'query_param'
-            ? `${MAX_API}/subscriptions?access_token=${MAX_TOKEN}`
-            : `${MAX_API}/subscriptions`;
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...headers },
-                body,
-            });
-            const text = await res.text();
-            let parsed;
-            try { parsed = JSON.parse(text); } catch { parsed = text; }
-            results[name] = { status: res.status, body: parsed };
-            // If success (no error code), stop trying
-            if (res.ok && !parsed?.code) {
-                results.success_method = name;
-                break;
-            }
-        } catch (e: any) {
-            results[name] = { error: e.message };
-        }
+        const res = await maxFetch('/subscriptions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: webhookUrl,
+                version: '1',
+                update_types: ['bot_started', 'message_created', 'callback_button_pressed'],
+            }),
+        });
+
+        const result = await res.json();
+        return NextResponse.json({ webhook_url: webhookUrl, status: res.status, result });
+    } catch (e: any) {
+        return NextResponse.json({ error: e.message }, { status: 500 });
     }
-
-    return NextResponse.json(results);
 }
