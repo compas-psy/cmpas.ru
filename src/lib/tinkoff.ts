@@ -6,7 +6,7 @@
  * Test terminal: 1775405621806DEMO / MwTygrFgyCLUQcFu
  * Prod terminal: set TINKOFF_TERMINAL_KEY and TINKOFF_PASSWORD in env
  */
-import crypto from 'crypto';
+import { createHash } from 'crypto';
 
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY || '1775405621806DEMO';
 const PASSWORD = process.env.TINKOFF_PASSWORD || 'MwTygrFgyCLUQcFu';
@@ -51,7 +51,7 @@ export function generateToken(params: Record<string, unknown>): string {
         .map(k => signable[k])
         .join('');
 
-    return crypto.createHash('sha256').update(sortedValues, 'utf8').digest('hex');
+    return createHash('sha256').update(sortedValues, 'utf8').digest('hex');
 }
 
 export interface InitPaymentParams {
