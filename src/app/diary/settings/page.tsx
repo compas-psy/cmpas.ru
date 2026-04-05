@@ -89,8 +89,12 @@ export default function SettingsPage() {
 
     const fetchSettings = useCallback(async () => {
         try {
-            const { getSettings, getAddresses, getTrialStatus } = await import('../actions/settings');
-            const [settingsRes, addrsRes, trialRes] = await Promise.all([getSettings(), getAddresses(), getTrialStatus().catch(() => null)]);
+            const { getSettings, getAddresses } = await import('../actions/settings');
+            const [settingsRes, addrsRes, trialRes] = await Promise.all([
+                getSettings(),
+                getAddresses(),
+                fetch('/api/billing/status').then(r => r.json()).catch(() => null),
+            ]);
             if (trialRes?.daysLeft !== undefined) setTrialDaysLeft(trialRes.daysLeft);
 
             if (settingsRes.success && settingsRes.data) {

@@ -52,6 +52,8 @@ jobs:
             GOOGLE_CALENDAR_CLIENT_ID=649610920409-i5orvlp14u9qo882fqd6caji868o603c.apps.googleusercontent.com
             GOOGLE_CALENDAR_CLIENT_SECRET=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
             DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}
+            TINKOFF_TERMINAL_KEY=1775405621806DEMO
+            TINKOFF_PASSWORD=MwTygrFgyCLUQcFu
             EOF
               echo ".env created with new AUTH_SECRET."
             else
@@ -104,6 +106,13 @@ jobs:
               # Ensure DADATA_API_KEY exists
               if ! grep -q '^DADATA_API_KEY=' .env; then
                 echo "DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}" >> .env
+              fi
+              # Ensure Tinkoff credentials exist
+              if ! grep -q '^TINKOFF_TERMINAL_KEY=' .env; then
+                echo "TINKOFF_TERMINAL_KEY=1775405621806DEMO" >> .env
+              fi
+              if ! grep -q '^TINKOFF_PASSWORD=' .env; then
+                echo "TINKOFF_PASSWORD=MwTygrFgyCLUQcFu" >> .env
               fi
             fi
             
@@ -394,6 +403,24 @@ jobs:
               ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"trialEndsAt\" TIMESTAMP(3);
               ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
               ALTER TABLE \"DiaryClient\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
+              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"subscriptionEndsAt\" TIMESTAMP(3);
+              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"subscriptionPlan\" TEXT;
+              CREATE TABLE IF NOT EXISTS \"Payment\" (
+                \"id\" TEXT NOT NULL,
+                \"userId\" TEXT NOT NULL,
+                \"orderId\" TEXT NOT NULL,
+                \"tinkoffPaymentId\" TEXT,
+                \"amount\" INTEGER NOT NULL,
+                \"plan\" TEXT NOT NULL,
+                \"status\" TEXT NOT NULL DEFAULT 'pending',
+                \"paymentUrl\" TEXT,
+                \"months\" INTEGER NOT NULL DEFAULT 1,
+                \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \"updatedAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT \"Payment_pkey\" PRIMARY KEY (\"id\")
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS \"Payment_orderId_key\" ON \"Payment\"(\"orderId\");
+              CREATE INDEX IF NOT EXISTS \"Payment_userId_idx\" ON \"Payment\"(\"userId\");
             " && echo "Schema columns: OK" || echo "WARNING: schema columns step failed"
 
             # Set 30-day trial for all existing users who don't have one yet

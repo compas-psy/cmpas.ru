@@ -87,14 +87,30 @@ export default async function DiaryLayout({
         redirect('/legal-acceptance');
     }
 
-    // Trial check
+    // Trial & subscription check
     const trialEndsAt = (dbUser as any).trialEndsAt as Date | null;
     const now = new Date();
-    if (trialEndsAt && trialEndsAt < now) {
+    const isForever = trialEndsAt && trialEndsAt.getFullYear() >= 2099;
+
+    // Check subscription from DB (column may not exist yet — use raw SQL)
+    let subscriptionEndsAt: Date | null = null;
+    try {
+        const rows = await db.$queryRaw<{ subscriptionEndsAt: Date | null }[]>`
+            SELECT "subscriptionEndsAt" FROM "User" WHERE id = ${dbUser.id} LIMIT 1
+        `;
+        subscriptionEndsAt = rows[0]?.subscriptionEndsAt ?? null;
+    } catch { /* column not yet in DB */ }
+
+    const hasActiveSub = subscriptionEndsAt && subscriptionEndsAt > now;
+    const effectiveEnd = hasActiveSub ? subscriptionEndsAt : trialEndsAt;
+    const isExpired = !isForever && effectiveEnd && effectiveEnd < now;
+
+    if (isExpired) {
         redirect('/billing');
     }
-    const daysLeft = trialEndsAt
-        ? Math.ceil((trialEndsAt.getTime() - now.getTime()) / 86400000)
+
+    const daysLeft = (!isForever && effectiveEnd)
+        ? Math.ceil((effectiveEnd.getTime() - now.getTime()) / 86400000)
         : null;
 
     const userName = session.user.name || session.user.email?.split('@')[0] || 'Психолог';
