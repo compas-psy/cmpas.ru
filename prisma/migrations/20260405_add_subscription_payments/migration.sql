@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "Payment" (
     "userId" TEXT NOT NULL,
     "orderId" TEXT NOT NULL,
     "tinkoffPaymentId" TEXT,
+    "rebillId" TEXT,
     "amount" INTEGER NOT NULL,
     "plan" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',

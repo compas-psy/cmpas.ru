@@ -8,9 +8,12 @@
  */
 import crypto from 'crypto';
 
-const TINKOFF_API = 'https://securepay.tinkoff.ru/v2';
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY || '1775405621806DEMO';
 const PASSWORD = process.env.TINKOFF_PASSWORD || 'MwTygrFgyCLUQcFu';
+// Test terminal (ending in DEMO) uses a different base URL
+const TINKOFF_API = TERMINAL_KEY.endsWith('DEMO')
+    ? 'https://rest-api-test.tinkoff.ru/v2'
+    : 'https://securepay.tinkoff.ru/v2';
 
 export const PLANS = {
     practice: {
@@ -32,18 +35,23 @@ export type PlanKey = keyof typeof PLANS;
  * Algorithm: sort all params by key, concatenate values (not keys), SHA256
  * Special: exclude Token, Receipt, DATA from signing; add Password to params first
  */
-export function generateToken(params: Record<string, string | number | boolean>): string {
-    const signable = { ...params, Password: PASSWORD };
-    delete (signable as any).Token;
-    delete (signable as any).Receipt;
-    delete (signable as any).DATA;
+export function generateToken(params: Record<string, unknown>): string {
+    const signable: Record<string, string> = { Password: PASSWORD };
+
+    for (const [k, v] of Object.entries(params)) {
+        if (k === 'Token') continue;
+        // Skip nested objects (Receipt, DATA, Shops, etc.) — only flat primitives
+        if (v !== null && v !== undefined && typeof v !== 'object' && typeof v !== 'function') {
+            signable[k] = String(v);
+        }
+    }
 
     const sortedValues = Object.keys(signable)
         .sort()
-        .map(k => String((signable as any)[k]))
+        .map(k => signable[k])
         .join('');
 
-    return crypto.createHash('sha256').update(sortedValues).digest('hex');
+    return crypto.createHash('sha256').update(sortedValues, 'utf8').digest('hex');
 }
 
 export interface InitPaymentParams {
@@ -72,6 +80,8 @@ export async function initPayment(p: InitPaymentParams): Promise<InitPaymentResu
         OrderId: p.orderId,
         Description: p.description,
         CustomerKey: p.customerKey,
+        Recurrent: 'Y',   // Enable card binding for future recurring charges
+        PayType: 'O',     // One-step payment (immediate charge)
         SuccessURL: p.successUrl,
         FailURL: p.failUrl,
         NotificationURL: p.notificationUrl,
@@ -109,10 +119,13 @@ export interface TinkoffNotification {
     TerminalKey: string;
     OrderId: string;
     Success: boolean;
-    Status: string; // CONFIRMED | AUTHORIZED | REJECTED | REVERSED | ...
+    Status: string; // CONFIRMED | AUTHORIZED | REJECTED | REVERSED | CANCELED | ...
     PaymentId: number;
     Amount: number;
     Token: string;
+    RebillId?: number;  // Present when Recurrent=Y, save for future auto-charges
+    Pan?: string;       // Masked card e.g. "430000****0777"
+    CardId?: number;
     [key: string]: unknown;
 }
 

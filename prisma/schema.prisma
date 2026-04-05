@@ -636,6 +636,7 @@ model Payment {
   userId          String
   orderId         String   @unique  // our order ID sent to Tinkoff
   tinkoffPaymentId String? @unique  // PaymentId from Tinkoff
+  rebillId        String?            // RebillId for future recurring charges
   amount          Int      // in kopecks
   plan            String   // 'practice' | 'practice_plus'
   status          String   @default("pending") // pending | paid | failed | cancelled
