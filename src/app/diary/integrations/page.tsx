@@ -300,8 +300,8 @@ export default function IntegrationsPage() {
                     {/* MAX */}
                     <div className="bg-card rounded-3xl border border-border p-5 shadow-sm flex flex-col gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-[#005FF9] flex items-center justify-center shrink-0 shadow-sm">
-                                <span className="text-white font-black text-lg leading-none">M</span>
+                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-border/50">
+                                <Image src="/icons/MAX.svg" alt="MAX" width={48} height={48} className="w-full h-full object-cover" />
                             </div>
                             <div>
                                 <div className="font-bold text-base text-foreground">MAX</div>

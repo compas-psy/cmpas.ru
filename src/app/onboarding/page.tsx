@@ -447,23 +447,36 @@ export default function OnboardingPage() {
     // Step 6: Completion
     const renderStep6 = () => (
         <div className="animate-in zoom-in-95 duration-500 text-center">
-            <div className="w-20 h-20 bg-[#c9a961] rounded-full mx-auto flex items-center justify-center mb-6">
+            <div className="w-20 h-20 bg-[#c9a961] rounded-full mx-auto flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(201,169,97,0.3)]">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                 </svg>
             </div>
             <h2 className="text-white text-3xl font-bold mb-4">Всё готово!</h2>
-            <p className="text-white/80 text-base mb-10 max-w-sm mx-auto">
+            <p className="text-white/80 text-base mb-6 max-w-sm mx-auto">
                 Ваш профиль психолога успешно настроен. Вы можете перейти в дневник, чтобы добавить первых клиентов и начать работу.
             </p>
+
+            <div className="bg-white/5 border border-[#c9a961]/30 rounded-2xl p-5 mb-8 text-left flex gap-4 items-start relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#c9a961]/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-[#c9a961]/20 transition-colors"></div>
+                <div className="mt-1 relative z-10 w-10 h-10 rounded-xl bg-[#c9a961]/20 flex items-center justify-center shrink-0">
+                    <span className="text-xl">🎁</span>
+                </div>
+                <div className="relative z-10">
+                    <h3 className="text-white font-medium mb-1.5 text-lg">30 дней в подарок</h3>
+                    <p className="text-white/60 text-sm leading-relaxed">
+                        Мы активировали для вас бесплатный пробный период. Пользуйтесь всеми премиум-функциями КОМПАСа 30 дней абсолютно без ограничений.
+                    </p>
+                </div>
+            </div>
 
             <button
                 onClick={submitData}
                 disabled={isSubmitting}
                 className="w-full h-[56px] text-lg bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-semibold transition-colors shadow-lg shadow-black/20"
             >
-                {isSubmitting ? "Сохраняем..." : "Перейти в дневник"}
+                {isSubmitting ? "Открываем дневник..." : "Начать работу"}
             </button>
         </div>
     )
