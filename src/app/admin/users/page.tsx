@@ -6,25 +6,44 @@ import { Users, Shield, UserCheck, ShieldAlert } from 'lucide-react';
 import { UserActions } from './user-actions';
 
 export default async function UsersPage() {
-    const users = await db.user.findMany({
-        orderBy: { createdAt: 'desc' },
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            isBlocked: true,
-            emailVerified: true,
-            createdAt: true,
-            trialEndsAt: true,
-            psychologistSettings: { select: { id: true } },
-            legalAcceptances: {
-                include: {
-                    document: true
-                }
-            }
-        },
-    }).catch(() => []);
+    let users: any[] = [];
+    try {
+        users = await db.user.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                isBlocked: true,
+                emailVerified: true,
+                createdAt: true,
+                trialEndsAt: true,
+                psychologistSettings: { select: { id: true } },
+                legalAcceptances: { include: { document: true } }
+            },
+        });
+    } catch (e) {
+        console.error('[admin/users] findMany with trialEndsAt failed, retrying without:', e);
+        try {
+            users = await db.user.findMany({
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    role: true,
+                    isBlocked: true,
+                    emailVerified: true,
+                    createdAt: true,
+                    psychologistSettings: { select: { id: true } },
+                    legalAcceptances: { include: { document: true } }
+                },
+            });
+        } catch (e2) {
+            console.error('[admin/users] fallback query also failed:', e2);
+        }
+    }
 
     const roleVariants: Record<string, 'default' | 'secondary' | 'new'> = {
         USER: 'secondary',

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Save, Clock, Video, MapPin, AlertCircle, Eye } from 'lucide-react';
+import { Save, Clock, Video, MapPin, AlertCircle, Eye, CreditCard, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import AddressAutocomplete from '@/components/ui/address-autocomplete';
 
@@ -78,6 +79,7 @@ export default function SettingsPage() {
         notifyAds: false,
         blockConflicts: true,
     });
+    const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [newAddress, setNewAddress] = useState({ name: '', address: '' });
     const [addingAddress, setAddingAddress] = useState(false);
@@ -87,8 +89,9 @@ export default function SettingsPage() {
 
     const fetchSettings = useCallback(async () => {
         try {
-            const { getSettings, getAddresses } = await import('../actions/settings');
-            const [settingsRes, addrsRes] = await Promise.all([getSettings(), getAddresses()]);
+            const { getSettings, getAddresses, getTrialStatus } = await import('../actions/settings');
+            const [settingsRes, addrsRes, trialRes] = await Promise.all([getSettings(), getAddresses(), getTrialStatus().catch(() => null)]);
+            if (trialRes?.daysLeft !== undefined) setTrialDaysLeft(trialRes.daysLeft);
 
             if (settingsRes.success && settingsRes.data) {
                 const data = settingsRes.data;
@@ -181,6 +184,28 @@ export default function SettingsPage() {
                     <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
                 </button>
             </div>
+
+            {/* Billing */}
+            <Link href="/billing" className="block bg-card border border-border rounded-3xl p-5 shadow-sm hover:border-primary/40 transition-colors group">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center shrink-0">
+                            <CreditCard className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-base font-semibold text-foreground">Подписка и оплата</p>
+                            <p className="text-sm text-muted-foreground font-medium">
+                                {trialDaysLeft === null
+                                    ? 'Пробный период'
+                                    : trialDaysLeft > 0
+                                        ? `Пробный период: осталось ${trialDaysLeft} дн.`
+                                        : 'Пробный период завершён'}
+                            </p>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+            </Link>
 
             {/* Timezone */}
             <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">

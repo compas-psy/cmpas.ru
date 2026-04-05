@@ -41,6 +41,31 @@ async function showClientMenu(ctx: Context, psychologistId: string, clientName: 
 export function setupBot() {
     if (!bot) return;
 
+    // Command: /connect — link psychologist account or show MAX connect instructions
+    bot.command('connect', async (ctx: Context) => {
+        const tgId = ctx.from?.id.toString();
+        if (!tgId) return;
+
+        // If already a linked psychologist
+        const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
+        if (psy) {
+            return ctx.reply(
+                '✅ Ваш Telegram уже привязан к КОМПАС.\n\nЧтобы также подключить MAX мессенджер — откройте страницу интеграций.',
+                Markup.inlineKeyboard([
+                    [Markup.button.webApp('⚙️ Интеграции', `${TELEGRAM_APP_URL}/diary/integrations`)]
+                ])
+            );
+        }
+
+        // Unknown user — direct them to the web app for linking
+        await ctx.reply(
+            'Чтобы привязать аккаунт психолога, войдите в кабинет:',
+            Markup.inlineKeyboard([
+                [Markup.button.webApp('💼 Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot`)]
+            ])
+        );
+    });
+
     // Command: /start
     bot.start(async (ctx: Context) => {
         const payload = (ctx as any).message?.text?.split(' ')[1]; // e.g. /start psy_123
