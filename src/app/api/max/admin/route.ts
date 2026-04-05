@@ -22,13 +22,9 @@ function checkAuth(request: NextRequest) {
 }
 
 function maxFetch(path: string, options: RequestInit = {}) {
-    return fetch(`${MAX_API}${path}`, {
-        ...options,
-        headers: {
-            'Authorization': `Bearer ${MAX_TOKEN}`,
-            ...(options.headers || {}),
-        },
-    });
+    // access_token query param still works (Bearer header not recognized by MAX API)
+    const url = `${MAX_API}${path}?access_token=${MAX_TOKEN}`;
+    return fetch(url, options);
 }
 
 export async function GET(request: NextRequest) {

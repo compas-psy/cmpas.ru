@@ -39,16 +39,13 @@ function maxId(uid: number | string) { return `${MAX_PREFIX}${uid}`; }
 /** Call the MAX Bot API */
 async function maxApi(path: string, body?: Record<string, unknown>, query: Record<string, string> = {}) {
     if (!MAX_TOKEN) return null;
-    const qs = new URLSearchParams(query);
-    const qsStr = qs.toString();
-    const url = `${MAX_API}${path}${qsStr ? '?' + qsStr : ''}`;
+    // Use access_token query param (still works, Bearer header not recognized by MAX API)
+    const qs = new URLSearchParams({ access_token: MAX_TOKEN, ...query });
+    const url = `${MAX_API}${path}?${qs}`;
     try {
         const res = await fetch(url, {
             method: body ? 'POST' : 'GET',
-            headers: {
-                'Authorization': `Bearer ${MAX_TOKEN}`,
-                ...(body ? { 'Content-Type': 'application/json' } : {}),
-            },
+            headers: body ? { 'Content-Type': 'application/json' } : undefined,
             body: body ? JSON.stringify(body) : undefined,
         });
         if (!res.ok) {

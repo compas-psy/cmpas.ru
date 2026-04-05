@@ -338,9 +338,10 @@ jobs:
               WHERE NOT EXISTS (SELECT 1 FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260222000000_add_advanced_scheduling');
             " || echo "WARNING: Migration record insert failed"
             
-            echo "Running prisma db push to apply new schema changes directly..."
-            docker compose exec -T app npx prisma db push --accept-data-loss || {
-              echo "WARNING: Database push failed!"
+            echo "Running prisma migrate deploy to apply pending migrations..."
+            docker compose exec -T app npx prisma migrate deploy || {
+              echo "WARNING: migrate deploy failed, trying db push as fallback..."
+              docker compose exec -T app npx prisma db push --accept-data-loss || echo "WARNING: db push also failed"
             }
             
             # ============================================
@@ -371,12 +372,11 @@ jobs:
             MAX_TOKEN=$(grep '^MAX_BOT_TOKEN=' .env | cut -d= -f2)
             if [ -n "$MAX_TOKEN" ]; then
               echo "Registering MAX webhook..."
-              # Delete existing subscription first
-              curl -s -X DELETE "https://botapi.max.ru/subscriptions" \
-                -H "Authorization: Bearer ${MAX_TOKEN}" 2>/dev/null || true
+              # Delete existing subscription first (use access_token param - Bearer not working)
+              curl -s -X DELETE "https://botapi.max.ru/subscriptions?access_token=${MAX_TOKEN}" 2>/dev/null || true
               # Register new webhook
-              MAX_WEBHOOK_RESULT=$(curl -s -X POST "https://botapi.max.ru/subscriptions" \
-                -H "Authorization: Bearer ${MAX_TOKEN}" \
+              MAX_WEBHOOK_RESULT=$(curl -s -X POST \
+                "https://botapi.max.ru/subscriptions?access_token=${MAX_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -d '{"url":"https://cmpas.ru/api/max/webhook","version":"1","update_types":["bot_started","message_created","callback_button_pressed"]}' \
                 2>/dev/null || echo "curl failed")

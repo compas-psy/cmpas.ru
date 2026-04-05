@@ -285,12 +285,13 @@ export async function toggleAdsConsentForUser(accept: boolean) {
 export async function getTrialStatus() {
     try {
         const userId = await getPsychologistId();
-        const user = await db.user.findUnique({
-            where: { id: userId },
-            select: { trialEndsAt: true },
-        });
-        if (!user?.trialEndsAt) return { daysLeft: null };
-        const diff = user.trialEndsAt.getTime() - Date.now();
+        // Use raw SQL so this works even if trialEndsAt column doesn't exist yet
+        const rows = await db.$queryRaw<{ trialEndsAt: Date | null }[]>`
+            SELECT "trialEndsAt" FROM "User" WHERE id = ${userId} LIMIT 1
+        `;
+        const trialEndsAt = rows[0]?.trialEndsAt ?? null;
+        if (!trialEndsAt) return { daysLeft: null };
+        const diff = trialEndsAt.getTime() - Date.now();
         const daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
         return { daysLeft };
     } catch {

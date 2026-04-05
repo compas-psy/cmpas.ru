@@ -62,38 +62,37 @@ export async function resetUserSettings(userId: string) {
     return { success: true }
 }
 
+async function setTrialRaw(userId: string, date: Date) {
+    // Use raw SQL to set trialEndsAt — works even before Prisma types are regenerated
+    await db.$executeRaw`UPDATE "User" SET "trialEndsAt" = ${date} WHERE id = ${userId}`
+}
+
 export async function extendUserTrial(userId: string, days: number) {
     await ensureAdmin()
-
-    const user = await (db as any).user.findUnique({ where: { id: userId }, select: { trialEndsAt: true } })
-    const base = (user?.trialEndsAt && user.trialEndsAt > new Date()) ? user.trialEndsAt : new Date()
+    const rows = await db.$queryRaw<{ trialEndsAt: Date | null }[]>`
+        SELECT "trialEndsAt" FROM "User" WHERE id = ${userId} LIMIT 1
+    `
+    const cur = rows[0]?.trialEndsAt
+    const base = (cur && cur > new Date()) ? cur : new Date()
     const newEnd = new Date(base)
     newEnd.setDate(newEnd.getDate() + days)
-
-    await (db as any).user.update({ where: { id: userId }, data: { trialEndsAt: newEnd } })
-
+    await setTrialRaw(userId, newEnd)
     revalidatePath("/admin/users")
     return { success: true, trialEndsAt: newEnd }
 }
 
 export async function resetUserTrialFromNow(userId: string, days: number) {
     await ensureAdmin()
-
     const newEnd = new Date()
     newEnd.setDate(newEnd.getDate() + days)
-
-    await (db as any).user.update({ where: { id: userId }, data: { trialEndsAt: newEnd } })
-
+    await setTrialRaw(userId, newEnd)
     revalidatePath("/admin/users")
     return { success: true, trialEndsAt: newEnd }
 }
 
 export async function setUserTrialForever(userId: string) {
     await ensureAdmin()
-
-    const forever = new Date('2099-01-01')
-    await (db as any).user.update({ where: { id: userId }, data: { trialEndsAt: forever } })
-
+    await setTrialRaw(userId, new Date('2099-01-01'))
     revalidatePath("/admin/users")
     return { success: true }
 }

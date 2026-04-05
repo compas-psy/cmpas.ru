@@ -6,20 +6,44 @@ import { Users, Shield, UserCheck, ShieldAlert } from 'lucide-react';
 import { UserActions } from './user-actions';
 
 export default async function UsersPage() {
-    // Use (db as any) to avoid TypeScript errors if trialEndsAt/maxChatId columns
-    // haven't been added to DB yet (pre-migration may not have run on first deploy)
-    let users: any[] = [];
+    // Step 1: query only stable columns that are guaranteed to exist
+    let baseUsers: any[] = [];
     try {
-        users = await (db as any).user.findMany({
+        baseUsers = await db.user.findMany({
             orderBy: { createdAt: 'desc' },
-            include: {
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                isBlocked: true,
+                emailVerified: true,
+                createdAt: true,
                 psychologistSettings: { select: { id: true } },
-                legalAcceptances: { include: { document: true } },
+                legalAcceptances: {
+                    select: {
+                        acceptedAt: true,
+                        document: { select: { type: true, version: true } },
+                    },
+                },
             },
         });
     } catch (e) {
-        console.error('[admin/users] findMany failed:', e);
+        console.error('[admin/users] base query failed:', e);
     }
+
+    // Step 2: try to get trialEndsAt via raw SQL (column may not exist yet)
+    const trialMap: Record<string, Date | null> = {};
+    try {
+        const rows = await db.$queryRaw<{ id: string; trialEndsAt: Date | null }[]>`
+            SELECT id, "trialEndsAt" FROM "User"
+        `;
+        rows.forEach(r => { trialMap[r.id] = r.trialEndsAt; });
+    } catch {
+        // column doesn't exist in DB yet — that's OK, trial column just won't show
+    }
+
+    const users = baseUsers.map(u => ({ ...u, trialEndsAt: trialMap[u.id] ?? null }));
 
     const roleVariants: Record<string, 'default' | 'secondary' | 'new'> = {
         USER: 'secondary',
