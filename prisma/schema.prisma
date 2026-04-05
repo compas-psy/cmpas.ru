@@ -43,10 +43,10 @@ model User {
   maxChatId        String?          @unique
 
   // Trial & Billing
-  trialEndsAt          DateTime?
-  subscriptionEndsAt   DateTime?
-  subscriptionPlan     String?    // 'practice' | 'practice_plus'
-  payments             Payment[]
+  trialEndsAt        DateTime?
+  subscriptionEndsAt DateTime?
+  subscriptionPlan   String? // 'practice' | 'practice_plus'
+  payments           Payment[]
 
   // Legal Documents (152-FZ, Advertising)
   legalAcceptances LegalDocumentAcceptance[]
@@ -631,20 +631,19 @@ model ClientCheckIn {
   @@index([date])
 }
 
-
 model Payment {
-  id              String   @id @default(cuid())
-  userId          String
-  orderId         String   @unique  // our order ID sent to Tinkoff
-  tinkoffPaymentId String? @unique  // PaymentId from Tinkoff
-  rebillId        String?            // RebillId for future recurring charges
-  amount          Int      // in kopecks
-  plan            String   // 'practice' | 'practice_plus'
-  status          String   @default("pending") // pending | paid | failed | cancelled
-  paymentUrl      String?  // Tinkoff redirect URL
-  months          Int      @default(1)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  orderId          String   @unique // our order ID sent to Tinkoff
+  tinkoffPaymentId String?  @unique // PaymentId from Tinkoff
+  rebillId         String? // RebillId for future recurring charges
+  amount           Int // in kopecks
+  plan             String // 'practice' | 'practice_plus'
+  status           String   @default("pending") // pending | paid | failed | cancelled
+  paymentUrl       String? // Tinkoff redirect URL
+  months           Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -10,10 +10,7 @@ import { createHash } from 'crypto';
 
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY || '1775405621806DEMO';
 const PASSWORD = process.env.TINKOFF_PASSWORD || 'MwTygrFgyCLUQcFu';
-// Test terminal (ending in DEMO) uses a different base URL
-const TINKOFF_API = TERMINAL_KEY.endsWith('DEMO')
-    ? 'https://rest-api-test.tinkoff.ru/v2'
-    : 'https://securepay.tinkoff.ru/v2';
+const TINKOFF_API = 'https://securepay.tinkoff.ru/v2';
 
 export const PLANS = {
     practice: {
