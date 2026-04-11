@@ -124,6 +124,14 @@ export async function POST(request: NextRequest) {
         };
 
         // Save to database with enhanced fields
+        // Check if visitor exists BEFORE upsert so we can tag the PageView as new/returning
+        const existing = await db.visitorAnalytics.findUnique({
+            where: { visitorId: data.visitorId },
+            select: { id: true },
+        }).catch(() => null);
+
+        const isNewVisitor = !existing;
+
         await db.visitorAnalytics.upsert({
             where: { visitorId: data.visitorId },
             create: {
@@ -134,6 +142,26 @@ export async function POST(request: NextRequest) {
                 ...analyticsRecord,
                 visits: { increment: 1 },
             },
+        });
+
+        // Log per-hit pageview for time-series charts & top pages
+        await db.pageView.create({
+            data: {
+                visitorId: data.visitorId,
+                pathname: data.session.pathname,
+                currentUrl: data.session.currentUrl,
+                referrerDomain: referrerDomain,
+                utmSource: data.session.searchParams['utm_source'] || null,
+                utmMedium: data.session.searchParams['utm_medium'] || null,
+                utmCampaign: data.session.searchParams['utm_campaign'] || null,
+                deviceType: ua.deviceType || data.device.deviceType,
+                country: geo.country,
+                city: geo.city,
+                isNewVisitor,
+            },
+        }).catch((e) => {
+            // Don't let PageView failure break analytics
+            console.error('PageView insert failed:', e);
         });
 
         return NextResponse.json({ success: true });

@@ -12,77 +12,42 @@ import {
     UserPlus,
     BarChart3,
 } from 'lucide-react';
+import { MiniAreaChart } from '@/components/admin/charts';
 
 export const dynamic = 'force-dynamic';
 
 // Generate daily visit data for the last N days
+// Uses PageView when available, falls back to VisitorAnalytics.createdAt
 async function getDailyVisits(days: number) {
-    const result: { date: string; count: number }[] = [];
+    const result: { label: string; value: number }[] = [];
     const now = new Date();
+
+    // Check if PageView has data
+    const pvStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+    const hasPageViews = await db.pageView.count({
+        where: { createdAt: { gte: pvStart } },
+    }).catch(() => 0);
 
     for (let i = days - 1; i >= 0; i--) {
         const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
         const dayEnd = new Date(dayStart);
         dayEnd.setDate(dayEnd.getDate() + 1);
 
-        const count = await db.visitorAnalytics.count({
-            where: {
-                createdAt: { gte: dayStart, lt: dayEnd },
-            },
-        }).catch(() => 0);
+        const count = hasPageViews > 0
+            ? await db.pageView.count({
+                where: { createdAt: { gte: dayStart, lt: dayEnd } },
+            }).catch(() => 0)
+            : await db.visitorAnalytics.count({
+                where: { createdAt: { gte: dayStart, lt: dayEnd } },
+            }).catch(() => 0);
 
         result.push({
-            date: dayStart.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
-            count,
+            label: dayStart.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+            value: count,
         });
     }
 
     return result;
-}
-
-function Sparkline({ data, color = '#6366f1' }: { data: number[]; color?: string }) {
-    if (data.length === 0 || data.every(d => d === 0)) {
-        return <div className="h-12 flex items-center text-xs text-muted-foreground">Нет данных</div>;
-    }
-
-    const max = Math.max(...data, 1);
-    const width = 200;
-    const height = 48;
-    const padding = 2;
-    const effectiveWidth = width - padding * 2;
-    const effectiveHeight = height - padding * 2;
-
-    const points = data.map((value, index) => {
-        const x = padding + (index / Math.max(data.length - 1, 1)) * effectiveWidth;
-        const y = padding + effectiveHeight - (value / max) * effectiveHeight;
-        return `${x},${y}`;
-    });
-
-    const areaPoints = [
-        `${padding},${height - padding}`,
-        ...points,
-        `${width - padding},${height - padding}`,
-    ].join(' ');
-
-    return (
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-            <defs>
-                <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-                    <stop offset="100%" stopColor={color} stopOpacity="0" />
-                </linearGradient>
-            </defs>
-            <polygon points={areaPoints} fill={`url(#grad-${color.replace('#', '')})`} />
-            <polyline
-                points={points.join(' ')}
-                fill="none"
-                stroke={color}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-        </svg>
-    );
 }
 
 function TrendBadge({ current, previous }: { current: number; previous: number }) {
@@ -234,7 +199,7 @@ export default async function AdminDashboard() {
                                 Подробнее <ArrowRight className="w-3 h-3" />
                             </Link>
                         </div>
-                        <VisitsChart data={dailyVisits} />
+                        <MiniAreaChart data={dailyVisits} height={220} />
                     </CardContent>
                 </Card>
 
@@ -344,36 +309,4 @@ export default async function AdminDashboard() {
     );
 }
 
-function VisitsChart({ data }: { data: { date: string; count: number }[] }) {
-    if (data.length === 0) {
-        return <div className="h-48 flex items-center justify-center text-sm text-[#94a3b8]">Нет данных</div>;
-    }
-
-    const max = Math.max(...data.map(d => d.count), 1);
-    const width = 100; // percentage
-    const barCount = data.length;
-
-    return (
-        <div className="h-48 flex items-end gap-[2px]">
-            {data.map((d, i) => {
-                const height = Math.max((d.count / max) * 100, 2);
-                const isToday = i === data.length - 1;
-                return (
-                    <div
-                        key={i}
-                        className="flex-1 flex flex-col items-center justify-end group relative"
-                    >
-                        {/* Tooltip */}
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0f1729] text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                            {d.date}: {d.count}
-                        </div>
-                        <div
-                            className={`w-full rounded-t-sm transition-all ${isToday ? 'bg-indigo-500' : 'bg-indigo-200 hover:bg-indigo-400'}`}
-                            style={{ height: `${height}%` }}
-                        />
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
+// VisitsChart — renders via MiniAreaChart (recharts) for smooth line+area

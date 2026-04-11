@@ -224,6 +224,30 @@ model VisitorAnalytics {
   @@index([createdAt])
 }
 
+// Per-hit pageview log (for time-series charts, top pages, etc.)
+model PageView {
+  id             String   @id @default(cuid())
+  visitorId      String // Matches VisitorAnalytics.visitorId (not a FK — visitor may arrive before analytics record is created)
+  pathname       String?
+  currentUrl     String?
+  referrerDomain String?
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  deviceType     String? // "mobile", "tablet", "desktop"
+  country        String?
+  city           String?
+  isNewVisitor   Boolean  @default(false) // true if this is the first visit for visitorId
+  createdAt      DateTime @default(now())
+
+  @@index([visitorId])
+  @@index([createdAt])
+  @@index([pathname])
+  @@index([deviceType])
+  @@index([utmSource])
+  @@index([country])
+}
+
 // Orders from the website
 model Order {
   id            String  @id @default(cuid())
