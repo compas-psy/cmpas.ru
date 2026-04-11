@@ -7,8 +7,17 @@ const BASE_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
-    const state = searchParams.get('state'); // psychologistId
+    const rawState = searchParams.get('state'); // psychologistId or psychologistId|returnUrl
     const error = searchParams.get('error');
+
+    // Parse state: may contain returnUrl for onboarding flow
+    let state = rawState;
+    let returnUrl: string | null = null;
+    if (rawState && rawState.includes('|')) {
+        const parts = rawState.split('|');
+        state = parts[0];
+        returnUrl = parts.slice(1).join('|');
+    }
 
     if (error) {
         return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=denied`);
@@ -57,9 +66,15 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        return NextResponse.redirect(`${BASE_URL}/diary/integrations?success=google`);
+        const successRedirect = returnUrl
+            ? `${BASE_URL}${returnUrl}?calendar_connected=google`
+            : `${BASE_URL}/diary/integrations?success=google`;
+        return NextResponse.redirect(successRedirect);
     } catch (err) {
         console.error('Google Calendar callback error:', err);
-        return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=google_failed`);
+        const errorRedirect = returnUrl
+            ? `${BASE_URL}${returnUrl}?calendar_error=google_failed`
+            : `${BASE_URL}/diary/integrations?error=google_failed`;
+        return NextResponse.redirect(errorRedirect);
     }
 }

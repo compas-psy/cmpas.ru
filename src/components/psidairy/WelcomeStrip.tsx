@@ -79,7 +79,8 @@ export function WelcomeStrip() {
         },
         {
             key: 'bot',
-            label: 'Подключить бот',
+            label: 'Telegram-бот',
+            description: 'Уведомления о записях',
             href: '/diary/integrations',
             icon: Bot,
             done: state.botConnected,
@@ -145,6 +146,9 @@ export function WelcomeStrip() {
                                 <div className={`text-sm font-semibold truncate ${step.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                                     {step.label}
                                 </div>
+                                {('description' in step) && step.description && (
+                                    <div className="text-xs text-muted-foreground mt-0.5 truncate">{(step as any).description}</div>
+                                )}
                             </div>
                         </Link>
                     );

@@ -1,245 +1,379 @@
 import { db } from '@/lib/db';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Card, CardContent } from '@/components/ui/card';
+import Link from 'next/link';
 import {
-    ShoppingCart,
     Users,
-    Eye,
     TrendingUp,
-    Clock,
-    Package,
-    CheckCircle2,
-    XCircle,
-    Globe,
-    Smartphone
+    TrendingDown,
+    Eye,
+    CreditCard,
+    ArrowRight,
+    Activity,
+    UserPlus,
+    BarChart3,
 } from 'lucide-react';
 
-const statusConfig: Record<string, { label: string; variant: 'new' | 'processing' | 'completed' | 'cancelled'; icon: typeof Clock }> = {
-    NEW: { label: 'Новый', variant: 'new', icon: Clock },
-    CONTACTED: { label: 'В работе', variant: 'processing', icon: Package },
-    PROCESSING: { label: 'В работе', variant: 'processing', icon: Package },
-    COMPLETED: { label: 'Завершено', variant: 'completed', icon: CheckCircle2 },
-    CANCELLED: { label: 'Отменено', variant: 'cancelled', icon: XCircle },
-};
+export const dynamic = 'force-dynamic';
+
+// Generate daily visit data for the last N days
+async function getDailyVisits(days: number) {
+    const result: { date: string; count: number }[] = [];
+    const now = new Date();
+
+    for (let i = days - 1; i >= 0; i--) {
+        const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        const count = await db.visitorAnalytics.count({
+            where: {
+                createdAt: { gte: dayStart, lt: dayEnd },
+            },
+        }).catch(() => 0);
+
+        result.push({
+            date: dayStart.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+            count,
+        });
+    }
+
+    return result;
+}
+
+function Sparkline({ data, color = '#6366f1' }: { data: number[]; color?: string }) {
+    if (data.length === 0 || data.every(d => d === 0)) {
+        return <div className="h-12 flex items-center text-xs text-muted-foreground">Нет данных</div>;
+    }
+
+    const max = Math.max(...data, 1);
+    const width = 200;
+    const height = 48;
+    const padding = 2;
+    const effectiveWidth = width - padding * 2;
+    const effectiveHeight = height - padding * 2;
+
+    const points = data.map((value, index) => {
+        const x = padding + (index / Math.max(data.length - 1, 1)) * effectiveWidth;
+        const y = padding + effectiveHeight - (value / max) * effectiveHeight;
+        return `${x},${y}`;
+    });
+
+    const areaPoints = [
+        `${padding},${height - padding}`,
+        ...points,
+        `${width - padding},${height - padding}`,
+    ].join(' ');
+
+    return (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+            <defs>
+                <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+                    <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            <polygon points={areaPoints} fill={`url(#grad-${color.replace('#', '')})`} />
+            <polyline
+                points={points.join(' ')}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
+function TrendBadge({ current, previous }: { current: number; previous: number }) {
+    if (previous === 0 && current === 0) return null;
+    const diff = previous > 0 ? Math.round(((current - previous) / previous) * 100) : (current > 0 ? 100 : 0);
+    const isUp = diff >= 0;
+
+    return (
+        <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${isUp ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>
+            {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {isUp ? '+' : ''}{diff}%
+        </span>
+    );
+}
 
 export default async function AdminDashboard() {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(todayStart);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const twoWeeksAgo = new Date(todayStart);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
     const [
-        totalOrders,
-        todayOrders,
-        newOrders,
+        totalUsers,
+        usersThisWeek,
+        usersPrevWeek,
         totalVisitors,
-        todayVisitors,
-        recentOrders,
-        topCountries,
-        deviceStats,
+        visitorsThisWeek,
+        visitorsPrevWeek,
+        activeTrials,
+        activeSubs,
+        dailyVisits,
+        recentUsers,
+        topSources,
     ] = await Promise.all([
-        db.order.count().catch(() => 0),
-        db.order.count({ where: { createdAt: { gte: todayStart } } }).catch(() => 0),
-        db.order.count({ where: { status: 'NEW' } }).catch(() => 0),
+        db.user.count().catch(() => 0),
+        db.user.count({ where: { createdAt: { gte: weekAgo } } }).catch(() => 0),
+        db.user.count({ where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }).catch(() => 0),
         db.visitorAnalytics.count().catch(() => 0),
-        db.visitorAnalytics.count({ where: { createdAt: { gte: todayStart } } }).catch(() => 0),
-        db.order.findMany({
+        db.visitorAnalytics.count({ where: { createdAt: { gte: weekAgo } } }).catch(() => 0),
+        db.visitorAnalytics.count({ where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }).catch(() => 0),
+        db.user.count({ where: { trialEndsAt: { gt: now } } }).catch(() => 0),
+        db.user.count({ where: { subscriptionEndsAt: { gt: now } } }).catch(() => 0),
+        getDailyVisits(30),
+        db.user.findMany({
             orderBy: { createdAt: 'desc' },
             take: 5,
-            select: { id: true, name: true, phone: true, status: true, createdAt: true, city: true, country: true },
+            select: { id: true, name: true, email: true, role: true, createdAt: true },
         }).catch(() => []),
         db.visitorAnalytics.groupBy({
-            by: ['country'],
+            by: ['utmSource'],
             _count: { id: true },
+            where: { utmSource: { not: null }, createdAt: { gte: weekAgo } },
             orderBy: { _count: { id: 'desc' } },
             take: 5,
         }).catch(() => []),
-        db.visitorAnalytics.groupBy({
-            by: ['deviceType'],
-            _count: { id: true },
-            orderBy: { _count: { id: 'desc' } },
-        }).catch(() => []),
     ]);
+
+    const kpiCards = [
+        {
+            title: 'Пользователи',
+            value: totalUsers,
+            current: usersThisWeek,
+            previous: usersPrevWeek,
+            icon: Users,
+            color: '#6366f1',
+            bgColor: 'bg-indigo-50',
+        },
+        {
+            title: 'Визиты (7 дн)',
+            value: visitorsThisWeek,
+            current: visitorsThisWeek,
+            previous: visitorsPrevWeek,
+            icon: Eye,
+            color: '#0ea5e9',
+            bgColor: 'bg-sky-50',
+        },
+        {
+            title: 'Активные триалы',
+            value: activeTrials,
+            current: activeTrials,
+            previous: 0,
+            icon: UserPlus,
+            color: '#f59e0b',
+            bgColor: 'bg-amber-50',
+        },
+        {
+            title: 'Подписки',
+            value: activeSubs,
+            current: activeSubs,
+            previous: 0,
+            icon: CreditCard,
+            color: '#10b981',
+            bgColor: 'bg-emerald-50',
+        },
+    ];
 
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-semibold text-foreground">Главная</h1>
-                <p className="text-foreground font-light mt-1">
-                    Обзор активности и ключевые метрики
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-[#0f1729]">Дашборд</h1>
+                    <p className="text-[#64748b] text-sm mt-0.5">
+                        Обзор платформы за последние 7 дней
+                    </p>
+                </div>
+                <div className="text-xs text-[#94a3b8] font-medium">
+                    {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
-                                <ShoppingCart className="w-6 h-6 text-[#f59e0b]" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-foreground/60 font-light">Всего заказов</p>
-                                <p className="text-2xl font-semibold mt-1">{totalOrders}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <Clock className="w-6 h-6 text-primary" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-foreground/60 font-light">Новых заказов</p>
-                                <p className="text-2xl font-semibold mt-1">{newOrders}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                                <Eye className="w-6 h-6 text-blue-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-foreground/60 font-light">Посетителей</p>
-                                <p className="text-2xl font-semibold mt-1">{totalVisitors}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                                <TrendingUp className="w-6 h-6 text-emerald-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-foreground/60 font-light">Сегодня</p>
-                                <p className="text-2xl font-semibold mt-1">+{todayVisitors}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+            {/* KPI Cards */}
+            <div className="grid gap-5 grid-cols-2 lg:grid-cols-4">
+                {kpiCards.map((kpi) => {
+                    const Icon = kpi.icon;
+                    return (
+                        <Card key={kpi.title} className="border-0 shadow-sm bg-white">
+                            <CardContent className="p-5">
+                                <div className="flex items-start justify-between mb-3">
+                                    <div className={`w-10 h-10 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
+                                        <Icon className="w-5 h-5" style={{ color: kpi.color }} />
+                                    </div>
+                                    <TrendBadge current={kpi.current} previous={kpi.previous} />
+                                </div>
+                                <div className="text-2xl font-bold text-[#0f1729]">{kpi.value.toLocaleString()}</div>
+                                <div className="text-xs text-[#94a3b8] font-medium mt-0.5">{kpi.title}</div>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
             </div>
 
-            {/* Main Content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Recent Orders */}
-                <div className="lg:col-span-2">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Последние заказы</CardTitle>
-                            <CardDescription>Последняя активность от клиентов</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Клиент</TableHead>
-                                        <TableHead>Город</TableHead>
-                                        <TableHead>Статус</TableHead>
-                                        <TableHead className="text-right">Дата</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {recentOrders.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="h-24 text-center">
-                                                <div className="flex flex-col items-center gap-2 text-foreground/50">
-                                                    <ShoppingCart className="w-8 h-8" />
-                                                    <p>Заказов пока нет</p>
+            {/* Charts Row */}
+            <div className="grid gap-5 grid-cols-1 lg:grid-cols-3">
+                {/* Visits Chart */}
+                <Card className="lg:col-span-2 border-0 shadow-sm bg-white">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="font-semibold text-[#0f1729]">Визиты</h3>
+                                <p className="text-xs text-[#94a3b8] mt-0.5">За последние 30 дней</p>
+                            </div>
+                            <Link
+                                href="/admin/analytics"
+                                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                            >
+                                Подробнее <ArrowRight className="w-3 h-3" />
+                            </Link>
+                        </div>
+                        <VisitsChart data={dailyVisits} />
+                    </CardContent>
+                </Card>
+
+                {/* Quick Stats */}
+                <div className="space-y-5">
+                    {/* Sources */}
+                    <Card className="border-0 shadow-sm bg-white">
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-2 mb-4">
+                                <BarChart3 className="w-4 h-4 text-indigo-500" />
+                                <h3 className="font-semibold text-sm text-[#0f1729]">Источники (7 дн)</h3>
+                            </div>
+                            {topSources.length === 0 ? (
+                                <p className="text-xs text-[#94a3b8]">Нет данных по UTM</p>
+                            ) : (
+                                <div className="space-y-2.5">
+                                    {topSources.map((item, i) => {
+                                        const maxCount = topSources[0]._count.id;
+                                        const pct = Math.round((item._count.id / maxCount) * 100);
+                                        return (
+                                            <div key={i}>
+                                                <div className="flex items-center justify-between text-xs mb-1">
+                                                    <span className="font-medium text-[#334155]">{item.utmSource}</span>
+                                                    <span className="text-[#94a3b8]">{item._count.id}</span>
                                                 </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        recentOrders.map((order) => {
-                                            const config = statusConfig[order.status] || statusConfig.NEW;
-                                            const StatusIcon = config.icon;
-                                            return (
-                                                <TableRow key={order.id}>
-                                                    <TableCell>
-                                                        <div>
-                                                            <p className="font-medium">{order.name}</p>
-                                                            <p className="text-xs text-foreground/60">{order.phone}</p>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-foreground/70">
-                                                        {order.city || '—'}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge variant={config.variant}>
-                                                            <StatusIcon className="w-3 h-3 mr-1" />
-                                                            {config.label}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-right text-foreground/70">
-                                                        {order.createdAt.toLocaleDateString('ru-RU')}
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Side Stats */}
-                <div className="space-y-6">
-                    {/* Geography */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center gap-2">
-                                <Globe className="w-5 h-5 text-primary" />
-                                <CardTitle className="text-base">География</CardTitle>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {topCountries.length === 0 ? (
-                                <p className="text-sm text-foreground/50">Нет данных</p>
-                            ) : (
-                                topCountries.map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between">
-                                        <span className="text-sm">{item.country || 'Неизвестно'}</span>
-                                        <span className="text-sm font-medium">{item._count.id}</span>
-                                    </div>
-                                ))
+                                                <div className="h-1.5 bg-[#f1f5f9] rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-indigo-500 rounded-full transition-all"
+                                                        style={{ width: `${pct}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             )}
                         </CardContent>
                     </Card>
 
-                    {/* Devices */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center gap-2">
-                                <Smartphone className="w-5 h-5 text-primary" />
-                                <CardTitle className="text-base">Устройства</CardTitle>
+                    {/* System Quick */}
+                    <Card className="border-0 shadow-sm bg-white">
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Activity className="w-4 h-4 text-emerald-500" />
+                                <h3 className="font-semibold text-sm text-[#0f1729]">Система</h3>
                             </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {deviceStats.length === 0 ? (
-                                <p className="text-sm text-foreground/50">Нет данных</p>
-                            ) : (
-                                deviceStats.map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between">
-                                        <span className="text-sm capitalize">{item.deviceType || 'Unknown'}</span>
-                                        <span className="text-sm font-medium">{item._count.id}</span>
-                                    </div>
-                                ))
-                            )}
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-[#94a3b8]">Всего визитов</span>
+                                    <span className="font-semibold text-[#334155]">{totalVisitors.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-[#94a3b8]">Конверсия</span>
+                                    <span className="font-semibold text-[#334155]">
+                                        {totalVisitors > 0 ? ((totalUsers / totalVisitors) * 100).toFixed(1) : 0}%
+                                    </span>
+                                </div>
+                            </div>
+                            <Link
+                                href="/admin/health"
+                                className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-3"
+                            >
+                                Мониторинг <ArrowRight className="w-3 h-3" />
+                            </Link>
                         </CardContent>
                     </Card>
                 </div>
             </div>
+
+            {/* Recent Users */}
+            <Card className="border-0 shadow-sm bg-white">
+                <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-5">
+                        <h3 className="font-semibold text-[#0f1729]">Новые пользователи</h3>
+                        <Link
+                            href="/admin/users"
+                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                        >
+                            Все пользователи <ArrowRight className="w-3 h-3" />
+                        </Link>
+                    </div>
+                    <div className="space-y-3">
+                        {recentUsers.length === 0 ? (
+                            <p className="text-sm text-[#94a3b8] text-center py-8">Нет пользователей</p>
+                        ) : (
+                            recentUsers.map((user) => (
+                                <div key={user.id} className="flex items-center justify-between py-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-600 font-semibold text-xs">
+                                            {(user.name || user.email)?.[0]?.toUpperCase() || '?'}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-[#0f1729]">{user.name || '—'}</p>
+                                            <p className="text-xs text-[#94a3b8]">{user.email}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-[#94a3b8]">
+                                        {user.createdAt.toLocaleDateString('ru-RU')}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function VisitsChart({ data }: { data: { date: string; count: number }[] }) {
+    if (data.length === 0) {
+        return <div className="h-48 flex items-center justify-center text-sm text-[#94a3b8]">Нет данных</div>;
+    }
+
+    const max = Math.max(...data.map(d => d.count), 1);
+    const width = 100; // percentage
+    const barCount = data.length;
+
+    return (
+        <div className="h-48 flex items-end gap-[2px]">
+            {data.map((d, i) => {
+                const height = Math.max((d.count / max) * 100, 2);
+                const isToday = i === data.length - 1;
+                return (
+                    <div
+                        key={i}
+                        className="flex-1 flex flex-col items-center justify-end group relative"
+                    >
+                        {/* Tooltip */}
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0f1729] text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                            {d.date}: {d.count}
+                        </div>
+                        <div
+                            className={`w-full rounded-t-sm transition-all ${isToday ? 'bg-indigo-500' : 'bg-indigo-200 hover:bg-indigo-400'}`}
+                            style={{ height: `${height}%` }}
+                        />
+                    </div>
+                );
+            })}
         </div>
     );
 }

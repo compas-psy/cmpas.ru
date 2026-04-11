@@ -62,6 +62,42 @@ export async function resetUserSettings(userId: string) {
     return { success: true }
 }
 
+/**
+ * Full test-mode reset: wipe all user data (clients, sessions, settings, slots)
+ * so the user can redo onboarding from scratch.
+ */
+export async function testModeReset(userId: string) {
+    await ensureAdmin()
+
+    // Delete in order of dependencies
+    // 1. Delete all sessions
+    await db.diarySession.deleteMany({ where: { psychologistId: userId } })
+
+    // 2. Delete all clients (cascades to questionnaires, therapy goals, etc.)
+    await db.diaryClient.deleteMany({ where: { psychologistId: userId } })
+
+    // 3. Delete availability slots
+    await db.availabilitySlot.deleteMany({ where: { psychologistId: userId } })
+
+    // 4. Delete diary blocks
+    await db.diaryBlock.deleteMany({ where: { psychologistId: userId } })
+
+    // 5. Delete time blocks
+    await db.timeBlock.deleteMany({ where: { psychologistId: userId } })
+
+    // 6. Delete calendar integrations
+    await db.calendarIntegration.deleteMany({ where: { psychologistId: userId } })
+
+    // 7. Delete notification settings
+    await db.notificationSettings.deleteMany({ where: { psychologistId: userId } })
+
+    // 8. Delete psychologist settings (this triggers onboarding again)
+    await db.psychologistSettings.deleteMany({ where: { psychologistId: userId } })
+
+    revalidatePath("/admin/users")
+    return { success: true }
+}
+
 async function setTrialRaw(userId: string, date: Date) {
     // Use raw SQL to set trialEndsAt — works even before Prisma types are regenerated
     await db.$executeRaw`UPDATE "User" SET "trialEndsAt" = ${date} WHERE id = ${userId}`
@@ -108,4 +144,86 @@ export async function deleteUserAccount(userId: string) {
 
     revalidatePath("/admin/users")
     return { success: true }
+}
+
+/**
+ * Send a message to a user via Telegram Bot API.
+ * Requires the user to have a telegramChatId set.
+ */
+export async function sendTelegramMessage(userId: string, message: string) {
+    await ensureAdmin()
+
+    const user = await db.user.findUnique({
+        where: { id: userId },
+        select: { telegramChatId: true, name: true }
+    })
+
+    if (!user?.telegramChatId) {
+        return { success: false, error: 'У пользователя не привязан Telegram' }
+    }
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN
+    if (!botToken) {
+        return { success: false, error: 'TELEGRAM_BOT_TOKEN не настроен' }
+    }
+
+    try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: user.telegramChatId,
+                text: message,
+                parse_mode: 'HTML',
+            }),
+        })
+
+        const data = await res.json()
+        if (!data.ok) {
+            return { success: false, error: data.description || 'Ошибка Telegram API' }
+        }
+
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message || 'Не удалось отправить сообщение' }
+    }
+}
+
+/**
+ * Get detailed user info for admin CRM profile
+ */
+export async function getUserDetails(userId: string) {
+    await ensureAdmin()
+
+    const user = await db.user.findUnique({
+        where: { id: userId },
+        include: {
+            psychologistSettings: true,
+            legalAcceptances: {
+                include: { document: true }
+            },
+            payments: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+            },
+        }
+    })
+
+    if (!user) return null
+
+    // Get counts
+    const [clientsCount, sessionsCount, totalSessionsCompleted] = await Promise.all([
+        db.diaryClient.count({ where: { psychologistId: userId } }),
+        db.diarySession.count({ where: { psychologistId: userId } }),
+        db.diarySession.count({ where: { psychologistId: userId, status: 'completed' } }),
+    ])
+
+    return {
+        ...user,
+        _counts: {
+            clients: clientsCount,
+            sessions: sessionsCount,
+            completedSessions: totalSessionsCompleted,
+        }
+    }
 }

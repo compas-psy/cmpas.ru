@@ -448,7 +448,7 @@ export default function OnboardingPage() {
             </p>
 
             <div className="space-y-4">
-                <a href="/api/calendar/google/connect" target="_blank" className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform">
+                <a href="/api/calendar/google/connect?returnUrl=/onboarding" className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform">
                     <div className="flex items-center gap-4">
                         <Image src="/icons/google-calendar.svg" alt="Google Calendar" width={32} height={32} className="w-8 h-8" />
                         <span className="text-[#1a1a1a] font-medium">Google Calendar</span>
@@ -456,15 +456,28 @@ export default function OnboardingPage() {
                     <span className="text-[#1a4d3a] text-sm font-medium px-4 py-2 bg-[#1a4d3a]/10 rounded-xl">Подключить</span>
                 </a>
 
-                <a href="/diary/integrations" target="_blank" className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform">
+                <button
+                    type="button"
+                    onClick={() => {
+                        window.open('/diary/integrations?from=onboarding', '_blank', 'width=600,height=700');
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform text-left"
+                >
                     <div className="flex items-center gap-4">
                         <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={32} height={32} className="w-8 h-8 rounded" />
-                        <span className="text-[#1a1a1a] font-medium">Яндекс Календарь</span>
+                        <div>
+                            <span className="text-[#1a1a1a] font-medium block">Яндекс Календарь</span>
+                            <span className="text-[#1a1a1a]/50 text-xs">Настройка через CalDAV</span>
+                        </div>
                     </div>
-                    <span className="text-[#1a4d3a] text-sm font-medium px-4 py-2 bg-[#1a4d3a]/10 rounded-xl">Подключить</span>
-                </a>
+                    <span className="text-[#1a4d3a] text-sm font-medium px-4 py-2 bg-[#1a4d3a]/10 rounded-xl">Настроить</span>
+                </button>
 
-                <div className="flex gap-4 pt-6">
+                <p className="text-white/40 text-xs text-center">
+                    Вы сможете подключить или изменить календари позже в Настройках → Интеграции
+                </p>
+
+                <div className="flex gap-4 pt-4">
                     <button onClick={prevStep} className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors">Назад</button>
                     <button onClick={nextStep} className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] rounded-2xl text-[#1a4d3a] font-medium transition-colors">
                         Далее (или пропустить)

@@ -11,6 +11,11 @@ const STOP_WORDS = new Set([
     'телеграм', 'telegram', 'max', 'google meet', 'teams',
     'sync', 'daily', 'standup', 'review',
     'free', 'busy', 'занято',
+    // Session type words that are NOT client names
+    'индивидуальная', 'групповая', 'парная', 'семейная',
+    'индивидуальный', 'групповой', 'парный', 'семейный',
+    'сессия', 'сеанс', 'консультация', 'терапия', 'приём', 'прием',
+    'онлайн', 'офлайн', 'online', 'offline',
 ]);
 
 const PREFIXES = [
@@ -26,7 +31,17 @@ const PREFIXES = [
     /^session[:]?\s+/i,
     /^meeting\s+with\s+/i,
     /^appointment\s+/i,
+    // Extended patterns for common psychologist calendar formats
+    /^индивидуальн(?:ая|ый)\s+(?:сессия|сеанс|консультация|терапия|приём|прием)\s*/i,
+    /^групповая\s+(?:сессия|сеанс|консультация|терапия)\s*/i,
+    /^парная\s+(?:сессия|сеанс|консультация|терапия)\s*/i,
+    /^семейная\s+(?:сессия|сеанс|консультация|терапия)\s*/i,
+    /^онлайн[-\s]?(?:сессия|сеанс|консультация)\s*/i,
+    /^офлайн[-\s]?(?:сессия|сеанс|консультация)\s*/i,
 ];
+
+// Delimiters that separate session type from client name
+const DELIMITERS = /\s*(?:—|--|–|::|:|\/\/|→)\s*/;
 
 function stripPrefix(s: string): string {
     let result = s;
@@ -48,11 +63,72 @@ function normalizeForKey(name: string): string {
     return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Try to extract a client name from the part after a delimiter.
+ * E.g. "Индивидуальная сессия — Иванова Мария" → "Иванова Мария"
+ */
+function extractNameFromPart(part: string): string | null {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed.length < 2) return null;
+
+    const lower = normalizeForKey(trimmed);
+    if (STOP_WORDS.has(lower)) return null;
+
+    // Split into words
+    const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+
+    // Filter out remaining stop-words at the beginning
+    let startIdx = 0;
+    for (let i = 0; i < words.length; i++) {
+        if (STOP_WORDS.has(words[i].toLowerCase())) {
+            startIdx = i + 1;
+        } else {
+            break;
+        }
+    }
+    const cleanWords = words.slice(startIdx);
+    if (cleanWords.length === 0) return null;
+
+    // Try to collect 1-3 capitalized words (Name Surname Patronymic)
+    const result: string[] = [];
+    for (const w of cleanWords) {
+        if (/^[A-ZА-ЯЁ][a-zа-яё-]*$/.test(w)) {
+            result.push(w);
+            if (result.length >= 3) break;
+        } else if (result.length > 0) {
+            break;
+        }
+    }
+
+    if (result.length === 0) return null;
+    const final = result.join(' ');
+    if (final.length < 2) return null;
+    if (STOP_WORDS.has(normalizeForKey(final))) return null;
+
+    return final;
+}
+
 export function extractClientNameFromSummary(summary: string | null | undefined): string | null {
     if (!summary) return null;
     let s = summary.trim();
     if (!s) return null;
 
+    // Step 1: Check if there's a delimiter — if so, try extracting name from the part AFTER it
+    const delimMatch = s.match(DELIMITERS);
+    if (delimMatch && delimMatch.index !== undefined) {
+        const afterDelim = s.slice(delimMatch.index + delimMatch[0].length);
+        const beforeDelim = s.slice(0, delimMatch.index);
+
+        // Try extracting from the part after the delimiter first (most common pattern)
+        const nameAfter = extractNameFromPart(afterDelim);
+        if (nameAfter) return nameAfter;
+
+        // If nothing found after delimiter, try the part before (reversed pattern: "Иванов — сессия")
+        const nameBefore = extractNameFromPart(beforeDelim);
+        if (nameBefore) return nameBefore;
+    }
+
+    // Step 2: No delimiter or extraction failed — use original logic with prefix stripping
     s = stripPrefix(s);
     s = stripTrailingTime(s);
     // Убираем скобки с комментариями
@@ -77,12 +153,12 @@ export function extractClientNameFromSummary(summary: string | null | undefined)
     // Если нет ни одного слова с заглавной → это, скорее всего, обычный текст, не имя
     if (capitalizedWords.length === 0) return null;
 
-    // Берём первые 1-2 слова с заглавной подряд (Имя или Имя Фамилия)
+    // Берём первые 1-3 слова с заглавной подряд (Имя или Имя Фамилия или Фамилия Имя Отчество)
     const result: string[] = [];
     for (const w of words) {
         if (/^[A-ZА-ЯЁ][a-zа-яё-]*$/.test(w)) {
             result.push(w);
-            if (result.length >= 2) break;
+            if (result.length >= 3) break;
         } else if (result.length > 0) {
             break;
         }
