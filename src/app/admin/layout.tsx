@@ -11,6 +11,7 @@ import {
     FileText,
     LogOut,
     ChevronLeft,
+    MessageSquare,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ const navItems = [
     { href: '/admin', label: 'Дашборд', icon: LayoutDashboard },
     { href: '/admin/analytics', label: 'Аналитика', icon: BarChart3 },
     { href: '/admin/users', label: 'Пользователи', icon: Users },
+    { href: '/admin/communications', label: 'Коммуникации', icon: MessageSquare },
     { href: '/admin/health', label: 'Здоровье', icon: Activity },
     { href: '/admin/audit', label: 'Безопасность', icon: Shield },
     { href: '/admin/legal', label: 'Документы', icon: FileText },

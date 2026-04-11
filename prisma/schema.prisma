@@ -675,3 +675,58 @@ model Payment {
   @@index([userId])
   @@index([status])
 }
+
+// ── Admin CRM Models ──
+
+model AdminMessage {
+  id          String   @id @default(cuid())
+  fromAdminId String
+  toUserId    String
+  channel     String   // "telegram" | "max" | "email"
+  subject     String?
+  content     String
+  status      String   @default("sent") // "sent" | "delivered" | "failed"
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+
+  @@index([toUserId])
+  @@index([fromAdminId])
+  @@index([createdAt])
+}
+
+model AdminActionLog {
+  id           String   @id @default(cuid())
+  adminId      String
+  targetUserId String?
+  action       String   // "block" | "unblock" | "role_change" | "trial_reset" | "trial_forever" | "test_reset" | "delete" | "message_sent" | "note_added" | "tag_added" | "tag_removed"
+  payload      String?  // JSON
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+model UserNote {
+  id        String   @id @default(cuid())
+  userId    String
+  authorId  String
+  content   String
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model UserTag {
+  id        String   @id @default(cuid())
+  userId    String
+  tag       String
+  addedById String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, tag])
+  @@index([userId])
+  @@index([tag])
+}

@@ -5,36 +5,49 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 
 /**
- * Ensures the caller is an ADMIN or SUPERADMIN before performing destructuve actions
+ * Ensures the caller is an ADMIN or SUPERADMIN before performing destructive actions.
+ * Returns the admin's userId for logging.
  */
-async function ensureAdmin() {
+async function ensureAdmin(): Promise<string> {
     const session = await auth()
     const userRole = (session?.user as { role?: string })?.role
 
-    if (!session?.user || (userRole !== "ADMIN" && userRole !== "SUPERADMIN")) {
+    if (!session?.user?.id || (userRole !== "ADMIN" && userRole !== "SUPERADMIN")) {
         throw new Error("Unauthorized: Only Admins can perform this action.")
     }
+    return session.user.id
+}
+
+async function logAction(adminId: string, action: string, targetUserId?: string, payload?: Record<string, any>) {
+    try {
+        await db.adminActionLog.create({
+            data: { adminId, action, targetUserId, payload: payload ? JSON.stringify(payload) : null }
+        })
+    } catch { /* don't block the action if logging fails */ }
 }
 
 export async function toggleUserBlock(userId: string, isBlocked: boolean) {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
 
     await db.user.update({
         where: { id: userId },
         data: { isBlocked }
     })
 
+    await logAction(adminId, isBlocked ? 'block' : 'unblock', userId)
     revalidatePath("/admin/users")
 }
 
 export async function changeUserRole(userId: string, newRole: "USER" | "ADMIN" | "SUPERADMIN") {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
+    const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } })
 
     await db.user.update({
         where: { id: userId },
         data: { role: newRole }
     })
 
+    await logAction(adminId, 'role_change', userId, { oldRole: user?.role, newRole })
     revalidatePath("/admin/users")
 }
 
@@ -67,33 +80,19 @@ export async function resetUserSettings(userId: string) {
  * so the user can redo onboarding from scratch.
  */
 export async function testModeReset(userId: string) {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
 
     // Delete in order of dependencies
-    // 1. Delete all sessions
     await db.diarySession.deleteMany({ where: { psychologistId: userId } })
-
-    // 2. Delete all clients (cascades to questionnaires, therapy goals, etc.)
     await db.diaryClient.deleteMany({ where: { psychologistId: userId } })
-
-    // 3. Delete availability slots
     await db.availabilitySlot.deleteMany({ where: { psychologistId: userId } })
-
-    // 4. Delete diary blocks
     await db.diaryBlock.deleteMany({ where: { psychologistId: userId } })
-
-    // 5. Delete time blocks
     await db.timeBlock.deleteMany({ where: { psychologistId: userId } })
-
-    // 6. Delete calendar integrations
     await db.calendarIntegration.deleteMany({ where: { psychologistId: userId } })
-
-    // 7. Delete notification settings
     await db.notificationSettings.deleteMany({ where: { psychologistId: userId } })
-
-    // 8. Delete psychologist settings (this triggers onboarding again)
     await db.psychologistSettings.deleteMany({ where: { psychologistId: userId } })
 
+    await logAction(adminId, 'test_reset', userId)
     revalidatePath("/admin/users")
     return { success: true }
 }
@@ -104,7 +103,7 @@ async function setTrialRaw(userId: string, date: Date) {
 }
 
 export async function extendUserTrial(userId: string, days: number) {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
     const rows = await db.$queryRaw<{ trialEndsAt: Date | null }[]>`
         SELECT "trialEndsAt" FROM "User" WHERE id = ${userId} LIMIT 1
     `
@@ -113,28 +112,33 @@ export async function extendUserTrial(userId: string, days: number) {
     const newEnd = new Date(base)
     newEnd.setDate(newEnd.getDate() + days)
     await setTrialRaw(userId, newEnd)
+    await logAction(adminId, 'trial_reset', userId, { days, type: 'extend', newEnd: newEnd.toISOString() })
     revalidatePath("/admin/users")
     return { success: true, trialEndsAt: newEnd }
 }
 
 export async function resetUserTrialFromNow(userId: string, days: number) {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
     const newEnd = new Date()
     newEnd.setDate(newEnd.getDate() + days)
     await setTrialRaw(userId, newEnd)
+    await logAction(adminId, 'trial_reset', userId, { days, type: 'reset_from_now', newEnd: newEnd.toISOString() })
     revalidatePath("/admin/users")
     return { success: true, trialEndsAt: newEnd }
 }
 
 export async function setUserTrialForever(userId: string) {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
     await setTrialRaw(userId, new Date('2099-01-01'))
+    await logAction(adminId, 'trial_forever', userId)
     revalidatePath("/admin/users")
     return { success: true }
 }
 
 export async function deleteUserAccount(userId: string) {
-    await ensureAdmin()
+    const adminId = await ensureAdmin()
+
+    await logAction(adminId, 'delete', userId)
 
     // Thanks to Prisma's onDelete: Cascade, deleting the User model
     // automatically handles related Accounts, Sessions, DiarySessions, etc.

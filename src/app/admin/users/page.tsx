@@ -290,17 +290,17 @@ export default async function UsersPage({
                                 </TableCell>
                             </TableRow>
                         ) : enrichedUsers.map((user) => (
-                            <TableRow key={user.id} className={user.isBlocked ? 'opacity-60 bg-red-50/30' : 'hover:bg-[#f8fafc]'}>
+                            <TableRow key={user.id} className={`cursor-pointer transition-colors ${user.isBlocked ? 'opacity-60 bg-red-50/30' : 'hover:bg-[#f8fafc]'}`}>
                                 <TableCell>
-                                    <div className="flex items-center gap-3">
+                                    <Link href={`/admin/users/${user.id}`} className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-600 font-semibold text-xs flex-shrink-0">
                                             {(user.name || user.email)?.[0]?.toUpperCase() || '?'}
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-sm font-medium text-[#0f1729] truncate">{user.name || '—'}</p>
+                                            <p className="text-sm font-medium text-[#0f1729] truncate hover:text-indigo-600 transition-colors">{user.name || '—'}</p>
                                             <p className="text-[11px] text-[#94a3b8] truncate">{user.email}</p>
                                         </div>
-                                    </div>
+                                    </Link>
                                 </TableCell>
                                 <TableCell>
                                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${roleColors[user.role] || roleColors.USER}`}>
