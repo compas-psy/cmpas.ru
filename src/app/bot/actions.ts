@@ -81,7 +81,7 @@ function getPartsInTz(date: Date, timeZone: string) {
     };
 }
 
-function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], sessionBreak: number) {
+function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], sessionBreak: number, maxSessionsPerDay?: number | null) {
     // Expected dateStr format: 'yyyy-MM-dd'
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(Date.UTC(year, month - 1, day));
@@ -106,7 +106,9 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
         return true;
     });
 
+    // Count already booked sessions for this day (for maxSessionsPerDay check)
     const daySessions = sessions.filter(s => toDateStr(new Date(s.date)) === dateStr);
+    const bookedCount = daySessions.length;
 
     let timesObj: Record<string, { time: string, format: string, addressId: string | null }> = {};
 
@@ -127,6 +129,11 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
             if (isToday && (h + m / 60 <= nowHours)) {
                 currentTotalMins += duration;
                 continue;
+            }
+
+            // Check maxSessionsPerDay limit
+            if (maxSessionsPerDay && (bookedCount + Object.keys(timesObj).length) >= maxSessionsPerDay) {
+                break;
             }
 
             // Check if clashes with any session
@@ -182,10 +189,11 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
     if (!slots.length) return [];
 
-    const sessionBreak = 15;
-
-    // Fetch settings to check if we should block conflicts from external calendars
+    // Fetch settings for session break, limits, and external calendar blocking
     const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    const sessionBreak = settings?.sessionBreak ?? 15;
+    const maxSessionsPerDay = settings?.maxSessionsPerDay ?? null;
+
     const blockConflicts = settings?.blockConflicts ?? true;
 
     let externalBlocks: any[] = [];
@@ -258,7 +266,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
         const dateStr = toDateStr(d);
         if (dateStr < todayStr) continue;
 
-        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, sessionBreak);
+        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, sessionBreak, maxSessionsPerDay);
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
         }
@@ -280,10 +288,12 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
     const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
 
     const slots = await db.availabilitySlot.findMany({ where: { psychologistId, isActive: true } });
-    const sessionBreak = 15;
 
-    // Fetch settings to check if we should block conflicts from external calendars
+    // Fetch settings for session break, limits, and external calendar blocking
     const settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    const sessionBreak = settings?.sessionBreak ?? 15;
+    const maxSessionsPerDay = settings?.maxSessionsPerDay ?? null;
+
     const blockConflicts = settings?.blockConflicts ?? true;
 
     let externalBlocks: any[] = [];
@@ -349,7 +359,7 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         select: { date: true, time: true, duration: true }
     });
 
-    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, sessionBreak);
+    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, sessionBreak, maxSessionsPerDay);
 }
 
 export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
@@ -445,9 +455,18 @@ export async function bookSession(psychologistId: string, userDetails: any, form
     const dayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
     const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
 
-    // Валидация: слот не занят
-    const duration = 50;
+    // Get duration from the matching availability slot for this booking
     const [h, min] = form.time.split(':').map(Number);
+    const bookingDayOfWeek = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+    const matchingSlot = await db.availabilitySlot.findFirst({
+        where: {
+            psychologistId,
+            isActive: true,
+            dayOfWeek: bookingDayOfWeek,
+        },
+        orderBy: { createdAt: 'desc' },
+    });
+    const duration = matchingSlot?.duration || 50;
     const newStartMins = h * 60 + min;
     const newEndMins = newStartMins + duration;
 
