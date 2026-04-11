@@ -52,9 +52,16 @@ function SidebarContent({ userName, userInitials }: { userName: string; userInit
 
 export default async function DiaryLayout({
     children,
+    params,
+    searchParams,
 }: {
     children: React.ReactNode;
+    params?: Promise<any>;
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+    const resolvedSearch = searchParams ? await searchParams : {};
+    const fromOnboarding = resolvedSearch?.from === 'onboarding';
+
     const session = await auth();
 
     if (!session?.user?.email) {
@@ -77,7 +84,7 @@ export default async function DiaryLayout({
         );
     }
 
-    if (!dbUser?.psychologistSettings?.onboardingCompleted) {
+    if (!dbUser?.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
         redirect('/onboarding');
     }
 
