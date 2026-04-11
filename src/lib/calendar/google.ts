@@ -96,12 +96,22 @@ async function getValidToken(integrationId: string): Promise<string> {
         where: { id: integrationId },
     });
 
-    if (!integration?.accessToken || !integration?.refreshToken) {
-        throw new Error('No tokens available');
+    if (!integration?.accessToken) {
+        throw new Error('No access token available');
     }
 
     // Check if token is expired (with 5-minute buffer)
-    if (integration.tokenExpiry && integration.tokenExpiry < new Date(Date.now() + 5 * 60 * 1000)) {
+    const isExpiredSoon = integration.tokenExpiry
+        ? integration.tokenExpiry < new Date(Date.now() + 5 * 60 * 1000)
+        : false;
+
+    if (isExpiredSoon) {
+        if (!integration.refreshToken) {
+            // Token expired but no refresh token — return current token as last resort
+            // (may fail on Google's side, but let the caller handle that)
+            console.warn(`[Google] Integration ${integrationId} has expired token and no refresh token`);
+            return integration.accessToken;
+        }
         const tokens = await refreshAccessToken(integration.refreshToken);
         await db.calendarIntegration.update({
             where: { id: integrationId },
@@ -115,6 +125,7 @@ async function getValidToken(integrationId: string): Promise<string> {
 
     return integration.accessToken;
 }
+
 
 /**
  * Get user's email from Google
@@ -371,7 +382,7 @@ export async function fetchGoogleCalendarEvents(
         const items = data.items || [];
 
         const events = items
-            .filter((item: any) => item.status !== 'cancelled' && item.transparency !== 'transparent' && !item.extendedProperties?.private?.compasSessionId) // skip Free slots and КОМПАС-synced sessions
+            .filter((item: any) => item.status !== 'cancelled' && !item.extendedProperties?.private?.compasSessionId) // skip cancelled and КОМПАС-synced sessions
             .map((item: any) => {
                 let start, end;
                 if (item.start.dateTime) {
