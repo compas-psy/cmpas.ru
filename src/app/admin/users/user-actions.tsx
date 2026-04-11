@@ -8,7 +8,7 @@ import {
 import {
     toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount,
     extendUserTrial, resetUserTrialFromNow, setUserTrialForever,
-    testModeReset, sendTelegramMessage,
+    testModeReset,
 } from "../actions/users"
 import { useRouter } from "next/navigation"
 
@@ -41,7 +41,12 @@ export function UserActions({
         if (!message.trim()) return
         setIsLoading(true)
         try {
-            const result = await sendTelegramMessage(user.id, message.trim())
+            const res = await fetch('/api/admin/send-telegram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, message: message.trim() }),
+            })
+            const result = await res.json()
             if (result.success) {
                 alert('Сообщение отправлено!')
                 setMessage('')
