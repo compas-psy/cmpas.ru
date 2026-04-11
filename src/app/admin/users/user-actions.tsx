@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
     Shield, ShieldAlert, UserCheck, Trash2, RotateCcw, RefreshCw,
     Infinity, Send, Mail, MessageCircle, MoreHorizontal, TestTube,
@@ -60,10 +60,29 @@ export function UserActions({
         return <span className="text-[10px] text-[#94a3b8]">Защищён</span>
     }
 
+    const btnRef = useRef<HTMLButtonElement>(null)
+    const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+
+    useEffect(() => {
+        if (showMenu && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect()
+            const menuHeight = 420 // approximate max height
+            const spaceBelow = window.innerHeight - rect.bottom
+            const top = spaceBelow < menuHeight
+                ? Math.max(8, rect.top - menuHeight + rect.height)
+                : rect.bottom + 4
+            setMenuPos({
+                top,
+                left: Math.max(8, rect.right - 224), // 224 = w-56 = 14rem
+            })
+        }
+    }, [showMenu])
+
     return (
         <>
             <div className="relative">
                 <button
+                    ref={btnRef}
                     onClick={() => setShowMenu(!showMenu)}
                     disabled={isLoading}
                     className="p-1.5 rounded-lg hover:bg-[#f1f5f9] transition-colors text-[#94a3b8] hover:text-[#334155]"
@@ -74,7 +93,10 @@ export function UserActions({
                 {showMenu && (
                     <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                        <div className="absolute right-0 top-8 z-50 w-56 bg-white rounded-xl shadow-lg border border-[#e2e8f0] py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                        <div
+                            className="fixed z-50 w-56 bg-white rounded-xl shadow-lg border border-[#e2e8f0] py-1.5 animate-in fade-in slide-in-from-top-1 duration-150 max-h-[80vh] overflow-y-auto"
+                            style={{ top: menuPos.top, left: menuPos.left }}
+                        >
                             {/* Block / Unblock */}
                             <button
                                 onClick={() => handleAction(() => toggleUserBlock(user.id, !user.isBlocked))}
