@@ -8,7 +8,6 @@ import {
 import {
     toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount,
     extendUserTrial, resetUserTrialFromNow, setUserTrialForever,
-    testModeReset,
 } from "../actions/users"
 import { useRouter } from "next/navigation"
 
@@ -188,10 +187,19 @@ export function UserActions({
                             </button>
 
                             <button
-                                onClick={() => {
+                                onClick={async () => {
                                     if (confirm("⚠️ ТЕСТОВЫЙ РЕЖИМ: Удалить ВСЕ данные пользователя (клиенты, сессии, настройки)? Это необратимо!")) {
                                         if (confirm("Вы уверены? Все клиенты и сессии будут удалены безвозвратно!")) {
-                                            handleAction(() => testModeReset(user.id))
+                                            handleAction(async () => {
+                                                const res = await fetch('/api/admin/test-mode-reset', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ userId: user.id }),
+                                                })
+                                                const data = await res.json()
+                                                if (!res.ok) throw new Error(data.error || 'Ошибка сброса')
+                                                if (data.errors?.length) console.warn('[testModeReset] partial errors:', data.errors)
+                                            })
                                         }
                                     }
                                 }}
