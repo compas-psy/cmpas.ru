@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { parseClientLines, type ParsedClient } from "@/lib/clients/parse"
@@ -51,6 +51,41 @@ export default function OnboardingPage() {
 
     const parsedClients = useMemo<ParsedClient[]>(() => parseClientLines(clientsText), [clientsText])
     const validParsedClients = parsedClients.filter(p => p.valid)
+
+    // Calendar connection state
+    const [googleConnected, setGoogleConnected] = useState(false)
+
+    // Check if we're returning from a calendar connection
+    // We can't use useSearchParams directly in a sync way, so we check window.location
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.location.search.includes('calendar_connected=google')) {
+            setGoogleConnected(true)
+            // Clean the URL without reloading
+            const url = new URL(window.location.href)
+            url.searchParams.delete('calendar_connected')
+            window.history.replaceState({}, '', url.toString())
+        }
+    }, [])
+
+    // Open Google Calendar OAuth in popup, listen for it to close
+    const handleGoogleConnect = () => {
+        const popup = window.open(
+            '/api/calendar/google/connect?returnUrl=/onboarding',
+            'google-calendar-oauth',
+            'width=520,height=640,scrollbars=yes'
+        )
+        if (!popup) return
+        const timer = setInterval(() => {
+            if (popup.closed) {
+                clearInterval(timer)
+                // Check if connection succeeded by polling
+                fetch('/api/onboarding/progress', { cache: 'no-store' })
+                    .then(r => r.json())
+                    .then(d => { if (d.calendarConnected) setGoogleConnected(true) })
+                    .catch(() => {})
+            }
+        }, 500)
+    }
 
     // Derived states
     const hasSelectedMethods = formData.methods.length > 0 || formData.customMethod.trim() !== ""
@@ -448,13 +483,28 @@ export default function OnboardingPage() {
             </p>
 
             <div className="space-y-4">
-                <a href="/api/calendar/google/connect?returnUrl=/onboarding" className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform">
+                <button
+                    type="button"
+                    onClick={handleGoogleConnect}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform text-left"
+                >
                     <div className="flex items-center gap-4">
                         <Image src="/icons/google-calendar.svg" alt="Google Calendar" width={32} height={32} className="w-8 h-8" />
-                        <span className="text-[#1a1a1a] font-medium">Google Calendar</span>
+                        <div>
+                            <span className="text-[#1a1a1a] font-medium block">Google Calendar</span>
+                            {googleConnected && (
+                                <span className="text-emerald-600 text-xs font-semibold">✓ Подключено</span>
+                            )}
+                        </div>
                     </div>
-                    <span className="text-[#1a4d3a] text-sm font-medium px-4 py-2 bg-[#1a4d3a]/10 rounded-xl">Подключить</span>
-                </a>
+                    <span className={`text-sm font-medium px-4 py-2 rounded-xl ${
+                        googleConnected
+                            ? 'text-emerald-700 bg-emerald-50'
+                            : 'text-[#1a4d3a] bg-[#1a4d3a]/10'
+                    }`}>
+                        {googleConnected ? 'Подключено ✓' : 'Подключить'}
+                    </span>
+                </button>
 
                 <button
                     type="button"

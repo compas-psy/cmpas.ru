@@ -19,11 +19,20 @@ export async function GET(request: NextRequest) {
         returnUrl = parts.slice(1).join('|');
     }
 
+    // Detect onboarding flow (returnUrl = /onboarding or /onboarding*)
+    const isOnboarding = returnUrl?.startsWith('/onboarding');
+
     if (error) {
+        if (isOnboarding) {
+            return NextResponse.redirect(`${BASE_URL}/api/calendar/google/done?status=denied`);
+        }
         return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=denied`);
     }
 
     if (!code || !state) {
+        if (isOnboarding) {
+            return NextResponse.redirect(`${BASE_URL}/api/calendar/google/done?status=invalid`);
+        }
         return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=invalid`);
     }
 
@@ -66,15 +75,17 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        const successRedirect = returnUrl
-            ? `${BASE_URL}${returnUrl}?calendar_connected=google`
-            : `${BASE_URL}/diary/integrations?success=google`;
-        return NextResponse.redirect(successRedirect);
+        // For onboarding: show a simple "Done, close this window" page
+        if (isOnboarding) {
+            return NextResponse.redirect(`${BASE_URL}/api/calendar/google/done?status=ok&email=${encodeURIComponent(email)}`);
+        }
+
+        return NextResponse.redirect(`${BASE_URL}/diary/integrations?success=google`);
     } catch (err) {
         console.error('Google Calendar callback error:', err);
-        const errorRedirect = returnUrl
-            ? `${BASE_URL}${returnUrl}?calendar_error=google_failed`
-            : `${BASE_URL}/diary/integrations?error=google_failed`;
-        return NextResponse.redirect(errorRedirect);
+        if (isOnboarding) {
+            return NextResponse.redirect(`${BASE_URL}/api/calendar/google/done?status=error`);
+        }
+        return NextResponse.redirect(`${BASE_URL}/diary/integrations?error=google_failed`);
     }
 }
