@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, Us
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
+import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
 
 type Session = {
     id: string;
@@ -211,6 +212,9 @@ export default function DiaryCalendarPage() {
 
     return (
         <div className="space-y-8 pb-12">
+            {/* Welcome strip for new psychologists */}
+            <WelcomeStrip />
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                 <div>

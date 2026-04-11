@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { parseClientLines, type ParsedClient } from "@/lib/clients/parse"
 
 const METHODS = [
     "КПТ (Когнитивно-поведенческая терапия)",
@@ -45,6 +46,11 @@ export default function OnboardingPage() {
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [clientsText, setClientsText] = useState("")
+    const [isSavingClients, setIsSavingClients] = useState(false)
+
+    const parsedClients = useMemo<ParsedClient[]>(() => parseClientLines(clientsText), [clientsText])
+    const validParsedClients = parsedClients.filter(p => p.valid)
 
     // Derived states
     const hasSelectedMethods = formData.methods.length > 0 || formData.customMethod.trim() !== ""
@@ -65,7 +71,7 @@ export default function OnboardingPage() {
     }
 
     const nextStep = () => {
-        if (step < 6) setStep(step + 1)
+        if (step < 7) setStep(step + 1)
     }
 
     const prevStep = () => {
@@ -75,6 +81,30 @@ export default function OnboardingPage() {
     const skipOnboarding = () => {
         // We will just mark as verified and go to dashboard
         submitData()
+    }
+
+    const saveClientsAndContinue = async () => {
+        if (validParsedClients.length === 0) {
+            nextStep()
+            return
+        }
+        setIsSavingClients(true)
+        try {
+            const { bulkCreateClients } = await import("@/app/diary/actions/clients")
+            await bulkCreateClients(
+                validParsedClients.map(p => ({
+                    name: p.name,
+                    phone: p.phone,
+                    email: p.email,
+                }))
+            )
+            setClientsText("")
+            nextStep()
+        } catch {
+            nextStep()
+        } finally {
+            setIsSavingClients(false)
+        }
     }
 
     const submitData = async () => {
@@ -444,8 +474,80 @@ export default function OnboardingPage() {
         </div>
     )
 
-    // Step 6: Completion
+    // Step 6: First clients (optional)
     const renderStep6 = () => (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-white text-2xl font-bold mb-2">Первые клиенты</h2>
+            <p className="text-white/70 text-sm mb-6">
+                Вставьте клиентов списком — КОМПАС распознает имена, телефоны и email. Можно пропустить и добавить позже.
+            </p>
+
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-white/80 text-xs mb-2">
+                        Одна строка — один клиент. Формат: имя, телефон, email (в любом порядке)
+                    </label>
+                    <textarea
+                        value={clientsText}
+                        onChange={(e) => setClientsText(e.target.value)}
+                        rows={6}
+                        placeholder={"Анна Иванова, +79161234567, anna@example.com\nМихаил Петров; +79031112233\nОльга Смирнова"}
+                        className="w-full p-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/40 outline-none focus:border-white/40 focus:bg-white/15 transition-all text-sm font-mono resize-y"
+                    />
+                </div>
+
+                {parsedClients.length > 0 && (
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3 max-h-[180px] overflow-y-auto custom-scrollbar">
+                        <div className="text-xs font-semibold text-white/70 mb-2">
+                            Распознано: {validParsedClients.length} из {parsedClients.length}
+                        </div>
+                        <ul className="space-y-1.5">
+                            {parsedClients.slice(0, 8).map((p, i) => (
+                                <li key={i} className="flex items-center gap-2 text-xs">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${p.valid ? 'bg-[#c9a961]' : 'bg-amber-400'}`} />
+                                    {p.valid ? (
+                                        <span className="text-white/90 truncate">
+                                            {p.name}
+                                            {p.phone && <span className="text-white/50"> · {p.phone}</span>}
+                                            {p.email && <span className="text-white/50"> · {p.email}</span>}
+                                        </span>
+                                    ) : (
+                                        <span className="text-amber-300/80 truncate">{p.raw} — {p.error}</span>
+                                    )}
+                                </li>
+                            ))}
+                            {parsedClients.length > 8 && (
+                                <li className="text-xs text-white/50 italic">и ещё {parsedClients.length - 8}…</li>
+                            )}
+                        </ul>
+                    </div>
+                )}
+
+                <div className="flex gap-4 pt-2">
+                    <button
+                        onClick={prevStep}
+                        className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors"
+                    >
+                        Назад
+                    </button>
+                    <button
+                        onClick={saveClientsAndContinue}
+                        disabled={isSavingClients}
+                        className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-medium transition-colors"
+                    >
+                        {isSavingClients
+                            ? "Сохраняем..."
+                            : validParsedClients.length > 0
+                                ? `Добавить ${validParsedClients.length} и продолжить`
+                                : "Пропустить"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+
+    // Step 7: Completion
+    const renderStep7 = () => (
         <div className="animate-in zoom-in-95 duration-500 text-center">
             <div className="w-20 h-20 bg-[#c9a961] rounded-full mx-auto flex items-center justify-center mb-6">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -484,8 +586,8 @@ export default function OnboardingPage() {
                             </span>
                         </div>
 
-                        {/* Skip Button (except Step 1 & 6) */}
-                        {step > 1 && step < 6 && (
+                        {/* Skip Button (except Step 1 & final) */}
+                        {step > 1 && step < 7 && (
                             <button
                                 onClick={skipOnboarding}
                                 className="text-white/50 hover:text-white transition-colors text-sm font-medium"
@@ -495,10 +597,10 @@ export default function OnboardingPage() {
                         )}
                     </div>
 
-                    {/* Progress Indicator (Steps 1-5) */}
-                    {step < 6 && (
+                    {/* Progress Indicator (Steps 1-6) */}
+                    {step < 7 && (
                         <div className="flex gap-2 mb-8">
-                            {[1, 2, 4, 5].map((s, idx) => {
+                            {[1, 2, 4, 5, 6].map((s, idx) => {
                                 // Maps actual step number to UI indicators (since 2 and 3 are combined visually)
                                 const isActive = step >= s
                                 return (
@@ -516,6 +618,7 @@ export default function OnboardingPage() {
                         {step === 4 && renderStep4()}
                         {step === 5 && renderStep5()}
                         {step === 6 && renderStep6()}
+                        {step === 7 && renderStep7()}
                     </div>
                 </div>
 
