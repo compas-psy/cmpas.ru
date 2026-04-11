@@ -3,6 +3,9 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
+import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
+import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
+import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract-name';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -127,4 +130,121 @@ export async function updateSessionNotes(sessionId: string, notes: string) {
         data: { notes },
     });
     revalidatePath('/diary/clients');
+}
+
+// Массовое создание клиентов — из вставки списком или из сканирования календаря.
+// Пропускает дубликаты по имени (case-insensitive) в пределах существующих клиентов психолога.
+export async function bulkCreateClients(
+    items: { name: string; phone?: string; email?: string }[]
+): Promise<{ created: number; skipped: number }> {
+    const psychologistId = await getPsychologistId();
+    if (!Array.isArray(items) || items.length === 0) {
+        return { created: 0, skipped: 0 };
+    }
+
+    // Берём существующих, чтобы не плодить дубликаты
+    const existing = await db.diaryClient.findMany({
+        where: { psychologistId },
+        select: { name: true, phone: true, email: true },
+    });
+    const existingKeys = new Set(
+        existing.map(c => (c.name || '').trim().toLowerCase())
+    );
+    const existingPhones = new Set(
+        existing.map(c => (c.phone || '').replace(/\D/g, '')).filter(Boolean)
+    );
+    const existingEmails = new Set(
+        existing.map(c => (c.email || '').toLowerCase()).filter(Boolean)
+    );
+
+    let created = 0;
+    let skipped = 0;
+    const seenInBatch = new Set<string>();
+
+    for (const raw of items) {
+        const name = (raw.name || '').trim();
+        if (!name || name.length < 2) {
+            skipped++;
+            continue;
+        }
+        const key = name.toLowerCase();
+        if (seenInBatch.has(key) || existingKeys.has(key)) {
+            skipped++;
+            continue;
+        }
+        const phoneDigits = (raw.phone || '').replace(/\D/g, '');
+        if (phoneDigits && existingPhones.has(phoneDigits)) {
+            skipped++;
+            continue;
+        }
+        const emailLower = (raw.email || '').toLowerCase();
+        if (emailLower && existingEmails.has(emailLower)) {
+            skipped++;
+            continue;
+        }
+
+        await db.diaryClient.create({
+            data: {
+                psychologistId,
+                name,
+                phone: raw.phone || null,
+                email: raw.email || null,
+            },
+        });
+        seenInBatch.add(key);
+        if (phoneDigits) existingPhones.add(phoneDigits);
+        if (emailLower) existingEmails.add(emailLower);
+        created++;
+    }
+
+    revalidatePath('/diary');
+    revalidatePath('/diary/clients');
+    return { created, skipped };
+}
+
+// Сканирование подключённого календаря за N последних дней.
+// Возвращает кандидатов-клиентов (повторяющиеся имена из заголовков событий).
+export async function scanCalendarForClients(
+    integrationId: string,
+    days: number = 90
+): Promise<{ success: boolean; candidates?: CandidateClient[]; error?: string }> {
+    const psychologistId = await getPsychologistId();
+
+    const integration = await db.calendarIntegration.findFirst({
+        where: { id: integrationId, psychologistId, isActive: true },
+    });
+    if (!integration) {
+        return { success: false, error: 'Календарь не подключён или отключён' };
+    }
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    let result: { success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string };
+
+    if (integration.provider === 'google') {
+        result = await fetchGoogleCalendarEvents(integrationId, startDate, endDate);
+    } else if (integration.provider === 'yandex') {
+        result = await fetchYandexCalendarEvents(integrationId, startDate, endDate);
+    } else {
+        return { success: false, error: 'Неподдерживаемый провайдер' };
+    }
+
+    if (!result.success || !result.events) {
+        return { success: false, error: result.error || 'Не удалось получить события' };
+    }
+
+    const candidates = aggregateCandidates(result.events);
+    return { success: true, candidates };
+}
+
+// Список подключённых календарей — для UI импорта
+export async function getConnectedCalendars() {
+    const psychologistId = await getPsychologistId();
+    return db.calendarIntegration.findMany({
+        where: { psychologistId, isActive: true },
+        select: { id: true, provider: true, accountEmail: true },
+        orderBy: { createdAt: 'asc' },
+    });
 }

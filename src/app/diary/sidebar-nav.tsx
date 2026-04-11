@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, Clock, Link2, Settings, Bell } from 'lucide-react';
+import { Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -12,6 +12,10 @@ const navItems = [
     { href: '/diary/notifications', label: 'Уведомления', icon: Bell },
     { href: '/diary/integrations', label: 'Интеграции', icon: Link2 },
     { href: '/diary/settings', label: 'Настройки', icon: Settings },
+];
+
+const secondaryNavItems = [
+    { href: '/diary/help', label: 'Помощь', icon: HelpCircle },
 ];
 
 export function SidebarNav() {
@@ -57,6 +61,30 @@ export function SidebarNav() {
                     const isActive = item.href === '/diary'
                         ? pathname === '/diary'
                         : pathname?.startsWith(item.href);
+
+                    return (
+                        <li key={item.href}>
+                            <Link
+                                href={item.href}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm ${isActive
+                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
+                                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium'
+                                    }`}
+                            >
+                                <Icon className="w-5 h-5" strokeWidth={isActive ? 2 : 1.5} />
+                                <span>{item.label}</span>
+                            </Link>
+                        </li>
+                    );
+                })}
+            </ul>
+
+            <div className="my-4 mx-2 border-t border-sidebar-border/60" />
+
+            <ul className="space-y-1.5">
+                {secondaryNavItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = pathname?.startsWith(item.href);
 
                     return (
                         <li key={item.href}>

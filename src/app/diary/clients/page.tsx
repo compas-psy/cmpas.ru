@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
+import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -344,6 +345,75 @@ export default function ClientsPage() {
     }
 
     // ======================== MAIN LIST / DESKTOP ========================
+    const isEmptyState = !loading && clients.length === 0 && (statusFilter === 'active' || statusFilter === 'all') && !search;
+
+    if (isEmptyState) {
+        return (
+            <div className="space-y-6 max-w-4xl mx-auto">
+                <div>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Клиенты</h1>
+                    <p className="text-muted-foreground text-sm mt-2">
+                        Начните с быстрого наполнения — три способа на выбор.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button
+                        onClick={() => setShowNewClient(true)}
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all text-left flex flex-col items-start gap-3 active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                            <UserPlus className="w-6 h-6" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base mb-1">Добавить одного</h3>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                Имя, телефон, email. Для начала — самый простой способ.
+                            </p>
+                        </div>
+                    </button>
+                    <Link
+                        href="/diary/clients/import"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent-foreground group-hover:bg-accent group-hover:text-accent-foreground transition-all">
+                            <ClipboardPaste className="w-6 h-6" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base mb-1">Вставить списком</h3>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                Скопируйте клиентов из заметок или таблицы — мы разберём.
+                            </p>
+                        </div>
+                    </Link>
+                    <Link
+                        href="/diary/clients/import-calendar"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                            <CalendarClock className="w-6 h-6" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base mb-1">Из календаря</h3>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                Подтянем клиентов из Google или Яндекс Календаря.
+                            </p>
+                        </div>
+                    </Link>
+                </div>
+                <div className="text-center">
+                    <Link
+                        href="/diary/help/clients"
+                        className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                        Как это работает? →
+                    </Link>
+                </div>
+
+                {showNewClient && <NewClientModal newClient={newClient} setNewClient={setNewClient} onCreate={handleCreateClient} onClose={() => setShowNewClient(false)} />}
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -351,10 +421,15 @@ export default function ClientsPage() {
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Клиенты</h1>
                     <p className="text-muted-foreground text-sm mt-1">{clients.length} клиентов</p>
                 </div>
-                <button onClick={() => setShowNewClient(true)}
-                    className="flex items-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-all font-semibold self-start shadow-sm active:scale-[0.98]">
-                    <Plus className="w-4 h-4" /> Добавить
-                </button>
+                <div className="flex gap-2 self-start">
+                    <Link href="/diary/clients/import" className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-all font-medium text-sm" title="Вставить списком">
+                        <ClipboardPaste className="w-4 h-4" /> <span className="hidden sm:inline">Импорт</span>
+                    </Link>
+                    <button onClick={() => setShowNewClient(true)}
+                        className="flex items-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-all font-semibold shadow-sm active:scale-[0.98]">
+                        <Plus className="w-4 h-4" /> Добавить
+                    </button>
+                </div>
             </div>
 
             {/* Search + Filter */}
