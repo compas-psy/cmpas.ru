@@ -450,6 +450,7 @@ model PsychologistSettings {
   blockConflicts         Boolean @default(true)
   scheduleMode           String  @default("private") // private | readonly | booking
   onboardingCompleted    Boolean @default(false)
+  maxSessionsPerDay      Int?                     // Max sessions per day (null = unlimited)
 
   methods   String[] @default([])
   basePrice Int?

@@ -338,3 +338,79 @@ export async function checkBlockIntersections(startDate: string, endDate: string
         return { success: false, error: e.message || 'Ошибка при проверке пересечений' };
     }
 }
+
+/**
+ * Create a single manual slot for a specific day of week.
+ * Used by the visual timeline for click-to-add.
+ */
+export async function createManualSlot(data: {
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    duration?: number;
+    format?: string;
+    addressId?: string | null;
+    startDate: string;
+    endDate: string;
+}) {
+    try {
+        const psychologistId = await getPsychologistId();
+
+        // Load settings for defaults
+        const settings = await db.psychologistSettings.findUnique({
+            where: { psychologistId },
+        });
+
+        const duration = data.duration || settings?.defaultSessionDuration || 50;
+
+        // Check for overlaps
+        const existing = await db.availabilitySlot.findMany({
+            where: { psychologistId, isActive: true, dayOfWeek: data.dayOfWeek },
+        });
+
+        const [newStartH, newStartM] = data.startTime.split(':').map(Number);
+        const [newEndH, newEndM] = data.endTime.split(':').map(Number);
+        const newStartMins = newStartH * 60 + newStartM;
+        const newEndMins = newEndH * 60 + newEndM;
+
+        for (const slot of existing) {
+            const [exStartH, exStartM] = slot.startTime.split(':').map(Number);
+            const [exEndH, exEndM] = slot.endTime.split(':').map(Number);
+            const exStartMins = exStartH * 60 + exStartM;
+            const exEndMins = exEndH * 60 + exEndM;
+
+            // Check date overlap
+            const slotStart = slot.startDate ? slot.startDate.getTime() : 0;
+            const slotEnd = slot.endDate ? slot.endDate.getTime() : Infinity;
+            const newStart = new Date(data.startDate).getTime();
+            const newEnd = new Date(data.endDate).getTime();
+            if (newStart > slotEnd || newEnd < slotStart) continue;
+
+            if (newStartMins < exEndMins && newEndMins > exStartMins) {
+                throw new Error('Это время уже занято');
+            }
+        }
+
+        const created = await db.availabilitySlot.create({
+            data: {
+                psychologistId,
+                dayOfWeek: data.dayOfWeek,
+                startTime: data.startTime,
+                endTime: data.endTime,
+                duration,
+                format: data.format || 'online',
+                addressId: data.addressId || null,
+                isRecurring: true,
+                startDate: new Date(data.startDate),
+                endDate: new Date(data.endDate),
+                isActive: true,
+            },
+        });
+
+        revalidatePath('/diary/availability');
+        return { success: true, data: created };
+    } catch (e: any) {
+        console.error('[Availability] createManualSlot error:', e);
+        return { success: false, error: e.message || 'Ошибка при создании слота' };
+    }
+}
