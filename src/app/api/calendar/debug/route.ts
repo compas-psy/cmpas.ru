@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
+import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { extractClientNameFromSummary, aggregateCandidates } from '@/lib/clients/extract-name';
+import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 
 export async function GET(request: NextRequest) {
     const session = await auth();
@@ -10,87 +12,65 @@ export async function GET(request: NextRequest) {
     }
 
     const psychologistId = session.user.id;
+    const days = parseInt(request.nextUrl.searchParams.get('days') || '90');
     const now = new Date();
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 90);
+    startDate.setDate(startDate.getDate() - days);
 
-    // Get all integrations for this user
     const integrations = await db.calendarIntegration.findMany({
-        where: { psychologistId },
+        where: { psychologistId, isActive: true },
     });
 
     const results = [];
 
     for (const integration of integrations) {
-        const tokenInfo = {
-            hasAccessToken: !!integration.accessToken,
-            hasRefreshToken: !!integration.refreshToken,
-            tokenExpiry: integration.tokenExpiry,
-            isExpired: integration.tokenExpiry
-                ? integration.tokenExpiry < new Date()
-                : null,
-            expiresInMinutes: integration.tokenExpiry
-                ? Math.round((integration.tokenExpiry.getTime() - Date.now()) / 60000)
-                : null,
-        };
+        let eventsResult: any;
 
-        // Try to fetch events via API
-        const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
-        const params = new URLSearchParams({
-            timeMin: startDate.toISOString(),
-            timeMax: now.toISOString(),
-            singleEvents: 'true',
-            orderBy: 'startTime',
-            showDeleted: 'false',
-            maxResults: '200',
-        });
-
-        let apiStatus: any = null;
-        let rawEvents: any[] = [];
-        let sampleNames: { summary: string; extracted: string | null }[] = [];
-        let candidates: any[] = [];
-
-        if (integration.accessToken) {
-            try {
-                const res = await fetch(
-                    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId || 'primary')}/events?${params}`,
-                    { headers: { Authorization: `Bearer ${integration.accessToken}` } }
-                );
-                const body = await res.json();
-                apiStatus = { status: res.status, ok: res.ok, error: body.error };
-                if (res.ok) {
-                    rawEvents = (body.items || []).slice(0, 50);
-                    sampleNames = rawEvents.slice(0, 20).map((e: any) => ({
-                        summary: e.summary || '(no summary)',
-                        extracted: extractClientNameFromSummary(e.summary),
-                    }));
-                    // Run aggregation on ALL events
-                    const allEvents = body.items || [];
-                    const mappedEvents = allEvents
-                        .filter((e: any) => e.status !== 'cancelled' && e.summary)
-                        .map((e: any) => ({
-                            summary: e.summary,
-                            start: new Date(e.start?.dateTime || e.start?.date || 0),
-                            end: new Date(e.end?.dateTime || e.end?.date || 0),
-                        }));
-                    candidates = aggregateCandidates(mappedEvents);
-                }
-            } catch (e: any) {
-                apiStatus = { error: e.message };
-            }
+        if (integration.provider === 'google') {
+            eventsResult = await fetchGoogleCalendarEvents(integration.id, startDate, now);
+        } else if (integration.provider === 'yandex') {
+            eventsResult = await fetchYandexCalendarEvents(integration.id, startDate, now);
+        } else {
+            results.push({ provider: integration.provider, error: 'Unsupported' });
+            continue;
         }
+
+        if (!eventsResult.success || !eventsResult.events) {
+            results.push({
+                provider: integration.provider,
+                accountEmail: integration.accountEmail,
+                error: eventsResult.error,
+            });
+            continue;
+        }
+
+        const events = eventsResult.events;
+
+        // Show ALL summaries with extraction results
+        const allSummaries = events.map((e: any) => ({
+            summary: e.summary,
+            extracted: extractClientNameFromSummary(e.summary),
+            start: e.start,
+        }));
+
+        // Show what names were extracted
+        const extractedNames = allSummaries.filter((s: any) => s.extracted !== null);
+        const failedExtractions = allSummaries.filter((s: any) => s.extracted === null);
+
+        // Run aggregation
+        const candidates = aggregateCandidates(events);
 
         results.push({
             provider: integration.provider,
-            calendarId: integration.calendarId,
             accountEmail: integration.accountEmail,
-            tokenInfo,
-            apiStatus,
-            totalRawEvents: rawEvents.length,
-            sampleNames,
+            totalEvents: events.length,
+            extractedNames: extractedNames.length,
+            failedExtractions: failedExtractions.length,
             candidates,
+            // Show ALL summaries so we can debug what's failing
+            allSummaries: allSummaries.slice(0, 100),
         });
     }
 
-    return NextResponse.json({ psychologistId, results });
+    return NextResponse.json({ psychologistId, days, results }, { status: 200 });
 }
