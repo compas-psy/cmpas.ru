@@ -54,13 +54,17 @@ export default function OnboardingPage() {
 
     // Calendar connection state
     const [googleConnected, setGoogleConnected] = useState(false)
+    const [yandexConnected, setYandexConnected] = useState(false)
+    const [showYandexForm, setShowYandexForm] = useState(false)
+    const [yandexLogin, setYandexLogin] = useState('')
+    const [yandexPassword, setYandexPassword] = useState('')
+    const [yandexConnecting, setYandexConnecting] = useState(false)
+    const [yandexError, setYandexError] = useState('')
 
     // Check if we're returning from a calendar connection
-    // We can't use useSearchParams directly in a sync way, so we check window.location
     useEffect(() => {
         if (typeof window !== 'undefined' && window.location.search.includes('calendar_connected=google')) {
             setGoogleConnected(true)
-            // Clean the URL without reloading
             const url = new URL(window.location.href)
             url.searchParams.delete('calendar_connected')
             window.history.replaceState({}, '', url.toString())
@@ -78,13 +82,35 @@ export default function OnboardingPage() {
         const timer = setInterval(() => {
             if (popup.closed) {
                 clearInterval(timer)
-                // Check if connection succeeded by polling
                 fetch('/api/onboarding/progress', { cache: 'no-store' })
                     .then(r => r.json())
                     .then(d => { if (d.calendarConnected) setGoogleConnected(true) })
                     .catch(() => {})
             }
         }, 500)
+    }
+
+    const handleYandexConnect = async () => {
+        if (!yandexLogin || !yandexPassword) return
+        setYandexConnecting(true)
+        setYandexError('')
+        try {
+            const res = await fetch('/api/calendar/yandex/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ login: yandexLogin, password: yandexPassword }),
+            })
+            const data = await res.json()
+            if (data.success) {
+                setYandexConnected(true)
+                setShowYandexForm(false)
+            } else {
+                setYandexError(data.error || 'Ошибка подключения')
+            }
+        } catch {
+            setYandexError('Ошибка сети')
+        }
+        setYandexConnecting(false)
     }
 
     // Derived states
@@ -482,7 +508,8 @@ export default function OnboardingPage() {
                 Подключите ваш текущий календарь, чтобы мы могли отображать ваши личные события и не допускали накладок в расписании.
             </p>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
+                {/* Google Calendar */}
                 <button
                     type="button"
                     onClick={handleGoogleConnect}
@@ -506,28 +533,71 @@ export default function OnboardingPage() {
                     </span>
                 </button>
 
-                <button
-                    type="button"
-                    onClick={() => {
-                        window.open('/diary/integrations?from=onboarding', '_blank', 'width=600,height=700');
-                    }}
-                    className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform text-left"
-                >
-                    <div className="flex items-center gap-4">
-                        <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={32} height={32} className="w-8 h-8 rounded" />
-                        <div>
-                            <span className="text-[#1a1a1a] font-medium block">Яндекс Календарь</span>
-                            <span className="text-[#1a1a1a]/50 text-xs">Настройка через CalDAV</span>
+                {/* Yandex Calendar - inline form */}
+                <div className="w-full bg-white rounded-2xl overflow-hidden">
+                    <button
+                        type="button"
+                        onClick={() => { if (!yandexConnected) setShowYandexForm(v => !v) }}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"
+                    >
+                        <div className="flex items-center gap-4">
+                            <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={32} height={32} className="w-8 h-8 rounded" />
+                            <div>
+                                <span className="text-[#1a1a1a] font-medium block">Яндекс Календарь</span>
+                                {yandexConnected
+                                    ? <span className="text-emerald-600 text-xs font-semibold">✓ Подключено</span>
+                                    : <span className="text-[#1a1a1a]/50 text-xs">Настройка через CalDAV</span>
+                                }
+                            </div>
                         </div>
-                    </div>
-                    <span className="text-[#1a4d3a] text-sm font-medium px-4 py-2 bg-[#1a4d3a]/10 rounded-xl">Настроить</span>
-                </button>
+                        <span className={`text-sm font-medium px-4 py-2 rounded-xl ${
+                            yandexConnected
+                                ? 'text-emerald-700 bg-emerald-50'
+                                : 'text-[#1a4d3a] bg-[#1a4d3a]/10'
+                        }`}>
+                            {yandexConnected ? 'Подключено ✓' : showYandexForm ? 'Скрыть' : 'Настроить'}
+                        </span>
+                    </button>
+
+                    {showYandexForm && !yandexConnected && (
+                        <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
+                            <p className="text-xs text-gray-500 pt-3">
+                                Создайте <a href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noreferrer" className="text-blue-600 underline font-medium">пароль приложения</a> типа «Календарь» в Яндекс ID и введите его ниже.
+                            </p>
+                            <input
+                                type="email"
+                                value={yandexLogin}
+                                onChange={e => setYandexLogin(e.target.value)}
+                                placeholder="user@yandex.ru"
+                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4d3a]/30"
+                            />
+                            <input
+                                type="password"
+                                value={yandexPassword}
+                                onChange={e => setYandexPassword(e.target.value)}
+                                placeholder="Пароль приложения"
+                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4d3a]/30"
+                            />
+                            {yandexError && (
+                                <p className="text-red-500 text-xs">{yandexError}</p>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleYandexConnect}
+                                disabled={yandexConnecting || !yandexLogin || !yandexPassword}
+                                className="w-full py-2.5 bg-[#1a4d3a] text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                            >
+                                {yandexConnecting ? 'Подключаю...' : 'Подключить'}
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 <p className="text-white/40 text-xs text-center">
                     Вы сможете подключить или изменить календари позже в Настройках → Интеграции
                 </p>
 
-                <div className="flex gap-4 pt-4">
+                <div className="flex gap-4 pt-2">
                     <button onClick={prevStep} className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors">Назад</button>
                     <button onClick={nextStep} className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] rounded-2xl text-[#1a4d3a] font-medium transition-colors">
                         Далее (или пропустить)
