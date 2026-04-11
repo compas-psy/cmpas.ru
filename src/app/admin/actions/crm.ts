@@ -258,7 +258,7 @@ export async function getUserDetailsFull(userId: string) {
         db.userNote.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 10 }),
         db.auditLog.findMany({
             where: { userId },
-            orderBy: { timestamp: 'desc' },
+            orderBy: { createdAt: 'desc' },
             take: 5,
         }),
         db.adminActionLog.findMany({

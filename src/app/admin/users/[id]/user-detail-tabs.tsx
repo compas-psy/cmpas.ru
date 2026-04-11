@@ -153,7 +153,7 @@ function OverviewTab({ user, onNavigate }: { user: any; onNavigate: (t: TabKey) 
                     <div className="space-y-3">
                         {[...user._recentAudit.map((a: any) => ({
                             type: 'audit',
-                            date: a.timestamp,
+                            date: a.createdAt,
                             text: auditLabel(a.action),
                             ip: a.ipAddress,
                         })), ...user._recentAdminActions.map((a: any) => ({
@@ -573,7 +573,7 @@ function ActivityTab({ user }: { user: any }) {
     // Combine both audit and admin logs
     const events = [
         ...user._recentAudit.map((a: any) => ({
-            type: 'auth' as const, date: a.timestamp, action: a.action,
+            type: 'auth' as const, date: a.createdAt, action: a.action,
             text: auditLabel(a.action), ip: a.ipAddress, ua: a.userAgent,
         })),
         ...user._recentAdminActions.map((a: any) => ({
