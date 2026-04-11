@@ -87,6 +87,14 @@ export default function AvailabilityPage() {
     const [showExpired, setShowExpired] = useState(false);
     const [hoveredCell, setHoveredCell] = useState<{ day: number; time: string } | null>(null);
 
+    // Quick-add popover state
+    type QuickSlot = {
+        day: number; time: string; posX: number; posY: number;
+        duration: number; format: string;
+        startDate: string; endDate: string;
+    };
+    const [quickSlot, setQuickSlot] = useState<QuickSlot | null>(null);
+
     const initialSlot = {
         startDate: '', endDate: '',
         daysOfWeek: [] as number[],
@@ -190,25 +198,39 @@ export default function AvailabilityPage() {
         } catch { toast.error('Ошибка'); }
     };
 
-    const handleClickTimeline = async (day: number, time: string) => {
-        const endTime = addMinutes(time, settings.defaultSessionDuration);
-        // Default date range: today + 90 days
+    const handleClickTimeline = (day: number, time: string, e: React.MouseEvent) => {
+        // Open inline popover instead of auto-creating
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const startDate = new Date();
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + 90);
+        setQuickSlot({
+            day, time,
+            posX: rect.left + rect.width / 2,
+            posY: rect.top + (e.clientY - rect.top),
+            duration: settings.defaultSessionDuration,
+            format: 'online',
+            startDate: startDate.toISOString().split('T')[0],
+            endDate: endDate.toISOString().split('T')[0],
+        });
+    };
 
+    const confirmQuickSlot = async () => {
+        if (!quickSlot) return;
+        const endTime = addMinutes(quickSlot.time, quickSlot.duration);
         try {
             const res = await createManualSlot({
-                dayOfWeek: day,
-                startTime: time,
+                dayOfWeek: quickSlot.day,
+                startTime: quickSlot.time,
                 endTime,
-                duration: settings.defaultSessionDuration,
-                format: 'online',
-                startDate: startDate.toISOString().split('T')[0],
-                endDate: endDate.toISOString().split('T')[0],
+                duration: quickSlot.duration,
+                format: quickSlot.format,
+                startDate: quickSlot.startDate,
+                endDate: quickSlot.endDate,
             });
             if (res.success) {
-                toast.success(`${DAY_LABELS[day]} ${time}–${endTime}`);
+                toast.success(`${DAY_LABELS[quickSlot.day]} ${quickSlot.time}–${endTime}`);
+                setQuickSlot(null);
                 fetchData();
             } else {
                 toast.error(res.error || 'Ошибка');
@@ -508,7 +530,7 @@ export default function AvailabilityPage() {
                                             const rect = e.currentTarget.getBoundingClientRect();
                                             const y = e.clientY - rect.top;
                                             const time = yToTime(y);
-                                            handleClickTimeline(dayIndex, time);
+                                            handleClickTimeline(dayIndex, time, e);
                                         }}
                                     >
                                         {/* Hour grid lines */}
@@ -534,6 +556,8 @@ export default function AvailabilityPage() {
                                             const bottom = timeToY(slot.endTime);
                                             const height = bottom - top;
                                             const isUpcoming = slot.startDate && new Date(slot.startDate) > today;
+                                            const dateFrom = slot.startDate ? new Date(slot.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
+                                            const dateTo = slot.endDate ? new Date(slot.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
 
                                             return (
                                                 <div
@@ -545,7 +569,7 @@ export default function AvailabilityPage() {
                                                     }`}
                                                     style={{ top, height: Math.max(height, 28) }}
                                                     onClick={(e) => { e.stopPropagation(); setEditingSlot(slot); }}
-                                                    title={`${slot.startTime}–${slot.endTime} · ${slot.duration} мин`}
+                                                    title={`${slot.startTime}–${slot.endTime} · ${slot.duration} мин · ${dateFrom} – ${dateTo}`}
                                                 >
                                                     <div className={`text-[11px] font-bold leading-tight ${isUpcoming ? 'text-amber-700' : 'text-primary'}`}>
                                                         {slot.startTime}–{slot.endTime}
@@ -553,6 +577,14 @@ export default function AvailabilityPage() {
                                                     {height > 35 && (
                                                         <div className="text-[9px] text-muted-foreground font-medium mt-0.5">
                                                             {slot.duration}′ · {slot.format === 'offline' ? '🏢' : slot.format === 'both' ? '🖥️+🏢' : '🖥️'}
+                                                        </div>
+                                                    )}
+                                                    {/* Date range badge */}
+                                                    {height > 60 && dateFrom && dateTo && (
+                                                        <div className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-md inline-block font-semibold ${
+                                                            isUpcoming ? 'bg-amber-100/80 text-amber-600' : 'bg-primary/10 text-primary/60'
+                                                        }`}>
+                                                            {dateFrom} – {dateTo}
                                                         </div>
                                                     )}
                                                     {/* Delete button */}
@@ -620,6 +652,108 @@ export default function AvailabilityPage() {
                     <span className="ml-auto">Кликните на пустое место → новый слот</span>
                 </div>
             </div>
+
+            {/* ── Quick-Add Popover ── */}
+            {quickSlot && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setQuickSlot(null)} />
+                    <div
+                        className="fixed z-50 bg-card rounded-2xl border border-border shadow-2xl p-4 w-72 animate-in fade-in slide-in-from-top-2 duration-200"
+                        style={{
+                            left: Math.min(quickSlot.posX - 144, window.innerWidth - 300),
+                            top: Math.min(quickSlot.posY + 8, window.innerHeight - 380),
+                        }}
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <div>
+                                <div className="text-sm font-bold text-foreground">
+                                    {DAY_LABELS_FULL[quickSlot.day]}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    {quickSlot.time} – {addMinutes(quickSlot.time, quickSlot.duration)}
+                                </div>
+                            </div>
+                            <button onClick={() => setQuickSlot(null)} className="p-1 hover:bg-muted rounded-lg transition-colors">
+                                <X className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                        </div>
+
+                        {/* Duration pills */}
+                        <div className="mb-3">
+                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Длительность</label>
+                            <div className="flex gap-1">
+                                {[50, 60, 80, 90].map(d => (
+                                    <button
+                                        key={d}
+                                        onClick={() => setQuickSlot(q => q ? { ...q, duration: d } : q)}
+                                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            quickSlot.duration === d
+                                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                        }`}
+                                    >
+                                        {d}′
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Format pills */}
+                        <div className="mb-3">
+                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Формат</label>
+                            <div className="flex gap-1">
+                                {[
+                                    { v: 'online', l: '🖥️ Онлайн' },
+                                    { v: 'offline', l: '🏢 Кабинет' },
+                                    { v: 'both', l: '🔄 Оба' },
+                                ].map(f => (
+                                    <button
+                                        key={f.v}
+                                        onClick={() => setQuickSlot(q => q ? { ...q, format: f.v } : q)}
+                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                            quickSlot.format === f.v
+                                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                        }`}
+                                    >
+                                        {f.l}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Date range */}
+                        <div className="mb-4">
+                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Действует</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <input
+                                        type="date"
+                                        value={quickSlot.startDate}
+                                        onChange={e => setQuickSlot(q => q ? { ...q, startDate: e.target.value } : q)}
+                                        className="w-full text-xs px-2 py-2 border border-border rounded-xl bg-background focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <input
+                                        type="date"
+                                        value={quickSlot.endDate}
+                                        onChange={e => setQuickSlot(q => q ? { ...q, endDate: e.target.value } : q)}
+                                        className="w-full text-xs px-2 py-2 border border-border rounded-xl bg-background focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={confirmQuickSlot}
+                            className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm active:scale-[0.97]"
+                        >
+                            Добавить слот
+                        </button>
+                    </div>
+                </>
+            )}
 
             {/* ── Mobile Card View ── */}
             <div className="md:hidden space-y-3">
