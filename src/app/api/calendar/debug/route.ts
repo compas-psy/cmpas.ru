@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         let eventsResult: any;
 
         if (integration.provider === 'google') {
-            eventsResult = await fetchGoogleCalendarEvents(integration.id, startDate, now);
+            eventsResult = await fetchGoogleCalendarEvents(integration.id, startDate, now, { includeCompasEvents: true });
         } else if (integration.provider === 'yandex') {
             eventsResult = await fetchYandexCalendarEvents(integration.id, startDate, now);
         } else {

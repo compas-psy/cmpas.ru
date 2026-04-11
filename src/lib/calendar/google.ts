@@ -345,7 +345,8 @@ export async function syncAllSessionsToGoogle(
 export async function fetchGoogleCalendarEvents(
     integrationId: string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    options?: { includeCompasEvents?: boolean }
 ): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
@@ -382,7 +383,13 @@ export async function fetchGoogleCalendarEvents(
         const items = data.items || [];
 
         const events = items
-            .filter((item: any) => item.status !== 'cancelled' && !item.extendedProperties?.private?.compasSessionId) // skip cancelled and КОМПАС-synced sessions
+            .filter((item: any) => {
+                if (item.status === 'cancelled') return false;
+                // When scanning for clients, include КОМПАС-synced events (they contain client names!)
+                // When checking for conflicts/busy times, exclude them
+                if (!options?.includeCompasEvents && item.extendedProperties?.private?.compasSessionId) return false;
+                return true;
+            })
             .map((item: any) => {
                 let start, end;
                 if (item.start.dateTime) {

@@ -224,7 +224,7 @@ export async function scanCalendarForClients(
     let result: { success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string };
 
     if (integration.provider === 'google') {
-        result = await fetchGoogleCalendarEvents(integrationId, startDate, endDate);
+        result = await fetchGoogleCalendarEvents(integrationId, startDate, endDate, { includeCompasEvents: true });
     } else if (integration.provider === 'yandex') {
         result = await fetchYandexCalendarEvents(integrationId, startDate, endDate);
     } else {
