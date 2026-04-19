@@ -215,6 +215,229 @@ export default function DiaryCalendarPage() {
             {/* Welcome strip for new psychologists */}
             <WelcomeStrip />
 
+            {/* ── Now Card + Attention Inbox ── */}
+            {(() => {
+                const now = new Date();
+                const todaySessions = sessions.filter(s => {
+                    const d = new Date(s.date);
+                    return isSameDay(d, now) && s.status !== 'cancelled';
+                }).sort((a, b) => a.time.localeCompare(b.time));
+
+                // Find next upcoming session (today, time > now)
+                const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                const nextSession = todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed');
+                const completedToday = todaySessions.filter(s => s.status === 'completed').length;
+                const remainingToday = todaySessions.filter(s => s.time >= currentTimeStr && s.status !== 'completed').length;
+
+                // Minutes until next session
+                const getMinutesUntil = (timeStr: string) => {
+                    const [h, m] = timeStr.split(':').map(Number);
+                    return (h * 60 + m) - (now.getHours() * 60 + now.getMinutes());
+                };
+
+                // Attention items
+                const pendingSessions = sessions.filter(s => s.status === 'pending');
+                const completedWithoutNotes = sessions.filter(s => {
+                    if (s.status !== 'completed') return false;
+                    const d = new Date(s.date);
+                    if (d > now) return false; // future sessions not yet relevant
+                    const daysDiff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+                    if (daysDiff > 14) return false; // older than 2 weeks — skip
+                    return !s.notes && !s.structuredNotes;
+                });
+                const attentionCount = pendingSessions.length + completedWithoutNotes.length;
+
+                return (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* Now Card — spans 2 cols */}
+                        <div className="lg:col-span-2">
+                            {nextSession ? (() => {
+                                const client = clients.find(c => c.id === nextSession.clientId);
+                                const clientName = nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).fullName
+                                    ? (nextSession.client.questionnaire.data as any).fullName
+                                    : (client?.name || nextSession.client?.name || 'Клиент');
+                                const minutesUntil = getMinutesUntil(nextSession.time);
+                                const isVeryClose = minutesUntil <= 15;
+                                const isStartingSoon = minutesUntil <= 5;
+
+                                return (
+                                    <div className={`relative bg-card rounded-3xl border shadow-sm overflow-hidden transition-all ${isStartingSoon ? 'border-primary/40 shadow-primary/10' : 'border-border'}`}>
+                                        {/* Subtle gradient accent */}
+                                        <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent pointer-events-none" />
+
+                                        <div className="relative p-5 md:p-6">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    {/* Label */}
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isStartingSoon ? 'text-primary animate-pulse' : 'text-muted-foreground'}`}>
+                                                            {isStartingSoon ? '● Сейчас начнётся' : 'Следующая сессия'}
+                                                        </span>
+                                                        {completedToday > 0 && (
+                                                            <span className="text-[10px] text-muted-foreground/50 font-medium">
+                                                                · {completedToday} проведено
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Client name */}
+                                                    <button
+                                                        onClick={() => window.location.href = `/diary/clients?clientId=${nextSession.client?.id || nextSession.clientId}`}
+                                                        className="text-xl md:text-2xl font-bold text-foreground hover:text-primary transition-colors text-left truncate block max-w-full"
+                                                    >
+                                                        {clientName}
+                                                    </button>
+
+                                                    {/* Time + format */}
+                                                    <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground font-medium">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <Clock className="w-4 h-4" />
+                                                            {nextSession.time} – {nextSession.endTime || ''}
+                                                        </span>
+                                                        <span>·</span>
+                                                        <span className="flex items-center gap-1.5">
+                                                            {nextSession.format === 'online'
+                                                                ? <><Video className="w-4 h-4" /> Онлайн</>
+                                                                : <><MapPin className="w-4 h-4" /> Офлайн</>
+                                                            }
+                                                        </span>
+                                                        <span>·</span>
+                                                        <span>{nextSession.duration} мин</span>
+                                                    </div>
+
+                                                    {/* Actions */}
+                                                    <div className="flex flex-wrap gap-2 mt-4">
+                                                        <button
+                                                            onClick={() => setEditingSession(nextSession)}
+                                                            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold shadow-sm hover:bg-primary/90 transition-all active:scale-[0.97]"
+                                                        >
+                                                            Заметки сессии
+                                                        </button>
+                                                        {nextSession.format === 'online' && settings?.onlineSessionLink && (
+                                                            <a
+                                                                href={settings.onlineSessionLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="px-4 py-2 bg-accent/10 text-accent rounded-xl text-xs font-bold hover:bg-accent/20 transition-all active:scale-[0.97]"
+                                                            >
+                                                                Подключиться ↗
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Timer badge */}
+                                                <div className={`shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center ${isVeryClose ? 'bg-primary/10 border-2 border-primary/30' : 'bg-muted/30 border border-border/50'}`}>
+                                                    <span className={`text-2xl font-bold leading-none ${isVeryClose ? 'text-primary' : 'text-foreground'}`}>
+                                                        {minutesUntil > 0 ? minutesUntil : 0}
+                                                    </span>
+                                                    <span className={`text-[10px] font-semibold mt-0.5 ${isVeryClose ? 'text-primary/70' : 'text-muted-foreground'}`}>
+                                                        мин
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Today progress bar */}
+                                            {todaySessions.length > 1 && (
+                                                <div className="mt-4 pt-4 border-t border-border/50">
+                                                    <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground mb-1.5">
+                                                        <span>Сегодня</span>
+                                                        <span>{completedToday} из {todaySessions.length}</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-primary/60 rounded-full transition-all duration-500"
+                                                            style={{ width: `${todaySessions.length > 0 ? (completedToday / todaySessions.length) * 100 : 0}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })() : (
+                                /* No next session — free time card */
+                                <div className="bg-card rounded-3xl border border-border p-5 md:p-6 shadow-sm">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 bg-accent/10 rounded-2xl flex items-center justify-center shrink-0">
+                                            <Sparkles className="w-7 h-7 text-accent" />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Сегодня</div>
+                                            <div className="text-lg font-bold text-foreground">
+                                                {todaySessions.length === 0 ? 'Свободный день' : `${completedToday} из ${todaySessions.length} сессий проведено`}
+                                            </div>
+                                            <div className="text-sm text-muted-foreground mt-0.5 font-medium">
+                                                {todaySessions.length === 0
+                                                    ? 'Нет запланированных сессий'
+                                                    : 'Все сессии на сегодня завершены ✓'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Attention Inbox */}
+                        <div>
+                            <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden h-full">
+                                <div className="p-4 border-b border-border/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${attentionCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-muted/50 text-muted-foreground/50'}`}>
+                                            <AlertTriangle className="w-4 h-4" />
+                                        </div>
+                                        <span className="text-sm font-bold text-foreground">Внимание</span>
+                                    </div>
+                                    {attentionCount > 0 && (
+                                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md">{attentionCount}</span>
+                                    )}
+                                </div>
+                                <div className="p-3 space-y-1.5 max-h-48 overflow-auto">
+                                    {attentionCount === 0 ? (
+                                        <div className="text-center py-4">
+                                            <div className="text-sm text-muted-foreground/50 font-medium">Всё в порядке ✓</div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {pendingSessions.map(s => (
+                                                <button
+                                                    key={`pending-${s.id}`}
+                                                    onClick={() => setEditingSession(s)}
+                                                    className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left group"
+                                                >
+                                                    <div className="w-6 h-6 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                                                        <Clock className="w-3 h-3" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div>
+                                                        <div className="text-[10px] text-muted-foreground">Ожидает подтверждения · {s.time}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {completedWithoutNotes.map(s => (
+                                                <button
+                                                    key={`notes-${s.id}`}
+                                                    onClick={() => setEditingSession(s)}
+                                                    className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left group"
+                                                >
+                                                    <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                                                        <FileText className="w-3 h-3" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div>
+                                                        <div className="text-[10px] text-muted-foreground">Нет заметок · {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                 <div>
