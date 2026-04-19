@@ -3,18 +3,7 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
-
-// Fixed color palette for schedule rules
-export const RULE_COLORS = [
-    '#4F46E5', // Indigo
-    '#0891B2', // Cyan
-    '#059669', // Emerald
-    '#D97706', // Amber
-    '#DC2626', // Red
-    '#7C3AED', // Violet
-    '#DB2777', // Pink
-    '#2563EB', // Blue
-] as const;
+import { RULE_COLORS } from './schedule-constants';
 
 async function getPsychologistId() {
     const session = await auth();

@@ -28,8 +28,8 @@ import {
     deleteScheduleRule,
     cloneScheduleRule,
     migrateOrphanSlots,
-    RULE_COLORS,
 } from '../actions/schedule-rules';
+import { RULE_COLORS } from '../actions/schedule-constants';
 import {
     getAvailableDates,
     getAvailableTimes,
