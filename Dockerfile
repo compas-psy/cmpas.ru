@@ -27,7 +27,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 
 # Limit Node.js memory to prevent OOM on small servers
-ENV NODE_OPTIONS="--max-old-space-size=512"
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
 RUN npx prisma generate
 RUN npm run build
