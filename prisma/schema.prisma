@@ -390,21 +390,21 @@ model AvailabilitySlot {
   dayOfWeek      Int // 0=Mon ... 6=Sun
   startTime      String // "09:00"
   endTime        String // "13:00"
-  duration       Int       @default(50)
-  format         String    @default("online") // online, offline, both
+  duration       Int?      @default(50)
+  format         String?   @default("online") // online, offline, both
   addressId      String? // nullable reference to a PsychologistAddress
   isRecurring    Boolean   @default(true)
   startDate      DateTime?
   endDate        DateTime?
   isActive       Boolean   @default(true)
-  scheduleRuleId String?   // Link to grouping rule (nullable for backward compat)
+  scheduleRuleId String? // Link to grouping rule (nullable for backward compat)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   psychologist User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   address      PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  scheduleRule ScheduleRule?         @relation(fields: [scheduleRuleId], references: [id], onDelete: SetNull)
+  scheduleRule ScheduleRule?        @relation(fields: [scheduleRuleId], references: [id], onDelete: SetNull)
 
   @@index([psychologistId])
   @@index([dayOfWeek])
@@ -413,12 +413,21 @@ model AvailabilitySlot {
 
 // Grouping layer: named schedule rules (e.g. "Main Schedule", "Summer")
 model ScheduleRule {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   psychologistId String
-  name           String   // "Основное расписание", "Летнее"
-  priority       Int      @default(0)
-  isActive       Boolean  @default(true)
-  color          String?  // Hex color for UI tagging
+  name           String // "Основное расписание", "Летнее"
+  priority       Int     @default(0)
+  isActive       Boolean @default(true)
+  color          String? // Hex color for UI tagging
+
+  // Настройки самого правила (действуют на все слоты)
+  format         String    @default("online")
+  addressId      String?
+  duration       Int       @default(50)
+  breakDuration  Int       @default(15)
+  audienceFilter String    @default("all") // "all", "new", "regular"
+  startDate      DateTime?
+  endDate        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -496,7 +505,9 @@ model PsychologistSettings {
   blockConflicts         Boolean @default(true)
   scheduleMode           String  @default("private") // private | readonly | booking
   onboardingCompleted    Boolean @default(false)
-  maxSessionsPerDay      Int?                     // Max sessions per day (null = unlimited)
+  maxSessionsPerDay      Int? // Max sessions per day (null = unlimited)
+  bookingBufferHours     Int     @default(24) // Запись минимум за N часов
+  bookingHorizonDays     Int     @default(14) // Максимальный горизонт записи в днях
 
   methods   String[] @default([])
   basePrice Int?
@@ -704,7 +715,7 @@ model AdminMessage {
   id          String   @id @default(cuid())
   fromAdminId String
   toUserId    String
-  channel     String   // "telegram" | "max" | "email"
+  channel     String // "telegram" | "max" | "email"
   subject     String?
   content     String
   status      String   @default("sent") // "sent" | "delivered" | "failed"
@@ -720,8 +731,8 @@ model AdminActionLog {
   id           String   @id @default(cuid())
   adminId      String
   targetUserId String?
-  action       String   // "block" | "unblock" | "role_change" | "trial_reset" | "trial_forever" | "test_reset" | "delete" | "message_sent" | "note_added" | "tag_added" | "tag_removed"
-  payload      String?  // JSON
+  action       String // "block" | "unblock" | "role_change" | "trial_reset" | "trial_forever" | "test_reset" | "delete" | "message_sent" | "note_added" | "tag_added" | "tag_removed"
+  payload      String? // JSON
   createdAt    DateTime @default(now())
 
   @@index([adminId])

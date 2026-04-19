@@ -154,3 +154,18 @@ END $$;
 
 -- Trial init for existing users
 UPDATE "User" SET "trialEndsAt" = NOW() + INTERVAL '30 days' WHERE "trialEndsAt" IS NULL;
+
+-- Schedule Rules V2 Updates
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "format" TEXT NOT NULL DEFAULT 'online';
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "addressId" TEXT;
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "duration" INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "breakDuration" INTEGER NOT NULL DEFAULT 15;
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "audienceFilter" TEXT NOT NULL DEFAULT 'all';
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "startDate" TIMESTAMP(3);
+ALTER TABLE "ScheduleRule" ADD COLUMN IF NOT EXISTS "endDate" TIMESTAMP(3);
+
+ALTER TABLE "PsychologistSettings" ADD COLUMN IF NOT EXISTS "bookingBufferHours" INTEGER NOT NULL DEFAULT 24;
+ALTER TABLE "PsychologistSettings" ADD COLUMN IF NOT EXISTS "bookingHorizonDays" INTEGER NOT NULL DEFAULT 14;
+
+ALTER TABLE "AvailabilitySlot" ALTER COLUMN "duration" DROP NOT NULL;
+ALTER TABLE "AvailabilitySlot" ALTER COLUMN "format" DROP NOT NULL;

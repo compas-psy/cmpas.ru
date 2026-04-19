@@ -44,7 +44,7 @@ export default function ClientBookingPage() {
     // Booking state
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
-    type TimeSlot = { time: string, format: string, addressId: string | null };
+    type TimeSlot = { time: string, format: string, addressId: string | null, isOwnBooking?: boolean };
     const [availableTimes, setAvailableTimes] = useState<TimeSlot[]>([]);
     const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
     const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline' | null>(null);
@@ -106,23 +106,6 @@ export default function ClientBookingPage() {
                     return;
                 }
 
-                // Fetch dates for current and next 3 months to find first available
-                const now = new Date();
-                let allDates: string[] = [];
-                for (let i = 0; i < 4; i++) {
-                    const m = (now.getMonth() + i) % 12;
-                    const y = now.getFullYear() + Math.floor((now.getMonth() + i) / 12);
-                    const d = await getAvailableDates(psychologistId, y, m);
-                    allDates = [...allDates, ...d];
-                }
-                setAvailableDates(allDates);
-
-                // Auto-navigate to first month with available dates
-                if (allDates.length > 0) {
-                    const firstDate = new Date(allDates[0] + 'T00:00:00');
-                    setStartDate(firstDate);
-                }
-
                 // Extract c param synchronously or read from localStorage
                 let currentClientId: string | undefined = undefined;
                 if (typeof window !== 'undefined') {
@@ -138,6 +121,23 @@ export default function ClientBookingPage() {
                             setClientId(savedClientId);
                         }
                     }
+                }
+
+                // Fetch dates for current and next 3 months to find first available
+                const now = new Date();
+                let allDates: string[] = [];
+                for (let i = 0; i < 4; i++) {
+                    const m = (now.getMonth() + i) % 12;
+                    const y = now.getFullYear() + Math.floor((now.getMonth() + i) / 12);
+                    const d = await getAvailableDates(psychologistId, y, m, false, currentClientId || null);
+                    allDates = [...allDates, ...d];
+                }
+                setAvailableDates(allDates);
+
+                // Auto-navigate to first month with available dates
+                if (allDates.length > 0) {
+                    const firstDate = new Date(allDates[0] + 'T00:00:00');
+                    setStartDate(firstDate);
                 }
 
                 // Pre-fill client data if returning
@@ -227,7 +227,7 @@ export default function ClientBookingPage() {
 
         const dateStr = format(date, 'yyyy-MM-dd');
         try {
-            const times = await getAvailableTimes(psychologistId, dateStr);
+            const times = await getAvailableTimes(psychologistId, dateStr, false, undefined, clientId || null);
             setAvailableTimes(times);
         } catch (e) {
             toast.error('Ошибка при загрузке времени');
@@ -241,7 +241,7 @@ export default function ClientBookingPage() {
         const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
         const hasMonth = availableDates.some(d => d.startsWith(monthPrefix));
         if (!hasMonth) {
-            const newDates = await getAvailableDates(psychologistId, year, month);
+            const newDates = await getAvailableDates(psychologistId, year, month, false, clientId || null);
             setAvailableDates(prev => [...prev, ...newDates]);
         }
     };
@@ -539,19 +539,33 @@ export default function ClientBookingPage() {
                             <p className="text-muted-foreground text-sm text-center py-4">Нет свободного времени на эту дату</p>
                         ) : (
                             <div className="grid grid-cols-4 gap-2">
-                                {availableTimes.map(slot => (
-                                    <button
-                                        key={`${slot.time}-${slot.format}`}
-                                        type="button"
-                                        onClick={() => handleTimeSlotSelect(slot)}
-                                        className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                            ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm'
-                                            : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'
-                                            }`}
-                                    >
-                                        {slot.time}
-                                    </button>
-                                ))}
+                                {availableTimes.map(slot => {
+                                    if (slot.isOwnBooking) {
+                                        return (
+                                            <div
+                                                key={`${slot.time}-${slot.format}-own`}
+                                                className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-primary/40 bg-primary/10 text-primary"
+                                                onClick={() => toast.info('Это ваше забронированное время')}
+                                            >
+                                                <span>{slot.time}</span>
+                                                <span className="text-[9px] leading-tight opacity-80 uppercase tracking-wider mt-0.5">Ваше</span>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <button
+                                            key={`${slot.time}-${slot.format}`}
+                                            type="button"
+                                            onClick={() => handleTimeSlotSelect(slot)}
+                                            className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
+                                                ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm'
+                                                : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'
+                                                }`}
+                                        >
+                                            {slot.time}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
 

@@ -38,6 +38,8 @@ import {
 type ScheduleRule = {
     id: string; name: string; priority: number; isActive: boolean;
     color: string | null; slotCount: number;
+    format: string; addressId: string | null; duration: number; breakDuration: number; audienceFilter: string;
+    startDate: Date | null; endDate: Date | null;
     slots: { id: string; dayOfWeek: number; startTime: string; endTime: string; format: string; startDate: Date | null; endDate: Date | null }[];
 };
 type Slot = {
@@ -111,8 +113,8 @@ export default function AvailabilityPage() {
 
     // Schedule Rules state
     const [showNewRule, setShowNewRule] = useState(false);
-    const [newRuleName, setNewRuleName] = useState('');
-    const [newRuleColor, setNewRuleColor] = useState(RULE_COLORS[0]);
+    const initialRuleData = { name: '', color: RULE_COLORS[0], format: 'online', addressId: '', duration: 50, breakDuration: 15, audienceFilter: 'all', startDate: '', endDate: '' };
+    const [newRuleData, setNewRuleData] = useState(initialRuleData);
     const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
     const [editingRule, setEditingRule] = useState<ScheduleRule | null>(null);
     const [showCloneModal, setShowCloneModal] = useState<ScheduleRule | null>(null);
@@ -221,6 +223,7 @@ export default function AvailabilityPage() {
 
     const visibleSlots = useMemo(() => {
         const base = [...activeSlots, ...upcomingSlots];
+        if (selectedRuleId === 'ad-hoc') return base.filter(s => s.scheduleRuleId === null);
         if (selectedRuleId) return base.filter(s => s.scheduleRuleId === selectedRuleId);
         return base;
     }, [activeSlots, upcomingSlots, selectedRuleId]);
@@ -285,7 +288,7 @@ export default function AvailabilityPage() {
                 format: quickSlot.format,
                 startDate: quickSlot.startDate,
                 endDate: quickSlot.endDate,
-                scheduleRuleId: selectedRuleId || (rules.length > 0 ? rules[0].id : null),
+                scheduleRuleId: selectedRuleId === 'ad-hoc' ? null : (selectedRuleId || (rules.length > 0 ? rules[0].id : null)),
             });
             if (res.success) {
                 toast.success(`${DAY_LABELS[quickSlot.day]} ${quickSlot.time}–${endTime}`);
@@ -325,7 +328,7 @@ export default function AvailabilityPage() {
         try {
             const res = await createAvailabilitySlot({
                 ...newSlot,
-                scheduleRuleId: selectedRuleId || (rules.length > 0 ? rules[0].id : null),
+                scheduleRuleId: selectedRuleId === 'ad-hoc' ? null : (selectedRuleId || (rules.length > 0 ? rules[0].id : null)),
             });
             if (res.success) { toast.success('Окна добавлены'); setShowNewSlot(false); setNewSlot(initialSlot); fetchData(); }
             else toast.error(res.error || 'Ошибка');
@@ -368,13 +371,24 @@ export default function AvailabilityPage() {
     // ── Schedule Rules Actions ──
 
     const handleCreateRule = async () => {
-        if (!newRuleName.trim()) { toast.error('Введите название'); return; }
-        const res = await createScheduleRule({ name: newRuleName.trim(), color: newRuleColor });
+        if (!newRuleData.name.trim()) { toast.error('Введите название'); return; }
+        const payload: any = { 
+            name: newRuleData.name.trim(), 
+            color: newRuleData.color,
+            format: newRuleData.format,
+            duration: newRuleData.duration,
+            breakDuration: newRuleData.breakDuration,
+            audienceFilter: newRuleData.audienceFilter,
+            addressId: newRuleData.addressId || null,
+        };
+        if (newRuleData.startDate) payload.startDate = new Date(newRuleData.startDate);
+        if (newRuleData.endDate) payload.endDate = new Date(newRuleData.endDate);
+        
+        const res = await createScheduleRule(payload);
         if (res.success) {
             toast.success('Правило создано');
             setShowNewRule(false);
-            setNewRuleName('');
-            setNewRuleColor(RULE_COLORS[0]);
+            setNewRuleData(initialRuleData);
             fetchData();
         } else toast.error(res.error || 'Ошибка');
     };
@@ -402,11 +416,22 @@ export default function AvailabilityPage() {
 
     const handleSaveEditRule = async () => {
         if (!editingRule) return;
-        const res = await updateScheduleRule(editingRule.id, {
+        const payload: any = {
             name: editingRule.name,
             color: editingRule.color,
             isActive: editingRule.isActive,
-        });
+            format: editingRule.format,
+            duration: editingRule.duration,
+            breakDuration: editingRule.breakDuration,
+            audienceFilter: editingRule.audienceFilter,
+            addressId: editingRule.addressId || null,
+        };
+        if (editingRule.startDate) payload.startDate = new Date(editingRule.startDate);
+        else payload.startDate = null;
+        if (editingRule.endDate) payload.endDate = new Date(editingRule.endDate);
+        else payload.endDate = null;
+
+        const res = await updateScheduleRule(editingRule.id, payload);
         if (res.success) {
             toast.success('Обновлено');
             setEditingRule(null);
@@ -516,6 +541,19 @@ export default function AvailabilityPage() {
                             <Layers className="w-3.5 h-3.5" />
                             Все
                             <span className="text-[10px] opacity-60">{slots.filter(s => !(s.endDate && new Date(s.endDate) < today)).length}</span>
+                        </button>
+                        {/* "Ad-hoc" chip */}
+                        <button
+                            onClick={() => setSelectedRuleId('ad-hoc')}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                selectedRuleId === 'ad-hoc'
+                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 shadow-sm'
+                                    : 'bg-transparent border-border text-muted-foreground hover:bg-muted/50'
+                            }`}
+                        >
+                            <Calendar className="w-3.5 h-3.5" />
+                            Без правила
+                            <span className="text-[10px] opacity-60">{slots.filter(s => !s.scheduleRuleId && !(s.endDate && new Date(s.endDate) < today)).length}</span>
                         </button>
 
                         {rules.map(rule => {
@@ -1155,7 +1193,7 @@ export default function AvailabilityPage() {
             {/* New Rule Modal */}
             {showNewRule && <Modal title="Новое правило" onClose={() => setShowNewRule(false)} onSubmit={handleCreateRule}>
                 <Field label="Название">
-                    <input type="text" value={newRuleName} onChange={e => setNewRuleName(e.target.value)} placeholder="Основное расписание" className="inp" autoFocus />
+                    <input type="text" value={newRuleData.name} onChange={e => setNewRuleData(d => ({ ...d, name: e.target.value }))} placeholder="Основное расписание" className="inp" autoFocus />
                 </Field>
                 <Field label="Цвет">
                     <div className="flex gap-2 flex-wrap">
@@ -1163,15 +1201,51 @@ export default function AvailabilityPage() {
                             <button
                                 key={c}
                                 type="button"
-                                onClick={() => setNewRuleColor(c)}
-                                className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${newRuleColor === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'}`}
+                                onClick={() => setNewRuleData(d => ({ ...d, color: c }))}
+                                className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${newRuleData.color === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'}`}
                                 style={{ backgroundColor: c }}
                             >
-                                {newRuleColor === c && <Check className="w-4 h-4 text-white" />}
+                                {newRuleData.color === c && <Check className="w-4 h-4 text-white" />}
                             </button>
                         ))}
                     </div>
                 </Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Действует с"><DatePicker value={newRuleData.startDate} onChange={d => setNewRuleData(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                    <Field label="Действует по"><DatePicker value={newRuleData.endDate} onChange={d => setNewRuleData(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Формат">
+                        <select value={newRuleData.format} onChange={e => setNewRuleData(s => ({ ...s, format: e.target.value }))} className="inp bg-white">
+                            <option value="online">Онлайн</option>
+                            <option value="offline">Кабинет</option>
+                            <option value="both">Онлайн + Кабинет</option>
+                        </select>
+                    </Field>
+                    <Field label="Аудитория">
+                        <select value={newRuleData.audienceFilter} onChange={e => setNewRuleData(s => ({ ...s, audienceFilter: e.target.value }))} className="inp bg-white">
+                            <option value="all">Все клиенты</option>
+                            <option value="regular">Только мои постоянные</option>
+                            <option value="new">Только новые (извне)</option>
+                        </select>
+                    </Field>
+                </div>
+                {(newRuleData.format === 'offline' || newRuleData.format === 'both') && (
+                    <Field label="Кабинет">
+                        <select value={newRuleData.addressId} onChange={e => setNewRuleData(s => ({ ...s, addressId: e.target.value }))} className="inp bg-white">
+                            <option value="">— Выберите —</option>
+                            {addresses.map(a => <option key={a.id} value={a.id}>{a.name} ({a.address})</option>)}
+                        </select>
+                    </Field>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Длительность (мин)">
+                        <input type="number" min={15} max={180} value={newRuleData.duration} onChange={e => setNewRuleData(s => ({ ...s, duration: Number(e.target.value) }))} className="inp" />
+                    </Field>
+                    <Field label="Перерыв между слотами (мин)">
+                        <input type="number" min={0} max={120} value={newRuleData.breakDuration} onChange={e => setNewRuleData(s => ({ ...s, breakDuration: Number(e.target.value) }))} className="inp" />
+                    </Field>
+                </div>
             </Modal>}
 
             {/* Edit Rule Modal */}
@@ -1194,6 +1268,42 @@ export default function AvailabilityPage() {
                         ))}
                     </div>
                 </Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Действует с"><DatePicker value={editingRule.startDate ? new Date(editingRule.startDate).toISOString().split('T')[0] : ''} onChange={d => setEditingRule(r => r ? { ...r, startDate: d } : r)} /></Field>
+                    <Field label="Действует по"><DatePicker value={editingRule.endDate ? new Date(editingRule.endDate).toISOString().split('T')[0] : ''} onChange={d => setEditingRule(r => r ? { ...r, endDate: d } : r)} /></Field>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Формат">
+                        <select value={editingRule.format} onChange={e => setEditingRule(r => r ? { ...r, format: e.target.value } : r)} className="inp bg-white">
+                            <option value="online">Онлайн</option>
+                            <option value="offline">Кабинет</option>
+                            <option value="both">Онлайн + Кабинет</option>
+                        </select>
+                    </Field>
+                    <Field label="Аудитория">
+                        <select value={editingRule.audienceFilter} onChange={e => setEditingRule(r => r ? { ...r, audienceFilter: e.target.value } : r)} className="inp bg-white">
+                            <option value="all">Все клиенты</option>
+                            <option value="regular">Только мои постоянные</option>
+                            <option value="new">Только новые (извне)</option>
+                        </select>
+                    </Field>
+                </div>
+                {(editingRule.format === 'offline' || editingRule.format === 'both') && (
+                    <Field label="Кабинет">
+                        <select value={editingRule.addressId || ''} onChange={e => setEditingRule(r => r ? { ...r, addressId: e.target.value } : r)} className="inp bg-white">
+                            <option value="">— Выберите —</option>
+                            {addresses.map(a => <option key={a.id} value={a.id}>{a.name} ({a.address})</option>)}
+                        </select>
+                    </Field>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Длительность (мин)">
+                        <input type="number" min={15} max={180} value={editingRule.duration} onChange={e => setEditingRule(r => r ? { ...r, duration: Number(e.target.value) } : r)} className="inp" />
+                    </Field>
+                    <Field label="Перерыв (мин)">
+                        <input type="number" min={0} max={120} value={editingRule.breakDuration} onChange={e => setEditingRule(r => r ? { ...r, breakDuration: Number(e.target.value) } : r)} className="inp" />
+                    </Field>
+                </div>
             </Modal>}
 
             {/* Clone Rule Modal */}

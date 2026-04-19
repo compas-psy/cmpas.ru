@@ -47,6 +47,13 @@ export async function getScheduleRules() {
                 priority: r.priority,
                 isActive: r.isActive,
                 color: r.color,
+                format: r.format,
+                addressId: r.addressId,
+                duration: r.duration,
+                breakDuration: r.breakDuration,
+                audienceFilter: r.audienceFilter,
+                startDate: r.startDate,
+                endDate: r.endDate,
                 slotCount: r._count.slots,
                 slots: r.slots,
                 createdAt: r.createdAt,
@@ -67,6 +74,13 @@ export async function createScheduleRule(data: {
     name: string;
     color?: string;
     priority?: number;
+    format?: string;
+    addressId?: string;
+    duration?: number;
+    breakDuration?: number;
+    audienceFilter?: string;
+    startDate?: Date;
+    endDate?: Date;
 }) {
     try {
         const psychologistId = await getPsychologistId();
@@ -88,6 +102,13 @@ export async function createScheduleRule(data: {
                 name: data.name,
                 color,
                 priority: data.priority ?? 0,
+                format: data.format || 'online',
+                addressId: data.addressId || null,
+                duration: data.duration ?? 50,
+                breakDuration: data.breakDuration ?? 15,
+                audienceFilter: data.audienceFilter || 'all',
+                startDate: data.startDate || null,
+                endDate: data.endDate || null,
             },
         });
 
@@ -107,6 +128,13 @@ export async function updateScheduleRule(id: string, data: {
     color?: string;
     priority?: number;
     isActive?: boolean;
+    format?: string;
+    addressId?: string | null;
+    duration?: number;
+    breakDuration?: number;
+    audienceFilter?: string;
+    startDate?: Date | null;
+    endDate?: Date | null;
 }) {
     try {
         const psychologistId = await getPsychologistId();
