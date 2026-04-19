@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2, Link as LinkIcon, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import { SessionModal } from './components/SessionModal';
-import { RescheduleModal } from './components/RescheduleModal';
+import { SessionModal } from '../components/SessionModal';
+import { RescheduleModal } from '../components/RescheduleModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
 
 type Session = {
@@ -74,7 +74,7 @@ export default function DiaryCalendarView() {
 
     const fetchSessions = useCallback(async () => {
         try {
-            const { getSessions } = await import('./actions/sessions');
+            const { getSessions } = await import('../actions/sessions');
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
             const from = new Date(year, month - 1, 1);
@@ -87,7 +87,7 @@ export default function DiaryCalendarView() {
 
     const fetchClients = useCallback(async () => {
         try {
-            const { getClients } = await import('./actions/clients');
+            const { getClients } = await import('../actions/clients');
             const data = await getClients();
             setClients(data.map(c => ({ id: c.id, name: c.name })));
         } catch { /* empty */ }
@@ -95,7 +95,7 @@ export default function DiaryCalendarView() {
 
     const fetchSettings = useCallback(async () => {
         try {
-            const { getSettings } = await import('./actions/settings');
+            const { getSettings } = await import('../actions/settings');
             const res = await getSettings();
             if (res.success && res.data) {
                 setSettings(res.data);
@@ -114,7 +114,7 @@ export default function DiaryCalendarView() {
         const loadFreeTimes = async () => {
             setLoadingFreeTimes(true);
             try {
-                const { getAvailableTimesForReschedule } = await import('./actions/sessions');
+                const { getAvailableTimesForReschedule } = await import('../actions/sessions');
                 const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
                 const times = await getAvailableTimesForReschedule(dateStr);
                 setMobileFreeTimes(times);
@@ -132,11 +132,11 @@ export default function DiaryCalendarView() {
     const handleStatusChange = async (id: string, status: string) => {
         try {
             if (status === 'cancelled') {
-                const { deleteSession } = await import('./actions/sessions');
+                const { deleteSession } = await import('../actions/sessions');
                 await deleteSession(id);
                 toast.success('Запись удалена из календаря');
             } else {
-                const { updateSession } = await import('./actions/sessions');
+                const { updateSession } = await import('../actions/sessions');
                 await updateSession(id, { status });
                 toast.success('Статус обновлён');
             }
