@@ -274,6 +274,20 @@ jobs:
               ALTER TABLE \"AvailabilitySlot\" ADD COLUMN IF NOT EXISTS \"startDate\" TIMESTAMP(3);
               ALTER TABLE \"AvailabilitySlot\" ADD COLUMN IF NOT EXISTS \"endDate\" TIMESTAMP(3);
               ALTER TABLE \"AvailabilitySlot\" DROP COLUMN IF EXISTS \"specificDate\";
+              ALTER TABLE \"AvailabilitySlot\" ADD COLUMN IF NOT EXISTS \"scheduleRuleId\" TEXT;
+
+              -- ScheduleRule table
+              CREATE TABLE IF NOT EXISTS \"ScheduleRule\" (
+                \"id\" TEXT NOT NULL,
+                \"psychologistId\" TEXT NOT NULL,
+                \"name\" TEXT NOT NULL,
+                \"priority\" INTEGER NOT NULL DEFAULT 0,
+                \"isActive\" BOOLEAN NOT NULL DEFAULT true,
+                \"color\" TEXT,
+                \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \"updatedAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT \"ScheduleRule_pkey\" PRIMARY KEY (\"id\")
+              );
 
               -- DiarySession columns
               ALTER TABLE \"DiarySession\" ADD COLUMN IF NOT EXISTS \"addressId\" TEXT;
@@ -336,14 +350,30 @@ jobs:
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'NotificationSettings_psychologistId_fkey') THEN
                   ALTER TABLE \"NotificationSettings\" ADD CONSTRAINT \"NotificationSettings_psychologistId_fkey\" FOREIGN KEY (\"psychologistId\") REFERENCES \"User\"(\"id\") ON DELETE CASCADE ON UPDATE CASCADE;
                 END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ScheduleRule_psychologistId_fkey') THEN
+                  ALTER TABLE \"ScheduleRule\" ADD CONSTRAINT \"ScheduleRule_psychologistId_fkey\" FOREIGN KEY (\"psychologistId\") REFERENCES \"User\"(\"id\") ON DELETE CASCADE ON UPDATE CASCADE;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AvailabilitySlot_scheduleRuleId_fkey') THEN
+                  ALTER TABLE \"AvailabilitySlot\" ADD CONSTRAINT \"AvailabilitySlot_scheduleRuleId_fkey\" FOREIGN KEY (\"scheduleRuleId\") REFERENCES \"ScheduleRule\"(\"id\") ON DELETE SET NULL ON UPDATE CASCADE;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduleRule_psychologistId_idx') THEN
+                  CREATE INDEX \"ScheduleRule_psychologistId_idx\" ON \"ScheduleRule\"(\"psychologistId\");
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'AvailabilitySlot_scheduleRuleId_idx') THEN
+                  CREATE INDEX \"AvailabilitySlot_scheduleRuleId_idx\" ON \"AvailabilitySlot\"(\"scheduleRuleId\");
+                END IF;
               END \$\$;
             " || echo "WARNING: Direct SQL fixup failed"
             
-            # Mark the migration as applied if it's not already
+            # Mark migrations as applied if not already
             docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
               INSERT INTO \"_prisma_migrations\" (\"id\", \"checksum\", \"finished_at\", \"migration_name\", \"logs\", \"rolled_back_at\", \"started_at\", \"applied_steps_count\")
               SELECT gen_random_uuid()::text, 'manual', NOW(), '20260222000000_add_advanced_scheduling', NULL, NULL, NOW(), 1
               WHERE NOT EXISTS (SELECT 1 FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260222000000_add_advanced_scheduling');
+
+              INSERT INTO \"_prisma_migrations\" (\"id\", \"checksum\", \"finished_at\", \"migration_name\", \"logs\", \"rolled_back_at\", \"started_at\", \"applied_steps_count\")
+              SELECT gen_random_uuid()::text, 'manual', NOW(), '20260419_add_schedule_rules', NULL, NULL, NOW(), 1
+              WHERE NOT EXISTS (SELECT 1 FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260419_add_schedule_rules');
             " || echo "WARNING: Migration record insert failed"
             
             echo "Running prisma migrate deploy to apply pending migrations..."
