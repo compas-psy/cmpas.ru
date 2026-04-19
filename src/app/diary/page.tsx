@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2, Link as LinkIcon, AlertTriangle, FileText, Sparkles } from 'lucide-react';
@@ -215,262 +215,96 @@ export default function DiaryCalendarPage() {
             {/* Welcome strip for new psychologists */}
             <WelcomeStrip />
 
-            {/* ── Now Card + Attention Inbox ── */}
+            {/* ── Экран «Сегодня» ── */}
             {(() => {
                 const now = new Date();
                 const todaySessions = sessions.filter(s => {
                     const d = new Date(s.date);
                     return isSameDay(d, now) && s.status !== 'cancelled';
                 }).sort((a, b) => a.time.localeCompare(b.time));
-
-                // Find next upcoming session (today, time > now)
                 const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                 const nextSession = todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed');
                 const completedToday = todaySessions.filter(s => s.status === 'completed').length;
-                const remainingToday = todaySessions.filter(s => s.time >= currentTimeStr && s.status !== 'completed').length;
-
-                // Minutes until next session
-                const getMinutesUntil = (timeStr: string) => {
-                    const [h, m] = timeStr.split(':').map(Number);
-                    return (h * 60 + m) - (now.getHours() * 60 + now.getMinutes());
-                };
-
-                // Attention items
+                const totalToday = todaySessions.length;
+                const getMinutesUntil = (t: string) => { const [h, m] = t.split(':').map(Number); return (h * 60 + m) - (now.getHours() * 60 + now.getMinutes()); };
                 const pendingSessions = sessions.filter(s => s.status === 'pending');
                 const completedWithoutNotes = sessions.filter(s => {
                     if (s.status !== 'completed') return false;
-                    const d = new Date(s.date);
-                    if (d > now) return false; // future sessions not yet relevant
-                    const daysDiff = Math.floor((now.getTime() - d.getTime()) / 86400000);
-                    if (daysDiff > 14) return false; // older than 2 weeks — skip
-                    return !s.notes && !s.structuredNotes;
+                    const d = new Date(s.date); if (d > now) return false;
+                    return Math.floor((now.getTime() - d.getTime()) / 86400000) <= 14 && !s.notes && !s.structuredNotes;
                 });
                 const attentionCount = pendingSessions.length + completedWithoutNotes.length;
-
-                return (
+                const timelineHours = Array.from({ length: 15 }, (_, i) => i + 8);
+                return (<>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Сегодня</h1>
+                            <p className="text-muted-foreground text-sm mt-1 font-medium capitalize">{now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {settings?.psychologistId && (<button onClick={() => { navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${settings.psychologistId}`); toast.success('Ссылка скопирована'); }} className="p-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-xl transition-all" title="Скопировать ссылку"><LinkIcon className="w-4 h-4" /></button>)}
+                            <button onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }} className="flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.97] text-sm"><Plus className="w-4 h-4" /> Запись</button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><CalendarIcon className="w-5 h-5 text-primary" /></div><div><div className="text-2xl font-bold text-foreground">{totalToday}</div><div className="text-[11px] text-muted-foreground font-medium">Сессий сегодня</div></div></div>
+                        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center"><Clock className="w-5 h-5 text-emerald-600" /></div><div><div className="text-2xl font-bold text-foreground">{completedToday}</div><div className="text-[11px] text-muted-foreground font-medium">Проведено</div></div></div>
+                        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3"><div className={`w-10 h-10 rounded-xl flex items-center justify-center ${attentionCount > 0 ? 'bg-amber-500/10' : 'bg-muted/50'}`}><AlertTriangle className={`w-5 h-5 ${attentionCount > 0 ? 'text-amber-600' : 'text-muted-foreground/30'}`} /></div><div><div className="text-2xl font-bold text-foreground">{attentionCount}</div><div className="text-[11px] text-muted-foreground font-medium">Внимание</div></div></div>
+                        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center"><User className="w-5 h-5 text-violet-600" /></div><div><div className="text-2xl font-bold text-foreground">{clients.length}</div><div className="text-[11px] text-muted-foreground font-medium">Клиентов</div></div></div>
+                    </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        {/* Now Card — spans 2 cols */}
-                        <div className="lg:col-span-2">
-                            {nextSession ? (() => {
-                                const client = clients.find(c => c.id === nextSession.clientId);
-                                const clientName = nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).fullName
-                                    ? (nextSession.client.questionnaire.data as any).fullName
-                                    : (client?.name || nextSession.client?.name || 'Клиент');
-                                const minutesUntil = getMinutesUntil(nextSession.time);
-                                const isVeryClose = minutesUntil <= 15;
-                                const isStartingSoon = minutesUntil <= 5;
-
-                                return (
-                                    <div className={`relative bg-card rounded-3xl border shadow-sm overflow-hidden transition-all ${isStartingSoon ? 'border-primary/40 shadow-primary/10' : 'border-border'}`}>
-                                        {/* Subtle gradient accent */}
-                                        <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent pointer-events-none" />
-
-                                        <div className="relative p-5 md:p-6">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="flex-1 min-w-0">
-                                                    {/* Label */}
-                                                    <div className="flex items-center gap-2 mb-3">
-                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isStartingSoon ? 'text-primary animate-pulse' : 'text-muted-foreground'}`}>
-                                                            {isStartingSoon ? '● Сейчас начнётся' : 'Следующая сессия'}
-                                                        </span>
-                                                        {completedToday > 0 && (
-                                                            <span className="text-[10px] text-muted-foreground/50 font-medium">
-                                                                · {completedToday} проведено
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Client name */}
-                                                    <button
-                                                        onClick={() => window.location.href = `/diary/clients?clientId=${nextSession.client?.id || nextSession.clientId}`}
-                                                        className="text-xl md:text-2xl font-bold text-foreground hover:text-primary transition-colors text-left truncate block max-w-full"
-                                                    >
-                                                        {clientName}
-                                                    </button>
-
-                                                    {/* Time + format */}
-                                                    <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground font-medium">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <Clock className="w-4 h-4" />
-                                                            {nextSession.time} – {nextSession.endTime || ''}
-                                                        </span>
-                                                        <span>·</span>
-                                                        <span className="flex items-center gap-1.5">
-                                                            {nextSession.format === 'online'
-                                                                ? <><Video className="w-4 h-4" /> Онлайн</>
-                                                                : <><MapPin className="w-4 h-4" /> Офлайн</>
-                                                            }
-                                                        </span>
-                                                        <span>·</span>
-                                                        <span>{nextSession.duration} мин</span>
-                                                    </div>
-
-                                                    {/* Actions */}
-                                                    <div className="flex flex-wrap gap-2 mt-4">
-                                                        <button
-                                                            onClick={() => setEditingSession(nextSession)}
-                                                            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold shadow-sm hover:bg-primary/90 transition-all active:scale-[0.97]"
-                                                        >
-                                                            Заметки сессии
-                                                        </button>
-                                                        {nextSession.format === 'online' && settings?.onlineSessionLink && (
-                                                            <a
-                                                                href={settings.onlineSessionLink}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="px-4 py-2 bg-accent/10 text-accent rounded-xl text-xs font-bold hover:bg-accent/20 transition-all active:scale-[0.97]"
-                                                            >
-                                                                Подключиться ↗
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Timer badge */}
-                                                <div className={`shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center ${isVeryClose ? 'bg-primary/10 border-2 border-primary/30' : 'bg-muted/30 border border-border/50'}`}>
-                                                    <span className={`text-2xl font-bold leading-none ${isVeryClose ? 'text-primary' : 'text-foreground'}`}>
-                                                        {minutesUntil > 0 ? minutesUntil : 0}
-                                                    </span>
-                                                    <span className={`text-[10px] font-semibold mt-0.5 ${isVeryClose ? 'text-primary/70' : 'text-muted-foreground'}`}>
-                                                        мин
-                                                    </span>
-                                                </div>
+                        <div className="lg:col-span-2 bg-card rounded-2xl border border-border overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between">
+                                <span className="font-bold text-foreground text-sm">Таймлайн дня</span>
+                                {totalToday > 0 && (<div className="flex items-center gap-2"><div className="h-1.5 w-24 bg-muted/50 rounded-full overflow-hidden"><div className="h-full bg-primary/60 rounded-full transition-all" style={{ width: `${(completedToday / totalToday) * 100}%` }} /></div><span className="text-[10px] font-bold text-muted-foreground">{completedToday}/{totalToday}</span></div>)}
+                            </div>
+                            {totalToday === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-16 px-4">
+                                    <div className="w-16 h-16 bg-accent/10 rounded-3xl flex items-center justify-center mb-4"><Sparkles className="w-8 h-8 text-accent" /></div>
+                                    <div className="text-lg font-bold text-foreground mb-1">Свободный день</div>
+                                    <div className="text-sm text-muted-foreground text-center max-w-xs">Нет запланированных сессий на сегодня</div>
+                                    <button onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }} className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-accent/10 text-accent rounded-xl text-sm font-bold hover:bg-accent/20 transition-all"><Plus className="w-4 h-4" /> Добавить запись</button>
+                                </div>
+                            ) : (
+                                <div className="relative px-4 py-3">
+                                    {(() => { const ch = now.getHours(), cm = now.getMinutes(); if (ch >= 8 && ch < 23) { const top = ((ch - 8) * 56) + (cm / 60) * 56; return (<div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top: `${top + 12}px` }}><div className="flex items-center"><div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1 shrink-0" /><div className="h-px flex-1 bg-red-500/40" /></div></div>); } return null; })()}
+                                    {timelineHours.map(hour => {
+                                        const hourStr = `${String(hour).padStart(2, '0')}:00`;
+                                        const atHour = todaySessions.filter(s => { const [sh] = s.time.split(':').map(Number); return sh === hour; });
+                                        return (<div key={hour} className="flex items-start gap-3 h-14 border-t border-border/30 first:border-t-0">
+                                            <span className="text-[10px] font-medium text-muted-foreground/60 w-10 pt-1 shrink-0 text-right">{hourStr}</span>
+                                            <div className="flex-1 flex gap-2 pt-1 overflow-hidden">
+                                                {atHour.map(s => { const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент'; const done = s.status === 'completed'; const past = s.time < currentTimeStr; const isN = nextSession?.id === s.id;
+                                                    return (<button key={s.id} onClick={() => setEditingSession(s)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-[0.97] truncate ${isN ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20' : done ? 'bg-emerald-500/10 text-emerald-700 line-through opacity-60' : past ? 'bg-muted/50 text-muted-foreground' : 'bg-accent/10 text-accent-foreground hover:bg-accent/20'}`}>
+                                                        {isN && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />}<span className="truncate">{s.time} {cn}</span>{s.format === 'online' && <Video className="w-3 h-3 shrink-0 opacity-60" />}
+                                                    </button>); })}
                                             </div>
-
-                                            {/* Today progress bar */}
-                                            {todaySessions.length > 1 && (
-                                                <div className="mt-4 pt-4 border-t border-border/50">
-                                                    <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground mb-1.5">
-                                                        <span>Сегодня</span>
-                                                        <span>{completedToday} из {todaySessions.length}</span>
-                                                    </div>
-                                                    <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-primary/60 rounded-full transition-all duration-500"
-                                                            style={{ width: `${todaySessions.length > 0 ? (completedToday / todaySessions.length) * 100 : 0}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })() : (
-                                /* No next session — free time card */
-                                <div className="bg-card rounded-3xl border border-border p-5 md:p-6 shadow-sm">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 bg-accent/10 rounded-2xl flex items-center justify-center shrink-0">
-                                            <Sparkles className="w-7 h-7 text-accent" />
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Сегодня</div>
-                                            <div className="text-lg font-bold text-foreground">
-                                                {todaySessions.length === 0 ? 'Свободный день' : `${completedToday} из ${todaySessions.length} сессий проведено`}
-                                            </div>
-                                            <div className="text-sm text-muted-foreground mt-0.5 font-medium">
-                                                {todaySessions.length === 0
-                                                    ? 'Нет запланированных сессий'
-                                                    : 'Все сессии на сегодня завершены ✓'}
-                                            </div>
-                                        </div>
-                                    </div>
+                                        </div>);
+                                    })}
                                 </div>
                             )}
                         </div>
-
-                        {/* Attention Inbox */}
-                        <div>
-                            <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden h-full">
-                                <div className="p-4 border-b border-border/50 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${attentionCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-muted/50 text-muted-foreground/50'}`}>
-                                            <AlertTriangle className="w-4 h-4" />
-                                        </div>
-                                        <span className="text-sm font-bold text-foreground">Внимание</span>
-                                    </div>
-                                    {attentionCount > 0 && (
-                                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md">{attentionCount}</span>
-                                    )}
+                        <div className="space-y-4">
+                            {nextSession && (() => { const cn = nextSession.client?.name || clients.find(c => c.id === nextSession.clientId)?.name || 'Клиент'; const mu = getMinutesUntil(nextSession.time); const close = mu <= 15;
+                                return (<div className={`bg-card rounded-2xl border overflow-hidden ${close ? 'border-primary/30 shadow-sm shadow-primary/5' : 'border-border'}`}>
+                                    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between"><span className={`text-[10px] font-bold uppercase tracking-wider ${close ? 'text-primary' : 'text-muted-foreground'}`}>{close ? '● Скоро' : 'Следующая'}</span><span className={`text-lg font-bold ${close ? 'text-primary' : 'text-foreground'}`}>{mu > 0 ? mu : 0} мин</span></div>
+                                    <div className="p-4"><div className="font-bold text-foreground text-base mb-1">{cn}</div><div className="flex items-center gap-2 text-xs text-muted-foreground font-medium"><Clock className="w-3.5 h-3.5" /><span>{nextSession.time} – {nextSession.endTime || ''}</span><span>·</span><span>{nextSession.duration} мин</span></div><div className="flex gap-2 mt-3"><button onClick={() => setEditingSession(nextSession)} className="flex-1 px-3 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-primary/90 transition-all active:scale-[0.97]">Открыть</button></div></div>
+                                </div>); })()}
+                            <div className="bg-card rounded-2xl border border-border overflow-hidden">
+                                <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between"><div className="flex items-center gap-2"><AlertTriangle className={`w-4 h-4 ${attentionCount > 0 ? 'text-amber-600' : 'text-muted-foreground/30'}`} /><span className="text-sm font-bold text-foreground">Внимание</span></div>{attentionCount > 0 && (<span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md">{attentionCount}</span>)}</div>
+                                <div className="p-3 space-y-1 max-h-64 overflow-auto">
+                                    {attentionCount === 0 ? (<div className="text-center py-6 text-sm text-muted-foreground/50 font-medium">Всё в порядке ✓</div>) : (<>{pendingSessions.map(s => (<button key={`p-${s.id}`} onClick={() => setEditingSession(s)} className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left"><div className="w-6 h-6 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0"><Clock className="w-3 h-3" /></div><div className="flex-1 min-w-0"><div className="text-xs font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div><div className="text-[10px] text-muted-foreground">Ожидает · {s.time}</div></div></button>))}{completedWithoutNotes.map(s => (<button key={`n-${s.id}`} onClick={() => setEditingSession(s)} className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left"><div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><FileText className="w-3 h-3" /></div><div className="flex-1 min-w-0"><div className="text-xs font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div><div className="text-[10px] text-muted-foreground">Нет заметок</div></div></button>))}</>)}
                                 </div>
-                                <div className="p-3 space-y-1.5 max-h-48 overflow-auto">
-                                    {attentionCount === 0 ? (
-                                        <div className="text-center py-4">
-                                            <div className="text-sm text-muted-foreground/50 font-medium">Всё в порядке ✓</div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {pendingSessions.map(s => (
-                                                <button
-                                                    key={`pending-${s.id}`}
-                                                    onClick={() => setEditingSession(s)}
-                                                    className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left group"
-                                                >
-                                                    <div className="w-6 h-6 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0">
-                                                        <Clock className="w-3 h-3" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-xs font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div>
-                                                        <div className="text-[10px] text-muted-foreground">Ожидает подтверждения · {s.time}</div>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                            {completedWithoutNotes.map(s => (
-                                                <button
-                                                    key={`notes-${s.id}`}
-                                                    onClick={() => setEditingSession(s)}
-                                                    className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left group"
-                                                >
-                                                    <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                                                        <FileText className="w-3 h-3" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-xs font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div>
-                                                        <div className="text-[10px] text-muted-foreground">Нет заметок · {new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</div>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-                                </div>
+                            </div>
+                            <div className="bg-card rounded-2xl border border-border p-4 space-y-2">
+                                <button onClick={() => window.location.href = '/diary/availability'} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left text-sm font-medium text-foreground"><Clock className="w-4 h-4 text-muted-foreground" /> Расписание</button>
+                                <button onClick={() => window.location.href = '/diary/clients'} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-colors text-left text-sm font-medium text-foreground"><User className="w-4 h-4 text-muted-foreground" /> Клиенты</button>
                             </div>
                         </div>
                     </div>
-                );
+                </>);
             })()}
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Календарь</h1>
-                    <p className="text-muted-foreground text-base mt-2">Управляйте своими записями</p>
-                </div>
-                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto telegram-miniapp-scrollbar-hide pb-2 md:pb-0">
-                    {settings?.psychologistId && (
-                        <button
-                            onClick={() => {
-                                navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${settings.psychologistId}`);
-                                toast.success('Ссылка на запись скопирована');
-                            }}
-                            className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 font-semibold rounded-lg transition-all whitespace-nowrap"
-                            title="Скопировать общую ссылку на форму записи"
-                        >
-                            <LinkIcon className="w-4 h-4" /> <span className="hidden sm:inline">Ссылка</span>
-                        </button>
-                    )}
-                    <button
-                        onClick={() => window.location.href = '/diary/availability'}
-                        className="hidden md:flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-foreground hover:bg-muted font-semibold rounded-lg transition-all whitespace-nowrap"
-                    >
-                        <Plus className="w-4 h-4" /> Окно
-                    </button>
-                    <button
-                        onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
-                        className="flex items-center justify-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg shadow-sm hover:bg-accent/90 transition-all font-semibold active:scale-[0.98] whitespace-nowrap"
-                    >
-                        <Plus className="w-4 h-4" /> Запись
-                    </button>
-                </div>
-            </div>
 
             {/* Widgets */}
             <div className="hidden md:grid grid-cols-3 gap-2 md:gap-4">
