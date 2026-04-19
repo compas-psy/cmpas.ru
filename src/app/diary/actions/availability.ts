@@ -43,6 +43,9 @@ export async function getAvailabilitySlots() {
         const slots = await db.availabilitySlot.findMany({
             where: { psychologistId, isActive: true },
             orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+            include: {
+                scheduleRule: { select: { id: true, name: true, color: true } },
+            },
         });
         console.log(`[Availability] Found ${slots.length} active slots`);
         return { success: true, data: slots };
@@ -64,6 +67,7 @@ export async function createAvailabilitySlot(data: {
     lunchEnd?: string;
     format?: string;
     addressId?: string | null;
+    scheduleRuleId?: string | null;
 }) {
     try {
         const psychologistId = await getPsychologistId();
@@ -124,7 +128,8 @@ export async function createAvailabilitySlot(data: {
                 endDate: end,
                 format: data.format || 'online',
                 addressId: data.addressId || null,
-                isActive: true
+                isActive: true,
+                scheduleRuleId: data.scheduleRuleId || null,
             };
 
             if (data.hasLunch && data.lunchStart && data.lunchEnd) {
@@ -352,6 +357,7 @@ export async function createManualSlot(data: {
     addressId?: string | null;
     startDate: string;
     endDate: string;
+    scheduleRuleId?: string | null;
 }) {
     try {
         const psychologistId = await getPsychologistId();
@@ -404,6 +410,7 @@ export async function createManualSlot(data: {
                 startDate: new Date(data.startDate),
                 endDate: new Date(data.endDate),
                 isActive: true,
+                scheduleRuleId: data.scheduleRuleId || null,
             },
         });
 

@@ -31,6 +31,7 @@ model User {
   notificationSettings  NotificationSettings?
   psychologistAddresses PsychologistAddress[]
   diaryBlocks           DiaryBlock[]
+  scheduleRules         ScheduleRule[]
 
   // Therapy process (Smart Notes)
   therapyGoals      TherapyGoal[]
@@ -396,15 +397,36 @@ model AvailabilitySlot {
   startDate      DateTime?
   endDate        DateTime?
   isActive       Boolean   @default(true)
+  scheduleRuleId String?   // Link to grouping rule (nullable for backward compat)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   psychologist User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   address      PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  scheduleRule ScheduleRule?         @relation(fields: [scheduleRuleId], references: [id], onDelete: SetNull)
 
   @@index([psychologistId])
   @@index([dayOfWeek])
+  @@index([scheduleRuleId])
+}
+
+// Grouping layer: named schedule rules (e.g. "Main Schedule", "Summer")
+model ScheduleRule {
+  id             String   @id @default(cuid())
+  psychologistId String
+  name           String   // "Основное расписание", "Летнее"
+  priority       Int      @default(0)
+  isActive       Boolean  @default(true)
+  color          String?  // Hex color for UI tagging
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  psychologist User               @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  slots        AvailabilitySlot[]
+
+  @@index([psychologistId])
 }
 
 model TimeBlock {

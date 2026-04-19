@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2, Lock, Eye,
     CalendarCheck, RefreshCw, AlertCircle, ChevronDown, ChevronUp,
-    Clock, Minus, Shield, Zap, Sparkles
+    Clock, Minus, Shield, Zap, Sparkles, Copy, Layers, EyeOff,
+    Tag, MoreHorizontal, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
@@ -20,11 +21,31 @@ import {
     createManualSlot,
 } from '../actions/availability';
 import { getAddresses, getSettings, updateSettings } from '../actions/settings';
+import {
+    getScheduleRules,
+    createScheduleRule,
+    updateScheduleRule,
+    deleteScheduleRule,
+    cloneScheduleRule,
+    migrateOrphanSlots,
+    RULE_COLORS,
+} from '../actions/schedule-rules';
+import {
+    getAvailableDates,
+    getAvailableTimes,
+} from '@/app/bot/actions';
 
+type ScheduleRule = {
+    id: string; name: string; priority: number; isActive: boolean;
+    color: string | null; slotCount: number;
+    slots: { id: string; dayOfWeek: number; startTime: string; endTime: string; format: string; startDate: Date | null; endDate: Date | null }[];
+};
 type Slot = {
     id: string; dayOfWeek: number; startTime: string; endTime: string;
     duration: number; isRecurring: boolean; startDate?: string | null;
     endDate?: string | null; format?: string; addressId?: string | null;
+    scheduleRuleId?: string | null;
+    scheduleRule?: { id: string; name: string; color: string | null } | null;
 };
 type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
 type Address = { id: string; name: string; address: string };
@@ -73,6 +94,7 @@ export default function AvailabilityPage() {
     const [slots, setSlots] = useState<Slot[]>([]);
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [addresses, setAddresses] = useState<Address[]>([]);
+    const [rules, setRules] = useState<ScheduleRule[]>([]);
     const [settings, setSettingsState] = useState<Settings>({
         scheduleMode: 'private',
         sessionBreak: 10,
@@ -86,6 +108,23 @@ export default function AvailabilityPage() {
     const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
     const [showExpired, setShowExpired] = useState(false);
     const [hoveredCell, setHoveredCell] = useState<{ day: number; time: string } | null>(null);
+
+    // Schedule Rules state
+    const [showNewRule, setShowNewRule] = useState(false);
+    const [newRuleName, setNewRuleName] = useState('');
+    const [newRuleColor, setNewRuleColor] = useState(RULE_COLORS[0]);
+    const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
+    const [editingRule, setEditingRule] = useState<ScheduleRule | null>(null);
+    const [showCloneModal, setShowCloneModal] = useState<ScheduleRule | null>(null);
+    const [cloneData, setCloneData] = useState({ name: '', startDate: '', endDate: '' });
+
+    // Client preview
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewDates, setPreviewDates] = useState<string[]>([]);
+    const [previewSelectedDate, setPreviewSelectedDate] = useState<string | null>(null);
+    const [previewTimes, setPreviewTimes] = useState<{ time: string; format: string }[]>([]);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [psychologistId, setPsychologistId] = useState<string | null>(null);
 
     // Quick-add popover state
     type QuickSlot = {
@@ -107,11 +146,12 @@ export default function AvailabilityPage() {
 
     const fetchData = useCallback(async () => {
         try {
-            const [slotsRes, blocksRes, addrs, settingsRes] = await Promise.all([
+            const [slotsRes, blocksRes, addrs, settingsRes, rulesRes] = await Promise.all([
                 getAvailabilitySlots(),
                 getTimeBlocks(),
                 getAddresses(),
                 getSettings(),
+                getScheduleRules(),
             ]);
 
             if (slotsRes.success && slotsRes.data) {
@@ -137,6 +177,10 @@ export default function AvailabilityPage() {
                     maxSessionsPerDay: d.maxSessionsPerDay ?? null,
                     defaultSessionDuration: d.defaultSessionDuration ?? 50,
                 });
+                setPsychologistId(d.psychologistId || null);
+            }
+            if (rulesRes.success && rulesRes.data) {
+                setRules(rulesRes.data);
             }
         } catch (e: any) {
             console.error('fetchData error:', e);
@@ -146,6 +190,17 @@ export default function AvailabilityPage() {
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    // Auto-migrate orphan slots on first load
+    useEffect(() => {
+        if (!loading && slots.length > 0 && rules.length === 0) {
+            migrateOrphanSlots().then(res => {
+                if (res.success && res.migrated && res.migrated > 0) {
+                    fetchData();
+                }
+            });
+        }
+    }, [loading, slots.length, rules.length, fetchData]);
 
     // ── Derived data ──
 
@@ -164,7 +219,11 @@ export default function AvailabilityPage() {
     const expiredSlots = useMemo(() =>
         slots.filter(s => s.endDate && new Date(s.endDate) < today), [slots, today]);
 
-    const visibleSlots = useMemo(() => [...activeSlots, ...upcomingSlots], [activeSlots, upcomingSlots]);
+    const visibleSlots = useMemo(() => {
+        const base = [...activeSlots, ...upcomingSlots];
+        if (selectedRuleId) return base.filter(s => s.scheduleRuleId === selectedRuleId);
+        return base;
+    }, [activeSlots, upcomingSlots, selectedRuleId]);
 
     const slotsByDay = useMemo(() =>
         DAY_LABELS.map((_, i) => visibleSlots.filter(s => s.dayOfWeek === i).sort((a, b) => a.startTime.localeCompare(b.startTime))),
@@ -199,7 +258,6 @@ export default function AvailabilityPage() {
     };
 
     const handleClickTimeline = (day: number, time: string, e: React.MouseEvent) => {
-        // Open inline popover instead of auto-creating
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const startDate = new Date();
         const endDate = new Date();
@@ -227,6 +285,7 @@ export default function AvailabilityPage() {
                 format: quickSlot.format,
                 startDate: quickSlot.startDate,
                 endDate: quickSlot.endDate,
+                scheduleRuleId: selectedRuleId || (rules.length > 0 ? rules[0].id : null),
             });
             if (res.success) {
                 toast.success(`${DAY_LABELS[quickSlot.day]} ${quickSlot.time}–${endTime}`);
@@ -254,7 +313,7 @@ export default function AvailabilityPage() {
         } catch { toast.error('Ошибка'); }
     };
 
-    // Template slot creation (existing logic)
+    // Template slot creation
     const addSlot = async () => {
         if (!newSlot.startDate || !newSlot.endDate) { toast.error('Укажите даты'); return; }
         if (new Date(newSlot.endDate) < new Date(newSlot.startDate)) { toast.error('Дата окончания раньше начала'); return; }
@@ -264,7 +323,10 @@ export default function AvailabilityPage() {
             toast.error('Некорректное время обеда'); return;
         }
         try {
-            const res = await createAvailabilitySlot(newSlot);
+            const res = await createAvailabilitySlot({
+                ...newSlot,
+                scheduleRuleId: selectedRuleId || (rules.length > 0 ? rules[0].id : null),
+            });
             if (res.success) { toast.success('Окна добавлены'); setShowNewSlot(false); setNewSlot(initialSlot); fetchData(); }
             else toast.error(res.error || 'Ошибка');
         } catch { toast.error('Ошибка'); }
@@ -303,6 +365,88 @@ export default function AvailabilityPage() {
         } catch { toast.error('Ошибка'); }
     };
 
+    // ── Schedule Rules Actions ──
+
+    const handleCreateRule = async () => {
+        if (!newRuleName.trim()) { toast.error('Введите название'); return; }
+        const res = await createScheduleRule({ name: newRuleName.trim(), color: newRuleColor });
+        if (res.success) {
+            toast.success('Правило создано');
+            setShowNewRule(false);
+            setNewRuleName('');
+            setNewRuleColor(RULE_COLORS[0]);
+            fetchData();
+        } else toast.error(res.error || 'Ошибка');
+    };
+
+    const handleDeleteRule = async (id: string) => {
+        const res = await deleteScheduleRule(id);
+        if (res.success) {
+            toast.success('Правило удалено');
+            if (selectedRuleId === id) setSelectedRuleId(null);
+            fetchData();
+        } else toast.error(res.error || 'Ошибка');
+    };
+
+    const handleCloneRule = async () => {
+        if (!showCloneModal) return;
+        if (!cloneData.name || !cloneData.startDate || !cloneData.endDate) { toast.error('Заполните все поля'); return; }
+        const res = await cloneScheduleRule(showCloneModal.id, cloneData);
+        if (res.success) {
+            toast.success('Правило клонировано');
+            setShowCloneModal(null);
+            setCloneData({ name: '', startDate: '', endDate: '' });
+            fetchData();
+        } else toast.error(res.error || 'Ошибка');
+    };
+
+    const handleSaveEditRule = async () => {
+        if (!editingRule) return;
+        const res = await updateScheduleRule(editingRule.id, {
+            name: editingRule.name,
+            color: editingRule.color,
+            isActive: editingRule.isActive,
+        });
+        if (res.success) {
+            toast.success('Обновлено');
+            setEditingRule(null);
+            fetchData();
+        } else toast.error(res.error || 'Ошибка');
+    };
+
+    // ── Client Preview ──
+    const openPreview = async () => {
+        if (!psychologistId) {
+            toast.error('ID не найден');
+            return;
+        }
+        setShowPreview(true);
+        setPreviewLoading(true);
+        try {
+            const now = new Date();
+            const dates = await getAvailableDates(psychologistId, now.getFullYear(), now.getMonth(), true);
+            setPreviewDates(dates);
+        } catch { toast.error('Ошибка загрузки превью'); }
+        setPreviewLoading(false);
+    };
+
+    const selectPreviewDate = async (dateStr: string) => {
+        if (!psychologistId) return;
+        setPreviewSelectedDate(dateStr);
+        setPreviewLoading(true);
+        try {
+            const times = await getAvailableTimes(psychologistId, dateStr, true);
+            setPreviewTimes(times);
+        } catch { setPreviewTimes([]); }
+        setPreviewLoading(false);
+    };
+
+    // ── Helpers ──
+
+    const getSlotColor = (slot: Slot): string => {
+        return slot.scheduleRule?.color || '#4F46E5';
+    };
+
     // ── Render ──
 
     if (loading) return (
@@ -322,6 +466,10 @@ export default function AvailabilityPage() {
                     <p className="text-muted-foreground text-sm mt-1">Визуальный конструктор вашей рабочей недели</p>
                 </div>
                 <div className="flex gap-2 self-start">
+                    <button onClick={openPreview}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-2xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
+                        <Eye className="w-4 h-4" />Глазами клиента
+                    </button>
                     <button onClick={() => setShowNewBlock(true)}
                         className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-2xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
                         <Calendar className="w-4 h-4" />Блокировка
@@ -333,49 +481,133 @@ export default function AvailabilityPage() {
                 </div>
             </div>
 
-            {/* ── Smart Settings Bar ── */}
+            {/* ── Schedule Rules Section ── */}
             <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden">
-                {/* Mode selector */}
                 <div className="p-5 border-b border-border/50">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-9 h-9 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
-                            <Shield className="w-4 h-4" />
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                                <Layers className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-bold tracking-tight text-foreground">Правила расписания</h2>
+                                <p className="text-[11px] text-muted-foreground">Группируйте слоты по названию и цвету</p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-sm font-bold tracking-tight text-foreground">Режим записи</h2>
-                            <p className="text-[11px] text-muted-foreground">Как клиенты видят ваше расписание</p>
-                        </div>
+                        <button
+                            onClick={() => setShowNewRule(true)}
+                            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors"
+                        >
+                            <Plus className="w-3.5 h-3.5" />Правило
+                        </button>
                     </div>
-                    <div className="flex gap-1.5 bg-muted/50 p-1 rounded-2xl">
-                        {[
-                            { value: 'private', label: 'Приватный', Icon: Lock },
-                            { value: 'readonly', label: 'Просмотр', Icon: Eye },
-                            { value: 'booking', label: 'Запись', Icon: CalendarCheck },
-                        ].map(m => (
-                            <button
-                                key={m.value}
-                                disabled={savingMode}
-                                onClick={() => handleUpdateSettings({ scheduleMode: m.value })}
-                                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                                    settings.scheduleMode === m.value
-                                        ? 'bg-white text-foreground shadow-sm dark:bg-foreground/10'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                            >
-                                <m.Icon className="w-3.5 h-3.5" />
-                                {m.label}
-                            </button>
-                        ))}
+
+                    {/* Rule chips */}
+                    <div className="flex flex-wrap gap-2">
+                        {/* "All" chip */}
+                        <button
+                            onClick={() => setSelectedRuleId(null)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                selectedRuleId === null
+                                    ? 'bg-foreground/10 border-foreground/20 text-foreground shadow-sm'
+                                    : 'bg-transparent border-border text-muted-foreground hover:bg-muted/50'
+                            }`}
+                        >
+                            <Layers className="w-3.5 h-3.5" />
+                            Все
+                            <span className="text-[10px] opacity-60">{slots.filter(s => !(s.endDate && new Date(s.endDate) < today)).length}</span>
+                        </button>
+
+                        {rules.map(rule => {
+                            const isSelected = selectedRuleId === rule.id;
+                            const ruleSlotCount = slots.filter(s => s.scheduleRuleId === rule.id && !(s.endDate && new Date(s.endDate) < today)).length;
+                            return (
+                                <div key={rule.id} className="relative group/rule">
+                                    <button
+                                        onClick={() => setSelectedRuleId(isSelected ? null : rule.id)}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                            isSelected
+                                                ? 'shadow-sm'
+                                                : 'bg-transparent hover:bg-muted/50'
+                                        }`}
+                                        style={{
+                                            borderColor: isSelected ? (rule.color || '#4F46E5') + '60' : undefined,
+                                            backgroundColor: isSelected ? (rule.color || '#4F46E5') + '15' : undefined,
+                                            color: isSelected ? (rule.color || '#4F46E5') : undefined,
+                                        }}
+                                    >
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: rule.color || '#4F46E5' }} />
+                                        {rule.name}
+                                        <span className="text-[10px] opacity-60">{ruleSlotCount}</span>
+                                    </button>
+                                    {/* Actions dropdown trigger */}
+                                    <div className="absolute -top-1 -right-1 opacity-0 group-hover/rule:opacity-100 transition-opacity z-10">
+                                        <div className="flex gap-0.5">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingRule(rule); }}
+                                                className="w-5 h-5 bg-card border border-border rounded-md flex items-center justify-center hover:bg-muted shadow-sm"
+                                                title="Редактировать"
+                                            >
+                                                <Edit2 className="w-2.5 h-2.5 text-muted-foreground" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setShowCloneModal(rule); setCloneData({ name: `${rule.name} (копия)`, startDate: '', endDate: '' }); }}
+                                                className="w-5 h-5 bg-card border border-border rounded-md flex items-center justify-center hover:bg-muted shadow-sm"
+                                                title="Клонировать"
+                                            >
+                                                <Copy className="w-2.5 h-2.5 text-muted-foreground" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteRule(rule.id); }}
+                                                className="w-5 h-5 bg-card border border-border rounded-md flex items-center justify-center hover:bg-destructive/10 shadow-sm"
+                                                title="Удалить"
+                                            >
+                                                <Trash2 className="w-2.5 h-2.5 text-destructive" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* Buffer + Limits */}
-                <div className="p-5 flex flex-col sm:flex-row gap-5">
+                {/* Mode selector + Buffer + Limits inline  */}
+                <div className="p-5 flex flex-col lg:flex-row gap-5">
+                    {/* Mode selector */}
+                    <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Shield className="w-4 h-4 text-accent" />
+                            <span className="text-sm font-semibold text-foreground">Режим записи</span>
+                        </div>
+                        <div className="flex gap-1.5 bg-muted/50 p-1 rounded-2xl">
+                            {[
+                                { value: 'private', label: 'Приватный', Icon: Lock },
+                                { value: 'readonly', label: 'Просмотр', Icon: Eye },
+                                { value: 'booking', label: 'Запись', Icon: CalendarCheck },
+                            ].map(m => (
+                                <button
+                                    key={m.value}
+                                    disabled={savingMode}
+                                    onClick={() => handleUpdateSettings({ scheduleMode: m.value })}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                                        settings.scheduleMode === m.value
+                                            ? 'bg-white text-foreground shadow-sm dark:bg-foreground/10'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                >
+                                    <m.Icon className="w-3.5 h-3.5" />
+                                    {m.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Buffer between sessions */}
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-3">
                             <Coffee className="w-4 h-4 text-accent" />
-                            <span className="text-sm font-semibold text-foreground">Перерыв между сессиями</span>
+                            <span className="text-sm font-semibold text-foreground">Перерыв</span>
                         </div>
                         <div className="flex gap-1.5">
                             {[0, 5, 10, 15, 20, 30].map(v => (
@@ -398,7 +630,7 @@ export default function AvailabilityPage() {
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-3">
                             <Zap className="w-4 h-4 text-accent" />
-                            <span className="text-sm font-semibold text-foreground">Лимит сессий в день</span>
+                            <span className="text-sm font-semibold text-foreground">Лимит/день</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button
@@ -457,7 +689,22 @@ export default function AvailabilityPage() {
                     <span className="text-sm font-semibold">
                         Расписание действует ещё {daysUntilExpiry} {daysUntilExpiry === 1 ? 'день' : daysUntilExpiry < 5 ? 'дня' : 'дней'}
                     </span>
-                    <button onClick={() => setShowNewSlot(true)} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">Продлить</button>
+                    <button onClick={() => {
+                        // Find the rule with nearest expiry and open clone modal
+                        const expiringRule = rules.find(r => r.slots.some(s => s.endDate && new Date(s.endDate) <= new Date(Date.now() + 14 * 86400000)));
+                        if (expiringRule) {
+                            const endDate = new Date();
+                            endDate.setDate(endDate.getDate() + 90);
+                            setShowCloneModal(expiringRule);
+                            setCloneData({
+                                name: expiringRule.name,
+                                startDate: new Date().toISOString().split('T')[0],
+                                endDate: endDate.toISOString().split('T')[0],
+                            });
+                        } else {
+                            setShowNewSlot(true);
+                        }
+                    }} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">Продлить</button>
                 </div>
             )}
 
@@ -550,7 +797,7 @@ export default function AvailabilityPage() {
                                             />
                                         ))}
 
-                                        {/* Existing slots */}
+                                        {/* Existing slots — now with rule colors */}
                                         {daySlots.map(slot => {
                                             const top = timeToY(slot.startTime);
                                             const bottom = timeToY(slot.endTime);
@@ -558,20 +805,24 @@ export default function AvailabilityPage() {
                                             const isUpcoming = slot.startDate && new Date(slot.startDate) > today;
                                             const dateFrom = slot.startDate ? new Date(slot.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
                                             const dateTo = slot.endDate ? new Date(slot.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
+                                            const ruleColor = getSlotColor(slot);
 
                                             return (
                                                 <div
                                                     key={slot.id}
                                                     className={`absolute left-1 right-1 rounded-xl border-2 px-2 py-1.5 overflow-hidden transition-all cursor-pointer hover:shadow-md z-10 group/slot ${
-                                                        isUpcoming
-                                                            ? 'bg-amber-50/90 border-amber-300/60 hover:border-amber-400'
-                                                            : 'bg-primary/8 border-primary/25 hover:border-primary/50'
+                                                        isUpcoming ? 'opacity-60' : ''
                                                     }`}
-                                                    style={{ top, height: Math.max(height, 28) }}
+                                                    style={{
+                                                        top,
+                                                        height: Math.max(height, 28),
+                                                        borderColor: ruleColor + '40',
+                                                        backgroundColor: ruleColor + '12',
+                                                    }}
                                                     onClick={(e) => { e.stopPropagation(); setEditingSlot(slot); }}
-                                                    title={`${slot.startTime}–${slot.endTime} · ${slot.duration} мин · ${dateFrom} – ${dateTo}`}
+                                                    title={`${slot.startTime}–${slot.endTime} · ${slot.duration} мин · ${dateFrom} – ${dateTo}${slot.scheduleRule ? ` · ${slot.scheduleRule.name}` : ''}`}
                                                 >
-                                                    <div className={`text-[11px] font-bold leading-tight ${isUpcoming ? 'text-amber-700' : 'text-primary'}`}>
+                                                    <div className="text-[11px] font-bold leading-tight" style={{ color: ruleColor }}>
                                                         {slot.startTime}–{slot.endTime}
                                                     </div>
                                                     {height > 35 && (
@@ -579,11 +830,16 @@ export default function AvailabilityPage() {
                                                             {slot.duration}′ · {slot.format === 'offline' ? '🏢' : slot.format === 'both' ? '🖥️+🏢' : '🖥️'}
                                                         </div>
                                                     )}
+                                                    {/* Rule name badge */}
+                                                    {height > 50 && slot.scheduleRule && (
+                                                        <div className="text-[8px] mt-1 px-1.5 py-0.5 rounded-md inline-block font-semibold"
+                                                            style={{ backgroundColor: ruleColor + '18', color: ruleColor }}>
+                                                            {slot.scheduleRule.name}
+                                                        </div>
+                                                    )}
                                                     {/* Date range badge */}
-                                                    {height > 60 && dateFrom && dateTo && (
-                                                        <div className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-md inline-block font-semibold ${
-                                                            isUpcoming ? 'bg-amber-100/80 text-amber-600' : 'bg-primary/10 text-primary/60'
-                                                        }`}>
+                                                    {height > 70 && dateFrom && dateTo && (
+                                                        <div className="text-[8px] mt-0.5 text-muted-foreground/60">
                                                             {dateFrom} – {dateTo}
                                                         </div>
                                                     )}
@@ -643,9 +899,13 @@ export default function AvailabilityPage() {
                 </div>
 
                 {/* Timeline legend */}
-                <div className="px-5 py-3 border-t border-border/50 bg-muted/10 flex items-center gap-5 text-[10px] text-muted-foreground font-medium">
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-primary/15 border border-primary/30 rounded" /> Слот</span>
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-amber-50 border border-amber-300/50 rounded" /> Будущий</span>
+                <div className="px-5 py-3 border-t border-border/50 bg-muted/10 flex items-center gap-5 text-[10px] text-muted-foreground font-medium flex-wrap">
+                    {rules.map(rule => (
+                        <span key={rule.id} className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded border" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', borderColor: (rule.color || '#4F46E5') + '40' }} />
+                            {rule.name}
+                        </span>
+                    ))}
                     {settings.sessionBreak > 0 && (
                         <span className="flex items-center gap-1.5"><Coffee className="w-3 h-3 text-orange-300" /> Перерыв {settings.sessionBreak}′</span>
                     )}
@@ -745,6 +1005,14 @@ export default function AvailabilityPage() {
                             </div>
                         </div>
 
+                        {/* Rule indicator */}
+                        {(selectedRuleId || rules.length > 0) && (
+                            <div className="mb-3 flex items-center gap-2 text-[10px] text-muted-foreground">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: (selectedRuleId ? rules.find(r => r.id === selectedRuleId)?.color : rules[0]?.color) || '#4F46E5' }} />
+                                Правило: {selectedRuleId ? rules.find(r => r.id === selectedRuleId)?.name : rules[0]?.name}
+                            </div>
+                        )}
+
                         <button
                             onClick={confirmQuickSlot}
                             className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm active:scale-[0.97]"
@@ -765,7 +1033,7 @@ export default function AvailabilityPage() {
                     (() => {
                         const groups = new Map<string, { slots: Slot[]; days: number[] }>();
                         visibleSlots.forEach(slot => {
-                            const key = `${slot.startTime}-${slot.endTime}-${slot.duration}-${slot.startDate || ''}-${slot.endDate || ''}-${slot.format || 'online'}`;
+                            const key = `${slot.startTime}-${slot.endTime}-${slot.duration}-${slot.startDate || ''}-${slot.endDate || ''}-${slot.format || 'online'}-${slot.scheduleRuleId || ''}`;
                             if (!groups.has(key)) groups.set(key, { slots: [], days: [] });
                             const g = groups.get(key)!;
                             g.slots.push(slot);
@@ -777,23 +1045,28 @@ export default function AvailabilityPage() {
                             const daysLabel = sortedDays.map(d => DAY_LABELS[d]).join(', ');
                             const formatLabel = sample.format === 'offline' ? 'Кабинет' : sample.format === 'both' ? 'Онлайн + Кабинет' : 'Онлайн';
                             const isUpcoming = sample.startDate && new Date(sample.startDate) > today;
+                            const ruleColor = getSlotColor(sample);
                             return (
-                                <div key={key} className={`rounded-2xl border p-4 shadow-sm ${isUpcoming ? 'bg-amber-50/50 border-amber-200/60' : 'bg-card border-border'}`}>
+                                <div key={key} className="rounded-2xl border p-4 shadow-sm bg-card" style={{ borderLeftWidth: 4, borderLeftColor: ruleColor }}>
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isUpcoming ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>{daysLabel}</span>
+                                                <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ backgroundColor: ruleColor + '15', color: ruleColor }}>{daysLabel}</span>
                                                 <span className="text-xs font-medium text-muted-foreground">{formatLabel}</span>
+                                                {isUpcoming && <span className="text-[10px] text-amber-600 font-bold">⏳ Будущее</span>}
                                             </div>
                                             <div className="text-base font-bold text-foreground">{sample.startTime} – {sample.endTime}</div>
                                             <div className="text-xs text-muted-foreground mt-0.5">{sample.duration} мин</div>
+                                            {sample.scheduleRule && (
+                                                <div className="flex items-center gap-1 text-xs mt-1 text-muted-foreground">
+                                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ruleColor }} />
+                                                    {sample.scheduleRule.name}
+                                                </div>
+                                            )}
                                             {sample.startDate && sample.endDate && (
-                                                <div className={`flex items-center gap-1 text-xs mt-1 ${isUpcoming ? 'text-amber-700' : 'text-muted-foreground'}`}>
-                                                    {isUpcoming ? <CalendarCheck className="w-3 h-3" /> : <RefreshCw className="w-3 h-3" />}
-                                                    {isUpcoming
-                                                        ? `с ${new Date(sample.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
-                                                        : `${new Date(sample.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} – ${new Date(sample.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`
-                                                    }
+                                                <div className="flex items-center gap-1 text-xs mt-1 text-muted-foreground">
+                                                    <RefreshCw className="w-3 h-3" />
+                                                    {new Date(sample.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} – {new Date(sample.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                                                 </div>
                                             )}
                                         </div>
@@ -879,6 +1152,139 @@ export default function AvailabilityPage() {
 
             {/* ── Modals ── */}
 
+            {/* New Rule Modal */}
+            {showNewRule && <Modal title="Новое правило" onClose={() => setShowNewRule(false)} onSubmit={handleCreateRule}>
+                <Field label="Название">
+                    <input type="text" value={newRuleName} onChange={e => setNewRuleName(e.target.value)} placeholder="Основное расписание" className="inp" autoFocus />
+                </Field>
+                <Field label="Цвет">
+                    <div className="flex gap-2 flex-wrap">
+                        {RULE_COLORS.map(c => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => setNewRuleColor(c)}
+                                className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${newRuleColor === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'}`}
+                                style={{ backgroundColor: c }}
+                            >
+                                {newRuleColor === c && <Check className="w-4 h-4 text-white" />}
+                            </button>
+                        ))}
+                    </div>
+                </Field>
+            </Modal>}
+
+            {/* Edit Rule Modal */}
+            {editingRule && <Modal title="Редактировать правило" onClose={() => setEditingRule(null)} onSubmit={handleSaveEditRule}>
+                <Field label="Название">
+                    <input type="text" value={editingRule.name} onChange={e => setEditingRule(r => r ? { ...r, name: e.target.value } : r)} className="inp" />
+                </Field>
+                <Field label="Цвет">
+                    <div className="flex gap-2 flex-wrap">
+                        {RULE_COLORS.map(c => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => setEditingRule(r => r ? { ...r, color: c } : r)}
+                                className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${editingRule.color === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'}`}
+                                style={{ backgroundColor: c }}
+                            >
+                                {editingRule.color === c && <Check className="w-4 h-4 text-white" />}
+                            </button>
+                        ))}
+                    </div>
+                </Field>
+            </Modal>}
+
+            {/* Clone Rule Modal */}
+            {showCloneModal && <Modal title={`Клонировать: ${showCloneModal.name}`} onClose={() => setShowCloneModal(null)} onSubmit={handleCloneRule}>
+                <Field label="Название нового правила">
+                    <input type="text" value={cloneData.name} onChange={e => setCloneData(d => ({ ...d, name: e.target.value }))} className="inp" />
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Действует с"><DatePicker value={cloneData.startDate} onChange={d => setCloneData(cd => ({ ...cd, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                    <Field label="Действует по"><DatePicker value={cloneData.endDate} onChange={d => setCloneData(cd => ({ ...cd, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
+                </div>
+                <div className="bg-muted/30 p-3 rounded-xl border border-border/50 text-sm text-muted-foreground">
+                    <div className="font-semibold text-foreground mb-1">Будет скопировано:</div>
+                    {showCloneModal.slotCount} слотов ({showCloneModal.slots.slice(0, 3).map(s => `${DAY_LABELS[s.dayOfWeek]} ${s.startTime}`).join(', ')}{showCloneModal.slotCount > 3 ? '...' : ''})
+                </div>
+            </Modal>}
+
+            {/* Client Preview Modal */}
+            {showPreview && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between p-5 border-b border-border/50 bg-muted/10">
+                            <div className="flex items-center gap-2">
+                                <Eye className="w-5 h-5 text-primary" />
+                                <h2 className="text-lg font-bold tracking-tight">Глазами клиента</h2>
+                            </div>
+                            <button onClick={() => { setShowPreview(false); setPreviewSelectedDate(null); setPreviewDates([]); setPreviewTimes([]); }} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="p-5 overflow-auto telegram-miniapp-scrollbar-hide">
+                            {previewLoading && !previewSelectedDate ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : previewDates.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <EyeOff className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                                    <p className="text-sm text-muted-foreground font-semibold">Нет доступных дат</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Клиент увидит пустой календарь. Добавьте слоты!</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-xs text-muted-foreground mb-3 font-medium">Доступные даты этого месяца:</p>
+                                    <div className="grid grid-cols-7 gap-1.5 mb-4">
+                                        {previewDates.map(dateStr => {
+                                            const [, m, d] = dateStr.split('-');
+                                            const isSelected = previewSelectedDate === dateStr;
+                                            return (
+                                                <button
+                                                    key={dateStr}
+                                                    onClick={() => selectPreviewDate(dateStr)}
+                                                    className={`py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                                        isSelected
+                                                            ? 'bg-primary text-primary-foreground shadow-sm'
+                                                            : 'bg-accent/10 text-accent hover:bg-accent/20'
+                                                    }`}
+                                                >
+                                                    {Number(d)}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {previewSelectedDate && (
+                                        <div>
+                                            <p className="text-xs text-muted-foreground mb-2 font-medium">
+                                                Доступные слоты на {new Date(previewSelectedDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}:
+                                            </p>
+                                            {previewLoading ? (
+                                                <div className="flex items-center justify-center py-6">
+                                                    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                </div>
+                                            ) : previewTimes.length === 0 ? (
+                                                <p className="text-sm text-muted-foreground text-center py-4">Все слоты заняты</p>
+                                            ) : (
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {previewTimes.map(t => (
+                                                        <div key={t.time} className="px-3 py-2.5 bg-accent/5 border border-accent/20 rounded-xl text-center">
+                                                            <div className="text-sm font-bold text-foreground">{t.time}</div>
+                                                            <div className="text-[10px] text-muted-foreground">{t.format === 'offline' ? '🏢 Кабинет' : '🖥️ Онлайн'}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* New Slot Template Modal */}
             {showNewSlot && <Modal title="Шаблон расписания" onClose={() => setShowNewSlot(false)} onSubmit={addSlot}>
                 <div className="grid grid-cols-2 gap-4">
@@ -941,6 +1347,13 @@ export default function AvailabilityPage() {
                             </select>
                         )}
                     </Field>
+                )}
+                {/* Rule indicator */}
+                {rules.length > 0 && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-xl">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: (selectedRuleId ? rules.find(r => r.id === selectedRuleId)?.color : rules[0]?.color) || '#4F46E5' }} />
+                        Правило: <span className="font-semibold text-foreground">{selectedRuleId ? rules.find(r => r.id === selectedRuleId)?.name : rules[0]?.name}</span>
+                    </div>
                 )}
             </Modal>}
 
