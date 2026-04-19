@@ -40,13 +40,23 @@ export async function getAvailabilitySlots() {
         // Run fix first
         await fixMissingIsActive(psychologistId);
 
-        const slots = await db.availabilitySlot.findMany({
-            where: { psychologistId, isActive: true },
-            orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
-            include: {
-                scheduleRule: { select: { id: true, name: true, color: true } },
-            },
-        });
+        // Try with scheduleRule include, fallback to without if migration not yet applied
+        let slots;
+        try {
+            slots = await db.availabilitySlot.findMany({
+                where: { psychologistId, isActive: true },
+                orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+                include: {
+                    scheduleRule: { select: { id: true, name: true, color: true } },
+                },
+            });
+        } catch {
+            // Fallback if scheduleRule relation doesn't exist yet (pre-migration)
+            slots = await db.availabilitySlot.findMany({
+                where: { psychologistId, isActive: true },
+                orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+            });
+        }
         console.log(`[Availability] Found ${slots.length} active slots`);
         return { success: true, data: slots };
     } catch (e: any) {

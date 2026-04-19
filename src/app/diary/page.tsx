@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2, Link as LinkIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, X, Clock, User, Video, MapPin, ArrowRightLeft, Loader2, Link as LinkIcon, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';

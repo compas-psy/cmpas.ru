@@ -10,6 +10,7 @@ import { MobileSidebar } from './mobile-sidebar';
 import { checkUserAcceptance } from '@/app/legal/actions';
 import { AdsConsentWrapper } from '@/components/legal/AdsConsentWrapper';
 import { TrialBanner } from '@/components/psidairy/TrialBanner';
+import { BottomTabBar } from './bottom-tab-bar';
 
 export const metadata: Metadata = {
     title: 'Ежедневник | Compas',
@@ -131,12 +132,15 @@ export default async function DiaryLayout({
             {/* Main content */}
             <main className="flex-1 md:ml-72 pt-16 md:pt-0 min-h-screen">
                 {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
-                <div className="p-4 md:p-8 max-w-6xl mx-auto">
+                <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-6xl mx-auto">
                     {children}
                 </div>
             </main>
 
             <Toaster position="top-right" richColors theme="system" />
+
+            {/* Mobile Bottom Tab Bar */}
+            <BottomTabBar />
 
             {/* Deferred Ads Consent Modal */}
             <AdsConsentWrapper userId={dbUser.id} />

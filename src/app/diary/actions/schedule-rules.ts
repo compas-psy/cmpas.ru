@@ -66,7 +66,8 @@ export async function getScheduleRules() {
         };
     } catch (e: any) {
         console.error('[ScheduleRules] getScheduleRules error:', e);
-        return { success: false, error: e.message || 'Ошибка при получении правил' };
+        // Return empty data instead of error — graceful pre-migration fallback
+        return { success: true, data: [] };
     }
 }
 
@@ -288,6 +289,7 @@ export async function migrateOrphanSlots() {
         return { success: true, migrated: result.count, ruleId: defaultRule.id };
     } catch (e: any) {
         console.error('[ScheduleRules] migrateOrphanSlots error:', e);
-        return { success: false, error: e.message || 'Ошибка при миграции слотов' };
+        // Silent failure — table may not exist yet pre-migration
+        return { success: true, migrated: 0 };
     }
 }

@@ -2,16 +2,26 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle } from 'lucide-react';
+import { Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle, BarChart3, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const navItems = [
-    { href: '/diary', label: 'Календарь', icon: Calendar },
-    { href: '/diary/clients', label: 'Клиенты', icon: Users },
-    { href: '/diary/availability', label: 'Расписание', icon: Clock },
-    { href: '/diary/notifications', label: 'Уведомления', icon: Bell },
-    { href: '/diary/integrations', label: 'Интеграции', icon: Link2 },
-    { href: '/diary/settings', label: 'Настройки', icon: Settings },
+const navGroups = [
+    {
+        label: 'Работа',
+        items: [
+            { href: '/diary', label: 'Календарь', icon: Calendar },
+            { href: '/diary/clients', label: 'Клиенты', icon: Users },
+            { href: '/diary/availability', label: 'Расписание', icon: Clock },
+        ],
+    },
+    {
+        label: 'Система',
+        items: [
+            { href: '/diary/notifications', label: 'Уведомления', icon: Bell },
+            { href: '/diary/integrations', label: 'Интеграции', icon: Link2 },
+            { href: '/diary/settings', label: 'Настройки', icon: Settings },
+        ],
+    },
 ];
 
 const secondaryNavItems = [
@@ -37,7 +47,7 @@ export function SidebarNav() {
             {/* Profile card */}
             <Link
                 href="/diary/profile"
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all mb-4 ${profileActive
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all mb-5 ${profileActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
                     : 'bg-sidebar-accent/50 hover:bg-sidebar-accent text-sidebar-foreground'
                     }`}
@@ -55,29 +65,39 @@ export function SidebarNav() {
                 </div>
             </Link>
 
-            <ul className="space-y-1.5">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = item.href === '/diary'
-                        ? pathname === '/diary'
-                        : pathname?.startsWith(item.href);
+            {/* Grouped navigation */}
+            {navGroups.map((group, groupIdx) => (
+                <div key={group.label} className={groupIdx > 0 ? 'mt-5' : ''}>
+                    <div className="px-4 mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/40">
+                            {group.label}
+                        </span>
+                    </div>
+                    <ul className="space-y-1">
+                        {group.items.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = item.href === '/diary'
+                                ? pathname === '/diary'
+                                : pathname?.startsWith(item.href);
 
-                    return (
-                        <li key={item.href}>
-                            <Link
-                                href={item.href}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm ${isActive
-                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
-                                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium'
-                                    }`}
-                            >
-                                <Icon className="w-5 h-5" strokeWidth={isActive ? 2 : 1.5} />
-                                <span>{item.label}</span>
-                            </Link>
-                        </li>
-                    );
-                })}
-            </ul>
+                            return (
+                                <li key={item.href}>
+                                    <Link
+                                        href={item.href}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm ${isActive
+                                            ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-sm'
+                                            : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium'
+                                            }`}
+                                    >
+                                        <Icon className="w-5 h-5" strokeWidth={isActive ? 2 : 1.5} />
+                                        <span>{item.label}</span>
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            ))}
 
             <div className="my-4 mx-2 border-t border-sidebar-border/60" />
 
