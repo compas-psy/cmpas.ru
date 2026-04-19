@@ -99,6 +99,8 @@ export async function updateSettings(data: {
     notifyTelegram?: boolean;
     scheduleMode?: string;
     maxSessionsPerDay?: number | null;
+    bookingHorizonDays?: number;
+    bookingBufferHours?: number;
 }) {
     const psychologistId = await getPsychologistId();
     const settings = await db.psychologistSettings.upsert({

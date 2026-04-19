@@ -5,7 +5,7 @@ import {
     Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2, Lock, Eye,
     CalendarCheck, RefreshCw, AlertCircle, ChevronDown, ChevronUp,
     Clock, Minus, Shield, Zap, Sparkles, Copy, Layers, EyeOff,
-    Tag, MoreHorizontal, Check
+    Tag, MoreHorizontal, Check, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
@@ -479,716 +479,323 @@ export default function AvailabilityPage() {
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
     );
-
-    const timelineHours = Array.from({ length: TIMELINE_END - TIMELINE_START }, (_, i) => TIMELINE_START + i);
+    const handleUpdateActive = async (rule: ScheduleRule) => {
+        try {
+            const res = await updateScheduleRule(rule.id, { isActive: !rule.isActive });
+            if (res.success) fetchData();
+            else toast.error("Ошибка обновления");
+        } catch { toast.error("Ошибка обновления"); }
+    };
 
     return (
-        <div className="space-y-6 pb-12">
+        <div className="space-y-8 pb-12 max-w-[1400px] mx-auto">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Расписание</h1>
-                    <p className="text-muted-foreground text-sm mt-1">Визуальный конструктор вашей рабочей недели</p>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Настройки расписания</h1>
+                    <p className="text-muted-foreground text-sm mt-1">Режимы записи, правила и интеграции в одном месте</p>
                 </div>
-                <div className="flex gap-2 self-start">
-                    <button onClick={openPreview}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-2xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
-                        <Eye className="w-4 h-4" />Глазами клиента
-                    </button>
-                    <button onClick={() => setShowNewBlock(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-2xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
-                        <Calendar className="w-4 h-4" />Блокировка
-                    </button>
-                    <button onClick={() => setShowNewSlot(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-2xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
-                        <Plus className="w-4 h-4" />Шаблон
+                <div className="flex gap-2 self-start md:hidden">
+                    <button onClick={openPreview} className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-2xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
+                        <Eye className="w-4 h-4" />Как видит клиент
                     </button>
                 </div>
             </div>
 
-            {/* ── Schedule Rules Section ── */}
-            <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-border/50">
-                    <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
-                                <Layers className="w-4 h-4" />
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+                {/* Left Column */}
+                <div className="w-full lg:w-[65%] space-y-6">
+                    
+                    {/* Section 1: Режим записи для клиентов */}
+                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm overflow-hidden relative">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <Sparkles className="w-5 h-5" />
                             </div>
                             <div>
-                                <h2 className="text-sm font-bold tracking-tight text-foreground">Правила расписания</h2>
-                                <p className="text-[11px] text-muted-foreground">Группируйте слоты по названию и цвету</p>
+                                <h2 className="text-xl font-bold tracking-tight text-foreground">Режим записи</h2>
+                                <p className="text-sm text-muted-foreground">Формат взаимодействия с клиентским календарем</p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => setShowNewRule(true)}
-                            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors"
-                        >
-                            <Plus className="w-3.5 h-3.5" />Правило
-                        </button>
-                    </div>
 
-                    {/* Rule chips */}
-                    <div className="flex flex-wrap gap-2">
-                        {/* "All" chip */}
-                        <button
-                            onClick={() => setSelectedRuleId(null)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-                                selectedRuleId === null
-                                    ? 'bg-foreground/10 border-foreground/20 text-foreground shadow-sm'
-                                    : 'bg-transparent border-border text-muted-foreground hover:bg-muted/50'
-                            }`}
-                        >
-                            <Layers className="w-3.5 h-3.5" />
-                            Все
-                            <span className="text-[10px] opacity-60">{slots.filter(s => !(s.endDate && new Date(s.endDate) < today)).length}</span>
-                        </button>
-                        {/* "Ad-hoc" chip */}
-                        <button
-                            onClick={() => setSelectedRuleId('ad-hoc')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-                                selectedRuleId === 'ad-hoc'
-                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 shadow-sm'
-                                    : 'bg-transparent border-border text-muted-foreground hover:bg-muted/50'
-                            }`}
-                        >
-                            <Calendar className="w-3.5 h-3.5" />
-                            Без правила
-                            <span className="text-[10px] opacity-60">{slots.filter(s => !s.scheduleRuleId && !(s.endDate && new Date(s.endDate) < today)).length}</span>
-                        </button>
-
-                        {rules.map(rule => {
-                            const isSelected = selectedRuleId === rule.id;
-                            const ruleSlotCount = slots.filter(s => s.scheduleRuleId === rule.id && !(s.endDate && new Date(s.endDate) < today)).length;
-                            return (
-                                <div key={rule.id} className="relative group/rule">
-                                    <button
-                                        onClick={() => setSelectedRuleId(isSelected ? null : rule.id)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-                                            isSelected
-                                                ? 'shadow-sm'
-                                                : 'bg-transparent hover:bg-muted/50'
-                                        }`}
-                                        style={{
-                                            borderColor: isSelected ? (rule.color || '#4F46E5') + '60' : undefined,
-                                            backgroundColor: isSelected ? (rule.color || '#4F46E5') + '15' : undefined,
-                                            color: isSelected ? (rule.color || '#4F46E5') : undefined,
-                                        }}
-                                    >
-                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: rule.color || '#4F46E5' }} />
-                                        {rule.name}
-                                        <span className="text-[10px] opacity-60">{ruleSlotCount}</span>
-                                    </button>
-                                    {/* Actions dropdown trigger */}
-                                    <div className="absolute -top-1 -right-1 opacity-0 group-hover/rule:opacity-100 transition-opacity z-10">
-                                        <div className="flex gap-0.5">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingRule(rule); }}
-                                                className="w-5 h-5 bg-card border border-border rounded-md flex items-center justify-center hover:bg-muted shadow-sm"
-                                                title="Редактировать"
-                                            >
-                                                <Edit2 className="w-2.5 h-2.5 text-muted-foreground" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setShowCloneModal(rule); setCloneData({ name: `${rule.name} (копия)`, startDate: '', endDate: '' }); }}
-                                                className="w-5 h-5 bg-card border border-border rounded-md flex items-center justify-center hover:bg-muted shadow-sm"
-                                                title="Клонировать"
-                                            >
-                                                <Copy className="w-2.5 h-2.5 text-muted-foreground" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteRule(rule.id); }}
-                                                className="w-5 h-5 bg-card border border-border rounded-md flex items-center justify-center hover:bg-destructive/10 shadow-sm"
-                                                title="Удалить"
-                                            >
-                                                <Trash2 className="w-2.5 h-2.5 text-destructive" />
-                                            </button>
-                                        </div>
-                                    </div>
+                        <div className="flex flex-col md:flex-row gap-4">
+                            {/* Private */}
+                            <button
+                                onClick={() => handleUpdateSettings({ scheduleMode: 'private' })}
+                                className={`flex-1 flex flex-col p-5 rounded-2xl border transition-all text-left group ${settings.scheduleMode === 'private' ? 'bg-primary/5 border-primary shadow-sm ring-1 ring-primary/20' : 'bg-background hover:bg-muted/50 border-border'}`}
+                            >
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings.scheduleMode === 'private' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:bg-muted-foreground/20'}`}><Lock className="w-4 h-4" /></div>
+                                    <span className="font-bold text-foreground">Приватный</span>
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* Mode selector + Buffer + Limits inline  */}
-                <div className="p-5 flex flex-col lg:flex-row gap-5">
-                    {/* Mode selector */}
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Shield className="w-4 h-4 text-accent" />
-                            <span className="text-sm font-semibold text-foreground">Режим записи</span>
-                        </div>
-                        <div className="flex gap-1.5 bg-muted/50 p-1 rounded-2xl">
-                            {[
-                                { value: 'private', label: 'Приватный', Icon: Lock },
-                                { value: 'readonly', label: 'Просмотр', Icon: Eye },
-                                { value: 'booking', label: 'Запись', Icon: CalendarCheck },
-                            ].map(m => (
-                                <button
-                                    key={m.value}
-                                    disabled={savingMode}
-                                    onClick={() => handleUpdateSettings({ scheduleMode: m.value })}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                                        settings.scheduleMode === m.value
-                                            ? 'bg-white text-foreground shadow-sm dark:bg-foreground/10'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    <m.Icon className="w-3.5 h-3.5" />
-                                    {m.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Buffer between sessions */}
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Coffee className="w-4 h-4 text-accent" />
-                            <span className="text-sm font-semibold text-foreground">Перерыв</span>
-                        </div>
-                        <div className="flex gap-1.5">
-                            {[0, 5, 10, 15, 20, 30].map(v => (
-                                <button
-                                    key={v}
-                                    onClick={() => handleUpdateSettings({ sessionBreak: v })}
-                                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                                        settings.sessionBreak === v
-                                            ? 'bg-accent text-accent-foreground shadow-sm'
-                                            : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent hover:border-border'
-                                    }`}
-                                >
-                                    {v === 0 ? '—' : `${v}′`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Max sessions per day */}
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Zap className="w-4 h-4 text-accent" />
-                            <span className="text-sm font-semibold text-foreground">Лимит/день</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => handleUpdateSettings({ maxSessionsPerDay: Math.max(1, (settings.maxSessionsPerDay || 6) - 1) })}
-                                className="w-10 h-10 bg-muted/50 hover:bg-muted rounded-xl flex items-center justify-center border border-border transition-colors"
-                            >
-                                <Minus className="w-4 h-4" />
+                                <span className="text-xs text-muted-foreground leading-relaxed">Клиенты не видят календарь. Запись только с вашего подтверждения.</span>
                             </button>
-                            <div className="flex-1 bg-muted/30 rounded-xl px-4 py-2 text-center">
-                                <span className="text-lg font-bold text-foreground">
-                                    {settings.maxSessionsPerDay ?? '∞'}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground block -mt-0.5">
-                                    {settings.maxSessionsPerDay === null ? 'без лимита' : 'в день'}
-                                </span>
+                            {/* Readonly */}
+                            <button
+                                onClick={() => handleUpdateSettings({ scheduleMode: 'readonly' })}
+                                className={`flex-1 flex flex-col p-5 rounded-2xl border transition-all text-left group ${settings.scheduleMode === 'readonly' ? 'bg-amber-500/5 border-amber-500 shadow-sm ring-1 ring-amber-500/20' : 'bg-background hover:bg-muted/50 border-border'}`}
+                            >
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings.scheduleMode === 'readonly' ? 'bg-amber-500 text-white' : 'bg-muted text-muted-foreground group-hover:bg-muted-foreground/20'}`}><Eye className="w-4 h-4" /></div>
+                                    <span className="font-bold text-foreground">Просмотр</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground leading-relaxed">Окна видны, но для брони кленту нужно написать вам сообщение.</span>
+                            </button>
+                            {/* Open */}
+                            <button
+                                onClick={() => handleUpdateSettings({ scheduleMode: 'booking' })}
+                                className={`flex-1 flex flex-col p-5 rounded-2xl border transition-all text-left group ${settings.scheduleMode === 'booking' ? 'bg-green-500/5 border-green-500 shadow-sm ring-1 ring-green-500/20' : 'bg-background hover:bg-muted/50 border-border'}`}
+                            >
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings.scheduleMode === 'booking' ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground group-hover:bg-muted-foreground/20'}`}><Check className="w-4 h-4" /></div>
+                                    <span className="font-bold text-foreground">Открыто</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground leading-relaxed">Автоматическая самостоятельная запись в свободные слоты.</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Section 2: Глобальные настройки */}
+                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
+                                <Clock className="w-5 h-5" />
                             </div>
-                            <button
-                                onClick={() => handleUpdateSettings({ maxSessionsPerDay: (settings.maxSessionsPerDay || 0) + 1 })}
-                                className="w-10 h-10 bg-muted/50 hover:bg-muted rounded-xl flex items-center justify-center border border-border transition-colors"
-                            >
-                                <Plus className="w-4 h-4" />
+                            <div>
+                                <h2 className="text-xl font-bold tracking-tight text-foreground">Глобальные лимиты</h2>
+                                <p className="text-sm text-muted-foreground">Применяются для всех шаблонов по умолчанию</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                            <div>
+                                <label className="block text-sm font-semibold text-foreground/90 mb-2">Длительность сессии (мин)</label>
+                                <select value={settings.defaultSessionDuration} onChange={e => handleUpdateSettings({ defaultSessionDuration: Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 min-h-[48px] text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                                    <option value={50}>50 минут</option><option value={60}>60 минут (1 час)</option><option value={80}>80 минут</option><option value={90}>90 минут (1.5 часа)</option>
+                                    <option value={120}>120 минут (2 часа)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-foreground/90 mb-2">Перерыв между сессиями (мин)</label>
+                                <select value={settings.sessionBreak} onChange={e => handleUpdateSettings({ sessionBreak: Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 min-h-[48px] text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                                    <option value={0}>Без перерыва</option><option value={5}>5 минут</option><option value={10}>10 минут</option><option value={15}>15 минут</option><option value={30}>30 минут</option>
+                                </select>
+                            </div>
+                            {/* Removed buffer and horizon settings because they might not be part of the UI but we can keep maxSessions */}
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-semibold text-foreground/90 mb-2">Максимум сессий в день</label>
+                                <select value={settings.maxSessionsPerDay || 0} onChange={e => handleUpdateSettings({ maxSessionsPerDay: Number(e.target.value) === 0 ? null : Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 min-h-[48px] text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                                    <option value={0}>Без лимита</option><option value={2}>2 сессии</option><option value={3}>3 сессии</option><option value={4}>4 сессии</option><option value={5}>5 сессий</option><option value={6}>6 сессий</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section 3: Шаблоны расписания */}
+                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                                    <Layers className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold tracking-tight text-foreground">Правила работы</h2>
+                                    <p className="text-sm text-muted-foreground">Шаблоны ваших регулярных часов</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowNewRule(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm hover:bg-primary/90 transition-all font-semibold text-sm active:scale-95">
+                                <Plus className="w-4 h-4" /> Шаблон
                             </button>
-                            {settings.maxSessionsPerDay !== null && (
-                                <button
-                                    onClick={() => handleUpdateSettings({ maxSessionsPerDay: null })}
-                                    className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-2 py-1 rounded-lg hover:bg-muted transition-colors"
-                                    title="Убрать лимит"
-                                >
-                                    ∞
-                                </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {rules.length === 0 && (
+                                <div className="p-8 border border-dashed border-border rounded-2xl text-center">
+                                    <Calendar className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                                    <h3 className="font-bold text-foreground mb-1">Нет активных правил</h3>
+                                    <p className="text-sm text-muted-foreground">Настройте свои рабочие часы, создав первый шаблон</p>
+                                </div>
                             )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Status Alerts ── */}
-            {activeSlots.length === 0 && upcomingSlots.length > 0 && (
-                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span className="text-sm font-semibold">
-                        Расписание начнётся с {new Date(upcomingSlots.sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime())[0].startDate!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                    </span>
-                </div>
-            )}
-            {activeSlots.length === 0 && upcomingSlots.length === 0 && expiredSlots.length > 0 && (
-                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span className="text-sm font-semibold">Расписание истекло — добавьте новые окна.</span>
-                    <button onClick={() => setShowNewSlot(true)} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">+ Шаблон</button>
-                </div>
-            )}
-            {activeSlots.length > 0 && daysUntilExpiry !== null && daysUntilExpiry <= 14 && (
-                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span className="text-sm font-semibold">
-                        Расписание действует ещё {daysUntilExpiry} {daysUntilExpiry === 1 ? 'день' : daysUntilExpiry < 5 ? 'дня' : 'дней'}
-                    </span>
-                    <button onClick={() => {
-                        // Find the rule with nearest expiry and open clone modal
-                        const expiringRule = rules.find(r => r.slots.some(s => s.endDate && new Date(s.endDate) <= new Date(Date.now() + 14 * 86400000)));
-                        if (expiringRule) {
-                            const endDate = new Date();
-                            endDate.setDate(endDate.getDate() + 90);
-                            setShowCloneModal(expiringRule);
-                            setCloneData({
-                                name: expiringRule.name,
-                                startDate: new Date().toISOString().split('T')[0],
-                                endDate: endDate.toISOString().split('T')[0],
-                            });
-                        } else {
-                            setShowNewSlot(true);
-                        }
-                    }} className="ml-auto text-xs font-bold bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">Продлить</button>
-                </div>
-            )}
-
-            {/* ── Prompt to add slots if empty ── */}
-            {visibleSlots.length === 0 && expiredSlots.length === 0 && (
-                <div className="bg-card rounded-3xl border border-border p-12 text-center shadow-sm">
-                    <div className="w-16 h-16 bg-accent/10 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                        <Sparkles className="w-8 h-8 text-accent" />
-                    </div>
-                    <h2 className="text-xl font-bold text-foreground mb-2">Создайте своё расписание</h2>
-                    <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-                        Нажмите на любое время в таймлайне ниже, чтобы добавить слот, или используйте шаблон для массового создания.
-                    </p>
-                    <div className="flex gap-3 justify-center">
-                        <button onClick={() => setShowNewSlot(true)}
-                            className="flex items-center gap-2 px-5 py-3 bg-accent text-accent-foreground rounded-2xl font-semibold text-sm shadow-sm hover:bg-accent/90 transition-all active:scale-[0.97]">
-                            <Plus className="w-4 h-4" />Создать шаблон
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Visual Timeline ── Desktop */}
-            <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden hidden md:block">
-                <div className="flex">
-                    {/* Time gutter */}
-                    <div className="w-14 shrink-0 border-r border-border/50 bg-muted/20">
-                        <div className="h-10 border-b border-border/50" /> {/* Header spacer */}
-                        <div className="relative" style={{ height: (TIMELINE_END - TIMELINE_START) * HOUR_HEIGHT }}>
-                            {timelineHours.map(h => (
-                                <div
-                                    key={h}
-                                    className="absolute right-2 text-[10px] font-medium text-muted-foreground/60 leading-none"
-                                    style={{ top: (h - TIMELINE_START) * HOUR_HEIGHT - 5 }}
-                                >
-                                    {h}:00
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Day columns */}
-                    <div className="flex-1 grid grid-cols-7 divide-x divide-border/30">
-                        {DAY_LABELS.map((day, dayIndex) => {
-                            const daySlots = slotsByDay[dayIndex];
-                            return (
-                                <div key={day} className="flex flex-col min-w-0">
-                                    {/* Day header */}
-                                    <div className="h-10 flex items-center justify-center border-b border-border/50 bg-muted/20">
-                                        <span className="text-xs font-bold text-foreground/70 uppercase tracking-wider">{day}</span>
-                                        {daySlots.length > 0 && (
-                                            <span className="ml-1.5 w-4 h-4 bg-accent/20 text-accent rounded-full text-[9px] font-bold flex items-center justify-center">
-                                                {daySlots.length}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Timeline body */}
-                                    <div
-                                        className="relative cursor-crosshair group/col"
-                                        style={{ height: (TIMELINE_END - TIMELINE_START) * HOUR_HEIGHT }}
-                                        onMouseLeave={() => setHoveredCell(null)}
-                                        onMouseMove={(e) => {
-                                            const rect = e.currentTarget.getBoundingClientRect();
-                                            const y = e.clientY - rect.top;
-                                            const time = yToTime(y);
-                                            setHoveredCell({ day: dayIndex, time });
-                                        }}
-                                        onClick={(e) => {
-                                            const rect = e.currentTarget.getBoundingClientRect();
-                                            const y = e.clientY - rect.top;
-                                            const time = yToTime(y);
-                                            handleClickTimeline(dayIndex, time, e);
-                                        }}
-                                    >
-                                        {/* Hour grid lines */}
-                                        {timelineHours.map(h => (
-                                            <div
-                                                key={h}
-                                                className="absolute left-0 right-0 border-t border-border/20"
-                                                style={{ top: (h - TIMELINE_START) * HOUR_HEIGHT }}
-                                            />
-                                        ))}
-                                        {/* Half-hour dashed lines */}
-                                        {timelineHours.map(h => (
-                                            <div
-                                                key={`${h}-half`}
-                                                className="absolute left-2 right-2 border-t border-dashed border-border/10"
-                                                style={{ top: (h - TIMELINE_START) * HOUR_HEIGHT + HALF_HOUR }}
-                                            />
-                                        ))}
-
-                                        {/* Existing slots — now with rule colors */}
-                                        {daySlots.map(slot => {
-                                            const top = timeToY(slot.startTime);
-                                            const bottom = timeToY(slot.endTime);
-                                            const height = bottom - top;
-                                            const isUpcoming = slot.startDate && new Date(slot.startDate) > today;
-                                            const dateFrom = slot.startDate ? new Date(slot.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
-                                            const dateTo = slot.endDate ? new Date(slot.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
-                                            const ruleColor = getSlotColor(slot);
-
-                                            return (
-                                                <div
-                                                    key={slot.id}
-                                                    className={`absolute left-1 right-1 rounded-xl border-2 px-2 py-1.5 overflow-hidden transition-all cursor-pointer hover:shadow-md z-10 group/slot ${
-                                                        isUpcoming ? 'opacity-60' : ''
-                                                    }`}
-                                                    style={{
-                                                        top,
-                                                        height: Math.max(height, 28),
-                                                        borderColor: ruleColor + '40',
-                                                        backgroundColor: ruleColor + '12',
-                                                    }}
-                                                    onClick={(e) => { e.stopPropagation(); setEditingSlot(slot); }}
-                                                    title={`${slot.startTime}–${slot.endTime} · ${slot.duration} мин · ${dateFrom} – ${dateTo}${slot.scheduleRule ? ` · ${slot.scheduleRule.name}` : ''}`}
-                                                >
-                                                    <div className="text-[11px] font-bold leading-tight" style={{ color: ruleColor }}>
-                                                        {slot.startTime}–{slot.endTime}
+                            {rules.map(rule => {
+                                const ruleSlots = slots.filter(s => s.scheduleRuleId === rule.id && !(s.endDate && new Date(s.endDate) < today));
+                                return (
+                                    <div key={rule.id} className="border border-border rounded-2xl overflow-hidden hover:border-primary/20 transition-all shadow-sm group">
+                                        <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/5">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', color: rule.color || '#4F46E5' }}>                                                    <Layers className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-lg text-foreground flex items-center gap-2 truncate">
+                                                        {rule.name}
+                                                        {!rule.isActive && <span className="bg-destructive/10 text-destructive text-[10px] px-2 py-0.5 rounded-md font-bold shrink-0">ОТКЛЮЧЕНО</span>}
                                                     </div>
-                                                    {height > 35 && (
-                                                        <div className="text-[9px] text-muted-foreground font-medium mt-0.5">
-                                                            {slot.duration}′ · {slot.format === 'offline' ? '🏢' : slot.format === 'both' ? '🖥️+🏢' : '🖥️'}
-                                                        </div>
-                                                    )}
-                                                    {/* Rule name badge */}
-                                                    {height > 50 && slot.scheduleRule && (
-                                                        <div className="text-[8px] mt-1 px-1.5 py-0.5 rounded-md inline-block font-semibold"
-                                                            style={{ backgroundColor: ruleColor + '18', color: ruleColor }}>
-                                                            {slot.scheduleRule.name}
-                                                        </div>
-                                                    )}
-                                                    {/* Date range badge */}
-                                                    {height > 70 && dateFrom && dateTo && (
-                                                        <div className="text-[8px] mt-0.5 text-muted-foreground/60">
-                                                            {dateFrom} – {dateTo}
-                                                        </div>
-                                                    )}
-                                                    {/* Delete button */}
-                                                    <button
-                                                        className="absolute top-1 right-1 w-5 h-5 bg-white/80 hover:bg-destructive/20 rounded-md flex items-center justify-center opacity-0 group-hover/slot:opacity-100 transition-all shadow-sm z-20"
-                                                        onClick={(e) => { e.stopPropagation(); rmSlot(slot.id); }}
-                                                    >
-                                                        <X className="w-3 h-3 text-destructive" />
-                                                    </button>
+                                                    <div className="text-xs text-muted-foreground font-medium mt-0.5 truncate">
+                                                        {rule.format === 'online' ? 'Онлайн' : rule.format === 'offline' ? 'Офлайн' : 'Смешанный'} • {rule.duration} мин
+                                                        {rule.endDate && ` • До ${new Date(rule.endDate).toLocaleDateString()}`}
+                                                    </div>
                                                 </div>
-                                            );
-                                        })}
-
-                                        {/* Buffer visualization between slots */}
-                                        {daySlots.slice(0, -1).map((slot, i) => {
-                                            if (settings.sessionBreak <= 0) return null;
-                                            const nextSlot = daySlots[i + 1];
-                                            const bufferStart = timeToY(slot.endTime);
-                                            const bufferEnd = timeToY(nextSlot.startTime);
-                                            const bufferHeight = bufferEnd - bufferStart;
-                                            if (bufferHeight <= 2) return null;
-
-                                            return (
-                                                <div
-                                                    key={`buffer-${slot.id}`}
-                                                    className="absolute left-2 right-2 bg-orange-100/40 rounded-lg flex items-center justify-center pointer-events-none z-5"
-                                                    style={{ top: bufferStart, height: bufferHeight }}
-                                                >
-                                                    {bufferHeight > 14 && (
-                                                        <Coffee className="w-3 h-3 text-orange-300" />
-                                                    )}
+                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-card rounded-xl border border-border p-1 shadow-sm shrink-0">
+                                                    <button onClick={() => setEditingRule(rule)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all" title="Настройки"><Edit2 className="w-4 h-4" /></button>
+                                                    <button onClick={() => { setShowCloneModal(rule); setCloneData({ name: `${rule.name} (копия)`, startDate: '', endDate: '' }); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all" title="Копировать"><Copy className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleDeleteRule(rule.id)} className="p-1.5 hover:bg-destructive/10 rounded-lg text-muted-foreground hover:text-destructive transition-all" title="Удалить"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
-                                            );
-                                        })}
-
-                                        {/* Hover indicator */}
-                                        {hoveredCell && hoveredCell.day === dayIndex && (
-                                            <div
-                                                className="absolute left-1 right-1 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 flex items-center justify-center pointer-events-none z-5 transition-all"
-                                                style={{
-                                                    top: timeToY(hoveredCell.time),
-                                                    height: (settings.defaultSessionDuration / 60) * HOUR_HEIGHT,
-                                                }}
-                                            >
-                                                <div className="flex items-center gap-1 text-[10px] font-bold text-primary/50">
-                                                    <Plus className="w-3 h-3" />
-                                                    {hoveredCell.time}
+                                                <div className="shrink-0 ml-2">
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" className="sr-only peer" checked={rule.isActive} onChange={() => handleUpdateActive(rule)} />
+                                                        <div className="w-11 h-6 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary shadow-inner"></div>
+                                                    </label>
                                                 </div>
                                             </div>
-                                        )}
+                                        </div>
+                                        <div className="p-5 border-t border-border/50 bg-background">
+                                            <div className="space-y-3">
+                                                {DAY_LABELS.map((dayName, dayIndex) => {
+                                                    const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a,b)=>a.startTime.localeCompare(b.startTime));
+                                                    if (daySlots.length === 0) return null;
+                                                    return (
+                                                        <div key={dayIndex} className="flex gap-4 items-start">
+                                                            <div className="w-8 font-semibold text-sm text-foreground uppercase pt-1 shrink-0">{dayName}</div>
+                                                            <div className="flex-1 flex flex-wrap gap-2">
+                                                                {daySlots.map(s => (
+                                                                    <div key={s.id} className="group/slot flex items-center gap-1.5 px-3 py-1.5 bg-muted/30 border border-border/50 rounded-lg text-sm font-bold hover:border-border transition-all">
+                                                                        <span>{s.startTime} – {s.endTime}</span>
+                                                                        <button onClick={() => setEditingSlot(s)} className="text-muted-foreground hover:text-foreground md:opacity-0 group-hover/slot:opacity-100 transition-opacity"><Edit2 className="w-3.5 h-3.5" /></button>
+                                                                        <button onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive md:opacity-0 group-hover/slot:opacity-100 transition-opacity"><X className="w-3.5 h-3.5" /></button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {ruleSlots.length === 0 && <div className="text-sm text-muted-foreground text-center py-4 bg-muted/20 rounded-xl">Часы работы не заданы</div>}
+                                            </div>
+                                            <button onClick={() => { setSelectedRuleId(rule.id); setShowNewSlot(true); }} className="mt-4 w-full py-2 border border-dashed border-border rounded-xl text-sm font-semibold text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
+                                                <Plus className="w-4 h-4" />Добавить часы
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
 
-                {/* Timeline legend */}
-                <div className="px-5 py-3 border-t border-border/50 bg-muted/10 flex items-center gap-5 text-[10px] text-muted-foreground font-medium flex-wrap">
-                    {rules.map(rule => (
-                        <span key={rule.id} className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded border" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', borderColor: (rule.color || '#4F46E5') + '40' }} />
-                            {rule.name}
-                        </span>
-                    ))}
-                    {settings.sessionBreak > 0 && (
-                        <span className="flex items-center gap-1.5"><Coffee className="w-3 h-3 text-orange-300" /> Перерыв {settings.sessionBreak}′</span>
-                    )}
-                    <span className="ml-auto">Кликните на пустое место → новый слот</span>
-                </div>
-            </div>
-
-            {/* ── Quick-Add Popover ── */}
-            {quickSlot && (
-                <>
-                    <div className="fixed inset-0 z-40" onClick={() => setQuickSlot(null)} />
-                    <div
-                        className="fixed z-50 bg-card rounded-2xl border border-border shadow-2xl p-4 w-72 animate-in fade-in slide-in-from-top-2 duration-200"
-                        style={{
-                            left: Math.min(quickSlot.posX - 144, window.innerWidth - 300),
-                            top: Math.min(quickSlot.posY + 8, window.innerHeight - 380),
-                        }}
-                    >
-                        <div className="flex items-center justify-between mb-3">
-                            <div>
-                                <div className="text-sm font-bold text-foreground">
-                                    {DAY_LABELS_FULL[quickSlot.day]}
+                    {/* Section 4: Блокировки */}
+                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+                                    <Palmtree className="w-5 h-5" />
                                 </div>
-                                <div className="text-xs text-muted-foreground">
-                                    {quickSlot.time} – {addMinutes(quickSlot.time, quickSlot.duration)}
+                                <div>
+                                    <h2 className="text-xl font-bold tracking-tight text-foreground">Отпуска и блокировки</h2>
+                                    <p className="text-sm text-muted-foreground">Временное скрытие слотов</p>
                                 </div>
                             </div>
-                            <button onClick={() => setQuickSlot(null)} className="p-1 hover:bg-muted rounded-lg transition-colors">
-                                <X className="w-4 h-4 text-muted-foreground" />
+                            <button onClick={() => setShowNewBlock(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-secondary text-secondary-foreground rounded-xl shadow-sm hover:bg-secondary/80 transition-all font-semibold text-sm active:scale-95">
+                                <Plus className="w-4 h-4" /> Добавить
                             </button>
                         </div>
-
-                        {/* Duration pills */}
-                        <div className="mb-3">
-                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Длительность</label>
-                            <div className="flex gap-1">
-                                {[50, 60, 80, 90].map(d => (
-                                    <button
-                                        key={d}
-                                        onClick={() => setQuickSlot(q => q ? { ...q, duration: d } : q)}
-                                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                            quickSlot.duration === d
-                                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                                        }`}
-                                    >
-                                        {d}′
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Format pills */}
-                        <div className="mb-3">
-                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Формат</label>
-                            <div className="flex gap-1">
-                                {[
-                                    { v: 'online', l: '🖥️ Онлайн' },
-                                    { v: 'offline', l: '🏢 Кабинет' },
-                                    { v: 'both', l: '🔄 Оба' },
-                                ].map(f => (
-                                    <button
-                                        key={f.v}
-                                        onClick={() => setQuickSlot(q => q ? { ...q, format: f.v } : q)}
-                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                                            quickSlot.format === f.v
-                                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                                        }`}
-                                    >
-                                        {f.l}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Date range */}
-                        <div className="mb-4">
-                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Действует</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <input
-                                        type="date"
-                                        value={quickSlot.startDate}
-                                        onChange={e => setQuickSlot(q => q ? { ...q, startDate: e.target.value } : q)}
-                                        className="w-full text-xs px-2 py-2 border border-border rounded-xl bg-background focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <input
-                                        type="date"
-                                        value={quickSlot.endDate}
-                                        onChange={e => setQuickSlot(q => q ? { ...q, endDate: e.target.value } : q)}
-                                        className="w-full text-xs px-2 py-2 border border-border rounded-xl bg-background focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Rule indicator */}
-                        {(selectedRuleId || rules.length > 0) && (
-                            <div className="mb-3 flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: (selectedRuleId ? rules.find(r => r.id === selectedRuleId)?.color : rules[0]?.color) || '#4F46E5' }} />
-                                Правило: {selectedRuleId ? rules.find(r => r.id === selectedRuleId)?.name : rules[0]?.name}
-                            </div>
-                        )}
-
-                        <button
-                            onClick={confirmQuickSlot}
-                            className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm active:scale-[0.97]"
-                        >
-                            Добавить слот
-                        </button>
-                    </div>
-                </>
-            )}
-
-            {/* ── Mobile Card View ── */}
-            <div className="md:hidden space-y-3">
-                {visibleSlots.length === 0 ? (
-                    <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
-                        <p className="text-sm text-muted-foreground">Нет окон расписания. Нажмите «Шаблон» для добавления.</p>
-                    </div>
-                ) : (
-                    (() => {
-                        const groups = new Map<string, { slots: Slot[]; days: number[] }>();
-                        visibleSlots.forEach(slot => {
-                            const key = `${slot.startTime}-${slot.endTime}-${slot.duration}-${slot.startDate || ''}-${slot.endDate || ''}-${slot.format || 'online'}-${slot.scheduleRuleId || ''}`;
-                            if (!groups.has(key)) groups.set(key, { slots: [], days: [] });
-                            const g = groups.get(key)!;
-                            g.slots.push(slot);
-                            if (!g.days.includes(slot.dayOfWeek)) g.days.push(slot.dayOfWeek);
-                        });
-                        return Array.from(groups.entries()).map(([key, group]) => {
-                            const sample = group.slots[0];
-                            const sortedDays = [...group.days].sort();
-                            const daysLabel = sortedDays.map(d => DAY_LABELS[d]).join(', ');
-                            const formatLabel = sample.format === 'offline' ? 'Кабинет' : sample.format === 'both' ? 'Онлайн + Кабинет' : 'Онлайн';
-                            const isUpcoming = sample.startDate && new Date(sample.startDate) > today;
-                            const ruleColor = getSlotColor(sample);
-                            return (
-                                <div key={key} className="rounded-2xl border p-4 shadow-sm bg-card" style={{ borderLeftWidth: 4, borderLeftColor: ruleColor }}>
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ backgroundColor: ruleColor + '15', color: ruleColor }}>{daysLabel}</span>
-                                                <span className="text-xs font-medium text-muted-foreground">{formatLabel}</span>
-                                                {isUpcoming && <span className="text-[10px] text-amber-600 font-bold">⏳ Будущее</span>}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {blocks.length === 0 && (
+                                <div className="col-span-full p-6 text-center text-sm font-medium text-muted-foreground">Нет активных блоков</div>
+                            )}
+                            {blocks.map(block => {
+                                const b = new Date(block.startDate);
+                                const e = new Date(block.endDate);
+                                const Icon = BLOCK_ICONS[block.type] || Coffee;
+                                return (
+                                    <div key={block.id} className="p-4 bg-background border border-border rounded-2xl shadow-sm flex items-center justify-between gap-3 group">
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <div className="w-8 h-8 bg-muted text-muted-foreground rounded-xl flex items-center justify-center shrink-0"><Icon className="w-4 h-4" /></div>
+                                            <div className="truncate">
+                                                <div className="text-sm font-bold text-foreground truncate">{BLOCK_LABELS[block.type] || 'Блок'}</div>
+                                                <div className="text-xs text-muted-foreground">{b.toLocaleDateString()} — {e.toLocaleDateString()}</div>
                                             </div>
-                                            <div className="text-base font-bold text-foreground">{sample.startTime} – {sample.endTime}</div>
-                                            <div className="text-xs text-muted-foreground mt-0.5">{sample.duration} мин</div>
-                                            {sample.scheduleRule && (
-                                                <div className="flex items-center gap-1 text-xs mt-1 text-muted-foreground">
-                                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ruleColor }} />
-                                                    {sample.scheduleRule.name}
-                                                </div>
-                                            )}
-                                            {sample.startDate && sample.endDate && (
-                                                <div className="flex items-center gap-1 text-xs mt-1 text-muted-foreground">
-                                                    <RefreshCw className="w-3 h-3" />
-                                                    {new Date(sample.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} – {new Date(sample.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                                                </div>
-                                            )}
                                         </div>
-                                        <div className="flex gap-1.5 ml-2">
-                                            <button onClick={() => setEditingSlot(sample)} className="p-2 bg-muted/50 rounded-xl hover:bg-muted transition-colors">
-                                                <Edit2 className="w-4 h-4 text-muted-foreground" />
-                                            </button>
-                                            <button onClick={() => { group.slots.forEach(s => rmSlot(s.id)); }} className="p-2 bg-destructive/10 rounded-xl hover:bg-destructive/20 transition-colors">
-                                                <Trash2 className="w-4 h-4 text-destructive" />
-                                            </button>
-                                        </div>
+                                        <button onClick={() => rmBlock(block.id)} className="p-2 bg-muted/50 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all shrink-0 md:opacity-0 group-hover:opacity-100">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                </div>
-                            );
-                        });
-                    })()
-                )}
-            </div>
-
-            {/* ── Expired slots ── */}
-            {expiredSlots.length > 0 && (
-                <div>
-                    <button
-                        onClick={() => setShowExpired(v => !v)}
-                        className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors py-1"
-                    >
-                        {showExpired ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        История ({expiredSlots.length})
-                    </button>
-                    {showExpired && (
-                        <div className="mt-2 space-y-1">
-                            {expiredSlots.map(slot => (
-                                <div key={slot.id} className="flex items-center justify-between px-4 py-2 bg-muted/20 rounded-xl text-sm group">
-                                    <span className="text-muted-foreground font-medium">
-                                        {DAY_LABELS[slot.dayOfWeek]} {slot.startTime}–{slot.endTime} · {slot.duration}′
-                                        {slot.endDate && <span className="ml-2 text-xs opacity-50">до {new Date(slot.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>}
-                                    </span>
-                                    <button onClick={() => rmSlot(slot.id)} className="p-1 rounded-lg hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                    </button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
-                    )}
+                    </div>
                 </div>
-            )}
 
-            {/* ── Time Blocks ── */}
-            <div>
-                <h2 className="text-lg font-bold mb-3 text-foreground tracking-tight">Блокировки</h2>
-                {blocks.length === 0 ? (
-                    <div className="bg-card rounded-3xl border border-border p-8 text-center shadow-sm">
-                        <div className="w-10 h-10 bg-muted/50 rounded-2xl flex items-center justify-center mx-auto mb-2">
-                            <Calendar className="w-5 h-5 text-muted-foreground/40" />
-                        </div>
-                        <p className="text-muted-foreground text-sm">Нет активных блокировок</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {blocks.map(b => {
-                            const Icon = BLOCK_ICONS[b.type] || Coffee;
-                            return (
-                                <div key={b.id} className="bg-card rounded-2xl border border-border p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-all group">
-                                    <div className={`w-10 h-10 shrink-0 rounded-2xl border-2 bg-transparent flex items-center justify-center ${b.type === 'vacation' ? 'border-accent/30 text-accent' : 'border-primary/30 text-primary'}`}>
-                                        <Icon className="w-5 h-5" />
+                {/* Right Column: Client Preview */}
+                <div className="hidden lg:block w-full lg:w-[35%] sticky top-8">
+                    <div className="bg-gradient-to-b from-card to-card/50 border border-border rounded-[32px] p-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl" />
+                        <div className="relative z-10 space-y-6">
+                            {/* App Header simulation */}
+                            <div className="flex items-center justify-between border-b border-border/50 pb-5">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center border text-muted-foreground">
+                                        <User className="w-5 h-5" />
                                     </div>
-                                    <div className="flex-1 min-w-0 pt-0.5">
-                                        <div className="font-bold text-sm text-foreground">{BLOCK_LABELS[b.type]}</div>
-                                        <div className="text-xs font-medium text-muted-foreground mt-0.5">
-                                            {new Date(b.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — {new Date(b.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                                        </div>
-                                        {b.reason && <div className="text-xs text-foreground/70 mt-1.5 bg-muted/50 p-2 rounded-xl border border-border/50">{b.reason}</div>}
+                                    <div>
+                                        <div className="text-sm font-bold text-foreground">Запись на прием</div>
+                                        <div className="text-[10px] text-muted-foreground">{settings.scheduleMode === 'private' ? 'Приватный режим' : 'Календарь'}</div>
                                     </div>
-                                    <button onClick={() => rmBlock(b.id)} className="p-1.5 hover:bg-destructive/10 rounded-xl transition-colors opacity-0 group-hover:opacity-100">
-                                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                    </button>
                                 </div>
-                            );
-                        })}
+                                <button onClick={openPreview} className="text-primary hover:bg-primary/5 p-2 rounded-xl transition-colors"><RefreshCw className="w-4 h-4" /></button>
+                            </div>
+
+                            {/* App Body simulation */}
+                            <div className="min-h-[300px]">
+                                {settings.scheduleMode === 'private' ? (
+                                    <div className="text-center py-12 px-4">
+                                        <Lock className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                                        <h3 className="font-bold text-lg mb-2">Запись временно закрыта</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">Прямо сейчас онлайн бронирование недоступно. Свяжитесь со специалистом лично.</p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="text-sm font-bold text-foreground mb-3">Свободные даты</p>
+                                        <div className="grid grid-cols-7 gap-1 mb-6">
+                                            {previewDates.length === 0 ? (
+                                                <div className="col-span-7 flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" /></div>
+                                            ) : (
+                                                previewDates.map(dateStr => {
+                                                    const [, m, d] = dateStr.split('-');
+                                                    const isSelected = previewSelectedDate === dateStr;
+                                                    return (
+                                                        <button key={dateStr} onClick={() => selectPreviewDate(dateStr)} className={`aspect-square flex items-center justify-center rounded-xl text-xs font-bold transition-all ${isSelected ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'bg-muted/30 text-muted-foreground hover:bg-muted/80'}`}>
+                                                            {Number(d)}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                        {previewSelectedDate && (
+                                            <div>
+                                                <p className="text-sm font-bold text-foreground mb-3">Время сессии</p>
+                                                {previewLoading ? (
+                                                    <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" /></div>
+                                                ) : previewTimes.length === 0 ? (
+                                                    <div className="text-center py-4 text-sm text-muted-foreground">Нет слотов на эту дату</div>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {previewTimes.map(t => (
+                                                            <div key={t.time} className="p-3 bg-background border border-border rounded-xl text-center shadow-sm cursor-pointer hover:border-primary/50 transition-colors">
+                                                                <div className="text-sm font-bold text-foreground">{t.time}</div>
+                                                                <div className="text-[10px] text-muted-foreground mt-1">{t.format === 'offline' ? 'Кабинет' : 'Онлайн'}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                )}
+                </div>
             </div>
 
-            {/* ── Modals ── */}
+
+{/* ── Modals ── */}
 
             {/* New Rule Modal */}
             {showNewRule && <Modal title="Новое правило" onClose={() => setShowNewRule(false)} onSubmit={handleCreateRule}>

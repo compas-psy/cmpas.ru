@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle, BarChart3, FileText } from 'lucide-react';
+import { Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle, BarChart3, FileText, Layers, LayoutDashboard } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navGroups = [
     {
-        label: 'Работа',
+        label: '', // no label for the main group
         items: [
-            { href: '/diary', label: 'Календарь', icon: Calendar },
-            { href: '/diary/clients', label: 'Клиенты', icon: Users },
+            { href: '/diary', label: 'Сегодня', icon: Layers },
+            { href: '/diary/calendar', label: 'Календарь', icon: Calendar },
             { href: '/diary/availability', label: 'Расписание', icon: Clock },
+            { href: '/diary/clients', label: 'Клиенты', icon: Users },
         ],
     },
     {
@@ -20,13 +21,12 @@ const navGroups = [
             { href: '/diary/notifications', label: 'Уведомления', icon: Bell },
             { href: '/diary/integrations', label: 'Интеграции', icon: Link2 },
             { href: '/diary/settings', label: 'Настройки', icon: Settings },
+            { href: '/diary/help', label: 'Помощь', icon: HelpCircle },
         ],
     },
 ];
 
-const secondaryNavItems = [
-    { href: '/diary/help', label: 'Помощь', icon: HelpCircle },
-];
+const secondaryNavItems: any[] = []; // handled in Sistema now
 
 export function SidebarNav() {
     const pathname = usePathname();
@@ -67,12 +67,14 @@ export function SidebarNav() {
 
             {/* Grouped navigation */}
             {navGroups.map((group, groupIdx) => (
-                <div key={group.label} className={groupIdx > 0 ? 'mt-5' : ''}>
-                    <div className="px-4 mb-2">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/40">
-                            {group.label}
-                        </span>
-                    </div>
+                <div key={groupIdx} className={groupIdx > 0 ? 'mt-5' : ''}>
+                    {group.label && (
+                        <div className="px-4 mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/40">
+                                {group.label}
+                            </span>
+                        </div>
+                    )}
                     <ul className="space-y-1">
                         {group.items.map((item) => {
                             const Icon = item.icon;
