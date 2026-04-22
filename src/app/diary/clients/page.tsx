@@ -623,7 +623,7 @@ export default function ClientsPage() {
         const name = clientName(selectedClient);
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200 p-6">
+                <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200 p-6">
                     <div className="text-center mb-6">
                         <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Trash2 className="w-8 h-8 text-destructive" />
@@ -652,7 +652,7 @@ export default function ClientsPage() {
         if (!showEditQuestionnaire) return null;
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-card rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex items-center justify-between p-6 border-b border-border/50">
                         <h2 className="text-xl font-bold text-foreground">Анкета клиента</h2>
                         <button onClick={() => setShowEditQuestionnaire(false)} className="p-2 hover:bg-muted rounded-xl"><X className="w-5 h-5" /></button>
@@ -824,7 +824,7 @@ function QuestionnaireView({ data }: { data?: QuestionnaireData | null }) {
 function NewClientModal({ newClient, setNewClient, onCreate, onClose }: { newClient: { name: string; phone: string; email: string; gender: string }; setNewClient: (fn: (s: typeof newClient) => typeof newClient) => void; onCreate: () => void; onClose: () => void }) {
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex items-center justify-between p-6 pb-4 border-b border-border/50">
                     <h2 className="text-xl font-bold">Новый клиент</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl"><X className="w-5 h-5" /></button>

@@ -507,7 +507,7 @@ export default function AvailabilityPage() {
                 <div className="w-full lg:w-[65%] space-y-6">
                     
                     {/* Section 1: Режим записи для клиентов */}
-                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm overflow-hidden relative">
+                    <div className="bg-card border border-border rounded-2xl p-6 shadow-card overflow-hidden relative">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                                 <Sparkles className="w-5 h-5" />
@@ -556,7 +556,7 @@ export default function AvailabilityPage() {
                     </div>
 
                     {/* Section 2: Глобальные настройки */}
-                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+                    <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-10 h-10 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
                                 <Clock className="w-5 h-5" />
@@ -592,7 +592,7 @@ export default function AvailabilityPage() {
                     </div>
 
                     {/* Section 3: Шаблоны расписания */}
-                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+                    <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
@@ -680,7 +680,7 @@ export default function AvailabilityPage() {
                     </div>
 
                     {/* Section 4: Блокировки */}
-                    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+                    <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
@@ -931,7 +931,7 @@ export default function AvailabilityPage() {
             {/* Client Preview Modal */}
             {showPreview && (
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="flex items-center justify-between p-5 border-b border-border/50 bg-muted/10">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-5 h-5 text-primary" />
@@ -1177,7 +1177,7 @@ export default function AvailabilityPage() {
 function Modal({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: React.ReactNode }) {
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-card rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between p-5 border-b border-border/50 bg-muted/10">
                     <h2 className="text-lg font-bold tracking-tight">{title}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-5 h-5" /></button>

@@ -252,7 +252,7 @@ export default function IntegrationsPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Telegram */}
-                    <div className="bg-card rounded-3xl border border-border p-5 shadow-sm flex flex-col gap-4">
+                    <div className="bg-card rounded-2xl border border-border p-5 shadow-card flex flex-col gap-4">
                         <div className="flex items-center gap-3">
                             <div className="w-12 h-12 rounded-2xl bg-[#2AABEE] flex items-center justify-center shrink-0 shadow-sm">
                                 <svg viewBox="0 0 24 24" className="w-7 h-7 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
@@ -298,7 +298,7 @@ export default function IntegrationsPage() {
                     </div>
 
                     {/* MAX */}
-                    <div className="bg-card rounded-3xl border border-border p-5 shadow-sm flex flex-col gap-4">
+                    <div className="bg-card rounded-2xl border border-border p-5 shadow-card flex flex-col gap-4">
                         <div className="flex items-center gap-3">
                             <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden border border-border/50">
                                 <Image src="/icons/MAX.svg" alt="MAX" width={48} height={48} className="w-full h-full object-cover" />
@@ -346,7 +346,7 @@ export default function IntegrationsPage() {
 
             {/* Connected */}
             {integrations.length > 0 && (
-                <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+                <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                     <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">Подключённые</h2>
                     <div className="space-y-4">
                         {integrations.map(i => {
@@ -423,7 +423,7 @@ export default function IntegrationsPage() {
             )}
 
             {/* Available */}
-            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">Доступные интеграции</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {availableProviders.map(p => {
@@ -461,7 +461,7 @@ export default function IntegrationsPage() {
                 <h2 className="text-2xl font-bold tracking-tight text-foreground">Видеоконференции</h2>
             </div>
 
-            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <p className="text-sm font-medium text-muted-foreground mb-5">Подключите сервис видеоконференций для автоматического создания ссылок на встречи</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {[
@@ -489,7 +489,7 @@ export default function IntegrationsPage() {
             {/* Yandex Connection Modal */}
             {showYandexForm && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowYandexForm(false)}>
-                    <div className="bg-card rounded-3xl shadow-2xl max-w-md w-full p-8" onClick={e => e.stopPropagation()}>
+                    <div className="bg-card rounded-2xl shadow-floating max-w-md w-full p-8" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-4 mb-6">
                             <div className="w-12 h-12 bg-[#FC3F1D] rounded-2xl flex items-center justify-center text-white overflow-hidden border border-border/50 shadow-sm">
                                 <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={48} height={48} className="w-full h-full object-cover" />
@@ -567,7 +567,7 @@ export default function IntegrationsPage() {
             )}
 
             {/* Sync Settings */}
-            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-6 flex items-center gap-3 text-foreground tracking-tight">
                     <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
                         <ShieldCheck className="w-5 h-5" />

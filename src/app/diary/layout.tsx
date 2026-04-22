@@ -3,7 +3,7 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { LogOut } from 'lucide-react';
+import { LogOut, Sparkles } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { SidebarNav } from './sidebar-nav';
 import { MobileSidebar } from './mobile-sidebar';
@@ -17,35 +17,76 @@ export const metadata: Metadata = {
     robots: { index: false, follow: false },
 };
 
-function SidebarContent({ userName, userInitials }: { userName: string; userInitials: string }) {
+function TrialCard({ daysLeft, totalDays }: { daysLeft: number; totalDays: number }) {
+    const progress = Math.max(0, Math.min(100, ((totalDays - daysLeft) / totalDays) * 100));
     return (
-        <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
+        <div className="mx-4 mb-3 bg-forest-900/60 rounded-2xl p-4 border border-white/5">
+            <div className="flex items-center justify-between mb-2">
+                <span className="text-[13px] font-bold text-white/90">Пробный период</span>
+                <Sparkles className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-[12px] text-white/50 font-medium mb-3">
+                Осталось {daysLeft} дней
+            </div>
+            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-2">
+                <div
+                    className="h-full bg-accent rounded-full transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
+            <div className="text-[11px] text-white/40 font-medium mb-3">
+                Использовано {Math.round(progress)}% функций
+            </div>
+            <Link
+                href="/billing"
+                className="block w-full py-2.5 bg-accent text-white text-center rounded-xl text-[13px] font-bold hover:bg-accent/90 transition-all active:scale-[0.98]"
+            >
+                Выбрать тариф
+            </Link>
+        </div>
+    );
+}
+
+function SidebarContent({
+    userName,
+    userInitials,
+    daysLeft,
+}: {
+    userName: string;
+    userInitials: string;
+    daysLeft: number | null;
+}) {
+    return (
+        <div className="flex flex-col h-full bg-sidebar">
             {/* Logo */}
-            <div className="p-6">
+            <div className="px-6 pt-6 pb-4">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-9 h-9 rounded-xl bg-white/8 flex items-center justify-center flex-shrink-0 overflow-hidden">
                         <img src="/icon.png" alt="Компаc" className="w-full h-full object-contain" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-lg font-bold text-sidebar-foreground tracking-widest uppercase truncate">КОМПАС</p>
-                    </div>
+                    <p className="text-[17px] font-bold text-white tracking-[0.12em] uppercase">КОМПАС</p>
                 </div>
             </div>
-
-            <div className="mx-6 h-px bg-sidebar-border" />
 
             {/* Navigation */}
             <SidebarNav />
 
-            {/* Footer */}
-            <div className="p-4 mt-auto border-t border-sidebar-border">
-                <Link
-                    href="/"
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive transition-colors text-sm font-semibold"
-                >
-                    <LogOut className="w-5 h-5" />
-                    <span>Выйти</span>
-                </Link>
+            {/* Trial Card or Spacer */}
+            <div className="mt-auto">
+                {daysLeft !== null && daysLeft > 0 && (
+                    <TrialCard daysLeft={daysLeft} totalDays={30} />
+                )}
+
+                {/* Logout */}
+                <div className="px-4 pb-4 pt-2 border-t border-sidebar-border">
+                    <Link
+                        href="/"
+                        className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-white/50 hover:bg-white/5 hover:text-white/80 transition-all text-[14px] font-medium"
+                    >
+                        <LogOut className="w-[18px] h-[18px]" />
+                        <span>Выйти</span>
+                    </Link>
+                </div>
             </div>
         </div>
     );
@@ -119,20 +160,20 @@ export default async function DiaryLayout({
 
     return (
         <div className="min-h-screen bg-background flex">
-            {/* Desktop sidebar */}
-            <aside className="hidden md:flex w-72 border-r border-sidebar-border fixed h-full flex-col z-30 shadow-sm">
-                <SidebarContent userName={userName} userInitials={userInitials} />
+            {/* Desktop sidebar — 252px width */}
+            <aside className="hidden md:flex w-[252px] fixed h-full flex-col z-30" style={{ boxShadow: '4px 0 24px rgba(20,32,24,0.06)' }}>
+                <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
             </aside>
 
             {/* Mobile sidebar */}
             <MobileSidebar>
-                <SidebarContent userName={userName} userInitials={userInitials} />
+                <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
             </MobileSidebar>
 
-            {/* Main content */}
-            <main className="flex-1 md:ml-72 pt-16 md:pt-0 min-h-screen">
+            {/* Main content — 252px offset, 32px padding */}
+            <main className="flex-1 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
                 {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
-                <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-6xl mx-auto">
+                <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto">
                     {children}
                 </div>
             </main>

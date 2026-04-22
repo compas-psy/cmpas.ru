@@ -180,20 +180,20 @@ export default function SettingsPage() {
         <div className="space-y-5 pb-8 max-w-3xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-foreground">Настройки</h1>
-                    <p className="text-muted-foreground text-sm mt-1">Параметры вашего кабинета и расписания</p>
+                    <h1 className="text-[32px] md:text-[40px] font-bold tracking-tight text-foreground leading-[1.1]">Настройки</h1>
+                    <p className="text-muted-foreground text-[15px] mt-2 font-medium">Параметры вашего кабинета и расписания</p>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.98] disabled:opacity-50">
+                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-semibold shadow-card active:scale-[0.97] disabled:opacity-50">
                     <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
                 </button>
             </div>
 
             {/* Billing */}
-            <Link href="/billing" className="block bg-card border border-border rounded-3xl p-5 shadow-sm hover:border-primary/40 transition-colors group">
+            <Link href="/billing" className="block bg-card border border-border rounded-2xl p-5 shadow-card hover:border-primary/40 hover:shadow-card-hover transition-all group">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center shrink-0">
                             <CreditCard className="w-5 h-5" />
                         </div>
                         <div>
@@ -212,9 +212,9 @@ export default function SettingsPage() {
             </Link>
 
             {/* Timezone */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
                         <Clock className="w-4 h-4 md:w-5 md:h-5" />
                     </div>
                     Часовой пояс
@@ -244,9 +244,9 @@ export default function SettingsPage() {
             </div>
 
             {/* Date & Time Format */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
                         <Clock className="w-5 h-5" />
                     </div>
                     Формат даты и времени
@@ -301,7 +301,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Рабочий процесс и Уведомления */}
-            <div className="bg-card rounded-3xl border border-border shadow-sm p-6 space-y-6">
+            <div className="bg-card rounded-2xl border border-border shadow-card p-6 space-y-6">
                 <div className="flex items-center gap-3 border-b border-border/50 pb-4">
                     <Video className="w-5 h-5 text-primary" />
                     <h2 className="text-xl font-bold tracking-tight">Рабочий процесс и Уведомления</h2>
@@ -367,9 +367,9 @@ export default function SettingsPage() {
             </div>
 
             {/* Session Formats (remaining parts) */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-orange-soft text-orange-500 flex items-center justify-center">
                         <Video className="w-5 h-5" />
                     </div>
                     Форматы сессий
@@ -398,9 +398,9 @@ export default function SettingsPage() {
             </div>
 
             {/* Cabinets / Addresses */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-blue-soft text-blue-500 flex items-center justify-center">
                         <MapPin className="w-5 h-5" />
                     </div>
                     Офлайн кабинеты
@@ -468,9 +468,9 @@ export default function SettingsPage() {
             </div>
 
             {/* Cancellation Policy */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-destructive/30 text-destructive bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-red-soft text-red-500 flex items-center justify-center">
                         <AlertCircle className="w-5 h-5" />
                     </div>
                     Правила отмены

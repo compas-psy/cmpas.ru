@@ -1,41 +1,156 @@
 @import "tailwindcss";
 
 @theme {
-    --color-primary: #1a4d3a;
-    --color-primary-foreground: #ffffff;
-    --color-background: #faf8f5;
-    --color-accent: #c9a961;
-    --color-accent-foreground: #ffffff;
-    --color-foreground: #1a4d3a;
-    --color-muted: rgba(26, 77, 58, 0.05);
-    /* #1a4d3a at 5% */
-    --color-muted-foreground: rgba(26, 77, 58, 0.6);
-    --color-border: rgba(26, 77, 58, 0.1);
-    --color-input: #ffffff;
-    --color-destructive: #d4183d;
-    --color-destructive-foreground: #ffffff;
-    --color-card: #ffffff;
-    --color-card-foreground: #1a4d3a;
-    --color-popover: #ffffff;
-    --color-secondary: #f5f2ed;
-    --color-secondary-foreground: #1a4d3a;
-    --color-ring: #c9a961;
+  /* ── Forest Greens (sidebar, primary) ── */
+  --color-forest-900: #143D2F;
+  --color-forest-800: #1D4735;
+  --color-forest-700: #285B46;
+  --color-forest-600: #2F6A52;
 
-    --color-sidebar: #1a4d3a;
-    --color-sidebar-foreground: #faf8f5;
-    --color-sidebar-primary: #c9a961;
-    --color-sidebar-primary-foreground: #1a4d3a;
-    --color-sidebar-accent: rgba(255, 255, 255, 0.1);
-    --color-sidebar-accent-foreground: #ffffff;
-    --color-sidebar-border: rgba(255, 255, 255, 0.1);
-    --color-sidebar-ring: #c9a961;
+  /* ── Sage (soft surfaces) ── */
+  --color-sage-50: #F6FAF6;
+  --color-sage-100: #EEF4EF;
+  --color-sage-150: #E7F0EA;
+  --color-sage-200: #DDE9E1;
 
-    --radius-sm: calc(6px - 4px);
-    --radius-md: calc(6px - 2px);
-    --radius-lg: 6px;
-    --radius-xl: calc(6px + 4px);
-    --radius-2xl: calc(6px + 10px);
+  /* ── Semantic Colors ── */
+  --color-primary: #1D4735;
+  --color-primary-foreground: #ffffff;
+  --color-background: #F7F8F4;
+  --color-foreground: #142018;
+  --color-card: #ffffff;
+  --color-card-foreground: #142018;
+  --color-muted: #F2F4EF;
+  --color-muted-foreground: #5F6C64;
+  --color-border: #E4E9E3;
+  --color-input: #ffffff;
+  --color-ring: #285B46;
 
-    /* System fonts are default in Tailwind, no need to override unless specified.
-     User requested default system fonts. */
+  --color-accent: #CC9E50;
+  --color-accent-foreground: #ffffff;
+  --color-secondary: #F2F4EF;
+  --color-secondary-foreground: #142018;
+  --color-destructive: #E35D4F;
+  --color-destructive-foreground: #ffffff;
+
+  --color-popover: #ffffff;
+  --color-popover-foreground: #142018;
+
+  /* ── Sidebar ── */
+  --color-sidebar: #1D4735;
+  --color-sidebar-foreground: #F6FAF6;
+  --color-sidebar-primary: rgba(246, 250, 246, 0.15);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: rgba(255, 255, 255, 0.08);
+  --color-sidebar-accent-foreground: rgba(255, 255, 255, 0.9);
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-sidebar-ring: #285B46;
+  --color-sidebar-muted: rgba(255, 255, 255, 0.5);
+
+  /* ── Status / Accent Colors ── */
+  --color-amber-500: #CC9E50;
+  --color-amber-400: #D8AE67;
+  --color-blue-soft: #EAF2FF;
+  --color-blue-500: #3B82F6;
+  --color-violet-soft: #F2ECFF;
+  --color-violet-500: #8B5CF6;
+  --color-orange-soft: #FFF2E8;
+  --color-orange-500: #F08A24;
+  --color-red-soft: #FFF0EE;
+  --color-red-500: #E35D4F;
+  --color-success-soft: #EAF7EE;
+  --color-success-500: #3B8F5A;
+
+  /* ── Radii ── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 999px;
+}
+
+/* ── Utility: Card shadows ── */
+.shadow-card {
+  box-shadow: 0 8px 30px rgba(20, 32, 24, 0.06);
+}
+.shadow-card-hover {
+  box-shadow: 0 10px 34px rgba(20, 32, 24, 0.09);
+}
+.shadow-floating {
+  box-shadow: 0 14px 34px rgba(20, 32, 24, 0.10);
+}
+
+/* ── Utility: Typography ── */
+.text-page-title {
+  font-size: 40px;
+  line-height: 44px;
+  font-weight: 700;
+}
+.text-hero-title {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 650;
+}
+.text-section-title {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 650;
+}
+.text-body-primary {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+.text-body-secondary {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 450;
+}
+.text-small-meta {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.text-kpi-number {
+  font-size: 32px;
+  line-height: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.text-sidebar-primary {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.text-sidebar-caption {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Tabular nums for time/metrics ── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Smooth scroll ── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Hide scrollbar for mini-app style ── */
+.telegram-miniapp-scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.telegram-miniapp-scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Safe area for iOS ── */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

@@ -153,7 +153,7 @@ export default function NotificationsPage() {
             </div>
 
             {/* Psychologist notifications */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
                         <Bell className="w-4 h-4 md:w-5 md:h-5" />
@@ -198,7 +198,7 @@ export default function NotificationsPage() {
             </div>
 
             {/* Client notifications */}
-            <div className="bg-card rounded-3xl border border-border p-4 md:p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
                         <BellRing className="w-4 h-4 md:w-5 md:h-5" />

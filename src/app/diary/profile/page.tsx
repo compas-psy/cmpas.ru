@@ -105,7 +105,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Avatar and Name */}
-            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
                     <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
                         <User className="w-5 h-5" />
@@ -151,7 +151,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Methods */}
-            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
                     <div className="w-10 h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
                         <Briefcase className="w-5 h-5" />
@@ -203,7 +203,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Pricing */}
-            <div className="bg-card rounded-3xl border border-border p-6 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
                     <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
                         <span className="text-lg font-bold">₽</span>
