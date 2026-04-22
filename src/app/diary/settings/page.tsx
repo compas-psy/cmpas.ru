@@ -174,339 +174,248 @@ export default function SettingsPage() {
         }
     };
 
+    const [activeTab, setActiveTab] = useState('profile');
+
+    const tabs = [
+        { id: 'profile', icon: '👤', label: 'Профиль' },
+        { id: 'time', icon: '🕐', label: 'Время и язык' },
+        { id: 'offices', icon: '📍', label: 'Офлайн-кабинеты' },
+        { id: 'cancellation', icon: '⚠️', label: 'Правила отмены' },
+        { id: 'billing', icon: '💳', label: 'Подписка' },
+        { id: 'security', icon: '🔒', label: 'Безопасность' },
+        { id: 'export', icon: '📦', label: 'Экспорт данных' },
+    ];
+
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
     return (
-        <div className="space-y-5 pb-8 max-w-3xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="pb-8">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-[32px] md:text-[40px] font-bold tracking-tight text-foreground leading-[1.1]">Настройки</h1>
-                    <p className="text-muted-foreground text-[15px] mt-2 font-medium">Параметры вашего кабинета и расписания</p>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Настройки</h1>
+                    <p className="text-muted-foreground text-sm mt-1">Управляйте параметрами кабинета и расписания</p>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-semibold shadow-card active:scale-[0.97] disabled:opacity-50">
-                    <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-bold shadow-card active:scale-[0.97] disabled:opacity-50">
+                    <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить изменения'}
                 </button>
             </div>
 
-            {/* Billing */}
-            <Link href="/billing" className="block bg-card border border-border rounded-2xl p-5 shadow-card hover:border-primary/40 hover:shadow-card-hover transition-all group">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center shrink-0">
-                            <CreditCard className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="text-base font-semibold text-foreground">Подписка и оплата</p>
-                            <p className="text-sm text-muted-foreground font-medium">
-                                {trialDaysLeft === null
-                                    ? 'Пробный период'
-                                    : trialDaysLeft > 0
-                                        ? `Пробный период: осталось ${trialDaysLeft} дн.`
-                                        : 'Пробный период завершён'}
-                            </p>
-                        </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left: Sidebar Tabs */}
+                <div className="w-full lg:w-[220px] shrink-0">
+                    <nav className="bg-card border border-border rounded-2xl p-2 shadow-card space-y-0.5 lg:sticky lg:top-4">
+                        {tabs.map(t => (
+                            <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all text-left ${activeTab === t.id ? 'bg-primary/10 text-forest-700' : 'text-muted-foreground hover:bg-sage-50 hover:text-foreground'}`}>
+                                <span className="text-[15px]">{t.icon}</span>
+                                {t.label}
+                                {t.id === activeTab && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                            </button>
+                        ))}
+                    </nav>
                 </div>
-            </Link>
 
-            {/* Timezone */}
-            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
-                <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
-                        <Clock className="w-4 h-4 md:w-5 md:h-5" />
-                    </div>
-                    Часовой пояс
-                </h2>
-                <div className="space-y-3">
-                    <label className="text-sm font-semibold text-foreground/80 ml-1">Текущий часовой пояс</label>
-                    <select value={settings.timezone} onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}
-                        className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium text-foreground transition-all">
-                        {timezones.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-                        {/* Если текущий TZ не в списке, показать его */}
-                        {!timezones.some(tz => tz.value === settings.timezone) && (
-                            <option value={settings.timezone}>{settings.timezone}</option>
-                        )}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                            setSettings(s => ({ ...s, timezone: detected }));
-                            toast.success(`Определён: ${detected}`);
-                        }}
-                        className="text-sm font-semibold text-primary hover:text-primary/70 transition-colors flex items-center gap-1.5 ml-1"
-                    >
-                        <Clock className="w-3.5 h-3.5" /> Определить автоматически
-                    </button>
-                </div>
-            </div>
+                {/* Right: Content */}
+                <div className="flex-1 min-w-0 space-y-5">
 
-            {/* Date & Time Format */}
-            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
-                <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
-                        <Clock className="w-5 h-5" />
-                    </div>
-                    Формат даты и времени
-                </h2>
-                <div className="space-y-5">
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 ml-1 mb-2 block">Формат времени</label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSettings(s => ({ ...s, timeFormat: '24h' } as any))}
-                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).timeFormat !== '12h' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
-                            >24 часа (14:00)</button>
-                            <button
-                                type="button"
-                                onClick={() => setSettings(s => ({ ...s, timeFormat: '12h' } as any))}
-                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).timeFormat === '12h' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
-                            >AM/PM (2:00 PM)</button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 ml-1 mb-2 block">Формат даты</label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSettings(s => ({ ...s, dateFormat: 'dd.MM.yyyy' } as any))}
-                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).dateFormat !== 'MM/dd/yyyy' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
-                            >ДД.ММ.ГГГГ</button>
-                            <button
-                                type="button"
-                                onClick={() => setSettings(s => ({ ...s, dateFormat: 'MM/dd/yyyy' } as any))}
-                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).dateFormat === 'MM/dd/yyyy' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
-                            >ММ/ДД/ГГГГ</button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 ml-1 mb-2 block">Начало недели</label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSettings(s => ({ ...s, weekStartsOn: 'monday' } as any))}
-                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).weekStartsOn !== 'sunday' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
-                            >Понедельник</button>
-                            <button
-                                type="button"
-                                onClick={() => setSettings(s => ({ ...s, weekStartsOn: 'sunday' } as any))}
-                                className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] ${(settings as any).weekStartsOn === 'sunday' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border text-foreground hover:border-primary/50'}`}
-                            >Воскресенье</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Рабочий процесс и Уведомления */}
-            <div className="bg-card rounded-2xl border border-border shadow-card p-6 space-y-6">
-                <div className="flex items-center gap-3 border-b border-border/50 pb-4">
-                    <Video className="w-5 h-5 text-primary" />
-                    <h2 className="text-xl font-bold tracking-tight">Рабочий процесс и Уведомления</h2>
-                </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Ссылка для онлайн-сессий</label>
-                        <input
-                            type="text"
-                            value={settings.onlineSessionLink}
-                            onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
-                            placeholder="https://zoom.us/j/..."
-                            className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background transition-all font-medium text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground mt-2 ml-1 leading-relaxed">
-                            Вставьте сюда постоянную ссылку на вашу переговорку из Zoom, Google Meet или Яндекс.Телемост.<br/>
-                            Клиенты увидят её в своем расписании и в напоминаниях перед сессией.
-                        </p>
-                    </div>
-                    <div className="pt-2">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                            <input
-                                type="checkbox"
-                                checked={settings.notifyTelegram}
-                                onChange={e => setSettings(s => ({ ...s, notifyTelegram: e.target.checked }))}
-                                className="w-5 h-5 rounded border-border text-primary focus:ring-primary/50 transition-all cursor-pointer"
-                            />
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-foreground/90 group-hover:text-primary transition-colors">Telegram уведомления психологу</span>
-                                <span className="text-xs font-medium text-muted-foreground">Получать напоминания о предстоящих сессиях (за 24 часа)</span>
-                            </div>
-                        </label>
-                    </div>
-                    <div className="pt-2">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                            <input
-                                type="checkbox"
-                                checked={settings.blockConflicts}
-                                onChange={e => setSettings(s => ({ ...s, blockConflicts: e.target.checked }))}
-                                className="w-5 h-5 rounded border-border text-primary focus:ring-primary/50 transition-all cursor-pointer"
-                            />
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-foreground/90 group-hover:text-primary transition-colors">Блокировать занятые слоты из календаря</span>
-                                <span className="text-xs font-medium text-muted-foreground">События из Google / Яндекс Календаря автоматически закрывают соответствующее время для записи</span>
-                            </div>
-                        </label>
-                    </div>
-                    <div className="pt-2">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                            <input
-                                type="checkbox"
-                                checked={settings.notifyAds}
-                                onChange={e => setSettings(s => ({ ...s, notifyAds: e.target.checked }))}
-                                className="w-5 h-5 rounded border-border text-accent focus:ring-accent/50 transition-all cursor-pointer"
-                            />
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-foreground/90 group-hover:text-accent transition-colors">Согласие на рекламные рассылки</span>
-                                <span className="text-xs font-medium text-muted-foreground">Получать подборки статей, анонсы супервизий и программ от партнеров</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            {/* Session Formats (remaining parts) */}
-            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
-                <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-orange-soft text-orange-500 flex items-center justify-center">
-                        <Video className="w-5 h-5" />
-                    </div>
-                    Форматы сессий
-                </h2>
-                <div className="space-y-6">
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 mb-2 ml-1">Временные интервалы по умолчанию</label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <select value={settings.defaultSessionDuration} onChange={e => setSettings(s => ({ ...s, defaultSessionDuration: Number(e.target.value) }))}
-                                className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all">
-                                <option value={50}>Длительность 50 мин</option>
-                                <option value={60}>Длительность 60 мин</option>
-                                <option value={80}>Длительность 80 мин</option>
-                                <option value={90}>Длительность 90 мин</option>
-                            </select>
-                            <select value={settings.sessionBreak} onChange={e => setSettings(s => ({ ...s, sessionBreak: Number(e.target.value) }))}
-                                className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all">
-                                <option value={0}>Без перерыва</option>
-                                <option value={10}>Перерыв 10 мин</option>
-                                <option value={15}>Перерыв 15 мин</option>
-                                <option value={30}>Перерыв 30 мин</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Cabinets / Addresses */}
-            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
-                <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-blue-soft text-blue-500 flex items-center justify-center">
-                        <MapPin className="w-5 h-5" />
-                    </div>
-                    Офлайн кабинеты
-                </h2>
-                <div className="space-y-4">
-                    {addresses.length === 0 ? (
-                        <div className="bg-muted/30 rounded-2xl p-6 text-center border border-border/50">
-                            <p className="text-sm font-medium text-muted-foreground">У вас пока нет добавленных кабинетов</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {addresses.map(a => (
-                                <div key={a.id} className={`flex justify-between items-center p-4 bg-background border rounded-2xl transition-colors group shadow-card ${(a as any).isPrimary ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30'}`}>
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    const { setPrimaryAddress } = await import('../actions/settings');
-                                                    await setPrimaryAddress(a.id);
-                                                    toast.success('Основной кабинет установлен');
-                                                    fetchSettings();
-                                                } catch {
-                                                    toast.error('Ошибка');
-                                                }
-                                            }}
-                                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${(a as any).isPrimary ? 'border-primary bg-primary' : 'border-muted-foreground/40 hover:border-primary'}`}
-                                            title={(a as any).isPrimary ? 'Основной кабинет' : 'Сделать основным'}
-                                        >
-                                            {(a as any).isPrimary && <div className="w-2 h-2 rounded-full bg-white" />}
-                                        </button>
-                                        <div className="min-w-0">
-                                            <p className="font-bold text-sm text-foreground flex items-center gap-2">
-                                                {a.name}
-                                                {(a as any).isPrimary && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">основной</span>}
-                                            </p>
-                                            <p className="text-sm font-medium text-muted-foreground mt-0.5 truncate">{a.address}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity bg-destructive/10 hover:bg-destructive/20 px-3 py-2 rounded-xl ml-2 shrink-0">Удалить</button>
+                    {activeTab === 'profile' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            {/* Profile Card */}
+                            <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
+                                <div className="flex items-center justify-between mb-5">
+                                    <h2 className="text-lg font-bold text-foreground">Профиль кабинета</h2>
+                                    <button className="text-[13px] font-semibold text-primary hover:text-forest-800 transition-colors">Редактировать</button>
                                 </div>
-                            ))}
+                                <div className="flex items-center gap-4 mb-5">
+                                    <div className="w-14 h-14 rounded-full bg-sage-100 flex items-center justify-center text-xl font-bold text-forest-700 border-2 border-sage-200 uppercase shrink-0">ИМ</div>
+                                    <div>
+                                        <div className="text-[16px] font-bold text-foreground">Мартынов Илья <span className="text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded ml-1">Основной</span></div>
+                                        <div className="text-[13px] text-muted-foreground">Психолог, гештальт-терапевт</div>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 text-[13px]">
+                                    <div className="flex items-center gap-3 text-muted-foreground"><span className="font-semibold text-foreground/70 w-24">ИНН</span> —</div>
+                                    <div className="flex items-center gap-3 text-muted-foreground"><span className="font-semibold text-foreground/70 w-24">Публичная ссылка</span> <a href="#" className="text-primary hover:underline">compas.ru/...</a></div>
+                                </div>
+                            </div>
+
+                            {/* Billing Widget */}
+                            <Link href="/billing" className="block bg-card border border-border rounded-2xl p-5 shadow-card hover:border-primary/40 transition-all group">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[15px] font-bold text-foreground">Подписка и оплата</p>
+                                        <p className="text-[13px] text-muted-foreground">
+                                            {trialDaysLeft === null ? 'Пробный период' : trialDaysLeft > 0 ? `Осталось ${trialDaysLeft} дн.` : 'Завершён'}
+                                        </p>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                </div>
+                            </Link>
                         </div>
                     )}
 
-                    <div className="pt-6 mt-6 border-t border-border/50">
-                        <label className="text-sm font-semibold mb-3 block text-foreground/80 ml-1">Новый кабинет</label>
-                        <div className="space-y-3">
-                            <input type="text" value={newAddress.name} onChange={e => setNewAddress(a => ({ ...a, name: e.target.value }))} placeholder="Название (например, Центр на Тверской)" className="w-full px-4 py-3 min-h-[48px] text-sm font-medium bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 transition-all" />
-                            <div className="flex flex-col md:flex-row gap-3">
-                                <div className="flex-[2]">
-                                    <AddressAutocomplete
-                                        value={newAddress.address}
-                                        onChange={(val) => setNewAddress(a => ({ ...a, address: val }))}
-                                        className="w-full px-4 py-3 min-h-[48px] text-sm font-medium bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 transition-all"
-                                        placeholder="Начните вводить адрес..."
-                                    />
+                    {activeTab === 'time' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            <div className="bg-card rounded-2xl border border-border p-6 shadow-card lg:col-span-2">
+                                <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Clock className="w-5 h-5 text-muted-foreground" /> Время и язык</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Часовой пояс</label>
+                                        <select value={settings.timezone} onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}
+                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                            {timezones.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+                                            {!timezones.some(tz => tz.value === settings.timezone) && <option value={settings.timezone}>{settings.timezone}</option>}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Формат времени</label>
+                                        <select value={(settings as any).timeFormat !== '12h' ? '24h' : '12h'} onChange={e => setSettings(s => ({ ...s, timeFormat: e.target.value } as any))}
+                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                            <option value="24h">24 часа (14:00)</option><option value="12h">AM/PM (2:00 PM)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Формат даты</label>
+                                        <select value={(settings as any).dateFormat === 'MM/dd/yyyy' ? 'MM/dd/yyyy' : 'dd.MM.yyyy'} onChange={e => setSettings(s => ({ ...s, dateFormat: e.target.value } as any))}
+                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                            <option value="dd.MM.yyyy">ДД.ММ.ГГГГ</option><option value="MM/dd/yyyy">ММ/ДД/ГГГГ</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Начало недели</label>
+                                        <select value={(settings as any).weekStartsOn === 'sunday' ? 'sunday' : 'monday'} onChange={e => setSettings(s => ({ ...s, weekStartsOn: e.target.value } as any))}
+                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                            <option value="monday">Понедельник</option><option value="sunday">Воскресенье</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="md:w-auto w-full px-6 py-3 min-h-[48px] bg-primary text-primary-foreground text-sm font-semibold rounded-xl shadow-card hover:bg-forest-700 transition-all disabled:opacity-50 active:scale-[0.98]">
-                                    Добавить
-                                </button>
+                            </div>
+                            <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
+                                <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Video className="w-5 h-5 text-muted-foreground" /> Форматы сессий</h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Длительность по умолчанию</label>
+                                        <select value={settings.defaultSessionDuration} onChange={e => setSettings(s => ({ ...s, defaultSessionDuration: Number(e.target.value) }))}
+                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                            <option value={50}>50 минут</option><option value={60}>60 минут</option><option value={80}>80 минут</option><option value={90}>90 минут</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Перерыв по умолчанию</label>
+                                        <select value={settings.sessionBreak} onChange={e => setSettings(s => ({ ...s, sessionBreak: Number(e.target.value) }))}
+                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                            <option value={0}>Без перерыва</option><option value={10}>10 минут</option><option value={15}>15 минут</option><option value={30}>30 минут</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
+                                <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Video className="w-5 h-5 text-muted-foreground" /> Ссылка и уведомления</h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Ссылка для онлайн-сессий</label>
+                                        <input type="text" value={settings.onlineSessionLink} onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
+                                            placeholder="https://zoom.us/j/..." className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm" />
+                                    </div>
+                                    <div className="space-y-3 pt-2">
+                                        {[
+                                            { key: 'notifyTelegram', label: 'Telegram уведомления психологу', desc: 'Получать напоминания о предстоящих сессиях (за 24 часа)', checked: settings.notifyTelegram },
+                                            { key: 'blockConflicts', label: 'Блокировать занятые слоты из календаря', desc: 'События из Google / Яндекс Календаря автоматически закрывают время', checked: settings.blockConflicts },
+                                            { key: 'notifyAds', label: 'Согласие на рекламные рассылки', desc: 'Получать подборки статей, анонсы и программы от партнеров', checked: settings.notifyAds },
+                                        ].map(opt => (
+                                            <label key={opt.key} className="flex items-start gap-3 cursor-pointer group">
+                                                <div className={`w-10 h-[22px] rounded-full transition-colors shrink-0 mt-0.5 relative cursor-pointer ${opt.checked ? 'bg-primary' : 'bg-border'}`}
+                                                    onClick={() => setSettings(s => ({ ...s, [opt.key]: !opt.checked } as any))}>
+                                                    <div className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${opt.checked ? 'translate-x-[20px]' : 'translate-x-[2px]'}`} />
+                                                </div>
+                                                <div>
+                                                    <div className="text-[13px] font-bold text-foreground">{opt.label}</div>
+                                                    <div className="text-[11px] text-muted-foreground">{opt.desc}</div>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
+                    )}
 
-            {/* Cancellation Policy */}
-            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
-                <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-red-soft text-red-500 flex items-center justify-center">
-                        <AlertCircle className="w-5 h-5" />
-                    </div>
-                    Правила отмены
-                </h2>
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Без штрафа за часов до отмены</label>
-                            <input type="number" value={settings.cancellationHours} onChange={e => setSettings(s => ({ ...s, cancellationHours: Number(e.target.value) }))}
-                                className="w-full px-4 py-3 min-h-[48px] bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all" min={0} />
-                        </div>
-                        <div>
-                            <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Удержание при поздней отмене (%)</label>
-                            <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))}
-                                className="w-full px-4 py-3 min-h-[48px] bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium transition-all" min={0} max={100} />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-foreground/80 mb-2 block ml-1">Свой текст правил для клиента</label>
-                        <textarea value={settings.cancellationText || ''} onChange={e => setSettings(s => ({ ...s, cancellationText: e.target.value }))} rows={4}
-                            className="w-full px-4 py-3 bg-background border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-ring/50 text-sm font-medium resize-none transition-all placeholder:text-muted-foreground/50"
-                            placeholder="Опишите ваши условия отмены (например, штраф ₽1000)..." />
-                    </div>
-                    <div>
-                        <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/70 transition-colors ml-1">
-                            <Eye className="w-4 h-4" />{showPreview ? 'Скрыть предпросмотр' : 'Взглянуть глазами клиента'}
-                        </button>
-                        {showPreview && (
-                            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 mt-4 transition-all animate-in fade-in zoom-in-95 duration-200">
-                                <h4 className="font-bold text-sm mb-2 text-foreground">Отмена сеанса</h4>
-                                <p className="text-sm text-foreground/80 leading-relaxed font-medium">
-                                    {settings.cancellationText || `Вы можете бесплатно отменить или перенести сессию не позднее чем за ${settings.cancellationHours} часов. При отмене менее чем за ${settings.cancellationHours} часов удерживается ${settings.cancellationFee}% от стоимости сеанса.`}
-                                </p>
+                    {activeTab === 'offices' && (
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
+                            <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><MapPin className="w-5 h-5 text-muted-foreground" /> Офлайн-кабинеты</h2>
+                            <div className="space-y-4">
+                                {addresses.length === 0 ? (
+                                    <div className="bg-muted/30 rounded-2xl p-6 text-center border border-dashed border-border"><p className="text-sm text-muted-foreground">У вас пока нет добавленных кабинетов</p></div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {addresses.map(a => (
+                                            <div key={a.id} className={`flex justify-between items-center p-4 bg-background border rounded-2xl group ${(a as any).isPrimary ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30'}`}>
+                                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                    <button onClick={async () => { try { const { setPrimaryAddress } = await import('../actions/settings'); await setPrimaryAddress(a.id); toast.success('Основной кабинет'); fetchSettings(); } catch { toast.error('Ошибка'); } }}
+                                                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${(a as any).isPrimary ? 'border-primary bg-primary' : 'border-muted-foreground/40 hover:border-primary'}`}>
+                                                        {(a as any).isPrimary && <div className="w-2 h-2 rounded-full bg-white" />}
+                                                    </button>
+                                                    <div className="min-w-0">
+                                                        <p className="font-bold text-sm text-foreground flex items-center gap-2">{a.name}{(a as any).isPrimary && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Основной</span>}</p>
+                                                        <p className="text-sm text-muted-foreground truncate">{a.address}</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 rounded-lg hover:bg-red-50 ml-2">⋮</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-border/50">
+                                    <input type="text" value={newAddress.name} onChange={e => setNewAddress(a => ({ ...a, name: e.target.value }))} placeholder="Название кабинета" className="flex-1 px-4 py-3 text-sm border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none" />
+                                    <div className="flex-[2]"><AddressAutocomplete value={newAddress.address} onChange={(val) => setNewAddress(a => ({ ...a, address: val }))} className="w-full px-4 py-3 text-sm border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Адрес кабинета" /></div>
+                                    <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address}
+                                        className="px-6 py-3 bg-primary text-primary-foreground text-sm font-bold rounded-xl hover:bg-forest-700 transition-all disabled:opacity-50">Добавить</button>
+                                </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'cancellation' && (
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
+                            <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-muted-foreground" /> Правила отмены</h2>
+                            <div className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Без штрафа до (часов)</label>
+                                        <input type="number" value={settings.cancellationHours} onChange={e => setSettings(s => ({ ...s, cancellationHours: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} /></div>
+                                    <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Удержание при поздней отмене (%)</label>
+                                        <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} max={100} /></div>
+                                </div>
+                                <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Текст правил для клиента</label>
+                                    <textarea value={settings.cancellationText || ''} onChange={e => setSettings(s => ({ ...s, cancellationText: e.target.value }))} rows={4}
+                                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-sm resize-none" placeholder="Опишите ваши условия отмены..." /></div>
+                                <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-forest-800"><Eye className="w-4 h-4" />{showPreview ? 'Скрыть' : 'Предпросмотр'}</button>
+                                {showPreview && (
+                                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5"><h4 className="font-bold text-sm mb-2">Отмена сеанса</h4><p className="text-sm text-foreground/80 leading-relaxed">{settings.cancellationText || `Бесплатная отмена за ${settings.cancellationHours}ч. При поздней отмене удержание ${settings.cancellationFee}%.`}</p></div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'billing' && (
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
+                            <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><CreditCard className="w-5 h-5 text-muted-foreground" /> Подписка</h2>
+                            <Link href="/billing" className="flex items-center justify-between p-4 rounded-xl border border-border hover:bg-sage-50 transition-colors">
+                                <div><div className="text-[14px] font-bold">Пробный период</div><div className="text-[12px] text-muted-foreground">{trialDaysLeft !== null ? `Осталось ${trialDaysLeft} дней` : 'Загрузка...'}</div></div>
+                                <span className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold">Выбрать тариф</span>
+                            </Link>
+                        </div>
+                    )}
+
+                    {activeTab === 'security' && (
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5">🔒 Безопасность</h2><p className="text-sm text-muted-foreground">Управление доступом — в разработке.</p></div>
+                    )}
+
+                    {activeTab === 'export' && (
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5">📦 Экспорт данных</h2><p className="text-sm text-muted-foreground">Выгрузка данных — в разработке.</p></div>
+                    )}
+
                 </div>
             </div>
         </div>

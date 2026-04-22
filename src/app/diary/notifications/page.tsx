@@ -140,14 +140,14 @@ export default function NotificationsPage() {
     if (loading || !settings) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
     return (
-        <div className="space-y-8 pb-12 max-w-3xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="space-y-6 pb-12 max-w-3xl mx-auto">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Уведомления</h1>
-                    <p className="text-muted-foreground text-base mt-2">Настройте что и когда отправлять вам и клиентам</p>
+                    <p className="text-muted-foreground text-sm mt-1">Настройте что и когда отправлять вам и клиентам</p>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-semibold shadow-card active:scale-[0.98] disabled:opacity-50">
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-bold shadow-card active:scale-[0.97] disabled:opacity-50">
                     <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
                 </button>
             </div>
