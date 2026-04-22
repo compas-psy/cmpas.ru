@@ -490,121 +490,87 @@ export default function AvailabilityPage() {
     return (
         <div className="space-y-8 pb-12 max-w-[1400px] mx-auto">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Настройки расписания</h1>
-                    <p className="text-muted-foreground text-sm mt-1">Режимы записи, правила и интеграции в одном месте</p>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Расписание</h1>
+                    <p className="text-muted-foreground text-sm mt-1">Гибкие правила доступности и самозаписи</p>
                 </div>
-                <div className="flex gap-2 self-start md:hidden">
-                    <button onClick={openPreview} className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-2xl text-foreground hover:bg-muted transition-all text-sm font-semibold shadow-sm active:scale-[0.97] min-h-[44px]">
-                        <Eye className="w-4 h-4" />Как видит клиент
+            </div>
+
+            {/* Schedule Mode Indicator */}
+            <div className="grid grid-cols-3 gap-3">
+                {[
+                    { mode: 'private', icon: '🔒', label: 'Приватный', desc: 'Клиенты не видят расписание' },
+                    { mode: 'preview', icon: '👁', label: 'Просмотр', desc: 'Клиенты видят окна, но не могут записаться' },
+                    { mode: 'booking', icon: '✅', label: 'Запись', desc: 'Клиенты могут записываться самостоятельно' },
+                ].map(m => (
+                    <button key={m.mode}
+                        onClick={async () => {
+                            setSavingMode(true);
+                            try { await updateSettings({ scheduleMode: m.mode }); setSettingsState(s => ({ ...s, scheduleMode: m.mode })); toast.success('Режим обновлён'); } catch { toast.error('Ошибка'); }
+                            setSavingMode(false);
+                        }}
+                        disabled={savingMode}
+                        className={`p-4 rounded-2xl border text-left transition-all ${settings.scheduleMode === m.mode ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-sage-50'}`}>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xl">{m.icon}</span>
+                            <div>
+                                <div className="text-[14px] font-bold text-foreground">{m.label}</div>
+                                <div className="text-[11px] text-muted-foreground">{m.desc}</div>
+                            </div>
+                        </div>
                     </button>
-                </div>
+                ))}
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6 items-start">
                 {/* Left Column */}
                 <div className="w-full lg:w-[65%] space-y-6">
                     
-                    {/* Section 1: Режим записи для клиентов */}
-                    <div className="bg-card border border-border rounded-2xl p-6 shadow-card overflow-hidden relative">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                                <Sparkles className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold tracking-tight text-foreground">Режим записи</h2>
-                                <p className="text-sm text-muted-foreground">Формат взаимодействия с клиентским календарем</p>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col md:flex-row gap-4">
-                            {/* Private */}
-                            <button
-                                onClick={() => handleUpdateSettings({ scheduleMode: 'private' })}
-                                className={`flex-1 flex flex-col p-5 rounded-2xl border transition-all text-left group ${settings.scheduleMode === 'private' ? 'bg-primary/5 border-primary shadow-sm ring-1 ring-primary/20' : 'bg-background hover:bg-muted/50 border-border'}`}
-                            >
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings.scheduleMode === 'private' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:bg-muted-foreground/20'}`}><Lock className="w-4 h-4" /></div>
-                                    <span className="font-bold text-foreground">Приватный</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground leading-relaxed">Клиенты не видят календарь. Запись только с вашего подтверждения.</span>
-                            </button>
-                            {/* Readonly */}
-                            <button
-                                onClick={() => handleUpdateSettings({ scheduleMode: 'readonly' })}
-                                className={`flex-1 flex flex-col p-5 rounded-2xl border transition-all text-left group ${settings.scheduleMode === 'readonly' ? 'bg-amber-500/5 border-amber-500 shadow-sm ring-1 ring-amber-500/20' : 'bg-background hover:bg-muted/50 border-border'}`}
-                            >
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings.scheduleMode === 'readonly' ? 'bg-amber-500 text-white' : 'bg-muted text-muted-foreground group-hover:bg-muted-foreground/20'}`}><Eye className="w-4 h-4" /></div>
-                                    <span className="font-bold text-foreground">Просмотр</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground leading-relaxed">Окна видны, но для брони кленту нужно написать вам сообщение.</span>
-                            </button>
-                            {/* Open */}
-                            <button
-                                onClick={() => handleUpdateSettings({ scheduleMode: 'booking' })}
-                                className={`flex-1 flex flex-col p-5 rounded-2xl border transition-all text-left group ${settings.scheduleMode === 'booking' ? 'bg-green-500/5 border-green-500 shadow-sm ring-1 ring-green-500/20' : 'bg-background hover:bg-muted/50 border-border'}`}
-                            >
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings.scheduleMode === 'booking' ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground group-hover:bg-muted-foreground/20'}`}><Check className="w-4 h-4" /></div>
-                                    <span className="font-bold text-foreground">Открыто</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground leading-relaxed">Автоматическая самостоятельная запись в свободные слоты.</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Section 2: Глобальные настройки */}
+                    {/* Section 1: Глобальные лимиты */}
                     <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
-                                <Clock className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold tracking-tight text-foreground">Глобальные лимиты</h2>
-                                <p className="text-sm text-muted-foreground">Применяются для всех шаблонов по умолчанию</p>
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <Clock className="w-5 h-5 text-muted-foreground" />
+                                <h2 className="text-lg font-bold text-foreground">Глобальные лимиты</h2>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm font-semibold text-foreground/90 mb-2">Длительность сессии (мин)</label>
-                                <select value={settings.defaultSessionDuration} onChange={e => handleUpdateSettings({ defaultSessionDuration: Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 min-h-[48px] text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
-                                    <option value={50}>50 минут</option><option value={60}>60 минут (1 час)</option><option value={80}>80 минут</option><option value={90}>90 минут (1.5 часа)</option>
-                                    <option value={120}>120 минут (2 часа)</option>
+                                <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Длительность сессии</label>
+                                <select value={settings.defaultSessionDuration} onChange={e => handleUpdateSettings({ defaultSessionDuration: Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                                    <option value={50}>50 минут</option><option value={60}>60 минут</option><option value={80}>80 минут</option><option value={90}>90 минут</option>
+                                    <option value={120}>120 минут</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-foreground/90 mb-2">Перерыв между сессиями (мин)</label>
-                                <select value={settings.sessionBreak} onChange={e => handleUpdateSettings({ sessionBreak: Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 min-h-[48px] text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                                <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Перерыв между сессиями</label>
+                                <select value={settings.sessionBreak} onChange={e => handleUpdateSettings({ sessionBreak: Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
                                     <option value={0}>Без перерыва</option><option value={5}>5 минут</option><option value={10}>10 минут</option><option value={15}>15 минут</option><option value={30}>30 минут</option>
                                 </select>
                             </div>
-                            {/* Removed buffer and horizon settings because they might not be part of the UI but we can keep maxSessions */}
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-semibold text-foreground/90 mb-2">Максимум сессий в день</label>
-                                <select value={settings.maxSessionsPerDay || 0} onChange={e => handleUpdateSettings({ maxSessionsPerDay: Number(e.target.value) === 0 ? null : Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 min-h-[48px] text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                            <div>
+                                <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Максимум сессий в день</label>
+                                <select value={settings.maxSessionsPerDay || 0} onChange={e => handleUpdateSettings({ maxSessionsPerDay: Number(e.target.value) === 0 ? null : Number(e.target.value) })} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all">
                                     <option value={0}>Без лимита</option><option value={2}>2 сессии</option><option value={3}>3 сессии</option><option value={4}>4 сессии</option><option value={5}>5 сессий</option><option value={6}>6 сессий</option>
                                 </select>
                             </div>
                         </div>
                     </div>
 
-                    {/* Section 3: Шаблоны расписания */}
+                    {/* Section 2: Правила доступности */}
                     <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
-                        <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center justify-between mb-5">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
-                                    <Layers className="w-5 h-5" />
-                                </div>
+                                <Layers className="w-5 h-5 text-muted-foreground" />
                                 <div>
-                                    <h2 className="text-xl font-bold tracking-tight text-foreground">Правила работы</h2>
-                                    <p className="text-sm text-muted-foreground">Шаблоны ваших регулярных часов</p>
+                                    <h2 className="text-lg font-bold text-foreground">Правила доступности</h2>
+                                    <p className="text-[12px] text-muted-foreground">Правила применяются сверху вниз. Перетаскивайте для изменения порядка.</p>
                                 </div>
                             </div>
-                            <button onClick={() => setShowNewRule(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm hover:bg-forest-700 transition-all font-semibold text-sm active:scale-95">
-                                <Plus className="w-4 h-4" /> Шаблон
+                            <button onClick={() => setShowNewRule(true)} className="flex items-center gap-1.5 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm hover:bg-forest-700 transition-all font-bold text-sm active:scale-95">
+                                <Plus className="w-4 h-4" /> Добавить правило
                             </button>
                         </div>
                         

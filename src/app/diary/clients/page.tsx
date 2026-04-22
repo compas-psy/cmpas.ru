@@ -416,17 +416,17 @@ export default function ClientsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Клиенты</h1>
-                    <p className="text-muted-foreground text-sm mt-1">{clients.length} клиентов</p>
+                    <p className="text-muted-foreground text-sm mt-1">{clients.filter(c => c.status === 'active').length} активных клиентов</p>
                 </div>
-                <div className="flex gap-2 self-start">
-                    <Link href="/diary/clients/import" className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-all font-medium text-sm" title="Вставить списком">
-                        <ClipboardPaste className="w-4 h-4" /> <span className="hidden sm:inline">Импорт</span>
+                <div className="flex gap-2">
+                    <Link href="/diary/clients/import" className="flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
+                        <ClipboardPaste className="w-4 h-4" /> Импорт
                     </Link>
                     <button onClick={() => setShowNewClient(true)}
-                        className="flex items-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-all font-semibold shadow-card active:scale-[0.98]">
+                        className="flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-all font-bold shadow-card active:scale-[0.98]">
                         <Plus className="w-4 h-4" /> Добавить
                     </button>
                 </div>
@@ -467,27 +467,30 @@ export default function ClientsPage() {
                         const letter = (clientName(c) || '?')[0].toUpperCase();
                         const prevLetter = i > 0 ? (clientName(clients[i - 1]) || '?')[0].toUpperCase() : '';
                         const showLetter = letter !== prevLetter;
-                        const nextSession = c.sessions?.find(s => new Date(s.date) >= now && s.status !== 'cancelled');
+                        const nextSessionC = c.sessions?.find(s => new Date(s.date) >= now && s.status !== 'cancelled');
+                        const statusBadgeC = c.totalSessions === 0 ? { label: 'Новый', cls: 'bg-blue-50 text-blue-600' }
+                            : c.status === 'archived' ? { label: 'Архив', cls: 'bg-muted text-muted-foreground' }
+                            : { label: 'Активный', cls: 'bg-green-50 text-green-700' };
+                        const lastDate = c.nextSessionDate
+                            ? new Date(c.nextSessionDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+                            : null;
                         return (
                             <div key={c.id}>
                                 {showLetter && <div id={`client-letter-${letter}`} className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1 pt-3 pb-1">{letter}</div>}
                                 <button onClick={() => { setSelectedClient(c); fetchClientDetail(c.id); setMobileTab('sessions'); setDesktopTab('sessions'); }}
                                     className={`w-full p-4 bg-card rounded-2xl border text-left hover:shadow-md transition-all flex items-center gap-4 ${selectedClient?.id === c.id ? 'border-primary ring-2 ring-primary ring-inset shadow-sm' : 'border-border shadow-sm'}`}>
-                                    <div className="w-12 h-12 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-base shrink-0 uppercase">
+                                    <div className="w-12 h-12 rounded-full bg-sage-100 border-2 border-sage-200 flex items-center justify-center text-forest-700 font-bold text-base shrink-0 uppercase">
                                         {clientInitials(c)}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-foreground text-base truncate mb-0.5">{clientName(c)}</p>
-                                        {nextSession ? (
-                                            <p className="text-xs font-medium text-green-600 dark:text-green-400">
-                                                📅 {new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} · {nextSession.time}
-                                            </p>
-                                        ) : (
-                                            <p className="text-sm font-medium text-muted-foreground">{c.totalSessions} сессий</p>
-                                        )}
+                                        <p className="font-bold text-foreground text-[15px] truncate">{clientName(c)}</p>
+                                        <p className="text-[12px] text-muted-foreground mt-0.5">{c.totalSessions} сессий</p>
                                     </div>
-                                    {c.status === 'archived' && <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">Архив</span>}
-                                    <ChevronRight className="w-5 h-5 text-muted-foreground/50 shrink-0" />
+                                    <div className="shrink-0 text-right">
+                                        {lastDate && <div className="text-[12px] text-muted-foreground mb-1">{lastDate}</div>}
+                                        {nextSessionC && <div className="text-[11px] text-muted-foreground">{nextSessionC.time}</div>}
+                                        <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 ${statusBadgeC.cls}`}>{statusBadgeC.label}</span>
+                                    </div>
                                 </button>
                             </div>
                         );
@@ -505,41 +508,64 @@ export default function ClientsPage() {
                     ) : (
                         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden flex flex-col max-h-[calc(100vh-12rem)] min-h-[600px]">
                             {/* Header */}
-                            <div className="p-6 pb-0">
-                                <div className="flex items-center gap-5">
-                                    <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-xl uppercase">{clientInitials(selectedClient)}</div>
-                                    <div className="flex-1">
-                                        <h2 className="text-2xl font-bold text-foreground mb-1">{clientName(selectedClient)}</h2>
-                                        <div className="flex gap-4 text-sm text-muted-foreground">
-                                            {selectedClient.phone && <span>{selectedClient.phone}</span>}
-                                            {selectedClient.email && <span>{selectedClient.email}</span>}
+                            <div className="p-6 pb-4">
+                                {/* Top: avatar + name + contact + stats */}
+                                <div className="flex items-start gap-5">
+                                    <div className="w-16 h-16 rounded-full bg-sage-100 border-2 border-sage-200 flex items-center justify-center text-forest-700 font-bold text-xl uppercase shrink-0">{clientInitials(selectedClient)}</div>
+                                    <div className="flex-1 min-w-0">
+                                        <h2 className="text-[24px] font-bold text-foreground mb-1">{clientName(selectedClient)}</h2>
+                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+                                            {selectedClient.phone && <span className="flex items-center gap-1">📞 {selectedClient.phone}</span>}
+                                            {selectedClient.email && <span className="flex items-center gap-1">✉ {selectedClient.email}</span>}
+                                            {selectedClient.questionnaire?.data?.age && <span>{selectedClient.questionnaire.data.age} лет</span>}
+                                            {selectedClient.questionnaire?.data?.occupation && <span>{selectedClient.questionnaire.data.occupation}</span>}
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => {
-                                            navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
-                                            toast.success('Персональная ссылка скопирована');
-                                        }} className="p-2 hover:bg-muted rounded-xl transition-colors" title="Скопировать ссылку для клиента"><ClipboardList className="w-5 h-5 text-primary" /></button>
-                                        {selectedClient.status === 'active' ? (
-                                            <button onClick={() => handleArchive(selectedClient.id)} className="p-2 hover:bg-muted rounded-xl transition-colors" title="В архив"><Archive className="w-5 h-5 text-muted-foreground" /></button>
-                                        ) : (
-                                            <button onClick={() => handleRestore(selectedClient.id)} className="p-2 hover:bg-muted rounded-xl transition-colors" title="Восстановить"><RotateCcw className="w-5 h-5 text-primary" /></button>
+                                    {/* Stats */}
+                                    <div className="hidden md:flex gap-6 shrink-0 text-center">
+                                        <div>
+                                            <div className="text-[11px] text-muted-foreground font-semibold mb-0.5">Статус</div>
+                                            <span className="text-[12px] font-bold text-green-700 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Активная</span>
+                                        </div>
+                                        <div>
+                                            <div className="text-[11px] text-muted-foreground font-semibold mb-0.5">Всего сессий</div>
+                                            <span className="text-[16px] font-bold text-foreground">{selectedClient.totalSessions}</span>
+                                        </div>
+                                        {futureSessions.length > 0 && (
+                                            <div>
+                                                <div className="text-[11px] text-muted-foreground font-semibold mb-0.5">Следующая сессия</div>
+                                                <span className="text-[13px] font-bold text-primary">
+                                                    {new Date(futureSessions[0].date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, {futureSessions[0].time}
+                                                </span>
+                                            </div>
                                         )}
-                                        <button onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmName(''); }} className="p-2 hover:bg-destructive/10 rounded-xl transition-colors" title="Удалить"><Trash2 className="w-5 h-5 text-destructive" /></button>
                                     </div>
                                 </div>
-                                {/* Next session highlight */}
-                                {futureSessions.length > 0 && (
-                                    <div className="mt-4 p-4 border border-border rounded-2xl flex items-center gap-4 bg-transparent shadow-card">
-                                        <Calendar className="w-8 h-8 text-primary shrink-0 opacity-80" />
-                                        <div>
-                                            <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Ближайшая запись</div>
-                                            <div className="text-base font-semibold text-foreground">
-                                                {new Date(futureSessions[0].date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} · {futureSessions[0].time}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+
+                                {/* Action buttons row */}
+                                <div className="flex gap-2 mt-5">
+                                    <button onClick={() => { setEditingSession(null); setShowNewSession(true); }}
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]">
+                                        <CalendarClock className="w-4 h-4" /> Запланировать
+                                    </button>
+                                    <button onClick={() => {
+                                        navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
+                                        toast.success('Ссылка скопирована');
+                                    }} className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-[13px] font-semibold hover:bg-sage-50 transition-all">
+                                        <ClipboardList className="w-4 h-4" /> Написать
+                                    </button>
+                                    <button onClick={() => setDesktopTab('documents')}
+                                        className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-[13px] font-semibold hover:bg-sage-50 transition-all">
+                                        <FileText className="w-4 h-4" /> Документы
+                                    </button>
+                                    <div className="flex-1" />
+                                    {selectedClient.status === 'active' ? (
+                                        <button onClick={() => handleArchive(selectedClient.id)} className="p-2.5 hover:bg-muted rounded-xl transition-colors" title="В архив"><Archive className="w-4.5 h-4.5 text-muted-foreground" /></button>
+                                    ) : (
+                                        <button onClick={() => handleRestore(selectedClient.id)} className="p-2.5 hover:bg-muted rounded-xl transition-colors" title="Восстановить"><RotateCcw className="w-4.5 h-4.5 text-primary" /></button>
+                                    )}
+                                    <button onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmName(''); }} className="p-2.5 hover:bg-destructive/10 rounded-xl transition-colors" title="Удалить"><Trash2 className="w-4.5 h-4.5 text-destructive" /></button>
+                                </div>
                             </div>
 
                             {/* Tabs */}
@@ -592,13 +618,6 @@ export default function ClientsPage() {
                                 )}
                             </div>
 
-                            {/* Footer */}
-                            <div className="p-6 border-t border-border bg-card">
-                                <button onClick={() => { setEditingSession(null); setShowNewSession(true); }}
-                                    className="w-full py-3.5 bg-accent text-accent-foreground rounded-xl font-medium hover:bg-accent/90 shadow-sm active:scale-[0.98]">
-                                    Запланировать сессию
-                                </button>
-                            </div>
                         </div>
                     )}
                 </div>
