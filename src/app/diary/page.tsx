@@ -298,56 +298,65 @@ export default function DiaryCalendarPage() {
                 {/* ── LEFT: Next Session + Timeline (2 cols) ── */}
                 <div className="lg:col-span-2 space-y-5">
 
-                    {/* NOW / Next Session Card */}
+                    {/* NOW / Next Session Card — matches mockup exactly */}
                     {nextSession && (() => {
                         const cn = nextSession.client?.name || clients.find(c => c.id === nextSession.clientId)?.name || 'Клиент';
                         const mu = getMinutesUntil(nextSession.time);
                         const close = mu <= 15;
                         const FormatInfo = formatLabels[nextSession.format] || formatLabels.online;
                         const FormatIcon = FormatInfo.icon;
-                        const sessionNum = todaySessions.indexOf(nextSession) + 1;
+                        // Count total sessions with this client
+                        const clientSessionCount = sessions.filter(s => s.clientId === nextSession.clientId && s.status !== 'cancelled').length;
+                        const typeLabel = nextSession.type === 'individual' ? 'Индивидуальная' : nextSession.type === 'couple' ? 'Парная' : nextSession.type === 'family' ? 'Семейная' : nextSession.type;
 
                         return (
                             <div className={`bg-card rounded-2xl border overflow-hidden shadow-card transition-all ${close ? 'border-primary/40 ring-1 ring-primary/10' : 'border-border'}`}>
-                                <div className="p-5 md:p-6">
-                                    {/* Header line */}
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className={`w-2.5 h-2.5 rounded-full ${close ? 'bg-primary animate-pulse' : 'bg-sage-200'}`} />
-                                            <span className="text-small-meta text-muted-foreground font-bold uppercase tracking-wider">
-                                                {close ? 'Скоро начнётся' : 'Следующая сессия'}
-                                            </span>
-                                        </div>
-                                        <div className={`px-3 py-1 rounded-full text-[13px] font-bold tabular-nums ${close ? 'bg-primary/10 text-primary' : 'bg-sage-100 text-muted-foreground'}`}>
-                                            {mu > 0 ? `через ${mu} мин` : 'Сейчас'}
-                                        </div>
+                                {/* Green header label */}
+                                <div className="px-6 pt-5 flex items-center justify-between">
+                                    <span className="text-[12px] font-bold uppercase tracking-wider text-forest-600">Следующая сессия</span>
+                                    <div className={`px-3 py-1 rounded-full text-[13px] font-bold tabular-nums ${close ? 'bg-primary text-primary-foreground' : 'bg-sage-100 text-muted-foreground'}`}>
+                                        {mu > 0 ? `через ${mu} мин` : 'Сейчас'}
                                     </div>
+                                </div>
 
-                                    {/* Client + session info */}
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-lg shrink-0 uppercase border border-sage-200">
+                                <div className="p-6 pt-4">
+                                    {/* Client row: avatar + info + time */}
+                                    <div className="flex items-start gap-5">
+                                        {/* Large circular avatar */}
+                                        <div className="w-16 h-16 rounded-full bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-xl shrink-0 uppercase border-2 border-sage-200">
                                             {cn.slice(0, 2)}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="text-[20px] font-bold text-foreground mb-1 truncate">{cn}</h3>
-                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-secondary text-muted-foreground">
-                                                <span className="flex items-center gap-1.5">
-                                                    <Clock className="w-3.5 h-3.5" />
-                                                    {nextSession.time} – {nextSession.endTime || ''} · {nextSession.duration} мин
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h3 className="text-[22px] font-bold text-foreground truncate">{cn}</h3>
+                                            </div>
+                                            <div className="text-[13px] text-forest-600 font-semibold mb-2">
+                                                {clientSessionCount} сессия
+                                            </div>
+                                            {/* Запрос - placeholder since we don't have this data yet */}
+                                            {nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).request && (
+                                                <div className="text-[13px] text-muted-foreground mb-2">
+                                                    <span className="font-semibold text-foreground">Запрос:</span> {(nextSession.client.questionnaire.data as any).request}
+                                                </div>
+                                            )}
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted-foreground">
+                                                <span className="flex items-center gap-1">
+                                                    <User className="w-3.5 h-3.5" /> {typeLabel}
                                                 </span>
-                                                <span className="flex items-center gap-1.5">
-                                                    <FormatIcon className="w-3.5 h-3.5" />
-                                                    {FormatInfo.label}
-                                                </span>
-                                                <span className="text-small-meta font-semibold text-forest-600">
-                                                    Сессия #{sessionNum}
-                                                </span>
+                                            </div>
+                                        </div>
+                                        {/* Right: Time block */}
+                                        <div className="shrink-0 text-right hidden sm:block">
+                                            <div className="text-[22px] font-bold text-foreground tabular-nums">{nextSession.time} – {nextSession.endTime || ''}</div>
+                                            <div className="text-[13px] text-muted-foreground flex items-center gap-1.5 justify-end mt-1">
+                                                <FormatIcon className="w-3.5 h-3.5" />
+                                                {FormatInfo.label}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Actions */}
-                                    <div className="flex gap-2.5 mt-5">
+                                    {/* Actions: 2 buttons + link */}
+                                    <div className="flex items-center gap-3 mt-5">
                                         <button
                                             onClick={() => setEditingSession(nextSession)}
                                             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-xl text-[14px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]"
@@ -359,13 +368,21 @@ export default function DiaryCalendarPage() {
                                                 href={settings.onlineSessionLink}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-soft text-blue-500 rounded-xl text-[14px] font-bold hover:bg-blue-500/15 transition-all active:scale-[0.97]"
+                                                className="flex items-center justify-center gap-2 px-5 py-3 bg-card border border-border text-foreground rounded-xl text-[14px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97]"
                                             >
-                                                <Video className="w-4 h-4" /> Zoom
-                                                <ArrowUpRight className="w-3.5 h-3.5" />
+                                                <Video className="w-4 h-4" /> Открыть Zoom
                                             </a>
                                         )}
                                     </div>
+
+                                    {/* Open client card link */}
+                                    <button
+                                        onClick={() => window.location.href = `/diary/clients?clientId=${nextSession.clientId}`}
+                                        className="w-full flex items-center justify-between mt-4 pt-4 border-t border-border/50 text-[14px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        Открыть карточку
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
                         );

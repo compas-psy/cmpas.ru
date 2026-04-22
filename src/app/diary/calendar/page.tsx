@@ -283,37 +283,54 @@ export default function DiaryCalendarView() {
                     {viewMode === 'month' && (
                         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
                             <div className="grid grid-cols-7 bg-sage-50">
-                                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
-                                    <div key={d} className="p-3 md:p-4 text-center text-small-meta font-bold text-muted-foreground border-r border-b border-border/40 last:border-r-0 uppercase tracking-wider">{d}</div>
+                                {['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map(d => (
+                                    <div key={d} className="p-2 md:p-3 text-center text-[11px] font-bold text-muted-foreground border-r border-b border-border/40 last:border-r-0 uppercase tracking-wider">{d}</div>
                                 ))}
                             </div>
                             <div className="grid grid-cols-7">
                                 {calendarDays.map((day, i) => {
-                                    const daySessions = getSessionsForDay(day);
+                                    const daySessions = getSessionsForDay(day).sort((a, b) => a.time.localeCompare(b.time));
                                     const isToday = isSameDay(day, new Date());
                                     const isCurrentMonth = day.getMonth() === month;
                                     const isSelected = isSameDay(day, selectedDate);
+                                    const maxShow = 3;
                                     return (
                                         <button
                                             key={i}
-                                            onClick={() => setSelectedDate(day)}
-                                            className={`p-1.5 md:p-2.5 border-r border-b border-border/30 last:border-r-0 hover:bg-sage-50 transition-colors text-center relative min-h-[52px] md:min-h-[80px] ${!isCurrentMonth ? 'opacity-35' : ''} ${isToday ? 'bg-sage-50' : ''} ${isSelected ? 'bg-primary/5 ring-2 ring-primary ring-inset' : ''}`}
+                                            onClick={() => { setSelectedDate(day); setSelectedSession(null); }}
+                                            className={`p-1.5 md:p-2 border-r border-b border-border/30 last:border-r-0 hover:bg-sage-50/50 transition-colors text-left relative min-h-[52px] md:min-h-[100px] ${!isCurrentMonth ? 'opacity-30' : ''} ${isToday ? 'bg-sage-50/80' : ''} ${isSelected ? 'bg-primary/5 ring-2 ring-primary ring-inset' : ''}`}
                                         >
-                                            <div className="flex flex-col items-center gap-1 md:gap-2">
-                                                <span className={`text-[13px] font-bold w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg transition-colors ${isToday ? 'bg-primary text-primary-foreground shadow-sm' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'}`}>
-                                                    {day.getDate()}
-                                                </span>
-                                                {daySessions.length > 0 && (
-                                                    <div className="flex gap-1 justify-center flex-wrap">
-                                                        {daySessions.slice(0, 4).map(s => (
-                                                            <div key={s.id} className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${(typeColors[s.type] || defaultTypeColor).dot}`} />
-                                                        ))}
-                                                        {daySessions.length > 4 && (
-                                                            <span className="text-[9px] font-bold text-muted-foreground">+{daySessions.length - 4}</span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            {/* Day number */}
+                                            <span className={`text-[13px] font-bold w-7 h-7 flex items-center justify-center rounded-lg mb-1 ${isToday ? 'bg-primary text-primary-foreground' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'}`}>
+                                                {day.getDate()}
+                                            </span>
+                                            {/* Session labels */}
+                                            {daySessions.length > 0 && (
+                                                <div className="space-y-0.5 hidden md:block">
+                                                    {daySessions.slice(0, maxShow).map(s => {
+                                                        const tc = typeColors[s.type] || defaultTypeColor;
+                                                        const cn = s.client?.name || 'Клиент';
+                                                        return (
+                                                            <div key={s.id} className={`flex items-center gap-1 px-1 py-0.5 rounded text-[10px] font-semibold truncate ${tc.bg} ${tc.text}`}>
+                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${tc.dot}`} />
+                                                                <span className="tabular-nums shrink-0">{s.time}</span>
+                                                                <span className="truncate">{cn}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {daySessions.length > maxShow && (
+                                                        <div className="text-[10px] font-bold text-muted-foreground pl-1">+{daySessions.length - maxShow} ещё</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* Mobile: just dots */}
+                                            {daySessions.length > 0 && (
+                                                <div className="flex gap-0.5 mt-0.5 md:hidden">
+                                                    {daySessions.slice(0, 4).map(s => (
+                                                        <div key={s.id} className={`w-1.5 h-1.5 rounded-full ${(typeColors[s.type] || defaultTypeColor).dot}`} />
+                                                    ))}
+                                                </div>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -323,16 +340,22 @@ export default function DiaryCalendarView() {
 
                     {viewMode === 'week' && (() => {
                         const weekDaysList = getWeekDays();
+                        const hourStart = 8, hourEnd = 21;
+                        const hours = Array.from({ length: hourEnd - hourStart }, (_, i) => i + hourStart);
+                        const rowH = 56; // px per hour
+                        const now = new Date();
+
                         return (
                             <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-                                {/* Week Header */}
-                                <div className="grid grid-cols-7 border-b border-border bg-sage-50">
+                                {/* Week Header: time col + 7 day cols */}
+                                <div className="grid grid-cols-[50px_repeat(7,1fr)] border-b border-border bg-sage-50">
+                                    <div className="border-r border-border/30" />
                                     {weekDaysList.map((date, i) => {
                                         const isToday = isSameDay(date, new Date());
                                         return (
-                                            <div key={i} className={`p-3 md:p-4 text-center border-r border-border/30 last:border-r-0 ${isToday ? 'bg-primary/5' : ''}`}>
-                                                <div className="text-small-meta font-bold text-muted-foreground uppercase tracking-wider mb-1">{['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][i]}</div>
-                                                <div className={`text-[18px] font-bold w-10 h-10 mx-auto flex items-center justify-center rounded-xl ${isToday ? 'bg-primary text-primary-foreground shadow-sm' : 'text-foreground'}`}>
+                                            <div key={i} className={`py-2.5 px-1 text-center border-r border-border/30 last:border-r-0 ${isToday ? 'bg-primary/5' : ''}`}>
+                                                <div className="text-[11px] font-bold text-muted-foreground uppercase">{['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][i]}</div>
+                                                <div className={`text-[16px] font-bold w-8 h-8 mx-auto flex items-center justify-center rounded-lg mt-0.5 ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
                                                     {date.getDate()}
                                                 </div>
                                             </div>
@@ -340,30 +363,74 @@ export default function DiaryCalendarView() {
                                     })}
                                 </div>
 
-                                {/* Week Body */}
-                                <div className="grid grid-cols-7 min-h-[300px]">
-                                    {weekDaysList.map((date, i) => {
-                                        const daySessions = sessions.filter(s => isSameDay(new Date(s.date), date)).sort((a, b) => a.time.localeCompare(b.time));
+                                {/* Time grid body */}
+                                <div className="grid grid-cols-[50px_repeat(7,1fr)] relative" style={{ height: `${hours.length * rowH}px` }}>
+                                    {/* Hour labels */}
+                                    <div className="border-r border-border/30">
+                                        {hours.map(h => (
+                                            <div key={h} className="border-b border-border/20 text-[11px] font-medium text-muted-foreground/50 text-right pr-2 pt-0.5 tabular-nums" style={{ height: `${rowH}px` }}>
+                                                {String(h).padStart(2, '0')}:00
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Day columns */}
+                                    {weekDaysList.map((date, di) => {
+                                        const daySessions = sessions.filter(s => isSameDay(new Date(s.date), date) && s.status !== 'cancelled').sort((a, b) => a.time.localeCompare(b.time));
                                         const isToday = isSameDay(date, new Date());
                                         return (
-                                            <div key={i} className={`p-2 border-r border-border/30 last:border-r-0 ${isToday ? 'bg-primary/[0.02]' : ''}`}>
-                                                <div className="space-y-1.5 mt-1">
-                                                    {daySessions.map(s => {
-                                                        const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
-                                                        const tc = typeColors[s.type] || defaultTypeColor;
-                                                        return (
-                                                            <button key={s.id} onClick={() => { setSelectedDate(date); setSelectedSession(s); }}
-                                                                className={`w-full text-left p-2 ${tc.bg} border ${tc.border} rounded-lg text-[12px] font-semibold transition-all hover:shadow-sm active:scale-[0.97] overflow-hidden`}
-                                                            >
-                                                                <div className="flex items-center gap-1.5 mb-0.5">
-                                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${tc.dot}`} />
-                                                                    <span className="text-muted-foreground tabular-nums">{s.time}</span>
+                                            <div key={di} className={`relative border-r border-border/20 last:border-r-0 ${isToday ? 'bg-primary/[0.02]' : ''}`}>
+                                                {/* Hour grid lines */}
+                                                {hours.map(h => (
+                                                    <div key={h} className="border-b border-border/15" style={{ height: `${rowH}px` }} />
+                                                ))}
+
+                                                {/* Session blocks */}
+                                                {daySessions.map(s => {
+                                                    const [sh, sm] = s.time.split(':').map(Number);
+                                                    const topMin = (sh - hourStart) * 60 + sm;
+                                                    const top = (topMin / 60) * rowH;
+                                                    const dur = s.duration || 60;
+                                                    const height = Math.max((dur / 60) * rowH - 2, 24);
+                                                    const tc = typeColors[s.type] || defaultTypeColor;
+                                                    const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
+
+                                                    return (
+                                                        <button
+                                                            key={s.id}
+                                                            onClick={() => { setSelectedDate(date); setSelectedSession(s); }}
+                                                            className={`absolute left-0.5 right-0.5 ${tc.bg} border ${tc.border} rounded-md px-1.5 py-1 text-left overflow-hidden transition-all hover:shadow-md hover:z-10 active:scale-[0.98]`}
+                                                            style={{ top: `${top}px`, height: `${height}px` }}
+                                                        >
+                                                            <div className={`text-[10px] font-bold tabular-nums ${tc.text}`}>
+                                                                {s.time} – {s.endTime}
+                                                            </div>
+                                                            <div className={`text-[11px] font-semibold truncate ${tc.text}`}>{cn}</div>
+                                                            {height > 40 && (
+                                                                <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                                    {s.format === 'online' ? '💻' : '📍'} {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
                                                                 </div>
-                                                                <div className={`truncate ${tc.text}`}>{cn}</div>
-                                                            </button>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+
+                                                {/* Current time marker */}
+                                                {isToday && (() => {
+                                                    const ch = now.getHours(), cm = now.getMinutes();
+                                                    if (ch >= hourStart && ch < hourEnd) {
+                                                        const markerTop = ((ch - hourStart) * 60 + cm) / 60 * rowH;
+                                                        return (
+                                                            <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${markerTop}px` }}>
+                                                                <div className="flex items-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+                                                                    <div className="h-[2px] flex-1 bg-red-500/40" />
+                                                                </div>
+                                                            </div>
                                                         );
-                                                    })}
-                                                </div>
+                                                    }
+                                                    return null;
+                                                })()}
                                             </div>
                                         );
                                     })}
@@ -372,58 +439,127 @@ export default function DiaryCalendarView() {
                         );
                     })()}
 
-                    {viewMode === 'day' && (
-                        <div className="space-y-3">
-                            {selectedSessions.length === 0 ? (
-                                <div className="bg-card rounded-2xl border border-border shadow-card p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
-                                    <div className="w-16 h-16 rounded-3xl bg-sage-100 flex items-center justify-center mb-4">
-                                        <CalendarIcon className="w-8 h-8 text-forest-600" />
-                                    </div>
-                                    <p className="text-foreground font-bold text-lg mb-1">Нет записей</p>
-                                    <p className="text-muted-foreground text-body-secondary">{formatDate(currentDate)}</p>
-                                    <button
-                                        onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: currentDate }); }}
-                                        className="mt-5 text-sm text-forest-700 font-bold flex items-center gap-2 hover:bg-sage-100 px-4 py-2.5 rounded-xl transition-colors"
-                                    >
-                                        <Plus className="w-4 h-4" /> Добавить запись
-                                    </button>
+                    {viewMode === 'day' && (() => {
+                        const hourStart = 8, hourEnd = 21;
+                        const hours = Array.from({ length: hourEnd - hourStart }, (_, i) => i + hourStart);
+                        const rowH = 72; // px per hour — bigger for day view
+                        const now = new Date();
+                        const isToday = isSameDay(currentDate, now);
+                        const sorted = selectedSessions.sort((a, b) => a.time.localeCompare(b.time));
+
+                        return (
+                            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+                                {/* Day subtitle */}
+                                <div className="px-5 py-3 border-b border-border/50 text-center">
+                                    <span className="text-[14px] font-semibold text-muted-foreground capitalize">
+                                        {currentDate.toLocaleDateString('ru-RU', { weekday: 'long' })}, {formatDate(currentDate)}
+                                    </span>
                                 </div>
-                            ) : (
-                                selectedSessions.map(s => (
-                                    <div key={s.id} onClick={() => setSelectedSession(s)}
-                                        className="bg-card rounded-2xl border border-border shadow-card p-5 flex flex-col sm:flex-row sm:items-center gap-4 transition-all hover:border-primary/30 hover:shadow-card-hover cursor-pointer"
-                                    >
-                                        <div className={`hidden sm:block w-1 h-14 rounded-full ${(typeColors[s.type] || defaultTypeColor).dot}`} />
-                                        <div className="flex-1 min-w-0">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); window.location.href = `/diary/clients?clientId=${s.client.id}`; }}
-                                                className="font-bold text-foreground text-lg mb-1 hover:text-primary transition-colors text-left block truncate"
-                                            >
-                                                {s.client.questionnaire?.data && (s.client.questionnaire.data as any).fullName
-                                                    ? (s.client.questionnaire.data as any).fullName
-                                                    : s.client.name}
-                                            </button>
-                                            <div className="text-body-secondary text-muted-foreground flex items-center gap-2">
-                                                <Clock className="w-3.5 h-3.5" />
-                                                <span className="tabular-nums">{s.time} – {s.endTime}</span>
-                                                <span>·</span>
-                                                <span>{s.duration} мин</span>
-                                            </div>
+
+                                {sorted.length === 0 ? (
+                                    <div className="p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
+                                        <div className="w-16 h-16 rounded-3xl bg-sage-100 flex items-center justify-center mb-4">
+                                            <CalendarIcon className="w-8 h-8 text-forest-600" />
                                         </div>
-                                        <div className="flex sm:flex-col items-center sm:items-end gap-2 shrink-0">
-                                            <span className={`text-[12px] px-2.5 py-1 rounded-lg font-bold ${statusBadge[s.status]}`}>
-                                                {statusLabels[s.status]}
-                                            </span>
-                                            <span className="text-[12px] px-2.5 py-1 bg-sage-50 text-muted-foreground rounded-lg font-semibold flex items-center gap-1.5">
-                                                {s.format === 'online' ? <Video className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
-                                                {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
-                                            </span>
+                                        <p className="text-foreground font-bold text-lg mb-1">Нет записей</p>
+                                        <button
+                                            onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: currentDate }); }}
+                                            className="mt-5 text-sm text-forest-700 font-bold flex items-center gap-2 hover:bg-sage-100 px-4 py-2.5 rounded-xl transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" /> Добавить запись
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-[50px_1fr] relative" style={{ minHeight: `${hours.length * rowH}px` }}>
+                                        {/* Hour labels */}
+                                        <div className="border-r border-border/30">
+                                            {hours.map(h => (
+                                                <div key={h} className="border-b border-border/15 text-[11px] font-medium text-muted-foreground/50 text-right pr-2 pt-0.5 tabular-nums" style={{ height: `${rowH}px` }}>
+                                                    {String(h).padStart(2, '0')}:00
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Sessions column */}
+                                        <div className="relative">
+                                            {/* Grid lines */}
+                                            {hours.map(h => (
+                                                <div key={h} className="border-b border-border/10" style={{ height: `${rowH}px` }} />
+                                            ))}
+
+                                            {/* Session cards */}
+                                            {sorted.map(s => {
+                                                const [sh, sm] = s.time.split(':').map(Number);
+                                                const topMin = (sh - hourStart) * 60 + sm;
+                                                const top = (topMin / 60) * rowH;
+                                                const dur = s.duration || 60;
+                                                const height = Math.max((dur / 60) * rowH - 4, 40);
+                                                const tc = typeColors[s.type] || defaultTypeColor;
+                                                const cn = s.client?.name || 'Клиент';
+                                                const typeLabel = s.type === 'individual' ? 'Регулярная сессия' : s.type === 'couple' ? 'Парная сессия' : s.type === 'family' ? 'Семейная сессия' : 'Сессия';
+                                                const isActive = selectedSession?.id === s.id;
+
+                                                return (
+                                                    <button
+                                                        key={s.id}
+                                                        onClick={() => setSelectedSession(s)}
+                                                        className={`absolute left-2 right-2 rounded-xl px-4 py-3 text-left overflow-hidden transition-all hover:shadow-md cursor-pointer flex items-center gap-4 ${isActive ? 'ring-2 ring-primary shadow-card-hover bg-card' : 'bg-card border border-border/50 hover:border-border'}`}
+                                                        style={{ top: `${top}px`, height: `${height}px` }}
+                                                    >
+                                                        {/* Colored left bar */}
+                                                        <div className={`w-1 rounded-full ${tc.dot} absolute left-0 top-2 bottom-2`} />
+
+                                                        {/* Time badge */}
+                                                        <div className={`shrink-0 px-2.5 py-1 rounded-lg text-[12px] font-bold tabular-nums ${tc.bg} ${tc.text} ml-2`}>
+                                                            {s.time} – {s.endTime}
+                                                        </div>
+
+                                                        {/* Client + type */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-[15px] font-bold text-foreground truncate">{cn}</div>
+                                                            <div className="text-[12px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                                                                <span className="flex items-center gap-1">{s.type === 'individual' ? '👤' : s.type === 'couple' ? '👥' : '👪'} {typeLabel}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Format + status */}
+                                                        <div className="flex items-center gap-3 shrink-0">
+                                                            <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                                                                {s.format === 'online' ? <Video className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
+                                                                {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
+                                                            </span>
+                                                            <span className={`text-[11px] px-2 py-0.5 rounded-md font-bold ${statusBadge[s.status]}`}>
+                                                                {statusLabels[s.status]}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+
+                                            {/* Current time marker */}
+                                            {isToday && (() => {
+                                                const ch = now.getHours(), cm = now.getMinutes();
+                                                if (ch >= hourStart && ch < hourEnd) {
+                                                    const markerTop = ((ch - hourStart) * 60 + cm) / 60 * rowH;
+                                                    return (
+                                                        <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${markerTop}px` }}>
+                                                            <div className="flex items-center">
+                                                                <div className="px-1.5 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded tabular-nums -ml-1">
+                                                                    {String(ch).padStart(2, '0')}:{String(cm).padStart(2, '0')}
+                                                                </div>
+                                                                <div className="h-[2px] flex-1 bg-primary/30" />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </div>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    )}
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {viewMode === 'list' && (() => {
                         // Group sessions by date within the current month
