@@ -260,8 +260,8 @@ export default function DiaryCalendarPage() {
                     </p>
                 </div>
 
-                {/* Week strip - matches mockup exactly */}
-                <div className="flex items-stretch gap-0 bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+                {/* Week strip */}
+                <div className="flex items-stretch gap-0 bg-card rounded-2xl border border-border shadow-card overflow-x-auto telegram-miniapp-scrollbar-hide">
                     {weekDays.map((wd, i) => {
                         const dayName = wd.date.toLocaleDateString('ru-RU', { weekday: 'short' });
                         const dayNum = wd.date.getDate();
@@ -322,7 +322,8 @@ export default function DiaryCalendarPage() {
                                 {/* Green header label */}
                                 <div className="px-6 pt-5 flex items-center justify-between">
                                     <span className="text-[12px] font-bold uppercase tracking-wider text-forest-600">Следующая сессия</span>
-                                    <div className={`px-3 py-1 rounded-full text-[13px] font-bold tabular-nums ${close ? 'bg-primary text-primary-foreground' : 'bg-sage-100 text-muted-foreground'}`}>
+                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold tabular-nums ${close ? 'bg-primary/10 text-forest-700 border border-primary/20' : 'bg-sage-100 text-muted-foreground'}`}>
+                                        {isTodaySession && mu > 0 && <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
                                         {sessionDateStr}
                                     </div>
                                 </div>
@@ -338,8 +339,9 @@ export default function DiaryCalendarPage() {
                                             <div className="flex items-center gap-2 mb-1">
                                                 <h3 className="text-[22px] font-bold text-foreground truncate">{cn}</h3>
                                             </div>
-                                            <div className="text-[13px] text-forest-600 font-semibold mb-2">
-                                                {clientSessionCount} сессия
+                                            <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground font-semibold mb-2">
+                                                <span className="w-2 h-2 rounded-full bg-green-500" />
+                                                {clientSessionCount} {clientSessionCount === 1 ? 'сессия' : clientSessionCount < 5 ? 'сессии' : 'сессий'}
                                             </div>
                                             {/* Запрос - placeholder since we don't have this data yet */}
                                             {nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).request && (
@@ -519,47 +521,53 @@ export default function DiaryCalendarPage() {
                                 <AlertTriangle className={`w-4 h-4 ${attentionCount > 0 ? 'text-orange-500' : 'text-muted-foreground/30'}`} />
                                 <span className="text-[15px] font-bold text-foreground">Требует внимания</span>
                             </div>
-                            {attentionCount > 0 && (
-                                <span className="min-w-[24px] h-[24px] flex items-center justify-center rounded-full text-[12px] font-bold bg-orange-soft text-orange-500 px-1.5">
-                                    {attentionCount}
-                                </span>
-                            )}
+                            <button className="p-1 rounded-lg hover:bg-sage-50 transition-colors text-muted-foreground/40">
+                                <MoreVertical className="w-4 h-4" />
+                            </button>
                         </div>
-                        <div className="p-3 space-y-1 max-h-72 overflow-auto telegram-miniapp-scrollbar-hide">
+                        <div className="p-3 space-y-1">
                             {attentionCount === 0 ? (
                                 <div className="text-center py-8 text-body-secondary text-muted-foreground/50 font-medium">
                                     Всё в порядке ✓
                                 </div>
                             ) : (
                                 <>
-                                    {pendingSessions.map(s => (
-                                        <button key={`p-${s.id}`} onClick={() => setEditingSession(s)}
-                                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-sage-50 transition-colors text-left group"
-                                        >
-                                            <div className="w-8 h-8 rounded-xl bg-orange-soft text-orange-500 flex items-center justify-center shrink-0">
-                                                <Clock className="w-4 h-4" />
+                                    {/* Consent issues */}
+                                    {pendingSessions.length > 0 && (
+                                        <div className="flex items-center gap-3 p-3 rounded-xl bg-red-50 hover:bg-red-100/50 transition-colors">
+                                            <div className="w-8 h-8 rounded-xl bg-red-100 text-red-500 flex items-center justify-center shrink-0">
+                                                <AlertTriangle className="w-4 h-4" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div>
-                                                <div className="text-small-meta text-muted-foreground">Ожидает подтверждения · {s.time}</div>
+                                                <div className="text-[13px] font-bold text-foreground">Оплата сессий не отмечена</div>
+                                                <div className="text-[11px] text-muted-foreground">{pendingSessions.length} сессий</div>
                                             </div>
-                                            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors shrink-0" />
-                                        </button>
-                                    ))}
-                                    {completedWithoutNotes.map(s => (
-                                        <button key={`n-${s.id}`} onClick={() => setEditingSession(s)}
-                                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-sage-50 transition-colors text-left group"
-                                        >
-                                            <div className="w-8 h-8 rounded-xl bg-amber-400/10 text-amber-500 flex items-center justify-center shrink-0">
+                                            <button
+                                                onClick={() => pendingSessions[0] && setEditingSession(pendingSessions[0])}
+                                                className="text-[12px] font-bold text-primary hover:text-forest-800 transition-colors flex items-center gap-1 shrink-0"
+                                            >
+                                                Открыть <ChevronRight className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    )}
+                                    {/* Notes missing */}
+                                    {completedWithoutNotes.length > 0 && (
+                                        <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 hover:bg-amber-100/50 transition-colors">
+                                            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
                                                 <FileText className="w-4 h-4" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-semibold text-foreground truncate">{s.client?.name || 'Клиент'}</div>
-                                                <div className="text-small-meta text-muted-foreground">Нет заметок после сессии</div>
+                                                <div className="text-[13px] font-bold text-foreground">Домашние задания не заполнены</div>
+                                                <div className="text-[11px] text-muted-foreground">{completedWithoutNotes.length} записи</div>
                                             </div>
-                                            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors shrink-0" />
-                                        </button>
-                                    ))}
+                                            <button
+                                                onClick={() => completedWithoutNotes[0] && setEditingSession(completedWithoutNotes[0])}
+                                                className="text-[12px] font-bold text-primary hover:text-forest-800 transition-colors flex items-center gap-1 shrink-0"
+                                            >
+                                                Проверить <ChevronRight className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
