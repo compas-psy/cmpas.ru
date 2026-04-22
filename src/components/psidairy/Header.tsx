@@ -89,7 +89,7 @@ export default function Header() {
                         {/* Action Button - Hidden on mobile when menu is open */}
                         <Link
                             href="#доставка"
-                            className="hidden sm:block bg-primary text-white px-8 py-3 rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm"
+                            className="hidden sm:block bg-primary text-white px-8 py-3 rounded-lg text-sm font-medium hover:bg-forest-700 transition shadow-sm"
                         >
                             Купить
                         </Link>
@@ -145,7 +145,7 @@ export default function Header() {
                     <Link
                         href="#доставка"
                         onClick={handleLinkClick}
-                        className="mt-6 bg-primary text-white px-8 py-4 rounded-lg text-base font-medium hover:bg-primary/90 transition shadow-sm text-center"
+                        className="mt-6 bg-primary text-white px-8 py-4 rounded-lg text-base font-medium hover:bg-forest-700 transition shadow-sm text-center"
                     >
                         Купить ежедневник
                     </Link>

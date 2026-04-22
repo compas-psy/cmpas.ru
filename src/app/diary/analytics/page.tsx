@@ -10,7 +10,7 @@ export default function AnalyticsPage() {
                 <p className="text-muted-foreground text-[15px] mt-2">Статистика вашей практики и инсайты</p>
             </div>
             <div className="flex flex-col items-center justify-center py-24 px-8">
-                <div className="w-20 h-20 bg-sage-100 rounded-3xl flex items-center justify-center mb-6">
+                <div className="w-20 h-20 bg-sage-100 rounded-2xl flex items-center justify-center mb-6">
                     <BarChart3 className="w-10 h-10 text-forest-600" />
                 </div>
                 <h2 className="text-hero-title text-foreground mb-3 text-center">Скоро появится</h2>

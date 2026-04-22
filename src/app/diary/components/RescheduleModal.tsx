@@ -116,13 +116,13 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
 
     return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-card rounded-3xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-card rounded-2xl shadow-floating max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-5">
                     <h3 className="text-xl font-bold tracking-tight text-foreground">Перенести сессию</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors"><X className="w-5 h-5 text-muted-foreground" /></button>
+                    <button onClick={onClose} className="p-2 hover:bg-sage-100 rounded-xl transition-colors"><X className="w-5 h-5 text-muted-foreground" /></button>
                 </div>
 
-                <div className="bg-muted/30 rounded-2xl p-4 mb-5 border border-border/50">
+                <div className="bg-sage-50 rounded-2xl p-4 mb-5 border border-border/50">
                     <p className="text-sm font-medium text-muted-foreground">Клиент</p>
                     <p className="font-bold text-foreground">{clientName}</p>
                     <p className="text-sm font-medium text-muted-foreground mt-2">Текущее время</p>
@@ -134,9 +134,9 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
                 {/* Calendar */}
                 <div className="mb-5">
                     <div className="flex items-center justify-between mb-3">
-                        <button onClick={prevMonth} className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground">◀</button>
+                        <button onClick={prevMonth} className="p-2 hover:bg-sage-100 rounded-xl transition-colors text-muted-foreground">◀</button>
                         <span className="font-semibold text-foreground capitalize">{monthName}</span>
-                        <button onClick={nextMonth} className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground">▶</button>
+                        <button onClick={nextMonth} className="p-2 hover:bg-sage-100 rounded-xl transition-colors text-muted-foreground">▶</button>
                     </div>
                     <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground mb-2">
                         {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(d => <div key={d}>{d}</div>)}
@@ -160,7 +160,7 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
                                     className={`relative h-9 rounded-xl text-sm font-medium transition-colors ${isSel
                                         ? 'bg-primary text-primary-foreground shadow-sm'
                                         : isAvail
-                                            ? 'text-foreground hover:bg-muted'
+                                            ? 'text-foreground hover:bg-sage-100'
                                             : 'text-muted-foreground/40 cursor-default'
                                         } ${isToday && !isSel ? 'ring-1 ring-primary/30' : ''}`}
                                 >
@@ -204,7 +204,7 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
                     <button
                         onClick={handleSave}
                         disabled={saving || !selectedSlot}
-                        className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
+                        className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-forest-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Перенос...' : 'Перенести'}

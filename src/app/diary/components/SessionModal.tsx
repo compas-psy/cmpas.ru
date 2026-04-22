@@ -152,8 +152,8 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
 
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-border/50 bg-muted/10">
+            <div className="bg-card rounded-2xl w-full max-w-lg shadow-floating overflow-hidden max-h-[90vh] flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-border/50 bg-sage-50/50">
                     <h2 className="text-xl font-bold tracking-tight">{editSession ? 'Редактировать запись' : 'Новая запись'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors active:scale-95">
                         <X className="w-5 h-5 text-muted-foreground" />
@@ -313,11 +313,11 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         </>
                     )}
                 </div>
-                <div className="p-6 border-t border-border/50 bg-muted/10 flex gap-4">
+                <div className="p-6 border-t border-border/50 bg-sage-50/50 flex gap-4">
                     <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-all active:scale-[0.98]">
                         Отмена
                     </button>
-                    <button onClick={handleSubmit} disabled={loading || (!editSession && !formData.time)} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]">
+                    <button onClick={handleSubmit} disabled={loading || (!editSession && !formData.time)} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-forest-700 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]">
                         {loading ? 'Сохранение...' : 'Сохранить'}
                     </button>
                 </div>

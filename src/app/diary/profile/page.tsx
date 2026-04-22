@@ -99,7 +99,7 @@ export default function ProfilePage() {
                     <p className="text-muted-foreground text-base mt-2">Личные данные и специализация</p>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.98] disabled:opacity-50">
+                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-semibold shadow-card active:scale-[0.98] disabled:opacity-50">
                     <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
                 </button>
             </div>
@@ -107,7 +107,7 @@ export default function ProfilePage() {
             {/* Avatar and Name */}
             <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
                         <User className="w-5 h-5" />
                     </div>
                     Основная информация
@@ -153,7 +153,7 @@ export default function ProfilePage() {
             {/* Methods */}
             <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-soft text-orange-500 flex items-center justify-center">
                         <Briefcase className="w-5 h-5" />
                     </div>
                     Методы работы
@@ -205,7 +205,7 @@ export default function ProfilePage() {
             {/* Pricing */}
             <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-5 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
                         <span className="text-lg font-bold">₽</span>
                     </div>
                     Стоимость

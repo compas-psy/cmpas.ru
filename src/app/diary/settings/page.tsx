@@ -413,7 +413,7 @@ export default function SettingsPage() {
                     ) : (
                         <div className="space-y-3">
                             {addresses.map(a => (
-                                <div key={a.id} className={`flex justify-between items-center p-4 bg-background border rounded-2xl transition-colors group shadow-sm ${(a as any).isPrimary ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30'}`}>
+                                <div key={a.id} className={`flex justify-between items-center p-4 bg-background border rounded-2xl transition-colors group shadow-card ${(a as any).isPrimary ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30'}`}>
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                         <button
                                             onClick={async () => {
@@ -458,7 +458,7 @@ export default function SettingsPage() {
                                         placeholder="Начните вводить адрес..."
                                     />
                                 </div>
-                                <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="md:w-auto w-full px-6 py-3 min-h-[48px] bg-primary text-primary-foreground text-sm font-semibold rounded-xl shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 active:scale-[0.98]">
+                                <button onClick={handleAddAddress} disabled={addingAddress || !newAddress.name || !newAddress.address} className="md:w-auto w-full px-6 py-3 min-h-[48px] bg-primary text-primary-foreground text-sm font-semibold rounded-xl shadow-card hover:bg-forest-700 transition-all disabled:opacity-50 active:scale-[0.98]">
                                     Добавить
                                 </button>
                             </div>

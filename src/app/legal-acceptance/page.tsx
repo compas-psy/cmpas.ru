@@ -26,7 +26,7 @@ export default async function LegalAcceptancePage() {
 
     return (
         <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center p-4">
-            <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl w-full max-w-lg text-center animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl w-full max-w-lg text-center animate-in fade-in zoom-in-95 duration-300">
                 <div className="flex justify-center mb-6">
                     <div className="w-16 h-16 rounded-2xl bg-[#faf8f5] flex items-center justify-center overflow-hidden">
                         <Image src="/logo-tree.png" alt="Compas Logo" width={40} height={40} className="object-contain" />

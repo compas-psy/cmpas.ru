@@ -242,7 +242,7 @@ export default function ClientsPage() {
                                 <div className="text-center py-12 text-muted-foreground text-sm">Нет сессий</div>
                             )}
                             <button onClick={() => { setEditingSession(null); setShowNewSession(true); }}
-                                className="w-full py-3.5 bg-accent text-accent-foreground rounded-xl font-medium shadow-sm active:scale-[0.98] transition-all">
+                                className="w-full py-3.5 bg-accent text-accent-foreground rounded-xl font-medium shadow-card active:scale-[0.98] transition-all">
                                 Запланировать сессию
                             </button>
                         </div>
@@ -259,7 +259,7 @@ export default function ClientsPage() {
                         <div className="space-y-4">
                             <QuestionnaireView data={selectedClient.questionnaire?.data} />
                             <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || { fullName: selectedClient.name, gender: selectedClient.gender || undefined, phone: selectedClient.phone || undefined, email: selectedClient.email || undefined }); }}
-                                className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium shadow-sm active:scale-[0.98]">
+                                className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium shadow-card active:scale-[0.98]">
                                 {selectedClient.questionnaire?.data ? 'Редактировать' : 'Заполнить анкету'}
                             </button>
                         </div>
@@ -359,7 +359,7 @@ export default function ClientsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <button
                         onClick={() => setShowNewClient(true)}
-                        className="group bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all text-left flex flex-col items-start gap-3 active:scale-[0.98]"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all text-left flex flex-col items-start gap-3 active:scale-[0.98]"
                     >
                         <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
                             <UserPlus className="w-6 h-6" strokeWidth={1.5} />
@@ -373,7 +373,7 @@ export default function ClientsPage() {
                     </button>
                     <Link
                         href="/diary/clients/import"
-                        className="group bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
                     >
                         <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent-foreground group-hover:bg-accent group-hover:text-accent-foreground transition-all">
                             <ClipboardPaste className="w-6 h-6" strokeWidth={1.5} />
@@ -387,7 +387,7 @@ export default function ClientsPage() {
                     </Link>
                     <Link
                         href="/diary/clients/import-calendar"
-                        className="group bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
                     >
                         <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
                             <CalendarClock className="w-6 h-6" strokeWidth={1.5} />
@@ -426,7 +426,7 @@ export default function ClientsPage() {
                         <ClipboardPaste className="w-4 h-4" /> <span className="hidden sm:inline">Импорт</span>
                     </Link>
                     <button onClick={() => setShowNewClient(true)}
-                        className="flex items-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-all font-semibold shadow-sm active:scale-[0.98]">
+                        className="flex items-center gap-2 px-6 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-all font-semibold shadow-card active:scale-[0.98]">
                         <Plus className="w-4 h-4" /> Добавить
                     </button>
                 </div>
@@ -492,18 +492,18 @@ export default function ClientsPage() {
                             </div>
                         );
                     })}
-                    {clients.length === 0 && <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm"><p className="text-muted-foreground font-medium text-sm">Нет клиентов</p></div>}
+                    {clients.length === 0 && <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-card"><p className="text-muted-foreground font-medium text-sm">Нет клиентов</p></div>}
                 </div>
 
                 {/* Desktop Detail */}
                 <div className="lg:col-span-2 hidden lg:block">
                     {!selectedClient ? (
-                        <div className="bg-card rounded-2xl border border-border shadow-sm p-12 text-center h-full flex flex-col items-center justify-center min-h-[400px]">
+                        <div className="bg-card rounded-2xl border border-border shadow-card p-12 text-center h-full flex flex-col items-center justify-center min-h-[400px]">
                             <FileText className="w-12 h-12 text-muted-foreground/30 mb-4" />
                             <p className="text-muted-foreground font-medium">Выберите клиента</p>
                         </div>
                     ) : (
-                        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-12rem)] min-h-[600px]">
+                        <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden flex flex-col max-h-[calc(100vh-12rem)] min-h-[600px]">
                             {/* Header */}
                             <div className="p-6 pb-0">
                                 <div className="flex items-center gap-5">
@@ -530,7 +530,7 @@ export default function ClientsPage() {
                                 </div>
                                 {/* Next session highlight */}
                                 {futureSessions.length > 0 && (
-                                    <div className="mt-4 p-4 border border-border rounded-2xl flex items-center gap-4 bg-transparent shadow-sm">
+                                    <div className="mt-4 p-4 border border-border rounded-2xl flex items-center gap-4 bg-transparent shadow-card">
                                         <Calendar className="w-8 h-8 text-primary shrink-0 opacity-80" />
                                         <div>
                                             <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Ближайшая запись</div>
@@ -574,7 +574,7 @@ export default function ClientsPage() {
                                     <div className="space-y-6 max-w-2xl">
                                         <QuestionnaireView data={selectedClient.questionnaire?.data} />
                                         <button onClick={() => { setShowEditQuestionnaire(true); setQuestionnaireForm(selectedClient.questionnaire?.data || { fullName: selectedClient.name, gender: selectedClient.gender || undefined, phone: selectedClient.phone || undefined, email: selectedClient.email || undefined }); }}
-                                            className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 shadow-sm active:scale-[0.98]">
+                                            className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-forest-700 shadow-sm active:scale-[0.98]">
                                             {selectedClient.questionnaire?.data ? 'Редактировать анкету' : 'Заполнить анкету'}
                                         </button>
                                     </div>
@@ -623,7 +623,7 @@ export default function ClientsPage() {
         const name = clientName(selectedClient);
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200 p-6">
+                <div className="bg-card rounded-2xl w-full max-w-md shadow-floating border border-border animate-in fade-in zoom-in-95 duration-200 p-6">
                     <div className="text-center mb-6">
                         <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Trash2 className="w-8 h-8 text-destructive" />
@@ -652,7 +652,7 @@ export default function ClientsPage() {
         if (!showEditQuestionnaire) return null;
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-floating border border-border animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex items-center justify-between p-6 border-b border-border/50">
                         <h2 className="text-xl font-bold text-foreground">Анкета клиента</h2>
                         <button onClick={() => setShowEditQuestionnaire(false)} className="p-2 hover:bg-muted rounded-xl"><X className="w-5 h-5" /></button>
@@ -715,7 +715,7 @@ export default function ClientsPage() {
                     </div>
                     <div className="p-6 border-t border-border/50 flex gap-4">
                         <button onClick={() => setShowEditQuestionnaire(false)} className="flex-1 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium">Отмена</button>
-                        <button onClick={handleSaveQuestionnaire} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-medium shadow-sm">Сохранить</button>
+                        <button onClick={handleSaveQuestionnaire} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-medium shadow-card">Сохранить</button>
                     </div>
                 </div>
             </div>
@@ -824,7 +824,7 @@ function QuestionnaireView({ data }: { data?: QuestionnaireData | null }) {
 function NewClientModal({ newClient, setNewClient, onCreate, onClose }: { newClient: { name: string; phone: string; email: string; gender: string }; setNewClient: (fn: (s: typeof newClient) => typeof newClient) => void; onCreate: () => void; onClose: () => void }) {
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-card rounded-2xl w-full max-w-md shadow-floating border border-border animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex items-center justify-between p-6 pb-4 border-b border-border/50">
                     <h2 className="text-xl font-bold">Новый клиент</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl"><X className="w-5 h-5" /></button>
@@ -844,7 +844,7 @@ function NewClientModal({ newClient, setNewClient, onCreate, onClose }: { newCli
                 </div>
                 <div className="p-6 pt-4 border-t border-border/50 flex gap-4">
                     <button onClick={onClose} className="flex-1 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium">Отмена</button>
-                    <button onClick={onCreate} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-medium shadow-sm">Создать</button>
+                    <button onClick={onCreate} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-medium shadow-card">Создать</button>
                 </div>
             </div>
         </div>

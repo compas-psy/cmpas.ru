@@ -16,7 +16,7 @@ export default async function HelpTopicPage({ params }: { params: Promise<{ slug
     const next = currentIndex >= 0 && currentIndex < HELP_TOPICS.length - 1 ? HELP_TOPICS[currentIndex + 1] : null;
 
     return (
-        <article className="bg-card rounded-2xl border border-border shadow-sm p-6 md:p-8">
+        <article className="bg-card rounded-2xl border border-border shadow-card p-6 md:p-8">
             <header className="mb-6 pb-6 border-b border-border">
                 <h2 className="text-2xl md:text-3xl font-bold text-foreground">{topic.title}</h2>
                 <p className="text-sm text-muted-foreground mt-2">{topic.description}</p>
@@ -35,7 +35,7 @@ export default async function HelpTopicPage({ params }: { params: Promise<{ slug
                             <ol className="mt-4 space-y-3">
                                 {section.steps.map((step, j) => (
                                     <li key={j} className="flex gap-3">
-                                        <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center mt-0.5">
+                                        <span className="shrink-0 w-6 h-6 rounded-full bg-sage-100 text-forest-700 font-bold text-xs flex items-center justify-center mt-0.5">
                                             {j + 1}
                                         </span>
                                         <span className="text-sm md:text-base text-muted-foreground leading-relaxed">
@@ -46,8 +46,8 @@ export default async function HelpTopicPage({ params }: { params: Promise<{ slug
                             </ol>
                         )}
                         {section.tip && (
-                            <div className="mt-4 flex gap-3 bg-accent/10 border border-accent/30 rounded-xl p-4">
-                                <Lightbulb className="w-5 h-5 text-accent-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
+                            <div className="mt-4 flex gap-3 bg-sage-100 border border-sage-200 rounded-xl p-4">
+                                <Lightbulb className="w-5 h-5 text-forest-700 shrink-0 mt-0.5" strokeWidth={1.5} />
                                 <p className="text-sm text-foreground leading-relaxed">{section.tip}</p>
                             </div>
                         )}

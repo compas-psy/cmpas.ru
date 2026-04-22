@@ -195,7 +195,7 @@ export default function Reviews() {
                     </p>
                     <a
                         href="#order"
-                        className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors font-medium"
+                        className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white rounded-full hover:bg-forest-700 transition-colors font-medium"
                     >
                         Заказать ежедневник
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

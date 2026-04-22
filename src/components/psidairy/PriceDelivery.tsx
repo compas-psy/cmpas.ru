@@ -86,7 +86,7 @@ export default function PriceDelivery() {
                         href={OZON_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-block bg-primary text-white px-8 py-3.5 rounded-lg font-medium hover:bg-primary/90 transition shadow-sm"
+                        className="inline-block bg-primary text-white px-8 py-3.5 rounded-lg font-medium hover:bg-forest-700 transition shadow-sm"
                     >
                         Купить ежедневник
                     </a>

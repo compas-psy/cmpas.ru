@@ -147,7 +147,7 @@ export default function NotificationsPage() {
                     <p className="text-muted-foreground text-base mt-2">Настройте что и когда отправлять вам и клиентам</p>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all text-sm font-semibold shadow-sm active:scale-[0.98] disabled:opacity-50">
+                    className="flex items-center gap-2 px-5 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-xl hover:bg-forest-700 transition-all text-sm font-semibold shadow-card active:scale-[0.98] disabled:opacity-50">
                     <Save className="w-4 h-4" />{saving ? 'Сохранение...' : 'Сохранить'}
                 </button>
             </div>
@@ -155,7 +155,7 @@ export default function NotificationsPage() {
             {/* Psychologist notifications */}
             <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
                         <Bell className="w-4 h-4 md:w-5 md:h-5" />
                     </div>
                     Уведомления психологу
@@ -200,7 +200,7 @@ export default function NotificationsPage() {
             {/* Client notifications */}
             <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-2xl bg-orange-soft text-orange-500 flex items-center justify-center">
                         <BellRing className="w-4 h-4 md:w-5 md:h-5" />
                     </div>
                     Уведомления клиенту

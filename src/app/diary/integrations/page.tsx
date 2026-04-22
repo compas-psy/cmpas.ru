@@ -247,7 +247,7 @@ export default function IntegrationsPage() {
             {/* Section: Messengers */}
             <div>
                 <div className="flex items-center gap-3 mb-5">
-                    <div className="w-8 h-8 rounded-xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center"><MessageCircle className="w-4 h-4" /></div>
+                    <div className="w-8 h-8 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center"><MessageCircle className="w-4 h-4" /></div>
                     <h2 className="text-2xl font-bold tracking-tight text-foreground">Мессенджеры</h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -340,7 +340,7 @@ export default function IntegrationsPage() {
 
             {/* Section: Calendars */}
             <div className="flex items-center gap-3 mt-2">
-                <div className="w-8 h-8 rounded-xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center"><RefreshCw className="w-4 h-4" /></div>
+                <div className="w-8 h-8 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center"><RefreshCw className="w-4 h-4" /></div>
                 <h2 className="text-2xl font-bold tracking-tight text-foreground">Календари</h2>
             </div>
 
@@ -441,7 +441,7 @@ export default function IntegrationsPage() {
                                 <p className="text-sm font-medium text-muted-foreground mb-6 flex-1">{info.description}</p>
                                 <button
                                     onClick={() => handleConnect(p)}
-                                    className="w-full px-5 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                    className="w-full px-5 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-forest-700 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                                 >
                                     {p === 'google' ? (
                                         <><ExternalLink className="w-5 h-5" />Авторизоваться</>
@@ -457,7 +457,7 @@ export default function IntegrationsPage() {
 
             {/* Section: Video Conferencing */}
             <div className="flex items-center gap-3 mt-4">
-                <div className="w-8 h-8 rounded-xl border-2 border-accent/30 text-accent bg-transparent flex items-center justify-center"><MonitorPlay className="w-4 h-4" /></div>
+                <div className="w-8 h-8 rounded-xl bg-orange-soft text-orange-500 flex items-center justify-center"><MonitorPlay className="w-4 h-4" /></div>
                 <h2 className="text-2xl font-bold tracking-tight text-foreground">Видеоконференции</h2>
             </div>
 
@@ -553,7 +553,7 @@ export default function IntegrationsPage() {
                             <button
                                 onClick={handleYandexConnect}
                                 disabled={yandexConnecting || !yandexLogin || !yandexPassword}
-                                className="w-full sm:w-1/2 px-4 py-3 min-h-[48px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
+                                className="w-full sm:w-1/2 px-4 py-3 min-h-[48px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-forest-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
                             >
                                 {yandexConnecting ? (
                                     <><Loader2 className="w-5 h-5 animate-spin" />Вход...</>
@@ -569,7 +569,7 @@ export default function IntegrationsPage() {
             {/* Sync Settings */}
             <div className="bg-card rounded-2xl border border-border p-6 shadow-card overflow-hidden">
                 <h2 className="text-xl font-semibold mb-6 flex items-center gap-3 text-foreground tracking-tight">
-                    <div className="w-10 h-10 rounded-2xl border-2 border-primary/30 text-primary bg-transparent flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
                         <ShieldCheck className="w-5 h-5" />
                     </div>
                     Настройки синхронизации

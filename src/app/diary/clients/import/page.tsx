@@ -69,7 +69,7 @@ export default function ImportClientsPage() {
             </div>
 
             {/* Instructions */}
-            <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+            <div className="bg-card rounded-2xl border border-border p-5 shadow-card">
                 <h2 className="font-semibold text-foreground mb-2 text-sm">Формат</h2>
                 <p className="text-muted-foreground text-sm mb-3">
                     Одна строка — один клиент. Поля разделяются запятой, точкой с запятой или табом. Порядок полей не важен:
@@ -113,7 +113,7 @@ export default function ImportClientsPage() {
                             </span>
                         )}
                     </h2>
-                    <div className="bg-card rounded-2xl border border-border shadow-sm divide-y divide-border">
+                    <div className="bg-card rounded-2xl border border-border shadow-card divide-y divide-border">
                         {parsed.map((p, i) => (
                             <div
                                 key={i}
@@ -176,7 +176,7 @@ export default function ImportClientsPage() {
                 <button
                     onClick={handleSubmit}
                     disabled={submitting || validItems.length === 0}
-                    className="flex-1 px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-sm hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-card hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {submitting
                         ? 'Добавляем…'

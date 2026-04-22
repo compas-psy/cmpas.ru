@@ -603,7 +603,7 @@ export default function AvailabilityPage() {
                                     <p className="text-sm text-muted-foreground">Шаблоны ваших регулярных часов</p>
                                 </div>
                             </div>
-                            <button onClick={() => setShowNewRule(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm hover:bg-primary/90 transition-all font-semibold text-sm active:scale-95">
+                            <button onClick={() => setShowNewRule(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm hover:bg-forest-700 transition-all font-semibold text-sm active:scale-95">
                                 <Plus className="w-4 h-4" /> Шаблон
                             </button>
                         </div>
@@ -931,8 +931,8 @@ export default function AvailabilityPage() {
             {/* Client Preview Modal */}
             {showPreview && (
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="flex items-center justify-between p-5 border-b border-border/50 bg-muted/10">
+                    <div className="bg-card rounded-2xl w-full max-w-md shadow-floating overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between p-5 border-b border-border/50 bg-sage-50/50">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-5 h-5 text-primary" />
                                 <h2 className="text-lg font-bold tracking-tight">Глазами клиента</h2>
@@ -1177,15 +1177,15 @@ export default function AvailabilityPage() {
 function Modal({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: React.ReactNode }) {
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between p-5 border-b border-border/50 bg-muted/10">
+            <div className="bg-card rounded-2xl w-full max-w-lg shadow-floating overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between p-5 border-b border-border/50 bg-sage-50/50">
                     <h2 className="text-lg font-bold tracking-tight">{title}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-5 h-5" /></button>
                 </div>
                 <div className="p-5 space-y-4 overflow-auto telegram-miniapp-scrollbar-hide">{children}</div>
-                <div className="p-5 border-t border-border/50 bg-muted/10 flex gap-3">
+                <div className="p-5 border-t border-border/50 bg-sage-50/50 flex gap-3">
                     <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/80 transition-all">Отмена</button>
-                    <button onClick={onSubmit} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-all shadow-sm">Сохранить</button>
+                    <button onClick={onSubmit} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-forest-700 transition-all shadow-sm">Сохранить</button>
                 </div>
             </div>
         </div>

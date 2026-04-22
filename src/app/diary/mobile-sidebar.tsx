@@ -26,14 +26,14 @@ export function MobileSidebar({ children }: { children: React.ReactNode }) {
     return (
         <>
             {/* Mobile header */}
-            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-card/80 backdrop-blur-md border-b border-border z-40 flex items-center px-4 gap-3 shadow-sm">
+            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-card/90 backdrop-blur-xl border-b border-border z-40 flex items-center px-4 gap-3 shadow-card">
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="p-2 -ml-2 rounded-xl hover:bg-muted transition-colors active:scale-95"
+                    className="p-2 -ml-2 rounded-xl hover:bg-sage-100 transition-colors active:scale-95"
                 >
-                    <Menu className="w-6 h-6" />
+                    <Menu className="w-6 h-6 text-forest-800" />
                 </button>
-                <div className="font-bold text-lg tracking-tight">Ежедневник</div>
+                <div className="font-bold text-[17px] tracking-tight text-foreground">КОМПАС</div>
             </div>
 
             {/* Overlay */}
@@ -46,7 +46,7 @@ export function MobileSidebar({ children }: { children: React.ReactNode }) {
 
             {/* Sidebar drawer */}
             <aside
-                className={`md:hidden fixed top-0 left-0 bottom-0 w-[280px] z-50 flex flex-col shadow-2xl bg-sidebar transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`md:hidden fixed top-0 left-0 bottom-0 w-[280px] z-50 flex flex-col shadow-floating bg-sidebar transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
                 onClick={(e) => {
                     const target = e.target as HTMLElement;

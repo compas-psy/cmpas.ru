@@ -37,7 +37,7 @@ export default function EmailExistsPage() {
                     </Link>
 
                     {/* Карточка */}
-                    <div className="w-full max-w-[420px] bg-[#1a4d3a] rounded-3xl shadow-xl p-8 lg:p-12 text-center">
+                    <div className="w-full max-w-[420px] bg-[#1a4d3a] rounded-2xl shadow-xl p-8 lg:p-12 text-center">
                         {/* Иконка */}
                         <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
                             <span className="text-3xl">✓</span>
@@ -89,7 +89,7 @@ export default function EmailExistsPage() {
 
                 {/* Правая часть: Декоративное изображение */}
                 <div className="hidden lg:flex items-center justify-center w-full max-w-[600px]">
-                    <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl">
+                    <div className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-2xl">
                         <Image
                             src="/images/auth-side.jpg"
                             alt="Ежедневник психолога"

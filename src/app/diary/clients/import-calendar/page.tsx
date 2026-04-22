@@ -145,7 +145,7 @@ export default function ImportFromCalendarPage() {
             </div>
 
             {integrations.length === 0 ? (
-                <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
+                <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-card">
                     <Link2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
                     <h2 className="font-bold text-foreground mb-2">Календарь не подключён</h2>
                     <p className="text-sm text-muted-foreground mb-5 max-w-md mx-auto">
@@ -153,7 +153,7 @@ export default function ImportFromCalendarPage() {
                     </p>
                     <Link
                         href="/diary/integrations"
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl font-semibold text-sm hover:bg-accent/90 transition-all shadow-sm"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl font-semibold text-sm hover:bg-accent/90 transition-all shadow-card"
                     >
                         Перейти к интеграциям
                     </Link>
@@ -161,7 +161,7 @@ export default function ImportFromCalendarPage() {
             ) : (
                 <>
                     {/* Выбор календаря и периода */}
-                    <div className="bg-card rounded-2xl border border-border p-5 shadow-sm space-y-4">
+                    <div className="bg-card rounded-2xl border border-border p-5 shadow-card space-y-4">
                         <div>
                             <label className="block text-sm font-semibold text-foreground mb-2">Календарь</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -192,7 +192,7 @@ export default function ImportFromCalendarPage() {
                                         onClick={() => setDays(p.days)}
                                         className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                                             days === p.days
-                                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                                ? 'bg-primary text-primary-foreground shadow-card'
                                                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                         }`}
                                     >
@@ -204,7 +204,7 @@ export default function ImportFromCalendarPage() {
                         <button
                             onClick={handleScan}
                             disabled={scanning || !selectedId}
-                            className="w-full px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-sm hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="w-full px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-card hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                             {scanning ? (
                                 <>
@@ -235,7 +235,7 @@ export default function ImportFromCalendarPage() {
                                     {selected.size === candidates.length ? 'Снять все' : 'Выбрать все'}
                                 </button>
                             </div>
-                            <div className="bg-card rounded-2xl border border-border shadow-sm divide-y divide-border">
+                            <div className="bg-card rounded-2xl border border-border shadow-card divide-y divide-border">
                                 {candidates.map(c => {
                                     const isSelected = selected.has(c.name);
                                     return (
@@ -283,7 +283,7 @@ export default function ImportFromCalendarPage() {
                     )}
 
                     {candidates && candidates.length === 0 && !scanning && (
-                        <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
+                        <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-card">
                             <p className="text-sm text-muted-foreground">
                                 В календаре не нашлось повторяющихся имён. Попробуйте увеличить период или добавьте клиентов
                                 вручную.
@@ -303,7 +303,7 @@ export default function ImportFromCalendarPage() {
                             <button
                                 onClick={handleSubmit}
                                 disabled={submitting || selected.size === 0}
-                                className="flex-1 px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-sm hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-card hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {submitting
                                     ? 'Добавляем…'
