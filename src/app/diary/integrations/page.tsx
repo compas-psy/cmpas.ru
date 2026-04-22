@@ -238,10 +238,10 @@ export default function IntegrationsPage() {
     const availableProviders = ['google', 'yandex'].filter(p => !connectedProviders.includes(p));
 
     return (
-        <div className="space-y-8 pb-12 max-w-3xl mx-auto">
+        <div className="space-y-6 pb-12 max-w-3xl mx-auto">
             <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Интеграции</h1>
-                <p className="text-muted-foreground text-base mt-2">Мессенджеры, календари и сервисы</p>
+                <p className="text-muted-foreground text-sm mt-1">Мессенджеры, календари и сервисы</p>
             </div>
 
             {/* Section: Messengers */}

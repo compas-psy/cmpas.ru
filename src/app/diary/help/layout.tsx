@@ -32,15 +32,8 @@ export default function HelpLayout({ children }: { children: React.ReactNode }) 
     return (
         <div className="max-w-6xl mx-auto">
             <div className="mb-6">
-                <h1 className="text-[32px] md:text-[40px] font-bold tracking-tight text-foreground leading-[1.1] flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sage-100 text-forest-700 flex items-center justify-center">
-                        <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
-                    </div>
-                    Помощь
-                </h1>
-                <p className="text-muted-foreground text-[15px] mt-2 font-medium">
-                    Краткая инструкция по работе с КОМПАС. Выберите тему слева.
-                </p>
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Помощь</h1>
+                <p className="text-muted-foreground text-sm mt-1">Краткая инструкция по работе с КОМПАС. Выберите тему слева.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
