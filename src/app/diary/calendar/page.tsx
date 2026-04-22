@@ -562,7 +562,6 @@ export default function DiaryCalendarView() {
                     })()}
 
                     {viewMode === 'list' && (() => {
-                        // Group sessions by date within the current month
                         const monthSessions = sessions.filter(s => {
                             const d = new Date(s.date);
                             return d.getMonth() === month && d.getFullYear() === year;
@@ -589,38 +588,81 @@ export default function DiaryCalendarView() {
                             );
                         }
 
+                        const todayDate = new Date();
+                        const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+
                         return (
-                            <div className="space-y-4">
-                                {grouped.map(group => (
-                                    <div key={group.date.toISOString()} className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-                                        <div className="px-5 py-3 bg-sage-50 border-b border-border/40 flex items-center justify-between">
-                                            <span className="text-[14px] font-bold text-foreground capitalize">
-                                                {group.date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
-                                            </span>
-                                            <span className="text-small-meta text-muted-foreground font-semibold">
-                                                {group.sessions.length} {group.sessions.length === 1 ? 'сессия' : group.sessions.length < 5 ? 'сессии' : 'сессий'}
-                                            </span>
+                            <div className="space-y-5">
+                                {grouped.map(group => {
+                                    const isGroupToday = isSameDay(group.date, todayDate);
+                                    const isGroupTomorrow = isSameDay(group.date, tomorrowDate);
+                                    const prefix = isGroupToday ? 'Сегодня, ' : isGroupTomorrow ? 'Завтра, ' : '';
+                                    const activeCount = group.sessions.filter(s => s.status !== 'cancelled').length;
+                                    const countLabel = activeCount === 1 ? 'сеанс' : activeCount < 5 ? 'сеанса' : 'сеансов';
+
+                                    return (
+                                        <div key={group.date.toISOString()}>
+                                            {/* Day header */}
+                                            <div className="flex items-center justify-between mb-2 px-1">
+                                                <h3 className="text-[15px] font-bold text-foreground capitalize">
+                                                    {prefix}{group.date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                                </h3>
+                                                <span className="text-[13px] text-muted-foreground font-semibold">{activeCount} {countLabel}</span>
+                                            </div>
+
+                                            {/* Sessions table */}
+                                            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden divide-y divide-border/30">
+                                                {group.sessions.map(s => {
+                                                    const cn = s.client?.name || 'Клиент';
+                                                    const tc = typeColors[s.type] || defaultTypeColor;
+                                                    const typeLabel = s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : s.type === 'family' ? 'Семейная' : s.type === 'group' ? 'Групповая' : 'Консультация';
+                                                    const isCancelled = s.status === 'cancelled';
+
+                                                    return (
+                                                        <button
+                                                            key={s.id}
+                                                            onClick={() => setSelectedSession(s)}
+                                                            className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-sage-50/50 transition-colors text-left ${isCancelled ? 'opacity-50' : ''}`}
+                                                        >
+                                                            {/* Color dot */}
+                                                            <div className={`w-2 h-2 rounded-full shrink-0 ${tc.dot}`} />
+
+                                                            {/* Time + duration */}
+                                                            <div className="shrink-0 w-[100px]">
+                                                                <div className="text-[14px] font-bold text-foreground tabular-nums">{s.time} – {s.endTime}</div>
+                                                                <div className="text-[11px] text-muted-foreground">{s.duration} мин</div>
+                                                            </div>
+
+                                                            {/* Client name */}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-[14px] font-bold text-foreground truncate">{cn}</div>
+                                                            </div>
+
+                                                            {/* Session type */}
+                                                            <span className={`hidden md:inline text-[12px] font-semibold px-2.5 py-0.5 rounded-lg ${tc.bg} ${tc.text}`}>
+                                                                {typeLabel}
+                                                            </span>
+
+                                                            {/* Format */}
+                                                            <span className="hidden md:flex items-center gap-1 text-[12px] text-muted-foreground shrink-0">
+                                                                {s.format === 'online' ? <Video className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                                                                {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
+                                                            </span>
+
+                                                            {/* Status badge */}
+                                                            <span className={`text-[11px] px-2 py-0.5 rounded-md font-bold shrink-0 ${statusBadge[s.status]}`}>
+                                                                {statusLabels[s.status]}
+                                                            </span>
+
+                                                            {/* Menu dots */}
+                                                            <div className="text-muted-foreground shrink-0">⋮</div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                        <div className="divide-y divide-border/30">
-                                            {group.sessions.map(s => {
-                                                const cn = s.client?.name || 'Клиент';
-                                                return (
-                                                    <button key={s.id} onClick={() => setSelectedSession(s)}
-                                                        className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-sage-50 transition-colors text-left"
-                                                    >
-                                                        <div className={`w-2 h-2 rounded-full shrink-0 ${statusDotColor[s.status]}`} />
-                                                        <span className="text-[14px] font-bold text-foreground tabular-nums w-[70px] shrink-0">{s.time}</span>
-                                                        <span className="text-body-primary text-foreground flex-1 truncate">{cn}</span>
-                                                        <span className="text-small-meta text-muted-foreground shrink-0">{s.duration} мин</span>
-                                                        <span className="text-small-meta text-muted-foreground shrink-0 hidden md:inline">
-                                                            {s.format === 'online' ? 'Онлайн' : 'Офлайн'}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         );
                     })()}

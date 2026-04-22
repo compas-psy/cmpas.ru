@@ -176,10 +176,16 @@ export default function DiaryCalendarPage() {
         [sessions, now]
     );
 
-    const nextSession = useMemo(() =>
-        todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed'),
-        [todaySessions, currentTimeStr]
-    );
+    const nextSession = useMemo(() => {
+        // First: next session today (future time)
+        const todayNext = todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed');
+        if (todayNext) return todayNext;
+        // Fallback: earliest future session on any upcoming day
+        const todayStr = now.toISOString().slice(0, 10);
+        return sessions
+            .filter(s => s.status !== 'cancelled' && s.status !== 'completed' && new Date(s.date).toISOString().slice(0, 10) > todayStr)
+            .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0] || null;
+    }, [todaySessions, currentTimeStr, sessions, now]);
 
     const completedToday = todaySessions.filter(s => s.status === 'completed').length;
     const totalToday = todaySessions.length;
@@ -298,16 +304,18 @@ export default function DiaryCalendarPage() {
                 {/* ── LEFT: Next Session + Timeline (2 cols) ── */}
                 <div className="lg:col-span-2 space-y-5">
 
-                    {/* NOW / Next Session Card — matches mockup exactly */}
                     {nextSession && (() => {
                         const cn = nextSession.client?.name || clients.find(c => c.id === nextSession.clientId)?.name || 'Клиент';
-                        const mu = getMinutesUntil(nextSession.time);
-                        const close = mu <= 15;
+                        const isTodaySession = isSameDay(new Date(nextSession.date), now);
+                        const mu = isTodaySession ? getMinutesUntil(nextSession.time) : -1;
+                        const close = isTodaySession && mu <= 15;
                         const FormatInfo = formatLabels[nextSession.format] || formatLabels.online;
                         const FormatIcon = FormatInfo.icon;
-                        // Count total sessions with this client
                         const clientSessionCount = sessions.filter(s => s.clientId === nextSession.clientId && s.status !== 'cancelled').length;
                         const typeLabel = nextSession.type === 'individual' ? 'Индивидуальная' : nextSession.type === 'couple' ? 'Парная' : nextSession.type === 'family' ? 'Семейная' : nextSession.type;
+                        const sessionDateStr = isTodaySession
+                            ? (mu > 0 ? `через ${mu} мин` : 'Сейчас')
+                            : new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + nextSession.time;
 
                         return (
                             <div className={`bg-card rounded-2xl border overflow-hidden shadow-card transition-all ${close ? 'border-primary/40 ring-1 ring-primary/10' : 'border-border'}`}>
@@ -315,7 +323,7 @@ export default function DiaryCalendarPage() {
                                 <div className="px-6 pt-5 flex items-center justify-between">
                                     <span className="text-[12px] font-bold uppercase tracking-wider text-forest-600">Следующая сессия</span>
                                     <div className={`px-3 py-1 rounded-full text-[13px] font-bold tabular-nums ${close ? 'bg-primary text-primary-foreground' : 'bg-sage-100 text-muted-foreground'}`}>
-                                        {mu > 0 ? `через ${mu} мин` : 'Сейчас'}
+                                        {sessionDateStr}
                                     </div>
                                 </div>
 
