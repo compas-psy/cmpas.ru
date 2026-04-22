@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Calendar as CalendarIcon, Plus, Clock, User, Video, MapPin,
     Loader2, Link as LinkIcon, AlertTriangle, FileText, Sparkles,
-    ChevronRight, ArrowUpRight, Coffee, Users, TrendingUp
+    ChevronRight, ArrowUpRight, Coffee, Users, TrendingUp, LayoutList,
+    Filter, MoreVertical, Star
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
@@ -200,6 +201,28 @@ export default function DiaryCalendarPage() {
         return d >= startOfWeek && d <= endOfWeek && s.status !== 'cancelled';
     });
 
+    // Week strip data: per-day session counts
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekDays = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        const dayStr = d.toISOString().slice(0, 10);
+        const count = sessions.filter(s => {
+            const sd = new Date(s.date).toISOString().slice(0, 10);
+            return sd === dayStr && s.status !== 'cancelled';
+        }).length;
+        return { date: d, dayStr, count, isToday: isSameDay(d, now) };
+    });
+
+    const weekUniqueClients = new Set(weekSessions.map(s => s.clientId)).size;
+
+    // Workload: average sessions per day this week / target (e.g. 6)
+    const weekWorkingDays = weekDays.filter(d => d.count > 0).length || 1;
+    const avgPerDay = weekSessions.length / Math.max(weekWorkingDays, 1);
+    const workloadPercent = Math.round(Math.min((avgPerDay / 6) * 100, 100));
+
     const getMinutesUntil = (t: string) => {
         const [h, m] = t.split(':').map(Number);
         return (h * 60 + m) - (now.getHours() * 60 + now.getMinutes());
@@ -220,8 +243,8 @@ export default function DiaryCalendarPage() {
             {/* Welcome strip for new psychologists */}
             <WelcomeStrip />
 
-            {/* ── HEADER ── */}
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            {/* ── HEADER with WEEK STRIP ── */}
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div>
                     <h1 className="text-[32px] md:text-[40px] font-bold tracking-tight text-foreground leading-[1.1]">
                         {getGreeting()}{userName ? `, ${userName}` : ''} 👋
@@ -230,61 +253,41 @@ export default function DiaryCalendarPage() {
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                 </div>
-                <div className="flex items-center gap-2.5 self-start md:self-auto">
-                    {settings?.psychologistId && (
-                        <button
-                            onClick={() => { navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${settings.psychologistId}`); toast.success('Ссылка скопирована'); }}
-                            className="p-2.5 bg-card border border-border text-muted-foreground hover:text-foreground hover:border-border/80 rounded-xl transition-all shadow-card"
-                            title="Скопировать ссылку на запись"
-                        >
-                            <LinkIcon className="w-4 h-4" />
-                        </button>
-                    )}
-                    <button
-                        onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl shadow-card hover:bg-forest-700 transition-all font-semibold active:scale-[0.97] text-sm"
-                    >
-                        <Plus className="w-4 h-4" /> Запись
-                    </button>
-                </div>
-            </div>
 
-            {/* ── MINI STATS ROW ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-card rounded-2xl border border-border p-4 shadow-card flex items-center gap-3.5 hover:shadow-card-hover transition-shadow">
-                    <div className="w-11 h-11 rounded-xl bg-sage-100 flex items-center justify-center">
-                        <CalendarIcon className="w-5 h-5 text-forest-700" />
-                    </div>
-                    <div>
-                        <div className="text-kpi-number text-foreground">{totalToday}</div>
-                        <div className="text-small-meta text-muted-foreground">Сессий сегодня</div>
-                    </div>
-                </div>
-                <div className="bg-card rounded-2xl border border-border p-4 shadow-card flex items-center gap-3.5 hover:shadow-card-hover transition-shadow">
-                    <div className="w-11 h-11 rounded-xl bg-success-soft flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-success-500" />
-                    </div>
-                    <div>
-                        <div className="text-kpi-number text-foreground">{completedToday}</div>
-                        <div className="text-small-meta text-muted-foreground">Проведено</div>
-                    </div>
-                </div>
-                <div className="bg-card rounded-2xl border border-border p-4 shadow-card flex items-center gap-3.5 hover:shadow-card-hover transition-shadow">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${attentionCount > 0 ? 'bg-orange-soft' : 'bg-sage-50'}`}>
-                        <AlertTriangle className={`w-5 h-5 ${attentionCount > 0 ? 'text-orange-500' : 'text-muted-foreground/30'}`} />
-                    </div>
-                    <div>
-                        <div className="text-kpi-number text-foreground">{attentionCount}</div>
-                        <div className="text-small-meta text-muted-foreground">Внимание</div>
-                    </div>
-                </div>
-                <div className="bg-card rounded-2xl border border-border p-4 shadow-card flex items-center gap-3.5 hover:shadow-card-hover transition-shadow">
-                    <div className="w-11 h-11 rounded-xl bg-violet-soft flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-violet-500" />
-                    </div>
-                    <div>
-                        <div className="text-kpi-number text-foreground">{weekSessions.length}</div>
-                        <div className="text-small-meta text-muted-foreground">За неделю</div>
+                {/* Week strip - matches mockup exactly */}
+                <div className="flex items-stretch gap-0 bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+                    {weekDays.map((wd, i) => {
+                        const dayName = wd.date.toLocaleDateString('ru-RU', { weekday: 'short' });
+                        const dayNum = wd.date.getDate();
+                        return (
+                            <div
+                                key={i}
+                                className={`flex flex-col items-center px-3 md:px-4 py-2.5 min-w-[52px] border-r border-border/50 last:border-r-0 ${
+                                    wd.isToday ? 'bg-primary text-primary-foreground' : ''
+                                }`}
+                            >
+                                <span className={`text-[11px] font-semibold uppercase ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                    {dayName}
+                                </span>
+                                <span className={`text-[15px] font-bold ${wd.isToday ? '' : 'text-foreground'}`}>
+                                    {dayNum}
+                                </span>
+                                {wd.count > 0 && (
+                                    <span className={`text-[11px] font-bold mt-0.5 ${wd.isToday ? 'text-primary-foreground/80' : 'text-forest-600'}`}>
+                                        {wd.count}
+                                        <span className={`font-medium ml-0.5 ${wd.isToday ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                                            {wd.count === 1 ? 'сессия' : wd.count < 5 ? 'сессии' : 'сессий'}
+                                        </span>
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                    {/* На неделю summary */}
+                    <div className="flex flex-col items-center justify-center px-4 md:px-5 py-2.5 border-l border-border bg-sage-50/50">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase">На неделю</span>
+                        <span className="text-[18px] font-bold text-foreground">{weekSessions.length} <span className="text-[12px] font-medium text-muted-foreground">сессий</span></span>
+                        <span className="text-[12px] font-medium text-muted-foreground">{weekUniqueClients} клиентов</span>
                     </div>
                 </div>
             </div>
@@ -368,27 +371,26 @@ export default function DiaryCalendarPage() {
                         );
                     })()}
 
-                    {/* TIMELINE */}
+                    {/* TIMELINE — Расписание на сегодня */}
                     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-card">
                         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
-                                <span className="text-[15px] font-bold text-foreground">Таймлайн дня</span>
-                                {totalToday > 0 && (
-                                    <span className="text-small-meta text-muted-foreground font-semibold bg-sage-100 px-2 py-0.5 rounded-md">
-                                        {completedToday}/{totalToday}
-                                    </span>
-                                )}
+                                <CalendarIcon className="w-4 h-4 text-forest-600" />
+                                <span className="text-[15px] font-bold text-foreground">Расписание на сегодня</span>
                             </div>
-                            {totalToday > 0 && (
-                                <div className="h-1.5 w-20 md:w-28 bg-sage-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-forest-600 rounded-full transition-all duration-500" style={{ width: `${(completedToday / totalToday) * 100}%` }} />
-                                </div>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold text-muted-foreground hover:bg-sage-50 transition-colors">
+                                    <Filter className="w-3.5 h-3.5" /> Фильтры
+                                </button>
+                                <button className="p-1.5 rounded-lg text-muted-foreground hover:bg-sage-50 transition-colors">
+                                    <LayoutList className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
 
                         {totalToday === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 px-4">
-                                <div className="w-16 h-16 bg-sage-100 rounded-3xl flex items-center justify-center mb-4">
+                                <div className="w-16 h-16 bg-sage-100 rounded-2xl flex items-center justify-center mb-4">
                                     <Coffee className="w-8 h-8 text-forest-600" />
                                 </div>
                                 <div className="text-[18px] font-bold text-foreground mb-1">Свободный день</div>
@@ -401,60 +403,82 @@ export default function DiaryCalendarPage() {
                                 </button>
                             </div>
                         ) : (
-                            <div className="relative px-4 py-3">
-                                {/* Current time indicator */}
-                                {(() => {
-                                    const ch = now.getHours(), cm = now.getMinutes();
-                                    if (ch >= 8 && ch < 23) {
-                                        const top = ((ch - 8) * 56) + (cm / 60) * 56;
-                                        return (
-                                            <div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top: `${top + 12}px` }}>
-                                                <div className="flex items-center">
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1 shrink-0 shadow-sm" />
-                                                    <div className="h-[1.5px] flex-1 bg-red-500/30" />
+                            <div className="divide-y divide-border/50">
+                                {todaySessions.map(s => {
+                                    const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
+                                    const done = s.status === 'completed';
+                                    const past = s.time < currentTimeStr && !done;
+                                    const isN = nextSession?.id === s.id;
+                                    const mu = isN ? getMinutesUntil(s.time) : 0;
+                                    const FormatInfo = formatLabels[s.format] || formatLabels.online;
+                                    const FormatIcon = FormatInfo.icon;
+                                    const typeLabel = s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : s.type === 'family' ? 'Семейная' : s.type;
+
+                                    // Badge logic
+                                    const badges: { label: string; color: string }[] = [];
+                                    if (s.status === 'pending') badges.push({ label: 'Оплата не отмечена', color: 'bg-orange-soft text-orange-600' });
+                                    if (done && !s.notes && !s.structuredNotes) badges.push({ label: 'ДЗ не заполнено', color: 'bg-orange-soft text-orange-600' });
+
+                                    return (
+                                        <div
+                                            key={s.id}
+                                            onClick={() => setEditingSession(s)}
+                                            className={`flex items-center gap-4 px-5 py-4 hover:bg-sage-50/50 transition-colors cursor-pointer ${isN ? 'bg-sage-50/80' : ''} ${done ? 'opacity-60' : ''}`}
+                                        >
+                                            {/* Time column */}
+                                            <div className="shrink-0 w-[56px]">
+                                                <div className={`text-[15px] font-bold tabular-nums ${isN ? 'text-primary' : 'text-foreground'}`}>{s.time}</div>
+                                                <div className="text-[12px] text-muted-foreground tabular-nums">{s.endTime || ''}</div>
+                                            </div>
+
+                                            {/* Color bar */}
+                                            <div className={`w-1 h-10 rounded-full shrink-0 ${isN ? 'bg-primary' : done ? 'bg-sage-200' : 'bg-forest-600'}`} />
+
+                                            {/* Avatar */}
+                                            <div className="w-10 h-10 rounded-full bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-[13px] shrink-0 uppercase border border-sage-200">
+                                                {cn.slice(0, 2)}
+                                            </div>
+
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[14px] font-bold truncate ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{cn}</span>
+                                                    {isN && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary shrink-0 tabular-nums">
+                                                            Через {mu > 0 ? `${mu} мин` : 'сейчас'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[12px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                                                    <span>{typeLabel}</span>
+                                                    <span>•</span>
+                                                    <span className="flex items-center gap-1"><FormatIcon className="w-3 h-3" />{FormatInfo.label}</span>
                                                 </div>
                                             </div>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-                                {timelineHours.map(hour => {
-                                    const hourStr = `${String(hour).padStart(2, '0')}:00`;
-                                    const atHour = todaySessions.filter(s => { const [sh] = s.time.split(':').map(Number); return sh === hour; });
-                                    return (
-                                        <div key={hour} className="flex items-start gap-3 h-14 border-t border-border/30 first:border-t-0">
-                                            <span className="text-[11px] font-medium text-muted-foreground/50 w-10 pt-1 shrink-0 text-right tabular-nums">{hourStr}</span>
-                                            <div className="flex-1 flex gap-2 pt-1 overflow-hidden">
-                                                {atHour.map(s => {
-                                                    const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
-                                                    const done = s.status === 'completed';
-                                                    const past = s.time < currentTimeStr;
-                                                    const isN = nextSession?.id === s.id;
 
-                                                    return (
-                                                        <button
-                                                            key={s.id}
-                                                            onClick={() => setEditingSession(s)}
-                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.97] truncate ${
-                                                                isN
-                                                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                                                    : done
-                                                                        ? 'bg-sage-100 text-muted-foreground line-through opacity-60'
-                                                                        : past
-                                                                            ? 'bg-sage-50 text-muted-foreground'
-                                                                            : 'bg-forest-800/5 text-forest-800 hover:bg-forest-800/10'
-                                                            }`}
-                                                        >
-                                                            {isN && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />}
-                                                            <span className="truncate">{s.time} {cn}</span>
-                                                            {s.format === 'online' && <Video className="w-3 h-3 shrink-0 opacity-60" />}
-                                                        </button>
-                                                    );
-                                                })}
+                                            {/* Badges */}
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {badges.map((b, i) => (
+                                                    <span key={i} className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${b.color}`}>{b.label}</span>
+                                                ))}
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); setEditingSession(s); }}
+                                                    className="p-1 rounded-lg hover:bg-sage-100 transition-colors text-muted-foreground/40 hover:text-muted-foreground"
+                                                >
+                                                    <MoreVertical className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </div>
                                     );
                                 })}
+
+                                {/* Add session button */}
+                                <button
+                                    onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                                    className="w-full flex items-center justify-center gap-2 py-4 text-[14px] font-semibold text-forest-600 hover:bg-sage-50 transition-colors"
+                                >
+                                    <Plus className="w-4 h-4" /> Добавить запись
+                                </button>
                             </div>
                         )}
                     </div>
@@ -516,62 +540,38 @@ export default function DiaryCalendarPage() {
                         </div>
                     </div>
 
-                    {/* Week Stats */}
-                    <div className="bg-card rounded-2xl border border-border p-5 shadow-card">
-                        <h3 className="text-[15px] font-bold text-foreground mb-4">Статистика недели</h3>
-                        <div className="space-y-3.5">
-                            <div className="flex items-center justify-between">
-                                <span className="text-body-secondary text-muted-foreground">Всего сессий</span>
-                                <span className="text-[15px] font-bold text-foreground tabular-nums">{weekSessions.length}</span>
+                    {/* Статистика недели — 4 KPI grid */}
+                    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-card">
+                        <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
+                            <TrendingUp className="w-4 h-4 text-forest-600" />
+                            <span className="text-[15px] font-bold text-foreground">Статистика недели</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-px bg-border/50">
+                            <div className="bg-card p-4 text-center">
+                                <div className="text-[28px] font-bold text-foreground tabular-nums">{weekSessions.length}</div>
+                                <div className="text-[12px] text-muted-foreground font-medium mt-0.5">Сессий</div>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-body-secondary text-muted-foreground">Завершено</span>
-                                <span className="text-[15px] font-bold text-success-500 tabular-nums">{weekSessions.filter(s => s.status === 'completed').length}</span>
+                            <div className="bg-card p-4 text-center">
+                                <div className="text-[28px] font-bold text-foreground tabular-nums">{weekUniqueClients}</div>
+                                <div className="text-[12px] text-muted-foreground font-medium mt-0.5">Клиентов</div>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-body-secondary text-muted-foreground">Отменено</span>
-                                <span className="text-[15px] font-bold text-red-500 tabular-nums">{sessions.filter(s => {
-                                    const d = new Date(s.date);
-                                    const startOfWeek = new Date(now);
-                                    startOfWeek.setDate(now.getDate() - (now.getDay() + 6) % 7);
-                                    const endOfWeek = new Date(startOfWeek);
-                                    endOfWeek.setDate(startOfWeek.getDate() + 6);
-                                    return d >= startOfWeek && d <= endOfWeek && s.status === 'cancelled';
-                                }).length}</span>
+                            <div className="bg-card p-4 text-center">
+                                <div className="text-[28px] font-bold text-foreground tabular-nums">{workloadPercent}<span className="text-[16px]">%</span></div>
+                                <div className="text-[12px] text-muted-foreground font-medium mt-0.5">Загрузка</div>
                             </div>
-                            <div className="h-px bg-border" />
-                            <div className="flex items-center justify-between">
-                                <span className="text-body-secondary text-muted-foreground">Активных клиентов</span>
-                                <span className="text-[15px] font-bold text-foreground tabular-nums">{clients.length}</span>
+                            <div className="bg-card p-4 text-center">
+                                <div className="text-[28px] font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
+                                    —
+                                </div>
+                                <div className="text-[12px] text-muted-foreground font-medium mt-0.5">Оценка</div>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Quick Links */}
-                    <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
                         <button
-                            onClick={() => window.location.href = '/diary/calendar'}
-                            className="w-full flex items-center gap-3 p-4 hover:bg-sage-50 transition-colors text-left border-b border-border/50"
+                            onClick={() => window.location.href = '/diary/analytics'}
+                            className="w-full flex items-center justify-between px-5 py-3 border-t border-border hover:bg-sage-50 transition-colors text-[13px] font-semibold text-forest-600"
                         >
-                            <CalendarIcon className="w-4.5 h-4.5 text-forest-600" />
-                            <span className="text-body-primary text-foreground font-medium flex-1">Календарь</span>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
-                        </button>
-                        <button
-                            onClick={() => window.location.href = '/diary/availability'}
-                            className="w-full flex items-center gap-3 p-4 hover:bg-sage-50 transition-colors text-left border-b border-border/50"
-                        >
-                            <Clock className="w-4.5 h-4.5 text-forest-600" />
-                            <span className="text-body-primary text-foreground font-medium flex-1">Расписание</span>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
-                        </button>
-                        <button
-                            onClick={() => window.location.href = '/diary/clients'}
-                            className="w-full flex items-center gap-3 p-4 hover:bg-sage-50 transition-colors text-left"
-                        >
-                            <User className="w-4.5 h-4.5 text-forest-600" />
-                            <span className="text-body-primary text-foreground font-medium flex-1">Клиенты</span>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
+                            Перейти к аналитике
+                            <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
