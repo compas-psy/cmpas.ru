@@ -52,7 +52,7 @@ export async function createSession(data: {
     const duration = data.duration || 50;
     const [h, m] = data.time.split(':').map(Number);
     const endMinutes = h * 60 + m + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+    const endTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
     const sessionDate = new Date(data.date);
     const dayStart = new Date(sessionDate);
@@ -176,7 +176,7 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
     const duration = existing.duration || 50;
     const [h, m] = newTime.split(':').map(Number);
     const endMinutes = h * 60 + m + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+    const endTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
     const dateObj = new Date(newDate);
     const dayStart = new Date(dateObj);

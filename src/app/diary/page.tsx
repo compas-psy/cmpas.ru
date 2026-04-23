@@ -165,7 +165,7 @@ export default function DiaryCalendarPage() {
     };
 
     // ── Derived data ──
-    const now = useMemo(() => new Date(), []);
+    const now = useMemo(() => new Date(), [sessions.length]); // recalculate on session data changes
     const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     const todaySessions = useMemo(() =>
@@ -181,9 +181,10 @@ export default function DiaryCalendarPage() {
         const todayNext = todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed');
         if (todayNext) return todayNext;
         // Fallback: earliest future session on any upcoming day
-        const todayStr = now.toISOString().slice(0, 10);
+        const toLocalStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const todayStr = toLocalStr(now);
         return sessions
-            .filter(s => s.status !== 'cancelled' && s.status !== 'completed' && new Date(s.date).toISOString().slice(0, 10) > todayStr)
+            .filter(s => s.status !== 'cancelled' && s.status !== 'completed' && toLocalStr(new Date(s.date)) > todayStr)
             .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0] || null;
     }, [todaySessions, currentTimeStr, sessions, now]);
 
@@ -214,10 +215,11 @@ export default function DiaryCalendarPage() {
     const weekDays = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(weekStart);
         d.setDate(weekStart.getDate() + i);
-        const dayStr = d.toISOString().slice(0, 10);
+        const dayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const count = sessions.filter(s => {
-            const sd = new Date(s.date).toISOString().slice(0, 10);
-            return sd === dayStr && s.status !== 'cancelled';
+            const sd = new Date(s.date);
+            const sdStr = `${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;
+            return sdStr === dayStr && s.status !== 'cancelled';
         }).length;
         return { date: d, dayStr, count, isToday: isSameDay(d, now) };
     });
@@ -232,6 +234,15 @@ export default function DiaryCalendarPage() {
     const getMinutesUntil = (t: string) => {
         const [h, m] = t.split(':').map(Number);
         return (h * 60 + m) - (now.getHours() * 60 + now.getMinutes());
+    };
+
+    const formatMinutes = (mins: number) => {
+        if (mins <= 0) return 'сейчас';
+        if (mins < 60) return `${mins} мин`;
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        if (m === 0) return `${h} ч`;
+        return `${h} ч ${m} мин`;
     };
 
     const timelineHours = Array.from({ length: 15 }, (_, i) => i + 8);
@@ -314,7 +325,7 @@ export default function DiaryCalendarPage() {
                         const clientSessionCount = sessions.filter(s => s.clientId === nextSession.clientId && s.status !== 'cancelled').length;
                         const typeLabel = nextSession.type === 'individual' ? 'Индивидуальная' : nextSession.type === 'couple' ? 'Парная' : nextSession.type === 'family' ? 'Семейная' : nextSession.type;
                         const sessionDateStr = isTodaySession
-                            ? (mu > 0 ? `через ${mu} мин` : 'Сейчас')
+                            ? (mu > 0 ? `через ${formatMinutes(mu)}` : 'Сейчас')
                             : new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + nextSession.time;
 
                         return (
@@ -472,7 +483,7 @@ export default function DiaryCalendarPage() {
                                                     <span className={`text-[14px] font-bold truncate ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{cn}</span>
                                                     {isN && (
                                                         <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary shrink-0 tabular-nums">
-                                                            Через {mu > 0 ? `${mu} мин` : 'сейчас'}
+                                                            Через {formatMinutes(mu)}
                                                         </span>
                                                     )}
                                                 </div>

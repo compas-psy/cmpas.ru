@@ -58,7 +58,7 @@ export async function POST() {
         const s = sessions[i];
         const [h, m] = s.time.split(':').map(Number);
         const endMinutes = h * 60 + m + s.duration;
-        const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+        const endTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
         const sess = await db.diarySession.create({
             data: {
