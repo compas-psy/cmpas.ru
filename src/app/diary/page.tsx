@@ -386,11 +386,49 @@ export default function DiaryCalendarPage() {
                             ? (isNow ? 'Сейчас' : mu > 0 ? `через ${formatMinutes(mu)}` : 'Идёт')
                             : new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', ' + nextSession.time;
                         const requestText = nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).request;
-                        // Find last completed session with the same client
+                        
+                        // Find last completed session with the same client that has any notes
                         const lastCompletedSession = sessions
-                            .filter(s => s.clientId === nextSession.clientId && s.status === 'completed' && s.clientSummary)
+                            .filter(s => s.clientId === nextSession.clientId && s.status === 'completed' && (s.structuredNotes || s.notes || s.clientSummary))
                             .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))[0];
-                        const lastSummary = lastCompletedSession?.clientSummary || null;
+                        
+                        // Build summary from structured notes blocks
+                        const buildSummaryFromBlocks = (session: typeof lastCompletedSession) => {
+                            if (!session) return null;
+                            
+                            // Priority 1: clientSummary (manually written by psychologist for client)
+                            if (session.clientSummary) return { type: 'text' as const, text: session.clientSummary };
+                            
+                            // Priority 2: structured notes blocks
+                            const blocks = session.structuredNotes?.blocks as { definitionId: string; values: Record<string, string> }[] | undefined;
+                            if (blocks && blocks.length > 0) {
+                                const parts: { emoji: string; label: string; text: string }[] = [];
+                                const blockMap: Record<string, { emoji: string; label: string; keys: string[] }> = {
+                                    dynamics: { emoji: '📈', label: 'Динамика', keys: ['changes', 'improved'] },
+                                    observation: { emoji: '👁', label: 'Наблюдение', keys: ['emotional_state', 'patterns'] },
+                                    intervention: { emoji: '🛠', label: 'Интервенция', keys: ['technique', 'reaction'] },
+                                    homework: { emoji: '📝', label: 'ДЗ', keys: ['task'] },
+                                    next_step: { emoji: '➡️', label: 'План', keys: ['focus'] },
+                                    request: { emoji: '🎯', label: 'Запрос', keys: ['formulation'] },
+                                };
+                                for (const block of blocks) {
+                                    const cfg = blockMap[block.definitionId];
+                                    if (!cfg) continue;
+                                    const texts = cfg.keys.map(k => block.values[k]?.trim()).filter(Boolean);
+                                    if (texts.length > 0) {
+                                        parts.push({ emoji: cfg.emoji, label: cfg.label, text: texts.join('. ') });
+                                    }
+                                }
+                                if (parts.length > 0) return { type: 'structured' as const, parts };
+                            }
+                            
+                            // Priority 3: plain text notes
+                            if (session.notes) return { type: 'text' as const, text: session.notes };
+                            
+                            return null;
+                        };
+                        
+                        const lastSummaryData = buildSummaryFromBlocks(lastCompletedSession);
 
                         return (
                             <div className={`bg-card rounded-2xl border overflow-hidden shadow-card transition-all ${close || isNow ? 'border-primary/40 ring-1 ring-primary/10' : 'border-border'}`}>
@@ -430,13 +468,26 @@ export default function DiaryCalendarPage() {
                                         </div>
                                     </div>
 
-                                    {/* AI summary of last session */}
-                                    {lastSummary && (
+                                    {/* Summary of last session */}
+                                    {lastSummaryData && (
                                         <div className="mt-3 p-3 bg-sage-50 rounded-xl border border-sage-200">
                                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-forest-600 mb-1.5 uppercase tracking-wide">
-                                                <Sparkles className="w-3 h-3" /> Кратко о прошлом сеансе • AI
+                                                <Sparkles className="w-3 h-3" /> Кратко о прошлом сеансе
                                             </div>
-                                            <p className="text-[12px] text-muted-foreground line-clamp-3 leading-relaxed">{lastSummary}</p>
+                                            {lastSummaryData.type === 'structured' ? (
+                                                <div className="space-y-1">
+                                                    {lastSummaryData.parts.slice(0, 4).map((part, i) => (
+                                                        <div key={i} className="flex items-start gap-1.5">
+                                                            <span className="text-[11px] shrink-0">{part.emoji}</span>
+                                                            <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-1">
+                                                                <span className="font-semibold text-foreground/70">{part.label}:</span>{' '}{part.text}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-[12px] text-muted-foreground line-clamp-3 leading-relaxed">{lastSummaryData.text}</p>
+                                            )}
                                         </div>
                                     )}
 
