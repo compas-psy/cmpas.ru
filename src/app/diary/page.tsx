@@ -317,102 +317,36 @@ export default function DiaryCalendarPage() {
             {/* Welcome strip for new psychologists */}
             <WelcomeStrip />
 
-            {/* ── WEEK ACTIVITY CHART ── */}
-            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-                <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-                    <div>
-                        <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Активность за неделю</div>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-[22px] font-bold text-foreground tabular-nums">{weekSessions.length}</span>
-                            <span className="text-[13px] text-muted-foreground font-medium">
-                                {weekSessions.length === 1 ? 'сессия' : weekSessions.length < 5 ? 'сессии' : 'сессий'}
-                                {sessionsDelta !== null && (
-                                    <span className={`ml-2 text-[11px] font-bold ${sessionsDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                        {sessionsDelta >= 0 ? '↑' : '↓'}{Math.abs(sessionsDelta)}% vs прошлой нед.
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-forest-500 shrink-0" />Завершено</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-forest-200 shrink-0" />Предстоит</span>
-                    </div>
-                </div>
-
-                {/* Bar chart */}
-                <div className="px-5 pb-4">
-                    <div className="flex items-end justify-between gap-1 h-[72px]">
-                        {weekDays.map((wd, i) => {
-                            const total = wd.count;
-                            const done = sessions.filter(s => {
-                                const sd = new Date(s.date);
-                                const sdStr = `${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;
-                                return sdStr === wd.dayStr && s.status === 'completed';
-                            }).length;
-                            const barH = sparkMax > 0 ? Math.max((total / sparkMax) * 56, total > 0 ? 8 : 2) : 2;
-                            const doneH = total > 0 ? (done / total) * barH : 0;
-                            const upcomingH = barH - doneH;
-                            return (
-                                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                    <div className="w-full flex flex-col items-center justify-end" style={{ height: '60px' }}>
-                                        {total > 0 && (
-                                            <div className="w-full max-w-[32px] rounded-md overflow-hidden flex flex-col" style={{ height: `${barH}px` }}>
-                                                {doneH > 0 && <div style={{ height: `${doneH}px`, flexShrink: 0 }} className={`w-full ${wd.isToday ? 'bg-primary' : 'bg-forest-500'}`} />}
-                                                {upcomingH > 0 && <div style={{ height: `${upcomingH}px`, flexShrink: 0 }} className={`w-full ${wd.isToday ? 'bg-primary/30' : 'bg-forest-200'}`} />}
-                                            </div>
-                                        )}
-                                        {total === 0 && <div className="w-full max-w-[32px] h-[2px] bg-border rounded-full" />}
-                                    </div>
-                                    <span className={`text-[10px] font-semibold ${wd.isToday ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
-                                        {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {/* Today progress bar */}
-                    {totalToday > 0 && (
-                        <div className="mt-3 flex items-center gap-2.5">
-                            <span className="text-[11px] text-muted-foreground font-medium shrink-0">Сегодня {completedToday}/{totalToday}</span>
-                            <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-                                <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${(completedToday / totalToday) * 100}%` }} />
-                            </div>
-                            <span className="text-[11px] font-bold text-primary tabular-nums shrink-0">{Math.round((completedToday / totalToday) * 100)}%</span>
-                        </div>
-                    )}
-                </div>
-            </div>
 
             {/* ── HEADER with WEEK STRIP ── */}
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 min-w-0">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 min-w-0">
                 <div className="min-w-0">
-                    <h1 className="text-[28px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1]">
+                    <h1 className="text-[26px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1]">
                         {getGreeting()}{userName ? `, ${userName}` : ''} 👋
                     </h1>
-                    <p className="text-muted-foreground text-[14px] mt-1 font-medium capitalize">
+                    <p className="text-muted-foreground text-[13px] mt-0.5 font-medium capitalize">
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                 </div>
 
-                {/* Week strip + sparkline */}
-                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0 max-w-full">
-                    <div className="flex overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                {/* Week strip */}
+                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0 w-full md:w-auto">
+                    <div className="grid grid-cols-7 flex-1">
                         {weekDays.map((wd, i) => (
-                            <div key={i} className={`flex flex-col items-center px-2.5 py-2 min-w-[46px] border-r border-border/40 last:border-r-0 ${wd.isToday ? 'bg-primary' : ''}`}>
-                                <span className={`text-[10px] font-semibold uppercase ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                            <div key={i} className={`flex flex-col items-center py-2 px-1 border-r border-border/40 last:border-r-0 ${wd.isToday ? 'bg-primary' : ''}`}>
+                                <span className={`text-[9px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                                     {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
                                 </span>
-                                <span className={`text-[14px] font-bold leading-tight ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
+                                <span className={`text-[13px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
                                     {wd.date.getDate()}
                                 </span>
-                                <span className={`text-[10px] font-bold mt-0.5 ${wd.isToday ? 'text-primary-foreground/80' : wd.count > 0 ? 'text-forest-600' : 'text-transparent'}`}>
-                                    {wd.count > 0 ? `${wd.count} ${wd.count === 1 ? 'сессия' : wd.count < 5 ? 'сессии' : 'сессий'}` : '-'}
+                                <span className={`text-[9px] font-bold mt-0.5 text-center leading-tight ${wd.isToday ? 'text-primary-foreground/80' : wd.count > 0 ? 'text-forest-600' : 'text-transparent'}`}>
+                                    {wd.count > 0 ? `${wd.count}\u00a0сес.` : '-'}
                                 </span>
                             </div>
                         ))}
                     </div>
-                    <div className="flex flex-col justify-center px-3 py-2 border-l border-border bg-sage-50/50 min-w-[95px]">
+                    <div className="hidden md:flex flex-col justify-center px-3 py-2 border-l border-border bg-sage-50/50 min-w-[90px]">
                         <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">На неделю</span>
                         <div className="flex items-baseline gap-1 mt-0.5">
                             <span className="text-[15px] font-bold text-foreground tabular-nums">{weekSessions.length}</span>
