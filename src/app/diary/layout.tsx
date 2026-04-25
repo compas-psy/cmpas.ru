@@ -173,7 +173,7 @@ export default async function DiaryLayout({
             {/* Main content — 252px offset, 32px padding */}
             <main className="flex-1 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
                 {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
-                <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto">
+                <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto overflow-x-hidden">
                     {children}
                 </div>
             </main>

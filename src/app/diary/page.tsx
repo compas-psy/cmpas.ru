@@ -32,6 +32,7 @@ type Session = {
 type Client = {
     id: string;
     name: string;
+    consentDate?: string | null;
     questionnaire?: { data: any } | null;
 };
 
@@ -111,7 +112,11 @@ export default function DiaryCalendarPage() {
         try {
             const { getClients } = await import('./actions/clients');
             const data = await getClients();
-            setClients(data.map(c => ({ id: c.id, name: c.name })));
+            setClients(data.map(c => ({
+                id: c.id,
+                name: c.name,
+                consentDate: (c as any).consentDate ?? null,
+            })));
         } catch { /* empty */ }
     }, []);
 
@@ -149,6 +154,18 @@ export default function DiaryCalendarPage() {
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => { fetchClients(); }, [fetchClients]);
     useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+    // Close filter dropdown on outside click
+    useEffect(() => {
+        if (!showFilterMenu) return;
+        const handler = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+                setShowFilterMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showFilterMenu]);
 
 
     const handleSessionSave = () => {
@@ -206,7 +223,7 @@ export default function DiaryCalendarPage() {
         const d = new Date(s.date); if (d > now) return false;
         return Math.floor((now.getTime() - d.getTime()) / 86400000) <= 14 && !s.notes && !s.structuredNotes;
     });
-    const noConsentClients = clients.filter(c => !(c as any).consentDate).slice(0, 5);
+    const noConsentClients = clients.filter(c => !c.consentDate).slice(0, 5);
     const attentionCount = pendingSessions.length + missingSessions.length + noConsentClients.length;
 
     const weekSessions = sessions.filter(s => {
@@ -299,6 +316,73 @@ export default function DiaryCalendarPage() {
         <div className="space-y-6 pb-12 w-full min-w-0">
             {/* Welcome strip for new psychologists */}
             <WelcomeStrip />
+
+            {/* ── WEEK ACTIVITY CHART ── */}
+            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+                <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+                    <div>
+                        <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Активность за неделю</div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-[22px] font-bold text-foreground tabular-nums">{weekSessions.length}</span>
+                            <span className="text-[13px] text-muted-foreground font-medium">
+                                {weekSessions.length === 1 ? 'сессия' : weekSessions.length < 5 ? 'сессии' : 'сессий'}
+                                {sessionsDelta !== null && (
+                                    <span className={`ml-2 text-[11px] font-bold ${sessionsDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        {sessionsDelta >= 0 ? '↑' : '↓'}{Math.abs(sessionsDelta)}% vs прошлой нед.
+                                    </span>
+                                )}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-forest-500 shrink-0" />Завершено</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-forest-200 shrink-0" />Предстоит</span>
+                    </div>
+                </div>
+
+                {/* Bar chart */}
+                <div className="px-5 pb-4">
+                    <div className="flex items-end justify-between gap-1 h-[72px]">
+                        {weekDays.map((wd, i) => {
+                            const total = wd.count;
+                            const done = sessions.filter(s => {
+                                const sd = new Date(s.date);
+                                const sdStr = `${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;
+                                return sdStr === wd.dayStr && s.status === 'completed';
+                            }).length;
+                            const barH = sparkMax > 0 ? Math.max((total / sparkMax) * 56, total > 0 ? 8 : 2) : 2;
+                            const doneH = total > 0 ? (done / total) * barH : 0;
+                            const upcomingH = barH - doneH;
+                            return (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                                    <div className="w-full flex flex-col items-center justify-end" style={{ height: '60px' }}>
+                                        {total > 0 && (
+                                            <div className="w-full max-w-[32px] rounded-md overflow-hidden flex flex-col" style={{ height: `${barH}px` }}>
+                                                {doneH > 0 && <div style={{ height: `${doneH}px`, flexShrink: 0 }} className={`w-full ${wd.isToday ? 'bg-primary' : 'bg-forest-500'}`} />}
+                                                {upcomingH > 0 && <div style={{ height: `${upcomingH}px`, flexShrink: 0 }} className={`w-full ${wd.isToday ? 'bg-primary/30' : 'bg-forest-200'}`} />}
+                                            </div>
+                                        )}
+                                        {total === 0 && <div className="w-full max-w-[32px] h-[2px] bg-border rounded-full" />}
+                                    </div>
+                                    <span className={`text-[10px] font-semibold ${wd.isToday ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                                        {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {/* Today progress bar */}
+                    {totalToday > 0 && (
+                        <div className="mt-3 flex items-center gap-2.5">
+                            <span className="text-[11px] text-muted-foreground font-medium shrink-0">Сегодня {completedToday}/{totalToday}</span>
+                            <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${(completedToday / totalToday) * 100}%` }} />
+                            </div>
+                            <span className="text-[11px] font-bold text-primary tabular-nums shrink-0">{Math.round((completedToday / totalToday) * 100)}%</span>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {/* ── HEADER with WEEK STRIP ── */}
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 min-w-0">
