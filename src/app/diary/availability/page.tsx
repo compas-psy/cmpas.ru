@@ -584,60 +584,74 @@ export default function AvailabilityPage() {
                             )}
                             {rules.map(rule => {
                                 const ruleSlots = slots.filter(s => s.scheduleRuleId === rule.id && !(s.endDate && new Date(s.endDate) < today));
+                                // Compute active days
+                                const activeDays = Array.from(new Set(ruleSlots.map(s => s.dayOfWeek))).sort();
+                                // Compute time range from slots
+                                const allStarts = ruleSlots.map(s => s.startTime).filter(Boolean);
+                                const allEnds = ruleSlots.map(s => s.endTime).filter(Boolean);
+                                const minTime = allStarts.length > 0 ? allStarts.sort()[0] : '--:--';
+                                const maxTime = allEnds.length > 0 ? allEnds.sort().reverse()[0] : '--:--';
+                                // Format label
+                                const formatIcon = rule.format === 'online' ? '💻' : rule.format === 'offline' ? '🏢' : '🔀';
+                                const formatLabel = rule.format === 'online' ? 'Онлайн' : rule.format === 'offline' ? 'Офлайн' : 'Гибрид';
+                                const audienceLabel = rule.audienceFilter === 'all' ? 'Все клиенты' : rule.audienceFilter === 'new' ? 'Только новые' : 'Только постоянные';
+                                // Day range title
+                                const dayRangeTitle = activeDays.length > 0
+                                    ? activeDays.length === 1
+                                        ? DAY_LABELS_FULL[activeDays[0]]
+                                        : `${DAY_LABELS_FULL[activeDays[0]]} – ${DAY_LABELS_FULL[activeDays[activeDays.length - 1]]}`
+                                    : rule.name;
+
                                 return (
-                                    <div key={rule.id} className="border border-border rounded-2xl overflow-hidden hover:border-primary/20 transition-all shadow-sm group">
-                                        <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/5">
-                                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', color: rule.color || '#4F46E5' }}>                                                    <Layers className="w-5 h-5" />
+                                    <div key={rule.id} className={`border rounded-2xl overflow-hidden transition-all shadow-sm ${rule.isActive ? 'border-border hover:border-primary/20' : 'border-border/50 opacity-60'}`}>
+                                        <div className="p-5 flex flex-col gap-3">
+                                            {/* Row 1: icon + format badge + title + time range + duration + break + audience */}
+                                            <div className="flex items-start gap-3">
+                                                {/* Format icon */}
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ backgroundColor: (rule.color || '#4F46E5') + '15' }}>
+                                                    {formatIcon}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="font-bold text-lg text-foreground flex items-center gap-2 truncate">
-                                                        {rule.name}
-                                                        {!rule.isActive && <span className="bg-destructive/10 text-destructive text-[10px] px-2 py-0.5 rounded-md font-bold shrink-0">ОТКЛЮЧЕНО</span>}
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', color: rule.color || '#4F46E5' }}>
+                                                            {formatLabel}
+                                                        </span>
+                                                        <span className="text-[15px] font-bold text-foreground">{dayRangeTitle}</span>
+                                                        {!rule.isActive && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-destructive/10 text-destructive">ОТКЛ</span>}
                                                     </div>
-                                                    <div className="text-xs text-muted-foreground font-medium mt-0.5 truncate">
-                                                        {rule.format === 'online' ? 'Онлайн' : rule.format === 'offline' ? 'Офлайн' : 'Смешанный'} • {rule.duration} мин
-                                                        {rule.endDate && ` • До ${new Date(rule.endDate).toLocaleDateString()}`}
+                                                    {/* Row 2: Day chips */}
+                                                    <div className="flex items-center gap-1 mt-2">
+                                                        {DAY_LABELS.map((d, i) => (
+                                                            <span key={i} className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${activeDays.includes(i) ? 'text-primary-foreground' : 'bg-muted/50 text-muted-foreground/50'}`}
+                                                                style={activeDays.includes(i) ? { backgroundColor: rule.color || '#4F46E5' } : {}}>
+                                                                {d}
+                                                            </span>
+                                                        ))}
+                                                        <span className="text-[12px] text-muted-foreground ml-2">{audienceLabel}</span>
                                                     </div>
                                                 </div>
-                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-card rounded-xl border border-border p-1 shadow-sm shrink-0">
-                                                    <button onClick={() => setEditingRule(rule)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all" title="Настройки"><Edit2 className="w-4 h-4" /></button>
-                                                    <button onClick={() => { setShowCloneModal(rule); setCloneData({ name: `${rule.name} (копия)`, startDate: '', endDate: '' }); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all" title="Копировать"><Copy className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleDeleteRule(rule.id)} className="p-1.5 hover:bg-destructive/10 rounded-lg text-muted-foreground hover:text-destructive transition-all" title="Удалить"><Trash2 className="w-4 h-4" /></button>
-                                                </div>
-                                                <div className="shrink-0 ml-2">
-                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                {/* Right: time + duration + break + toggles */}
+                                                <div className="shrink-0 flex items-center gap-3">
+                                                    <div className="text-right hidden sm:block">
+                                                        <div className="text-[14px] font-bold text-foreground tabular-nums">{minTime} – {maxTime}</div>
+                                                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 justify-end">
+                                                            <span>⏱ {rule.duration} мин</span>
+                                                            <span>☕ {rule.breakDuration} мин</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Toggle */}
+                                                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
                                                         <input type="checkbox" className="sr-only peer" checked={rule.isActive} onChange={() => handleUpdateActive(rule)} />
                                                         <div className="w-11 h-6 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary shadow-inner"></div>
                                                     </label>
+                                                    {/* Actions */}
+                                                    <div className="flex gap-0.5">
+                                                        <button onClick={() => setEditingRule(rule)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all" title="Настройки"><Edit2 className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleDeleteRule(rule.id)} className="p-1.5 hover:bg-destructive/10 rounded-lg text-muted-foreground hover:text-destructive transition-all" title="Удалить"><Trash2 className="w-4 h-4" /></button>
+                                                        <button onClick={() => { setSelectedRuleId(rule.id); setShowNewSlot(true); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-all" title="Добавить часы"><Plus className="w-4 h-4" /></button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="p-5 border-t border-border/50 bg-background">
-                                            <div className="space-y-3">
-                                                {DAY_LABELS.map((dayName, dayIndex) => {
-                                                    const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a,b)=>a.startTime.localeCompare(b.startTime));
-                                                    if (daySlots.length === 0) return null;
-                                                    return (
-                                                        <div key={dayIndex} className="flex gap-4 items-start">
-                                                            <div className="w-8 font-semibold text-sm text-foreground uppercase pt-1 shrink-0">{dayName}</div>
-                                                            <div className="flex-1 flex flex-wrap gap-2">
-                                                                {daySlots.map(s => (
-                                                                    <div key={s.id} className="group/slot flex items-center gap-1.5 px-3 py-1.5 bg-muted/30 border border-border/50 rounded-lg text-sm font-bold hover:border-border transition-all">
-                                                                        <span>{s.startTime} – {s.endTime}</span>
-                                                                        <button onClick={() => setEditingSlot(s)} className="text-muted-foreground hover:text-foreground md:opacity-0 group-hover/slot:opacity-100 transition-opacity"><Edit2 className="w-3.5 h-3.5" /></button>
-                                                                        <button onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive md:opacity-0 group-hover/slot:opacity-100 transition-opacity"><X className="w-3.5 h-3.5" /></button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                                {ruleSlots.length === 0 && <div className="text-sm text-muted-foreground text-center py-4 bg-muted/20 rounded-xl">Часы работы не заданы</div>}
-                                            </div>
-                                            <button onClick={() => { setSelectedRuleId(rule.id); setShowNewSlot(true); }} className="mt-4 w-full py-2 border border-dashed border-border rounded-xl text-sm font-semibold text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
-                                                <Plus className="w-4 h-4" />Добавить часы
-                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -688,74 +702,130 @@ export default function AvailabilityPage() {
                     </div>
                 </div>
 
-                {/* Right Column: Client Preview */}
-                <div className="hidden lg:block w-full lg:w-[35%] sticky top-8">
-                    <div className="bg-gradient-to-b from-card to-card/50 border border-border rounded-[32px] p-6 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl" />
-                        <div className="relative z-10 space-y-6">
-                            {/* App Header simulation */}
-                            <div className="flex items-center justify-between border-b border-border/50 pb-5">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center border text-muted-foreground">
-                                        <User className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-bold text-foreground">Запись на прием</div>
-                                        <div className="text-[10px] text-muted-foreground">{settings.scheduleMode === 'private' ? 'Приватный режим' : 'Календарь'}</div>
-                                    </div>
-                                </div>
-                                <button onClick={openPreview} className="text-primary hover:bg-primary/5 p-2 rounded-xl transition-colors"><RefreshCw className="w-4 h-4" /></button>
+                {/* Right Column */}
+                <div className="hidden lg:block w-full lg:w-[35%] space-y-5 sticky top-8">
+                    {/* Card 1: Client Preview */}
+                    <div className="bg-card border border-border rounded-2xl shadow-card overflow-hidden">
+                        <div className="px-5 pt-5 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-[15px] font-bold text-foreground">Предпросмотр для клиентов</h3>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">Так клиенты видят вашу самозапись</p>
                             </div>
-
-                            {/* App Body simulation */}
-                            <div className="min-h-[300px]">
-                                {settings.scheduleMode === 'private' ? (
-                                    <div className="text-center py-12 px-4">
-                                        <Lock className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                                        <h3 className="font-bold text-lg mb-2">Запись временно закрыта</h3>
-                                        <p className="text-sm text-muted-foreground leading-relaxed">Прямо сейчас онлайн бронирование недоступно. Свяжитесь со специалистом лично.</p>
+                            <button onClick={openPreview} className="p-2 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-4 h-4" /></button>
+                        </div>
+                        <div className="p-5">
+                            {settings.scheduleMode === 'private' ? (
+                                <div className="text-center py-8 px-4">
+                                    <Lock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                                    <p className="text-sm font-bold mb-1">Запись временно закрыта</p>
+                                    <p className="text-xs text-muted-foreground">Режим «Приватный»: клиенты не видят расписание</p>
+                                </div>
+                            ) : (
+                                <div>
+                                    {/* Mini calendar header */}
+                                    <div className="flex items-center justify-between mb-3">
+                                        <button onClick={() => {
+                                            const d = new Date();
+                                            d.setMonth(d.getMonth() - 1);
+                                            // simplified: just reload current month
+                                            openPreview();
+                                        }} className="p-1 hover:bg-muted rounded-lg transition-colors"><ChevronUp className="w-4 h-4 -rotate-90" /></button>
+                                        <span className="text-sm font-bold text-foreground">{new Date().toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase())}</span>
+                                        <button onClick={openPreview} className="p-1 hover:bg-muted rounded-lg transition-colors"><ChevronDown className="w-4 h-4 -rotate-90" /></button>
                                     </div>
-                                ) : (
-                                    <div>
-                                        <p className="text-sm font-bold text-foreground mb-3">Свободные даты</p>
-                                        <div className="grid grid-cols-7 gap-1 mb-6">
-                                            {previewDates.length === 0 ? (
-                                                <div className="col-span-7 flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" /></div>
-                                            ) : (
-                                                previewDates.map(dateStr => {
-                                                    const [, m, d] = dateStr.split('-');
-                                                    const isSelected = previewSelectedDate === dateStr;
-                                                    return (
-                                                        <button key={dateStr} onClick={() => selectPreviewDate(dateStr)} className={`aspect-square flex items-center justify-center rounded-xl text-xs font-bold transition-all ${isSelected ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'bg-muted/30 text-muted-foreground hover:bg-muted/80'}`}>
-                                                            {Number(d)}
-                                                        </button>
-                                                    );
-                                                })
-                                            )}
-                                        </div>
-                                        {previewSelectedDate && (
-                                            <div>
-                                                <p className="text-sm font-bold text-foreground mb-3">Время сессии</p>
-                                                {previewLoading ? (
-                                                    <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" /></div>
-                                                ) : previewTimes.length === 0 ? (
-                                                    <div className="text-center py-4 text-sm text-muted-foreground">Нет слотов на эту дату</div>
-                                                ) : (
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {previewTimes.map(t => (
-                                                            <div key={t.time} className="p-3 bg-background border border-border rounded-xl text-center shadow-sm cursor-pointer hover:border-primary/50 transition-colors">
-                                                                <div className="text-sm font-bold text-foreground">{t.time}</div>
-                                                                <div className="text-[10px] text-muted-foreground mt-1">{t.format === 'offline' ? 'Кабинет' : 'Онлайн'}</div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
+                                    {/* Day headers */}
+                                    <div className="grid grid-cols-7 gap-1 mb-1">
+                                        {DAY_LABELS.map(d => (
+                                            <div key={d} className="text-center text-[10px] font-bold text-muted-foreground/60">{d}</div>
+                                        ))}
+                                    </div>
+                                    {/* Calendar days */}
+                                    <div className="grid grid-cols-7 gap-1 mb-4">
+                                        {previewDates.length === 0 ? (
+                                            <div className="col-span-7 flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" /></div>
+                                        ) : (
+                                            previewDates.map(dateStr => {
+                                                const [, , d] = dateStr.split('-');
+                                                const isSelected = previewSelectedDate === dateStr;
+                                                const isToday = dateStr === new Date().toISOString().split('T')[0];
+                                                return (
+                                                    <button key={dateStr} onClick={() => selectPreviewDate(dateStr)}
+                                                        className={`aspect-square flex items-center justify-center rounded-lg text-[12px] font-bold transition-all ${isSelected ? 'bg-primary text-primary-foreground shadow-sm' : isToday ? 'ring-1 ring-primary text-primary bg-primary/5' : 'text-foreground hover:bg-muted'}`}>
+                                                        {Number(d)}
+                                                    </button>
+                                                );
+                                            })
                                         )}
                                     </div>
-                                )}
+                                    {/* Selected date times */}
+                                    {previewSelectedDate && (
+                                        <div>
+                                            <p className="text-[13px] font-bold text-foreground mb-2">
+                                                {new Date(previewSelectedDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}
+                                            </p>
+                                            {previewLoading ? (
+                                                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" /></div>
+                                            ) : previewTimes.length === 0 ? (
+                                                <p className="text-xs text-muted-foreground text-center py-3">Нет свободных слотов</p>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {previewTimes.map(t => (
+                                                        <div key={t.time} className="px-3 py-2 bg-sage-50 border border-sage-200 rounded-xl text-center">
+                                                            <span className="text-[14px] font-bold text-foreground tabular-nums">{t.time}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <button className="w-full mt-2 text-[12px] text-primary font-semibold hover:underline">Показать все доступные время</button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Card 2: Booking Link */}
+                    {psychologistId && (
+                        <div className="bg-card border border-border rounded-2xl shadow-card p-5">
+                            <div className="flex items-center gap-2 mb-3">
+                                <CalendarCheck className="w-4 h-4 text-primary" />
+                                <div>
+                                    <h3 className="text-[14px] font-bold text-foreground">Ссылка на самозапись</h3>
+                                    <p className="text-[11px] text-muted-foreground">Поделитесь ссылкой с клиентами</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
+                                <span className="flex-1 text-[13px] font-medium text-foreground truncate">cmpas.ru/book/{psychologistId}</span>
+                                <button onClick={() => { navigator.clipboard.writeText(`https://cmpas.ru/book/${psychologistId}`); toast.success('Ссылка скопирована'); }}
+                                    className="p-1.5 hover:bg-primary/10 rounded-lg text-muted-foreground hover:text-primary transition-colors shrink-0">
+                                    <Copy className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <a href={`/book/${psychologistId}`} target="_blank" className="block mt-2 text-[12px] text-muted-foreground hover:text-primary font-medium">Настроить вид страницы →</a>
+                        </div>
+                    )}
+
+                    {/* Card 3: Statistics placeholder */}
+                    <div className="bg-card border border-border rounded-2xl shadow-card p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-[14px] font-bold text-foreground">Статистика самозаписи</h3>
+                            <span className="text-[11px] text-muted-foreground bg-muted px-2 py-1 rounded-md font-medium">За 30 дней</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-foreground">—</div>
+                                <div className="text-[11px] text-muted-foreground">Просмотры</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-foreground">—</div>
+                                <div className="text-[11px] text-muted-foreground">Записи</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-foreground">—</div>
+                                <div className="text-[11px] text-muted-foreground">Конверсия</div>
                             </div>
                         </div>
+                        <a href="/diary/analytics" className="block mt-4 text-[12px] text-primary font-semibold hover:underline text-center">Перейти к аналитике →</a>
                     </div>
                 </div>
             </div>
