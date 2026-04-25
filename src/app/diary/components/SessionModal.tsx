@@ -208,7 +208,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                     {Array.from({ length: daysInMonth }).map((_, i) => {
                                         const day = i + 1;
                                         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                                        const isAvailable = availableDates.includes(dateStr);
+                                        const hasSlots = availableDates.includes(dateStr);
                                         const isSelected = formData.date === dateStr;
                                         const isPast = dateStr < today;
                                         const isToday = dateStr === today;
@@ -216,18 +216,22 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                             <button
                                                 key={day}
                                                 type="button"
-                                                disabled={!isAvailable || isPast}
+                                                disabled={isPast}
                                                 onClick={() => setFormData(s => ({ ...s, date: dateStr, time: '' }))}
-                                                className={`w-full aspect-square flex items-center justify-center text-xs font-semibold rounded-lg transition-all ${isSelected
-                                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                                    : isToday
-                                                        ? 'bg-accent/20 text-accent-foreground font-bold'
-                                                        : isAvailable && !isPast
-                                                            ? 'hover:bg-muted text-foreground cursor-pointer'
-                                                            : 'text-muted-foreground/30 cursor-not-allowed'
-                                                    }`}
+                                                className={`w-full aspect-square flex flex-col items-center justify-center text-xs font-semibold rounded-lg transition-all relative ${
+                                                    isSelected
+                                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                                        : isToday
+                                                            ? 'ring-2 ring-primary/40 text-primary font-bold hover:bg-muted'
+                                                            : isPast
+                                                                ? 'text-muted-foreground/25 cursor-not-allowed'
+                                                                : 'hover:bg-muted text-foreground cursor-pointer'
+                                                }`}
                                             >
                                                 {day}
+                                                {hasSlots && !isSelected && !isPast && (
+                                                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-forest-500" />
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -240,31 +244,53 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     {!editSession && formData.date && (
                         <div>
                             <label className="block text-sm font-semibold mb-3 ml-1 text-foreground/90">
-                                <Clock className="w-4 h-4 inline mr-1 text-muted-foreground" />Свободное время
+                                <Clock className="w-4 h-4 inline mr-1 text-muted-foreground" />Время сессии
                             </label>
                             {loadingSlots ? (
                                 <div className="flex items-center justify-center py-6">
                                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                                 </div>
-                            ) : availableSlots.length === 0 ? (
-                                <div className="text-center py-4 text-sm text-muted-foreground bg-muted/30 rounded-xl">
-                                    Нет свободных окон на эту дату
+                            ) : availableSlots.length > 0 ? (
+                                <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-2">
+                                        {availableSlots.map(slot => (
+                                            <button
+                                                key={slot.time}
+                                                type="button"
+                                                onClick={() => setFormData(s => ({ ...s, time: slot.time }))}
+                                                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[40px] ${formData.time === slot.time
+                                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                                    : 'border border-border hover:border-primary/50 hover:bg-muted text-foreground'
+                                                    }`}
+                                            >
+                                                {slot.time}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {/* Manual override always available */}
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <span className="text-xs text-muted-foreground">Или введите вручную:</span>
+                                        <input
+                                            type="time"
+                                            value={availableSlots.some(s => s.time === formData.time) ? '' : formData.time}
+                                            onChange={e => setFormData(s => ({ ...s, time: e.target.value }))}
+                                            className="border border-border rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+                                        />
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="flex flex-wrap gap-2">
-                                    {availableSlots.map(slot => (
-                                        <button
-                                            key={slot.time}
-                                            type="button"
-                                            onClick={() => setFormData(s => ({ ...s, time: slot.time }))}
-                                            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[40px] ${formData.time === slot.time
-                                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                                : 'border border-border hover:border-primary/50 hover:bg-muted text-foreground'
-                                                }`}
-                                        >
-                                            {slot.time}
-                                        </button>
-                                    ))}
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                                        <span className="text-base">⚠️</span>
+                                        <span>Нет слотов в расписании. Укажите время вручную:</span>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        value={formData.time}
+                                        onChange={e => setFormData(s => ({ ...s, time: e.target.value }))}
+                                        className="w-full border border-border rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-ring/50 min-h-[48px]"
+                                    />
+                                    <p className="text-xs text-muted-foreground ml-1">Запись создастся вне расписания</p>
                                 </div>
                             )}
                         </div>

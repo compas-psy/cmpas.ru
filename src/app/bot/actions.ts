@@ -81,7 +81,7 @@ function getPartsInTz(date: Date, timeZone: string) {
     };
 }
 
-function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], settings: any, clientId: string | null = null) {
+function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], settings: any, clientId: string | null = null, skipBuffer = false) {
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(Date.UTC(year, month - 1, day));
     const now = new Date();
@@ -96,11 +96,13 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
     // If the check date is historically earlier or earlier than buffer date
     if (dateStr < todayStr) return [];
     
-    // Horizon check
-    const horizonDays = settings?.bookingHorizonDays ?? 14;
-    const horizonDate = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
-    const horizonDateStr = toDateStr(horizonDate);
-    if (dateStr > horizonDateStr) return [];
+    // Horizon check — only for client-facing booking, not psychologist
+    if (!skipBuffer) {
+        const horizonDays = settings?.bookingHorizonDays ?? 14;
+        const horizonDate = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+        const horizonDateStr = toDateStr(horizonDate);
+        if (dateStr > horizonDateStr) return [];
+    }
 
     const maxSessionsPerDay = settings?.maxSessionsPerDay ?? null;
     const defaultSessionBreak = settings?.sessionBreak ?? 15;
@@ -156,7 +158,15 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
             const slotEndTimeMins = currentTotalMins + duration;
             
             // Evaluated exact time buffer.
-            if (isToday || dateStr === bufferDateStr) {
+            if (skipBuffer) {
+                // Psychologist manually creating — no buffer restriction, only skip past times for today
+                if (isToday) {
+                    if (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes())) {
+                        currentTotalMins += duration + breakDuration;
+                        continue;
+                    }
+                }
+            } else if (isToday || dateStr === bufferDateStr) {
                  // bufferDate comparison. If this exact slot starts before the buffer Date/Time, skip it.
                  const [bH, bM] = [bufferDate.getHours(), bufferDate.getMinutes()];
                  if (dateStr === bufferDateStr && (h < bH || (h === bH && m < bM))) {
@@ -215,7 +225,7 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
     return Object.values(timesObj).sort((a, b) => a.time.localeCompare(b.time));
 }
 
-export async function getAvailableDates(psychologistId: string, year: number, month: number, skipModeCheck = false, clientId: string | null = null) {
+export async function getAvailableDates(psychologistId: string, year: number, month: number, skipModeCheck = false, clientId: string | null = null, skipBuffer = false) {
     // Check schedule mode — if private, return empty (only for client-facing calls)
     if (!skipModeCheck) {
         const mode = await getScheduleMode(psychologistId);
@@ -307,7 +317,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
         const dateStr = toDateStr(d);
         if (dateStr < todayStr) continue;
 
-        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId);
+        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
         }
@@ -316,7 +326,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
     return availableDates;
 }
 
-export async function getAvailableTimes(psychologistId: string, dateStr: string, skipModeCheck = false, excludeSessionId?: string, clientId: string | null = null) {
+export async function getAvailableTimes(psychologistId: string, dateStr: string, skipModeCheck = false, excludeSessionId?: string, clientId: string | null = null, skipBuffer = false) {
     // Check schedule mode — if private, return empty (only for client-facing calls)
     if (!skipModeCheck) {
         const mode = await getScheduleMode(psychologistId);
@@ -400,7 +410,7 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         select: { date: true, time: true, duration: true, clientId: true }
     });
 
-    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId);
+    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
 }
 
 export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {

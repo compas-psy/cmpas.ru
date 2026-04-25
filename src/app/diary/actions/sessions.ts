@@ -230,13 +230,13 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
 export async function getAvailableDatesForReschedule(year: number, month: number) {
     const psychologistId = await getPsychologistId();
     const { getAvailableDates } = await import('@/app/bot/actions');
-    return getAvailableDates(psychologistId, year, month, true);
+    return getAvailableDates(psychologistId, year, month, true, null, true); // skipBuffer=true for psychologist
 }
 
 export async function getAvailableTimesForReschedule(dateStr: string, sessionId?: string, clientId?: string) {
     const psychologistId = await getPsychologistId();
     const { getAvailableTimes } = await import('@/app/bot/actions');
-    return getAvailableTimes(psychologistId, dateStr, true, sessionId);
+    return getAvailableTimes(psychologistId, dateStr, true, sessionId, null, true); // skipBuffer=true for psychologist
 }
 
 export async function getClientActivity() {
