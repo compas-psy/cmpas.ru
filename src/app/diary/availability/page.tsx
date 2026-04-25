@@ -204,6 +204,21 @@ export default function AvailabilityPage() {
         }
     }, [loading, slots.length, rules.length, fetchData]);
 
+    // Auto-load preview when psychologistId becomes available
+    useEffect(() => {
+        if (psychologistId && !loading && settings.scheduleMode !== 'private') {
+            (async () => {
+                setPreviewLoading(true);
+                try {
+                    const now = new Date();
+                    const dates = await getAvailableDates(psychologistId, now.getFullYear(), now.getMonth(), true);
+                    setPreviewDates(dates);
+                } catch { /* silent */ }
+                setPreviewLoading(false);
+            })();
+        }
+    }, [psychologistId, loading, settings.scheduleMode]);
+
     // ── Derived data ──
 
     const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -488,7 +503,7 @@ export default function AvailabilityPage() {
     };
 
     return (
-        <div className="space-y-8 pb-12 max-w-[1400px] mx-auto">
+        <div className="space-y-8 pb-12 max-w-[1400px] mx-auto overflow-x-hidden">
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
                 <div>
@@ -606,32 +621,38 @@ export default function AvailabilityPage() {
                                     <div key={rule.id} className={`border rounded-2xl overflow-hidden transition-all shadow-sm ${rule.isActive ? 'border-border hover:border-primary/20' : 'border-border/50 opacity-60'}`}>
                                         <div className="p-5 flex flex-col gap-3">
                                             {/* Row 1: icon + format badge + title + time range + duration + break + audience */}
-                                            <div className="flex items-start gap-3">
+                                            <div className="flex flex-col sm:flex-row items-start gap-3">
                                                 {/* Format icon */}
                                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ backgroundColor: (rule.color || '#4F46E5') + '15' }}>
                                                     {formatIcon}
                                                 </div>
-                                                <div className="flex-1 min-w-0">
+                                                <div className="flex-1 min-w-0 w-full">
                                                     <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="px-2 py-0.5 rounded-md text-[11px] font-bold" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', color: rule.color || '#4F46E5' }}>
                                                             {formatLabel}
                                                         </span>
-                                                        <span className="text-[15px] font-bold text-foreground">{dayRangeTitle}</span>
+                                                        <span className="text-[14px] sm:text-[15px] font-bold text-foreground truncate">{dayRangeTitle}</span>
                                                         {!rule.isActive && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-destructive/10 text-destructive">ОТКЛ</span>}
                                                     </div>
-                                                    {/* Row 2: Day chips */}
-                                                    <div className="flex items-center gap-1 mt-2">
+                                                    {/* Row 2: Day chips + time info */}
+                                                    <div className="flex items-center gap-1 mt-2 flex-wrap">
                                                         {DAY_LABELS.map((d, i) => (
-                                                            <span key={i} className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${activeDays.includes(i) ? 'text-primary-foreground' : 'bg-muted/50 text-muted-foreground/50'}`}
+                                                            <span key={i} className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${activeDays.includes(i) ? 'text-primary-foreground' : 'bg-muted/50 text-muted-foreground/50'}`}
                                                                 style={activeDays.includes(i) ? { backgroundColor: rule.color || '#4F46E5' } : {}}>
                                                                 {d}
                                                             </span>
                                                         ))}
-                                                        <span className="text-[12px] text-muted-foreground ml-2">{audienceLabel}</span>
+                                                        <span className="text-[11px] text-muted-foreground ml-1 shrink-0">{audienceLabel}</span>
+                                                    </div>
+                                                    {/* Mobile time/duration info */}
+                                                    <div className="flex items-center gap-3 mt-2 text-[12px] text-muted-foreground sm:hidden">
+                                                        <span className="font-bold text-foreground tabular-nums">{minTime} – {maxTime}</span>
+                                                        <span>⏱ {rule.duration} мин</span>
+                                                        <span>☕ {rule.breakDuration} мин</span>
                                                     </div>
                                                 </div>
                                                 {/* Right: time + duration + break + toggles */}
-                                                <div className="shrink-0 flex items-center gap-3">
+                                                <div className="shrink-0 flex items-center gap-2 sm:gap-3 self-start sm:self-center">
                                                     <div className="text-right hidden sm:block">
                                                         <div className="text-[14px] font-bold text-foreground tabular-nums">{minTime} – {maxTime}</div>
                                                         <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 justify-end">
@@ -946,6 +967,38 @@ export default function AvailabilityPage() {
                     <Field label="Перерыв (мин)">
                         <input type="number" min={0} max={120} value={editingRule.breakDuration} onChange={e => setEditingRule(r => r ? { ...r, breakDuration: Number(e.target.value) } : r)} className="inp" />
                     </Field>
+                </div>
+                {/* Current slots for this rule */}
+                <div className="border-t border-border/50 pt-4 mt-2">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold text-foreground">Рабочие часы</span>
+                        <button type="button" onClick={() => { setEditingRule(null); setSelectedRuleId(editingRule.id); setShowNewSlot(true); }} className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Добавить</button>
+                    </div>
+                    {(() => {
+                        const ruleSlots = slots.filter(s => s.scheduleRuleId === editingRule.id && !(s.endDate && new Date(s.endDate) < today));
+                        if (ruleSlots.length === 0) return <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">Нет слотов. Нажмите «Добавить» чтобы настроить дни и время.</p>;
+                        return (
+                            <div className="space-y-2">
+                                {DAY_LABELS.map((dayName, dayIndex) => {
+                                    const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a, b) => a.startTime.localeCompare(b.startTime));
+                                    if (daySlots.length === 0) return null;
+                                    return (
+                                        <div key={dayIndex} className="flex items-center gap-2">
+                                            <span className="w-7 text-[11px] font-bold text-muted-foreground uppercase shrink-0">{dayName}</span>
+                                            <div className="flex flex-wrap gap-1.5 flex-1">
+                                                {daySlots.map(s => (
+                                                    <div key={s.id} className="flex items-center gap-1 px-2 py-1 bg-muted/30 border border-border/50 rounded-lg text-[12px] font-bold group/es">
+                                                        <span className="tabular-nums">{s.startTime}–{s.endTime}</span>
+                                                        <button type="button" onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover/es:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
                 </div>
             </Modal>}
 
