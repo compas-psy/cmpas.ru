@@ -274,7 +274,8 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                             type="time"
                                             value={availableSlots.some(s => s.time === formData.time) ? '' : formData.time}
                                             onChange={e => setFormData(s => ({ ...s, time: e.target.value }))}
-                                            className="border border-border rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+                                            placeholder="ЧЧ:ММ"
+                                            className="border border-border rounded-lg px-2 py-1 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/50"
                                         />
                                     </div>
                                 </div>
@@ -282,13 +283,14 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
                                         <span className="text-base">⚠️</span>
-                                        <span>Нет слотов в расписании. Укажите время вручную:</span>
+                                        <span>Нет слотов в расписании — укажите время:</span>
                                     </div>
                                     <input
                                         type="time"
                                         value={formData.time}
                                         onChange={e => setFormData(s => ({ ...s, time: e.target.value }))}
-                                        className="w-full border border-border rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-ring/50 min-h-[48px]"
+                                        placeholder="ЧЧ:ММ"
+                                        className="w-full border border-border rounded-xl px-4 py-3 text-base font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-ring/50 min-h-[48px]"
                                     />
                                     <p className="text-xs text-muted-foreground ml-1">Запись создастся вне расписания</p>
                                 </div>

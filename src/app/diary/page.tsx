@@ -203,9 +203,17 @@ export default function DiaryCalendarPage() {
     );
 
     const nextSession = useMemo(() => {
-        // First: next session today (future time)
-        const todayNext = todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed');
+        // First: next session today (future time OR currently going on)
+        const todayNext = todaySessions.find(s => s.time >= currentTimeStr && s.status !== 'completed');
         if (todayNext) return todayNext;
+        // Also check currently-ongoing session (started but not over)
+        const ongoing = todaySessions.find(s => {
+            const [h, m] = s.time.split(':').map(Number);
+            const endMins = h * 60 + m + (s.duration || 50);
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            return nowMins >= h * 60 + m && nowMins < endMins && s.status !== 'completed';
+        });
+        if (ongoing) return ongoing;
         // Fallback: earliest future session on any upcoming day
         const toLocalStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const todayStr = toLocalStr(now);
@@ -213,6 +221,19 @@ export default function DiaryCalendarPage() {
             .filter(s => s.status !== 'cancelled' && s.status !== 'completed' && toLocalStr(new Date(s.date)) > todayStr)
             .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0] || null;
     }, [todaySessions, currentTimeStr, sessions, now]);
+
+    // Previous session summary for the next session's client
+    const prevClientSummary = useMemo(() => {
+        if (!nextSession) return null;
+        const toLocalStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const nextDateStr = toLocalStr(new Date(nextSession.date));
+        const prevSessions = sessions
+            .filter(s => s.clientId === nextSession.clientId && s.status === 'completed' && toLocalStr(new Date(s.date)) < nextDateStr)
+            .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+        const last = prevSessions[0];
+        return last?.clientSummary || last?.notes || null;
+    }, [nextSession, sessions]);
+
 
     const completedToday = todaySessions.filter(s => s.status === 'completed').length;
     const totalToday = todaySessions.length;
@@ -385,7 +406,6 @@ export default function DiaryCalendarPage() {
                             ? (isNow ? 'Сейчас' : mu > 0 ? `через ${formatMinutes(mu)}` : 'Идёт')
                             : new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', ' + nextSession.time;
                         const requestText = nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).request;
-                        const lastSummary = nextSession.clientSummary;
 
                         return (
                             <div className={`bg-card rounded-2xl border overflow-hidden shadow-card transition-all ${close || isNow ? 'border-primary/40 ring-1 ring-primary/10' : 'border-border'}`}>
@@ -426,21 +446,22 @@ export default function DiaryCalendarPage() {
                                     </div>
 
                                     {/* AI summary of last session */}
-                                    {lastSummary && (
+                                    {prevClientSummary && (
                                         <div className="mt-3 p-3 bg-sage-50 rounded-xl border border-sage-200">
                                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-forest-600 mb-1.5 uppercase tracking-wide">
-                                                <Sparkles className="w-3 h-3" /> Кратко о прошлом сеансе • AI
+                                                <Sparkles className="w-3 h-3" /> Кратко о прошлом сеансе
+                                                <span className="ml-auto text-[10px] bg-forest-100 text-forest-700 px-1.5 py-0.5 rounded font-bold">AI</span>
                                             </div>
-                                            <p className="text-[12px] text-muted-foreground line-clamp-3 leading-relaxed">{lastSummary}</p>
+                                            <p className="text-[12px] text-muted-foreground line-clamp-3 leading-relaxed">{prevClientSummary}</p>
                                         </div>
                                     )}
 
                                     <div className="flex items-center gap-2 mt-4">
                                         <button
-                                            onClick={() => setEditingSession(nextSession)}
+                                            onClick={() => window.location.href = `/diary/clients?clientId=${nextSession.clientId}`}
                                             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]"
                                         >
-                                            <FileText className="w-4 h-4" /> Подготовиться
+                                            <BookOpen className="w-4 h-4" /> Подготовиться
                                         </button>
                                         {nextSession.format === 'online' && (settings?.onlineSessionLink) && (
                                             <a
@@ -519,39 +540,55 @@ export default function DiaryCalendarPage() {
                                     const mu = isN ? getMinutesUntil(s.time) : 0;
                                     const FormatInfo = formatLabels[s.format] || formatLabels.online;
                                     const FormatIcon = FormatInfo.icon;
-                                    const typeLabel = s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная' : s.type === 'family' ? 'Семейная' : s.type;
+                                    const typeLabel = s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная консультация' : s.type === 'family' ? 'Семейная' : s.type;
                                     const noConsent = !s.client?.consentDate;
                                     const badges: { label: string; color: string }[] = [];
-                                    if (done && !s.notes && !s.structuredNotes) badges.push({ label: 'ДЗ не заполнено', color: 'text-orange-600 bg-orange-50' });
-                                    if (s.status === 'pending') badges.push({ label: 'Оплата не отмечена', color: 'text-orange-600 bg-orange-50' });
-                                    if (noConsent) badges.push({ label: 'Нет согласия', color: 'text-red-600 bg-red-50' });
+                                    if (s.status === 'pending') badges.push({ label: 'Оплата не отмечена', color: 'text-orange-600 bg-orange-50 border border-orange-200' });
+                                    if (done && !s.notes && !s.structuredNotes) badges.push({ label: 'ДЗ не заполнено', color: 'text-orange-600 bg-orange-50 border border-orange-200' });
+                                    if (noConsent) badges.push({ label: 'Нет согласия', color: 'text-red-600 bg-red-50 border border-red-200' });
+
+                                    const initials = cn.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
 
                                     return (
-                                        <div key={s.id} onClick={() => setEditingSession(s)}
-                                            className={`flex items-center gap-3 px-4 py-3.5 hover:bg-sage-50/50 transition-colors cursor-pointer ${isN ? 'bg-sage-50/80' : ''} ${done ? 'opacity-60' : ''}`}>
-                                            <div className="shrink-0 w-[50px] text-right">
-                                                <div className={`text-[14px] font-bold tabular-nums ${isN ? 'text-primary' : 'text-foreground'}`}>{s.time}</div>
-                                                <div className="text-[11px] text-muted-foreground tabular-nums">{s.endTime || ''}</div>
+                                        <div key={s.id}
+                                            onClick={() => setEditingSession(s)}
+                                            className={`flex items-stretch gap-0 hover:bg-sage-50/60 transition-colors cursor-pointer ${done ? 'opacity-60' : ''}`}>
+                                            {/* Time column */}
+                                            <div className="flex flex-col items-end justify-center w-[52px] shrink-0 py-3 pr-2 pl-3">
+                                                <span className={`text-[13px] font-bold tabular-nums leading-tight ${isN ? 'text-primary' : 'text-foreground'}`}>{s.time}</span>
+                                                <span className="text-[11px] text-muted-foreground tabular-nums leading-tight">{s.endTime || ''}</span>
                                             </div>
-                                            <div className={`w-1 h-9 rounded-full shrink-0 ${isN ? 'bg-primary' : done ? 'bg-sage-200' : s.status === 'pending' ? 'bg-orange-400' : 'bg-forest-500'}`} />
-                                            <div className="w-9 h-9 rounded-full bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-[12px] shrink-0 uppercase border border-sage-200">
-                                                {cn.slice(0, 2)}
+                                            {/* Vertical indicator */}
+                                            <div className="flex flex-col items-center py-3 px-1 shrink-0">
+                                                <div className={`w-2 h-2 rounded-full mt-1 shrink-0 ${isN && mu > 0 ? 'bg-primary ring-4 ring-primary/20' : done ? 'bg-sage-300' : isN ? 'bg-green-500 ring-4 ring-green-200' : 'bg-forest-400'}`} />
+                                                <div className="w-px flex-1 bg-border/60 mt-1" />
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-1.5 flex-wrap">
-                                                    <span className={`text-[13px] font-bold truncate ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{cn}</span>
-                                                    {isN && mu > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary shrink-0">Через {formatMinutes(mu)}</span>}
+                                            {/* Avatar */}
+                                            <div className="flex items-center py-3 px-2 shrink-0">
+                                                <div className="w-9 h-9 rounded-full bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-[11px] border border-sage-200 uppercase">{initials}</div>
+                                            </div>
+                                            {/* Main info */}
+                                            <div className="flex-1 min-w-0 py-3 pr-3">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className={`text-[13px] font-semibold ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{cn}</span>
+                                                            {isN && mu > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary shrink-0">Через {formatMinutes(mu)}</span>}
+                                                            {isN && mu <= 0 && mu > -60 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 shrink-0">Сейчас</span>}
+                                                        </div>
+                                                        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                                                            <span>{typeLabel}</span>
+                                                            <span className="text-border">•</span>
+                                                            <span className="flex items-center gap-0.5"><FormatIcon className="w-3 h-3" />{FormatInfo.label}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        {badges.map((b, i) => <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${b.color}`}>{b.label}</span>)}
+                                                        <button onClick={e => { e.stopPropagation(); setEditingSession(s); }} className="p-1 rounded hover:bg-sage-100 text-muted-foreground/40 hover:text-muted-foreground ml-0.5">
+                                                            <MoreVertical className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                                                    <span>{typeLabel}</span><span>•</span>
-                                                    <span className="flex items-center gap-0.5"><FormatIcon className="w-3 h-3" />{FormatInfo.label}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                                                {badges.map((b, i) => <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${b.color}`}>{b.label}</span>)}
-                                                <button onClick={e => { e.stopPropagation(); setEditingSession(s); }} className="p-1 rounded hover:bg-sage-100 text-muted-foreground/40 hover:text-muted-foreground">
-                                                    <MoreVertical className="w-3.5 h-3.5" />
-                                                </button>
                                             </div>
                                         </div>
                                     );
@@ -706,6 +743,14 @@ export default function DiaryCalendarPage() {
                     clientId={rescheduleTarget.client.id}
                 />
             )}
+            {/* Mobile FAB — Add session */}
+            <button
+                onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: new Date() }); }}
+                className="fixed bottom-24 right-4 z-40 md:hidden w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:bg-forest-700 active:scale-95 transition-all"
+                aria-label="Добавить запись"
+            >
+                <Plus className="w-7 h-7" />
+            </button>
         </div>
     );
 }
