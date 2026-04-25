@@ -203,17 +203,9 @@ export default function DiaryCalendarPage() {
     );
 
     const nextSession = useMemo(() => {
-        // First: next session today (future time OR currently going on)
-        const todayNext = todaySessions.find(s => s.time >= currentTimeStr && s.status !== 'completed');
+        // First: next session today (future time)
+        const todayNext = todaySessions.find(s => s.time > currentTimeStr && s.status !== 'completed');
         if (todayNext) return todayNext;
-        // Also check currently-ongoing session (started but not over)
-        const ongoing = todaySessions.find(s => {
-            const [h, m] = s.time.split(':').map(Number);
-            const endMins = h * 60 + m + (s.duration || 50);
-            const nowMins = now.getHours() * 60 + now.getMinutes();
-            return nowMins >= h * 60 + m && nowMins < endMins && s.status !== 'completed';
-        });
-        if (ongoing) return ongoing;
         // Fallback: earliest future session on any upcoming day
         const toLocalStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const todayStr = toLocalStr(now);
@@ -221,19 +213,6 @@ export default function DiaryCalendarPage() {
             .filter(s => s.status !== 'cancelled' && s.status !== 'completed' && toLocalStr(new Date(s.date)) > todayStr)
             .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0] || null;
     }, [todaySessions, currentTimeStr, sessions, now]);
-
-    // Previous session summary for the next session's client
-    const prevClientSummary = useMemo(() => {
-        if (!nextSession) return null;
-        const toLocalStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        const nextDateStr = toLocalStr(new Date(nextSession.date));
-        const prevSessions = sessions
-            .filter(s => s.clientId === nextSession.clientId && s.status === 'completed' && toLocalStr(new Date(s.date)) < nextDateStr)
-            .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
-        const last = prevSessions[0];
-        return last?.clientSummary || last?.notes || null;
-    }, [nextSession, sessions]);
-
 
     const completedToday = todaySessions.filter(s => s.status === 'completed').length;
     const totalToday = todaySessions.length;
@@ -334,6 +313,7 @@ export default function DiaryCalendarPage() {
     }
 
     return (
+        <>
         <div className="space-y-6 pb-12 w-full min-w-0">
             {/* Welcome strip for new psychologists */}
             <WelcomeStrip />
@@ -406,6 +386,11 @@ export default function DiaryCalendarPage() {
                             ? (isNow ? 'Сейчас' : mu > 0 ? `через ${formatMinutes(mu)}` : 'Идёт')
                             : new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', ' + nextSession.time;
                         const requestText = nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).request;
+                        // Find last completed session with the same client
+                        const lastCompletedSession = sessions
+                            .filter(s => s.clientId === nextSession.clientId && s.status === 'completed' && s.clientSummary)
+                            .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))[0];
+                        const lastSummary = lastCompletedSession?.clientSummary || null;
 
                         return (
                             <div className={`bg-card rounded-2xl border overflow-hidden shadow-card transition-all ${close || isNow ? 'border-primary/40 ring-1 ring-primary/10' : 'border-border'}`}>
@@ -446,13 +431,12 @@ export default function DiaryCalendarPage() {
                                     </div>
 
                                     {/* AI summary of last session */}
-                                    {prevClientSummary && (
+                                    {lastSummary && (
                                         <div className="mt-3 p-3 bg-sage-50 rounded-xl border border-sage-200">
                                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-forest-600 mb-1.5 uppercase tracking-wide">
-                                                <Sparkles className="w-3 h-3" /> Кратко о прошлом сеансе
-                                                <span className="ml-auto text-[10px] bg-forest-100 text-forest-700 px-1.5 py-0.5 rounded font-bold">AI</span>
+                                                <Sparkles className="w-3 h-3" /> Кратко о прошлом сеансе • AI
                                             </div>
-                                            <p className="text-[12px] text-muted-foreground line-clamp-3 leading-relaxed">{prevClientSummary}</p>
+                                            <p className="text-[12px] text-muted-foreground line-clamp-3 leading-relaxed">{lastSummary}</p>
                                         </div>
                                     )}
 
@@ -461,7 +445,7 @@ export default function DiaryCalendarPage() {
                                             onClick={() => window.location.href = `/diary/clients?clientId=${nextSession.clientId}`}
                                             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]"
                                         >
-                                            <BookOpen className="w-4 h-4" /> Подготовиться
+                                            <FileText className="w-4 h-4" /> Подготовиться
                                         </button>
                                         {nextSession.format === 'online' && (settings?.onlineSessionLink) && (
                                             <a
@@ -533,62 +517,52 @@ export default function DiaryCalendarPage() {
                             </div>
                         ) : (
                             <div className="divide-y divide-border/50">
-                                {filteredTodaySessions.map(s => {
+                                {filteredTodaySessions.map((s, idx) => {
                                     const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
                                     const done = s.status === 'completed';
                                     const isN = nextSession?.id === s.id;
                                     const mu = isN ? getMinutesUntil(s.time) : 0;
                                     const FormatInfo = formatLabels[s.format] || formatLabels.online;
                                     const FormatIcon = FormatInfo.icon;
-                                    const typeLabel = s.type === 'individual' ? 'Индивидуальная' : s.type === 'couple' ? 'Парная консультация' : s.type === 'family' ? 'Семейная' : s.type;
                                     const noConsent = !s.client?.consentDate;
-                                    const badges: { label: string; color: string }[] = [];
-                                    if (s.status === 'pending') badges.push({ label: 'Оплата не отмечена', color: 'text-orange-600 bg-orange-50 border border-orange-200' });
-                                    if (done && !s.notes && !s.structuredNotes) badges.push({ label: 'ДЗ не заполнено', color: 'text-orange-600 bg-orange-50 border border-orange-200' });
-                                    if (noConsent) badges.push({ label: 'Нет согласия', color: 'text-red-600 bg-red-50 border border-red-200' });
-
-                                    const initials = cn.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+                                    const isLast = idx === filteredTodaySessions.length - 1;
 
                                     return (
-                                        <div key={s.id}
-                                            onClick={() => setEditingSession(s)}
-                                            className={`flex items-stretch gap-0 hover:bg-sage-50/60 transition-colors cursor-pointer ${done ? 'opacity-60' : ''}`}>
+                                        <div key={s.id} onClick={() => setEditingSession(s)}
+                                            className={`flex gap-3 px-5 py-3 hover:bg-sage-50/50 transition-colors cursor-pointer ${isN ? 'bg-sage-50/80' : ''} ${done ? 'opacity-50' : ''}`}>
                                             {/* Time column */}
-                                            <div className="flex flex-col items-end justify-center w-[52px] shrink-0 py-3 pr-2 pl-3">
-                                                <span className={`text-[13px] font-bold tabular-nums leading-tight ${isN ? 'text-primary' : 'text-foreground'}`}>{s.time}</span>
-                                                <span className="text-[11px] text-muted-foreground tabular-nums leading-tight">{s.endTime || ''}</span>
+                                            <div className="shrink-0 w-[44px] pt-0.5 text-right">
+                                                <div className={`text-[13px] font-bold tabular-nums leading-tight ${isN ? 'text-primary' : 'text-foreground'}`}>{s.time}</div>
+                                                <div className="text-[10px] text-muted-foreground/60 tabular-nums leading-tight">{s.endTime || ''}</div>
                                             </div>
-                                            {/* Vertical indicator */}
-                                            <div className="flex flex-col items-center py-3 px-1 shrink-0">
-                                                <div className={`w-2 h-2 rounded-full mt-1 shrink-0 ${isN && mu > 0 ? 'bg-primary ring-4 ring-primary/20' : done ? 'bg-sage-300' : isN ? 'bg-green-500 ring-4 ring-green-200' : 'bg-forest-400'}`} />
-                                                <div className="w-px flex-1 bg-border/60 mt-1" />
+                                            {/* Timeline */}
+                                            <div className="flex flex-col items-center shrink-0">
+                                                <div className={`w-2.5 h-2.5 rounded-full shrink-0 border-2 ${isN ? 'bg-primary border-primary/30' : done ? 'bg-sage-300 border-sage-200' : s.status === 'pending' ? 'bg-orange-400 border-orange-200' : 'bg-forest-500 border-forest-200'}`} />
+                                                {!isLast && <div className="w-0.5 flex-1 bg-border/60 mt-0.5" />}
                                             </div>
                                             {/* Avatar */}
-                                            <div className="flex items-center py-3 px-2 shrink-0">
-                                                <div className="w-9 h-9 rounded-full bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-[11px] border border-sage-200 uppercase">{initials}</div>
+                                            <div className="w-9 h-9 rounded-full bg-sage-100 flex items-center justify-center text-forest-700 font-bold text-[11px] shrink-0 uppercase border border-sage-200">
+                                                {cn.slice(0, 2)}
                                             </div>
-                                            {/* Main info */}
-                                            <div className="flex-1 min-w-0 py-3 pr-3">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                                            <span className={`text-[13px] font-semibold ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{cn}</span>
-                                                            {isN && mu > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary shrink-0">Через {formatMinutes(mu)}</span>}
-                                                            {isN && mu <= 0 && mu > -60 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 shrink-0">Сейчас</span>}
-                                                        </div>
-                                                        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                                                            <span>{typeLabel}</span>
-                                                            <span className="text-border">•</span>
-                                                            <span className="flex items-center gap-0.5"><FormatIcon className="w-3 h-3" />{FormatInfo.label}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-1 shrink-0">
-                                                        {badges.map((b, i) => <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${b.color}`}>{b.label}</span>)}
-                                                        <button onClick={e => { e.stopPropagation(); setEditingSession(s); }} className="p-1 rounded hover:bg-sage-100 text-muted-foreground/40 hover:text-muted-foreground ml-0.5">
-                                                            <MoreVertical className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0 pb-2">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className={`text-[13px] font-bold truncate ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{cn}</span>
+                                                    {isN && mu > 0 && <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-primary/10 text-primary shrink-0">Через {formatMinutes(mu)}</span>}
                                                 </div>
+                                                <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
+                                                    <FormatIcon className="w-3 h-3 shrink-0" />
+                                                    <span>{FormatInfo.label}</span>
+                                                    <span>•</span>
+                                                    <span>{s.duration} мин</span>
+                                                    {noConsent && <span className="px-1 py-0.5 rounded text-[9px] font-bold text-red-600 bg-red-50 ml-1">Нет согласия</span>}
+                                                </div>
+                                            </div>
+                                            {/* Status badge */}
+                                            <div className="shrink-0 flex flex-col items-end gap-1 pt-0.5">
+                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusColors[s.status] || 'text-muted-foreground bg-muted border-border'}`}>
+                                                    {statusLabels[s.status] || s.status}
+                                                </span>
                                             </div>
                                         </div>
                                     );
@@ -743,14 +717,16 @@ export default function DiaryCalendarPage() {
                     clientId={rescheduleTarget.client.id}
                 />
             )}
-            {/* Mobile FAB — Add session */}
+        </div>
+
+            {/* Mobile FAB */}
             <button
-                onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: new Date() }); }}
-                className="fixed bottom-24 right-4 z-40 md:hidden w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:bg-forest-700 active:scale-95 transition-all"
+                onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center active:scale-90 transition-transform hover:bg-forest-700"
                 aria-label="Добавить запись"
             >
-                <Plus className="w-7 h-7" />
+                <Plus className="w-6 h-6" />
             </button>
-        </div>
+        </>
     );
 }
