@@ -18,7 +18,7 @@ export async function getSessions(dateFrom?: Date, dateTo?: Date) {
             psychologistId,
             ...(dateFrom && dateTo ? { date: { gte: dateFrom, lte: dateTo } } : {}),
         },
-        include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } } } } },
+        include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } }, consentDate: true } } },
         orderBy: { date: 'asc' },
     });
 }
@@ -35,7 +35,7 @@ export async function getSessionsByDate(date: Date) {
             psychologistId,
             date: { gte: dayStart, lte: dayEnd },
         },
-        include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } } } } },
+        include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } }, consentDate: true } } },
         orderBy: { time: 'asc' },
     });
 }
@@ -60,7 +60,7 @@ export async function createSession(data: {
     const dayEnd = new Date(sessionDate);
     dayEnd.setHours(23, 59, 59, 999);
 
-    // Валидация: нет ли уже записи на пересекающийся временной слот
+    // Check for time conflicts
     const existingSessions = await db.diarySession.findMany({
         where: {
             psychologistId,
@@ -72,26 +72,20 @@ export async function createSession(data: {
     const newStartMins = h * 60 + m;
     const newEndMins = newStartMins + duration;
 
-    for (const existing of existingSessions) {
-        const [eH, eM] = existing.time.split(':').map(Number);
-        const eStartMins = eH * 60 + eM;
-        const eEndMins = eStartMins + (existing.duration || 50);
-        if (newStartMins < eEndMins && newEndMins > eStartMins) {
+    for (const sess of existingSessions) {
+        const [sH, sM] = sess.time.split(':').map(Number);
+        const sStartMins = sH * 60 + sM;
+        const sEndMins = sStartMins + (sess.duration || 50);
+        if (newStartMins < sEndMins && newEndMins > sStartMins) {
             throw new Error('Это время уже занято другой сессией');
         }
-    }
-
-    // Валидация: один клиент не может быть записан 2+ раз в один день
-    const clientSessionsToday = existingSessions.filter(s => s.clientId === data.clientId);
-    if (clientSessionsToday.length > 0) {
-        throw new Error('Этот клиент уже записан на данный день');
     }
 
     const session = await db.diarySession.create({
         data: {
             psychologistId,
             clientId: data.clientId,
-            date: new Date(data.date),
+            date: sessionDate,
             time: data.time,
             endTime,
             duration,
@@ -236,12 +230,106 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
 export async function getAvailableDatesForReschedule(year: number, month: number) {
     const psychologistId = await getPsychologistId();
     const { getAvailableDates } = await import('@/app/bot/actions');
-    return getAvailableDates(psychologistId, year, month, true); // skipModeCheck for psychologist's own diary
+    return getAvailableDates(psychologistId, year, month, true);
 }
 
 export async function getAvailableTimesForReschedule(dateStr: string, sessionId?: string, clientId?: string) {
     const psychologistId = await getPsychologistId();
     const { getAvailableTimes } = await import('@/app/bot/actions');
-    // Pass sessionId so the session being rescheduled doesn't block its own original slot
     return getAvailableTimes(psychologistId, dateStr, true, sessionId);
+}
+
+export async function getClientActivity() {
+    const psychologistId = await getPsychologistId();
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const events: Array<{
+        clientId: string;
+        clientName: string;
+        type: 'homework_done' | 'session_confirmed' | 'consent_given';
+        description: string;
+        at: Date;
+    }> = [];
+
+    // Completed homeworks
+    const doneHW = await db.homework.findMany({
+        where: { psychologistId, status: 'completed', updatedAt: { gte: since } },
+        include: { client: { select: { id: true, name: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+    });
+    for (const hw of doneHW) {
+        const sessionNum = await db.diarySession.count({ where: { clientId: hw.client.id, status: 'completed' } });
+        events.push({
+            clientId: hw.client.id,
+            clientName: hw.client.name,
+            type: 'homework_done',
+            description: `Выполнил(а) ДЗ к ${sessionNum}-й сессии`,
+            at: hw.updatedAt,
+        });
+    }
+
+    // Recently confirmed sessions (status changed to confirmed)
+    const recentConfirmed = await db.diarySession.findMany({
+        where: { psychologistId, status: 'confirmed', updatedAt: { gte: since } },
+        include: { client: { select: { id: true, name: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+    });
+    for (const s of recentConfirmed) {
+        const sessionDate = new Date(s.date);
+        const dateStr = sessionDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+        events.push({
+            clientId: s.client.id,
+            clientName: s.client.name,
+            type: 'session_confirmed',
+            description: `Запись подтверждена на ${dateStr}`,
+            at: s.updatedAt,
+        });
+    }
+
+    // Clients who gave consent recently
+    const newConsents = await db.diaryClient.findMany({
+        where: { psychologistId, consentDate: { gte: since }, NOT: { consentDate: null } },
+        orderBy: { consentDate: 'desc' },
+        take: 3,
+    });
+    for (const c of newConsents) {
+        if (c.consentDate) {
+            events.push({
+                clientId: c.id,
+                clientName: c.name,
+                type: 'consent_given',
+                description: 'Подписал(а) согласие на обработку данных',
+                at: c.consentDate,
+            });
+        }
+    }
+
+    events.sort((a, b) => b.at.getTime() - a.at.getTime());
+    return events.slice(0, 5).map(e => ({ ...e, at: e.at.toISOString() }));
+}
+
+export async function getPreviousWeekStats() {
+    const psychologistId = await getPsychologistId();
+    const now = new Date();
+
+    const startOfThisWeek = new Date(now);
+    startOfThisWeek.setDate(now.getDate() - (now.getDay() + 6) % 7);
+    startOfThisWeek.setHours(0, 0, 0, 0);
+
+    const startOfPrevWeek = new Date(startOfThisWeek);
+    startOfPrevWeek.setDate(startOfThisWeek.getDate() - 7);
+    const endOfPrevWeek = new Date(startOfThisWeek);
+    endOfPrevWeek.setMilliseconds(-1);
+
+    const prevSessions = await db.diarySession.findMany({
+        where: { psychologistId, date: { gte: startOfPrevWeek, lte: endOfPrevWeek }, status: { not: 'cancelled' } },
+        select: { clientId: true },
+    });
+
+    return {
+        sessions: prevSessions.length,
+        clients: new Set(prevSessions.map(s => s.clientId)).size,
+    };
 }
