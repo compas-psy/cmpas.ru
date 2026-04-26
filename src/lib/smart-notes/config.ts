@@ -1,8 +1,9 @@
 /**
  * Smart Notes — block definitions and templates
- * 
- * Each tag is not just a label — it's an "action" that inserts
- * a structured block with guided fields into the session note.
+ *
+ * Each block is a structured section with guided fields.
+ * Fields marked `advanced: true` are hidden under "дополнительно".
+ * Max 1-3 primary fields visible by default.
  */
 
 export type SmartBlockField = {
@@ -10,22 +11,24 @@ export type SmartBlockField = {
     label: string;
     placeholder: string;
     type: 'text' | 'textarea' | 'select' | 'rating';
-    options?: string[]; // for select type
+    options?: string[];
     required?: boolean;
+    advanced?: boolean; // hidden under "дополнительно"
 };
 
 export type SmartBlockDefinition = {
     id: string;
     label: string;
-    emoji: string;
-    color: string; // tailwind color class
+    emoji: string; // kept for backward compat, use icon component instead
+    iconId: string; // key into NOTE_BLOCK_ICONS
     description: string;
     fields: SmartBlockField[];
     category: 'basic' | 'context' | 'process' | 'safety' | 'org';
+    priority: 1 | 2; // 1 = always visible, 2 = via "+ Добавить блок"
 };
 
 export type SmartBlock = {
-    id: string; // unique instance id
+    id: string;
     definitionId: string;
     values: Record<string, string>;
     createdAt: string;
@@ -34,7 +37,7 @@ export type SmartBlock = {
 export type NoteVisibility = 'private' | 'shared';
 
 // ============================================================
-// 8 Core Quick Tags (always visible as chips)
+// Block Definitions
 // ============================================================
 
 export const SMART_BLOCK_DEFINITIONS: SmartBlockDefinition[] = [
@@ -42,119 +45,151 @@ export const SMART_BLOCK_DEFINITIONS: SmartBlockDefinition[] = [
         id: 'request',
         label: 'Запрос',
         emoji: '🎯',
-        color: 'bg-blue-500/10 text-blue-700 border-blue-200',
+        iconId: 'request',
         description: 'Как клиент формулирует запрос',
         category: 'basic',
+        priority: 1,
         fields: [
             { key: 'formulation', label: 'Формулировка запроса', placeholder: 'Как клиент формулирует свой запрос...', type: 'textarea', required: true },
             { key: 'desired_result', label: 'Желаемый результат', placeholder: 'Что хочет получить в итоге...', type: 'textarea' },
-            { key: 'success_criteria', label: 'Критерии «что станет лучше»', placeholder: 'По каким признакам поймёт, что стало лучше...', type: 'textarea' },
-            { key: 'changes', label: 'Как менялась формулировка', placeholder: 'Динамика формулировки запроса...', type: 'textarea' },
-        ],
-    },
-    {
-        id: 'anamnesis',
-        label: 'Анамнез',
-        emoji: '📋',
-        color: 'bg-purple-500/10 text-purple-700 border-purple-200',
-        description: 'Семейный контекст и история',
-        category: 'basic',
-        fields: [
-            { key: 'family', label: 'Семейный контекст', placeholder: 'Состав семьи, значимые отношения...', type: 'textarea' },
-            { key: 'significant_events', label: 'Значимые события', placeholder: 'Ключевые жизненные события...', type: 'textarea' },
-            { key: 'prev_therapy', label: 'Предыдущий опыт терапии', placeholder: 'Был ли опыт, у кого, как давно...', type: 'textarea' },
-            { key: 'medical', label: 'Медицинский контекст', placeholder: 'Заболевания, лекарства...', type: 'textarea' },
-            { key: 'trauma', label: 'Потери / травматический опыт', placeholder: 'Если клиент готов поделиться...', type: 'textarea' },
-            { key: 'open_questions', label: 'Открытые вопросы', placeholder: 'Что ещё нужно прояснить...', type: 'textarea' },
+            { key: 'success_criteria', label: 'Критерии «что станет лучше»', placeholder: 'По каким признакам поймёт, что стало лучше...', type: 'textarea', advanced: true },
+            { key: 'changes', label: 'Как менялась формулировка', placeholder: 'Динамика формулировки запроса...', type: 'textarea', advanced: true },
         ],
     },
     {
         id: 'observation',
         label: 'Наблюдение',
         emoji: '👁',
-        color: 'bg-amber-500/10 text-amber-700 border-amber-200',
+        iconId: 'observation',
         description: 'Что заметил в ходе сессии',
         category: 'basic',
+        priority: 1,
         fields: [
             { key: 'emotional_state', label: 'Эмоциональный фон', placeholder: 'Настроение, аффект...', type: 'textarea', required: true },
-            { key: 'speech', label: 'Темп речи', placeholder: 'Быстрый, замедленный, прерывистый...', type: 'text' },
             { key: 'body', label: 'Телесные проявления', placeholder: 'Поза, жесты, напряжение...', type: 'textarea' },
             { key: 'contact', label: 'Особенности контакта', placeholder: 'Открытость, избегание, зрительный контакт...', type: 'textarea' },
-            { key: 'patterns', label: 'Повторяющиеся паттерны', placeholder: 'Что повторяется из сессии в сессию...', type: 'textarea' },
-            { key: 'incongruence', label: 'Несоответствия', placeholder: 'Слова vs невербалика...', type: 'textarea' },
+            { key: 'speech', label: 'Темп речи', placeholder: 'Быстрый, замедленный, прерывистый...', type: 'text', advanced: true },
+            { key: 'patterns', label: 'Повторяющиеся паттерны', placeholder: 'Что повторяется из сессии в сессию...', type: 'textarea', advanced: true },
+            { key: 'incongruence', label: 'Несоответствия', placeholder: 'Слова vs невербалика...', type: 'textarea', advanced: true },
         ],
     },
     {
         id: 'intervention',
         label: 'Интервенция',
         emoji: '🛠',
-        color: 'bg-teal-500/10 text-teal-700 border-teal-200',
+        iconId: 'intervention',
         description: 'Что использовали в работе',
         category: 'basic',
+        priority: 1,
         fields: [
             { key: 'technique', label: 'Техника / ход', placeholder: 'Какая техника или подход использован...', type: 'textarea', required: true },
-            { key: 'purpose', label: 'Цель', placeholder: 'Зачем это было сделано...', type: 'textarea' },
             { key: 'reaction', label: 'Реакция клиента', placeholder: 'Как отреагировал клиент...', type: 'textarea' },
-            { key: 'effectiveness', label: 'Субъективная эффективность', placeholder: 'Насколько сработало...', type: 'text' },
-        ],
-    },
-    {
-        id: 'resources',
-        label: 'Ресурсы',
-        emoji: '💪',
-        color: 'bg-green-500/10 text-green-700 border-green-200',
-        description: 'Опоры и ресурсы клиента',
-        category: 'basic',
-        fields: [
-            { key: 'internal', label: 'Внутренние опоры', placeholder: 'Качества, навыки, сильные стороны...', type: 'textarea' },
-            { key: 'external', label: 'Внешние опоры', placeholder: 'Люди, места, активности...', type: 'textarea' },
-            { key: 'people', label: 'Поддерживающие люди', placeholder: 'С кем может поговорить, кто рядом...', type: 'textarea' },
-            { key: 'coping', label: 'Рабочие способы саморегуляции', placeholder: 'Что реально помогает...', type: 'textarea' },
-            { key: 'rituals', label: 'Безопасные ритуалы / привычки', placeholder: 'Рутины, которые стабилизируют...', type: 'textarea' },
+            { key: 'purpose', label: 'Цель', placeholder: 'Зачем это было сделано...', type: 'textarea', advanced: true },
+            { key: 'effectiveness', label: 'Субъективная эффективность', placeholder: 'Насколько сработало...', type: 'text', advanced: true },
         ],
     },
     {
         id: 'dynamics',
         label: 'Динамика',
         emoji: '📈',
-        color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200',
+        iconId: 'dynamics',
         description: 'Изменения с прошлой сессии',
         category: 'basic',
+        priority: 1,
         fields: [
-            { key: 'changes', label: 'Что изменилось', placeholder: 'С прошлой сессии...', type: 'textarea', required: true },
-            { key: 'improved', label: 'Что улучшилось', placeholder: 'Позитивные сдвиги...', type: 'textarea' },
-            { key: 'regressed', label: 'Что откатилось', placeholder: 'Если есть ухудшение...', type: 'textarea' },
-            { key: 'factors', label: 'Что повлияло', placeholder: 'Причины изменений...', type: 'textarea' },
-            { key: 'progress', label: 'Оценка прогресса', placeholder: 'Краткая оценка...', type: 'text' },
+            { key: 'changes', label: 'Что улучшилось', placeholder: 'Позитивные сдвиги...', type: 'textarea', required: true },
+            { key: 'regressed', label: 'Что осталось сложным', placeholder: 'Если есть ухудшение или стагнация...', type: 'textarea' },
+            { key: 'factors', label: 'Что появилось нового', placeholder: 'Новые темы, инсайты...', type: 'textarea' },
+            { key: 'progress', label: 'Оценка прогресса', placeholder: 'Краткая оценка...', type: 'text', advanced: true },
         ],
     },
     {
         id: 'homework',
         label: 'Домашнее задание',
         emoji: '📝',
-        color: 'bg-orange-500/10 text-orange-700 border-orange-200',
+        iconId: 'homework',
         description: 'Задание между сессиями',
         category: 'basic',
+        priority: 1,
         fields: [
             { key: 'task', label: 'Формулировка задания', placeholder: 'Что именно нужно сделать...', type: 'textarea', required: true },
             { key: 'purpose', label: 'Зачем', placeholder: 'Какую цель преследует задание...', type: 'textarea' },
-            { key: 'format', label: 'Формат выполнения', placeholder: 'Как именно выполнять...', type: 'text' },
-            { key: 'deadline', label: 'Срок', placeholder: 'До когда...', type: 'text' },
-            { key: 'obstacles', label: 'Возможные препятствия', placeholder: 'Что может помешать...', type: 'textarea' },
+            { key: 'format', label: 'Формат выполнения', placeholder: 'Как именно выполнять...', type: 'text', advanced: true },
+            { key: 'deadline', label: 'Срок', placeholder: 'До когда...', type: 'text', advanced: true },
+            { key: 'obstacles', label: 'Возможные препятствия', placeholder: 'Что может помешать...', type: 'textarea', advanced: true },
         ],
     },
     {
         id: 'next_step',
         label: 'Следующий шаг',
         emoji: '➡️',
-        color: 'bg-cyan-500/10 text-cyan-700 border-cyan-200',
+        iconId: 'next_step',
         description: 'План на следующую встречу',
         category: 'basic',
+        priority: 1,
         fields: [
-            { key: 'focus', label: 'Фокус следующей сессии', placeholder: 'На чём сосредоточиться...', type: 'textarea', required: true },
-            { key: 'check', label: 'Что проверить', placeholder: 'Что нужно узнать / уточнить...', type: 'textarea' },
-            { key: 'send_to_client', label: 'Что прислать клиенту', placeholder: 'Материалы, ссылки...', type: 'textarea' },
-            { key: 'needs_questionnaire', label: 'Нужен ли опросник до встречи?', placeholder: '', type: 'select', options: ['Нет', 'Да'] },
+            { key: 'focus', label: 'Договорённость', placeholder: 'На чём сосредоточиться...', type: 'textarea', required: true },
+            { key: 'check', label: 'Домашнее задание', placeholder: 'Что нужно узнать / уточнить...', type: 'textarea' },
+            { key: 'send_to_client', label: 'На что обратить внимание', placeholder: 'Материалы, ссылки...', type: 'textarea', advanced: true },
+            { key: 'needs_questionnaire', label: 'Нужен ли опросник до встречи?', placeholder: '', type: 'select', options: ['Нет', 'Да'], advanced: true },
+        ],
+    },
+    // ── Priority 2 blocks (via "+ Добавить блок") ──
+    {
+        id: 'resources',
+        label: 'Ресурсы',
+        emoji: '💪',
+        iconId: 'resources',
+        description: 'Опоры и ресурсы клиента',
+        category: 'basic',
+        priority: 2,
+        fields: [
+            { key: 'internal', label: 'Что помогает', placeholder: 'Качества, навыки, люди, активности...', type: 'textarea' },
+            { key: 'coping', label: 'Рабочие способы саморегуляции', placeholder: 'Что реально помогает...', type: 'textarea' },
+            { key: 'people', label: 'Поддерживающие люди', placeholder: 'С кем может поговорить...', type: 'textarea', advanced: true },
+            { key: 'rituals', label: 'Безопасные ритуалы', placeholder: 'Рутины, которые стабилизируют...', type: 'textarea', advanced: true },
+        ],
+    },
+    {
+        id: 'anamnesis',
+        label: 'Анамнез',
+        emoji: '📋',
+        iconId: 'anamnesis',
+        description: 'Семейный контекст и история',
+        category: 'context',
+        priority: 2,
+        fields: [
+            { key: 'family', label: 'Семейный контекст', placeholder: 'Состав семьи, значимые отношения...', type: 'textarea' },
+            { key: 'significant_events', label: 'Значимые события', placeholder: 'Ключевые жизненные события...', type: 'textarea' },
+            { key: 'prev_therapy', label: 'Предыдущий опыт терапии', placeholder: 'Был ли опыт, у кого, как давно...', type: 'textarea', advanced: true },
+            { key: 'medical', label: 'Медицинский контекст', placeholder: 'Заболевания, лекарства...', type: 'textarea', advanced: true },
+            { key: 'open_questions', label: 'Открытые вопросы', placeholder: 'Что ещё нужно прояснить...', type: 'textarea', advanced: true },
+        ],
+    },
+    {
+        id: 'quote',
+        label: 'Цитата',
+        emoji: '💬',
+        iconId: 'quote',
+        description: 'Дословная цитата клиента',
+        category: 'context',
+        priority: 2,
+        fields: [
+            { key: 'text', label: 'Цитата', placeholder: '«...»', type: 'textarea', required: true },
+            { key: 'context', label: 'Контекст', placeholder: 'В какой момент это было сказано...', type: 'textarea' },
+        ],
+    },
+    {
+        id: 'hypothesis',
+        label: 'Гипотеза',
+        emoji: '💡',
+        iconId: 'hypothesis',
+        description: 'Рабочая гипотеза терапевта',
+        category: 'process',
+        priority: 2,
+        fields: [
+            { key: 'text', label: 'Гипотеза', placeholder: 'Предположение о динамике / паттернах...', type: 'textarea', required: true },
+            { key: 'evidence', label: 'На чём основана', placeholder: 'Наблюдения, факты...', type: 'textarea' },
         ],
     },
 ];
@@ -167,7 +202,7 @@ export type SessionTemplate = {
     id: string;
     label: string;
     description: string;
-    blockIds: string[]; // Which blocks to pre-insert
+    blockIds: string[];
 };
 
 export const SESSION_TEMPLATES: SessionTemplate[] = [
@@ -209,5 +244,9 @@ export function createBlockInstance(definitionId: string): SmartBlock {
 }
 
 export function getCoreBlockIds(): string[] {
-    return SMART_BLOCK_DEFINITIONS.filter(d => d.category === 'basic').map(d => d.id);
+    return SMART_BLOCK_DEFINITIONS.filter(d => d.priority === 1).map(d => d.id);
+}
+
+export function getSecondaryBlockIds(): string[] {
+    return SMART_BLOCK_DEFINITIONS.filter(d => d.priority === 2).map(d => d.id);
 }

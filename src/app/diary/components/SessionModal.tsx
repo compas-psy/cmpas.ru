@@ -298,17 +298,26 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         </div>
                     )}
 
-                    {/* Smart Notes Editor (edit mode) */}
+                    {/* Notes — link to full flow */}
                     {editSession && (
                         <div>
                             <label className="block text-sm font-semibold mb-3 ml-1 text-foreground/90">
                                 <FileText className="w-4 h-4 inline mr-1 text-muted-foreground" />Заметки по сессии
                             </label>
-                            <SmartNotesEditor
-                                initialData={smartNotesData}
-                                onChange={setSmartNotesData}
-                                isFirstSession={isFirstSession}
-                            />
+                            <button
+                                type="button"
+                                onClick={() => { onClose(); window.location.href = `/diary/session/${editSession.id}/notes`; }}
+                                className="w-full px-4 py-3.5 border border-border rounded-2xl text-sm font-semibold text-forest-700 hover:bg-sage-50 transition-colors flex items-center justify-between min-h-[48px]"
+                            >
+                                <span>Открыть редактор заметок</span>
+                                <span className="text-muted-foreground">→</span>
+                            </button>
+                            {(smartNotesData.blocks.length > 0 || smartNotesData.privateNotes) && (
+                                <div className="mt-2 text-xs text-muted-foreground ml-1">
+                                    {smartNotesData.blocks.length > 0 && `${smartNotesData.blocks.length} блоков`}
+                                    {smartNotesData.privateNotes && ' · есть приватные заметки'}
+                                </div>
+                            )}
                         </div>
                     )}
 

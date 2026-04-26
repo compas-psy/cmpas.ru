@@ -154,3 +154,146 @@ html {
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ── Notes Flow Surfaces ── */
+.note-surface {
+  background-color: #FAFBF8;
+}
+.note-surface-muted {
+  background-color: #F2F4EF;
+}
+.note-card {
+  background-color: #ffffff;
+  border: 1px solid #E4E9E3;
+  border-radius: 22px;
+  padding: 16px;
+}
+.note-card-active {
+  background-color: #ffffff;
+  border: 1.5px solid #285B46;
+  border-radius: 22px;
+  padding: 16px;
+}
+
+/* ── Notes Flow Typography (mobile-first) ── */
+.note-title {
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 700;
+  color: #142018;
+}
+.note-section-title {
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 650;
+  color: #142018;
+}
+.note-client-name {
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 650;
+  color: #142018;
+}
+.note-body {
+  font-size: 16px;
+  line-height: 23px;
+  color: #142018;
+}
+.note-body-secondary {
+  font-size: 15px;
+  line-height: 21px;
+  color: #5F6C64;
+}
+.note-chip {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.note-btn-text {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+/* ── Notes Flow Buttons ── */
+.note-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 52px;
+  background-color: #1D4735;
+  color: #ffffff;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: none;
+}
+.note-btn-primary:hover {
+  background-color: #285B46;
+}
+.note-btn-primary:active {
+  transform: scale(0.98);
+}
+.note-btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  background-color: transparent;
+  color: #1D4735;
+  border: 1.5px solid #E4E9E3;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.note-btn-secondary:hover {
+  background-color: #F6FAF6;
+  border-color: #DDE9E1;
+}
+.note-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* ── Notes Segmented Control ── */
+.note-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background-color: #F2F4EF;
+  border-radius: 14px;
+}
+.note-segmented-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5F6C64;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+.note-segmented-item[data-active="true"] {
+  background-color: #ffffff;
+  color: #142018;
+  box-shadow: 0 1px 3px rgba(20, 32, 24, 0.08);
+}
+.note-segmented-item[data-mode="private"][data-active="true"] {
+  color: #1D4735;
+}
+.note-segmented-item[data-mode="client"][data-active="true"] {
+  color: #CC9E50;
+}
