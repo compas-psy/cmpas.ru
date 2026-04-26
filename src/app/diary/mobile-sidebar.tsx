@@ -33,7 +33,12 @@ export function MobileSidebar({ children }: { children: React.ReactNode }) {
                 >
                     <Menu className="w-6 h-6 text-forest-800" />
                 </button>
-                <div className="font-bold text-[17px] tracking-tight text-foreground">КОМПАС</div>
+                <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0">
+                        <img src="/icon.png" alt="Компас" className="w-full h-full object-contain" />
+                    </div>
+                    <span className="text-[15px] font-bold text-foreground tracking-[0.12em] uppercase">КОМПАС</span>
+                </div>
             </div>
 
             {/* Overlay */}

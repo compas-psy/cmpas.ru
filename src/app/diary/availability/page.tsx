@@ -540,7 +540,7 @@ export default function AvailabilityPage() {
             </div>
 
             {/* Schedule Mode Indicator */}
-            <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                     { mode: 'private', Icon: Lock, label: 'Приватный', desc: 'Клиенты не видят расписание' },
                     { mode: 'preview', Icon: Eye, label: 'Просмотр', desc: 'Клиенты видят окна, но не могут записаться' },
@@ -553,7 +553,7 @@ export default function AvailabilityPage() {
                             setSavingMode(false);
                         }}
                         disabled={savingMode}
-                        className={`p-4 rounded-2xl border text-left transition-all shrink-0 sm:shrink ${settings.scheduleMode === m.mode ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-sage-50'}`}>
+                        className={`p-4 rounded-2xl border text-left transition-all ${settings.scheduleMode === m.mode ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-sage-50'}`}>
                         <div className="flex items-center gap-3">
                             <m.Icon className="w-5 h-5 text-muted-foreground" strokeWidth={1.8} />
                             <div>
@@ -965,21 +965,25 @@ export default function AvailabilityPage() {
                 </div>
             </Modal>}
 
-            {/* Edit Rule Modal */}
-            {editingRule && <Modal title="Редактировать правило" onClose={() => setEditingRule(null)} onSubmit={handleSaveEditRule}>
+            {/* Edit Rule Modal — unified like create */}
+            {editingRule && (() => {
+                const ruleSlots = slots.filter(s => s.scheduleRuleId === editingRule.id && !(s.endDate && new Date(s.endDate) < today));
+                const activeDays = Array.from(new Set(ruleSlots.map(s => s.dayOfWeek))).sort();
+                const allStarts = ruleSlots.map(s => s.startTime).filter(Boolean).sort();
+                const allEnds = ruleSlots.map(s => s.endTime).filter(Boolean).sort().reverse();
+                const minTime = allStarts[0] || '09:00';
+                const maxTime = allEnds[0] || '18:00';
+                return (
+                <Modal title="Редактировать правило" onClose={() => setEditingRule(null)} onSubmit={handleSaveEditRule}>
                 <Field label="Название">
                     <input type="text" value={editingRule.name} onChange={e => setEditingRule(r => r ? { ...r, name: e.target.value } : r)} className="inp" />
                 </Field>
                 <Field label="Цвет">
                     <div className="flex gap-2 flex-wrap">
                         {RULE_COLORS.map(c => (
-                            <button
-                                key={c}
-                                type="button"
-                                onClick={() => setEditingRule(r => r ? { ...r, color: c } : r)}
+                            <button key={c} type="button" onClick={() => setEditingRule(r => r ? { ...r, color: c } : r)}
                                 className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${editingRule.color === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'}`}
-                                style={{ backgroundColor: c }}
-                            >
+                                style={{ backgroundColor: c }}>
                                 {editingRule.color === c && <Check className="w-4 h-4 text-white" />}
                             </button>
                         ))}
@@ -992,16 +996,12 @@ export default function AvailabilityPage() {
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Формат">
                         <select value={editingRule.format} onChange={e => setEditingRule(r => r ? { ...r, format: e.target.value } : r)} className="inp bg-white">
-                            <option value="online">Онлайн</option>
-                            <option value="offline">Кабинет</option>
-                            <option value="both">Онлайн + Кабинет</option>
+                            <option value="online">Онлайн</option><option value="offline">Кабинет</option><option value="both">Онлайн + Кабинет</option>
                         </select>
                     </Field>
                     <Field label="Аудитория">
                         <select value={editingRule.audienceFilter} onChange={e => setEditingRule(r => r ? { ...r, audienceFilter: e.target.value } : r)} className="inp bg-white">
-                            <option value="all">Все клиенты</option>
-                            <option value="regular">Только мои постоянные</option>
-                            <option value="new">Только новые (извне)</option>
+                            <option value="all">Все клиенты</option><option value="regular">Только постоянные</option><option value="new">Только новые</option>
                         </select>
                     </Field>
                 </div>
@@ -1017,51 +1017,44 @@ export default function AvailabilityPage() {
                     <Field label="Длительность (мин)">
                         <input type="number" min={15} max={180} value={editingRule.duration} onChange={e => setEditingRule(r => r ? { ...r, duration: Number(e.target.value) } : r)} className="inp" />
                     </Field>
-                    <Field label="Перерыв (мин)">
+                    <Field label="Перерыв между слотами (мин)">
                         <input type="number" min={0} max={120} value={editingRule.breakDuration} onChange={e => setEditingRule(r => r ? { ...r, breakDuration: Number(e.target.value) } : r)} className="inp" />
                     </Field>
                 </div>
-                {/* Current slots for this rule */}
+                {/* Current slots */}
                 <div className="border-t border-border/50 pt-4 mt-2">
                     <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-bold text-foreground">Рабочие часы</span>
                         <button type="button" onClick={() => { setEditingRule(null); setSelectedRuleId(editingRule.id); setShowNewSlot(true); }} className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Добавить</button>
                     </div>
-                    {(() => {
-                        const ruleSlots = slots.filter(s => s.scheduleRuleId === editingRule.id && !(s.endDate && new Date(s.endDate) < today));
-                        if (ruleSlots.length === 0) return <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">Нет слотов. Нажмите «Добавить» чтобы настроить дни и время.</p>;
-                        return (
-                            <div className="space-y-2">
-                                {DAY_LABELS.map((dayName, dayIndex) => {
-                                    const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a, b) => a.startTime.localeCompare(b.startTime));
-                                    // Deduplicate: group by startTime+endTime, keep first
-                                    const seen = new Set<string>();
-                                    const uniqueSlots = daySlots.filter(s => {
-                                        const key = `${s.startTime}-${s.endTime}`;
-                                        if (seen.has(key)) return false;
-                                        seen.add(key);
-                                        return true;
-                                    });
-                                    if (uniqueSlots.length === 0) return null;
-                                    return (
-                                        <div key={dayIndex} className="flex items-center gap-2">
-                                            <span className="w-7 text-[11px] font-bold text-muted-foreground uppercase shrink-0">{dayName}</span>
-                                            <div className="flex flex-wrap gap-1.5 flex-1">
-                                                {uniqueSlots.map(s => (
-                                                    <div key={s.id} className="flex items-center gap-1 px-2 py-1 bg-muted/30 border border-border/50 rounded-lg text-[12px] font-bold group/es">
-                                                        <span className="tabular-nums">{s.startTime}–{s.endTime}</span>
-                                                        <button type="button" onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover/es:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
-                                                    </div>
-                                                ))}
-                                            </div>
+                    {ruleSlots.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">Нет слотов. Нажмите «Добавить».</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {DAY_LABELS.map((dayName, dayIndex) => {
+                                const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a, b) => a.startTime.localeCompare(b.startTime));
+                                const seen = new Set<string>();
+                                const uniqueSlots = daySlots.filter(s => { const key = `${s.startTime}-${s.endTime}`; if (seen.has(key)) return false; seen.add(key); return true; });
+                                if (uniqueSlots.length === 0) return null;
+                                return (
+                                    <div key={dayIndex} className="flex items-center gap-2">
+                                        <span className="w-7 text-[11px] font-bold text-muted-foreground uppercase shrink-0">{dayName}</span>
+                                        <div className="flex flex-wrap gap-1.5 flex-1">
+                                            {uniqueSlots.map(s => (
+                                                <div key={s.id} className="flex items-center gap-1 px-2 py-1 bg-muted/30 border border-border/50 rounded-lg text-[12px] font-bold group/es">
+                                                    <span className="tabular-nums">{s.startTime}–{s.endTime}</span>
+                                                    <button type="button" onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover/es:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                                                </div>
+                                            ))}
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })()}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
-            </Modal>}
+            </Modal>);
+            })()}
 
             {/* Clone Rule Modal */}
             {showCloneModal && <Modal title={`Клонировать: ${showCloneModal.name}`} onClose={() => setShowCloneModal(null)} onSubmit={handleCloneRule}>

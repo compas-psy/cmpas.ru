@@ -297,3 +297,8 @@ html {
 .note-segmented-item[data-mode="client"][data-active="true"] {
   color: #CC9E50;
 }
+
+/* DatePicker popup must appear above z-50 modals */
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}

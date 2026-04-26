@@ -22,14 +22,15 @@ export function DatePicker({ value, onChange, label, placeholder = 'Выбери
     return (
         <div className={`relative ${className}`}>
             {label && <label className="block text-sm font-medium mb-1">{label}</label>}
-            <div className="relative [&_.react-datepicker-wrapper]:w-full [&_.react-datepicker__input-container]:w-full">
+            <div className="relative [&_.react-datepicker-wrapper]:w-full [&_.react-datepicker__input-container]:w-full [&_.react-datepicker-popper]:!z-[9999]">
                 <ReactDatePicker
                     selected={selectedDate}
                     onChange={(date: Date | null) => onChange(date)}
                     locale="ru"
                     dateFormat="dd.MM.yyyy"
                     placeholderText={placeholder}
-                    portalId="datepicker-portal"
+                    popperPlacement="bottom-start"
+                    popperModifiers={[{ name: 'preventOverflow', options: { boundary: 'viewport' } }]}
                     className="w-full px-3 py-2 pr-9 border border-border rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <CalendarIcon className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -59,7 +60,7 @@ export function TimePicker({ value, onChange, label, className = '' }: TimePicke
     return (
         <div className={`relative ${className}`}>
             {label && <label className="block text-sm font-medium mb-1">{label}</label>}
-            <div className="relative [&_.react-datepicker-wrapper]:w-full [&_.react-datepicker__input-container]:w-full">
+            <div className="relative [&_.react-datepicker-wrapper]:w-full [&_.react-datepicker__input-container]:w-full [&_.react-datepicker-popper]:!z-[9999]">
                 <ReactDatePicker
                     selected={selectedDate}
                     onChange={handleChange}
