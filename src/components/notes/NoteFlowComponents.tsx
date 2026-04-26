@@ -120,26 +120,28 @@ export function AddBlockSheet({ existingIds, onAdd, onClose }: {
   const available = SMART_BLOCK_DEFINITIONS.filter(d => !existingIds.includes(d.id));
   if (available.length === 0) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg bg-white rounded-t-3xl p-5 pb-8 safe-area-bottom" onClick={e => e.stopPropagation()}>
-        <div className="w-10 h-1 bg-border rounded-full mx-auto mb-4" />
+      <div className="relative w-full max-w-md bg-white rounded-2xl p-5 shadow-floating" onClick={e => e.stopPropagation()}>
         <h3 className="note-section-title mb-4">Добавить блок</h3>
-        <div className="space-y-2 max-h-[50vh] overflow-auto">
+        <div className="space-y-1 max-h-[60vh] overflow-auto -mx-2 px-2">
           {available.map(def => {
             const Icon = NOTE_BLOCK_ICONS[def.iconId];
             return (
               <button key={def.id} onClick={() => { onAdd(def.id); onClose(); }}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl hover:bg-sage-50 transition-colors text-left">
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-sage-50 transition-colors text-left">
                 {Icon && <Icon className="w-5 h-5 text-forest-800 shrink-0" />}
                 <div>
-                  <div className="text-[16px] font-semibold text-foreground">{def.label}</div>
-                  <div className="text-[14px] text-muted-foreground">{def.description}</div>
+                  <div className="text-[15px] font-semibold text-foreground">{def.label}</div>
+                  <div className="text-[13px] text-muted-foreground">{def.description}</div>
                 </div>
               </button>
             );
           })}
         </div>
+        <button onClick={onClose} className="w-full mt-4 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground border border-border rounded-xl transition-colors">
+          Отмена
+        </button>
       </div>
     </div>
   );

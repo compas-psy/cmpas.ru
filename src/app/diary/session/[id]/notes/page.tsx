@@ -9,7 +9,7 @@ import {
   NoteBlockChip, NoteBlockCard, AddBlockSheet,
 } from '@/components/notes/NoteFlowComponents';
 import {
-  SmartBlock, SMART_BLOCK_DEFINITIONS, createBlockInstance, getDefinitionById
+  SmartBlock, SMART_BLOCK_DEFINITIONS, createBlockInstance, getDefinitionById, sortBlocksByDefinition
 } from '@/lib/smart-notes/config';
 
 type SessionInfo = {
@@ -62,7 +62,7 @@ export default function NotesFlowPage() {
 
   // Block operations
   const addBlock = useCallback((defId: string) => {
-    setBlocks(prev => [...prev, createBlockInstance(defId)]);
+    setBlocks(prev => sortBlocksByDefinition([...prev, createBlockInstance(defId)]));
   }, []);
   const removeBlock = useCallback((id: string) => {
     setBlocks(prev => prev.filter(b => b.id !== id));

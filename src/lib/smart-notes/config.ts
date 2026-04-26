@@ -250,3 +250,15 @@ export function getCoreBlockIds(): string[] {
 export function getSecondaryBlockIds(): string[] {
     return SMART_BLOCK_DEFINITIONS.filter(d => d.priority === 2).map(d => d.id);
 }
+
+/** Canonical sort order for a block definition — its index in SMART_BLOCK_DEFINITIONS */
+export function getBlockSortIndex(definitionId: string): number {
+    const idx = SMART_BLOCK_DEFINITIONS.findIndex(d => d.id === definitionId);
+    return idx === -1 ? 999 : idx;
+}
+
+/** Sort blocks into canonical order based on SMART_BLOCK_DEFINITIONS ordering */
+export function sortBlocksByDefinition(blocks: SmartBlock[]): SmartBlock[] {
+    return [...blocks].sort((a, b) => getBlockSortIndex(a.definitionId) - getBlockSortIndex(b.definitionId));
+}
+

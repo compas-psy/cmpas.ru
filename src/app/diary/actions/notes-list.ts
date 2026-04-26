@@ -118,3 +118,29 @@ export async function getClientsForNotesFilter() {
     });
     return clients;
 }
+
+export async function getSessionsWithoutNotes() {
+    const psychologistId = await getPsychologistId();
+    const sessions = await db.diarySession.findMany({
+        where: {
+            psychologistId,
+            notes: null,
+            structuredNotes: null,
+            privateNotes: null,
+            status: { in: ['completed', 'confirmed'] },
+        },
+        include: {
+            client: { select: { id: true, name: true } },
+        },
+        orderBy: { date: 'desc' },
+    });
+    return sessions.map((s: any) => ({
+        id: s.id,
+        clientId: s.clientId,
+        clientName: s.client.name,
+        date: s.date.toISOString(),
+        time: s.time,
+        duration: s.duration,
+    }));
+}
+
