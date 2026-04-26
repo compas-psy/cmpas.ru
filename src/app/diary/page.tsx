@@ -331,36 +331,21 @@ export default function DiaryCalendarPage() {
                 </div>
 
                 {/* Week strip */}
-                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0 w-full md:w-auto">
-                    <div className="grid grid-cols-7 flex-1">
+                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0">
+                    <div className="grid grid-cols-7">
                         {weekDays.map((wd, i) => (
-                            <div key={i} className={`flex flex-col items-center py-2 px-1 border-r border-border/40 last:border-r-0 ${wd.isToday ? 'bg-primary' : ''}`}>
-                                <span className={`text-[9px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                                    {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
+                            <div key={i} className={`flex flex-col items-center py-2.5 px-3 sm:px-4 ${wd.isToday ? 'bg-primary rounded-2xl -m-px z-10 shadow-sm' : ''}`}>
+                                <span className={`text-[10px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                    {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', '')}
                                 </span>
-                                <span className={`text-[13px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
+                                <span className={`text-[15px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
                                     {wd.date.getDate()}
                                 </span>
-                                <span className={`text-[9px] font-bold mt-0.5 text-center leading-tight ${wd.isToday ? 'text-primary-foreground/80' : wd.count > 0 ? 'text-forest-600' : 'text-transparent'}`}>
-                                    {wd.count > 0 ? `${wd.count}\u00a0сес.` : '-'}
-                                </span>
+                                {wd.count > 0 && (
+                                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${wd.isToday ? 'bg-primary-foreground/60' : 'bg-forest-500'}`} />
+                                )}
                             </div>
                         ))}
-                    </div>
-                    <div className="hidden md:flex flex-col justify-center px-3 py-2 border-l border-border bg-sage-50/50 min-w-[90px]">
-                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">На неделю</span>
-                        <div className="flex items-baseline gap-1 mt-0.5">
-                            <span className="text-[15px] font-bold text-foreground tabular-nums">{weekSessions.length}</span>
-                            <span className="text-[10px] text-muted-foreground">сессий</span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground">{weekUniqueClients} клиентов</span>
-                        <svg width="80" height="18" viewBox="0 0 80 18" className="mt-1" preserveAspectRatio="none">
-                            <polyline
-                                points={sparkCounts.map((c, i) => `${i * 13},${16 - Math.round((c / sparkMax) * 14)}`).join(' ')}
-                                fill="none" stroke="#4a7c59" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                            />
-                            {sparkCounts.map((c, i) => c > 0 ? <circle key={i} cx={i * 13} cy={16 - Math.round((c / sparkMax) * 14)} r="1.5" fill="#4a7c59" /> : null)}
-                        </svg>
                     </div>
                 </div>
             </div>
@@ -387,9 +372,10 @@ export default function DiaryCalendarPage() {
                             : new Date(nextSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', ' + nextSession.time;
                         const requestText = nextSession.client?.questionnaire?.data && (nextSession.client.questionnaire.data as any).request;
                         
-                        // Find last completed session with the same client that has any notes
+                        // Find last session with the same client that has any notes (before next session date)
+                        const nextSessionDate = new Date(nextSession.date).toISOString();
                         const lastCompletedSession = sessions
-                            .filter(s => s.clientId === nextSession.clientId && s.status === 'completed' && (s.structuredNotes || s.notes || s.clientSummary))
+                            .filter(s => s.clientId === nextSession.clientId && s.id !== nextSession.id && s.date < nextSessionDate && (s.structuredNotes || s.notes || s.clientSummary || s.privateNotes))
                             .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))[0];
                         
                         // Build summary from structured notes blocks
@@ -424,6 +410,13 @@ export default function DiaryCalendarPage() {
                             
                             // Priority 3: plain text notes
                             if (session.notes) return { type: 'text' as const, text: session.notes };
+                            
+                            // Priority 4: private notes (psychologist's internal notes)
+                            if (session.privateNotes) {
+                                const pn = session.privateNotes;
+                                if (typeof pn === 'string') return { type: 'text' as const, text: pn };
+                                if (typeof pn === 'object' && pn.text) return { type: 'text' as const, text: pn.text };
+                            }
                             
                             return null;
                         };
