@@ -763,3 +763,11 @@ model UserTag {
   @@index([userId])
   @@index([tag])
 }
+
+model SystemConfig {
+  key       String   @id
+  value     String   @default("false")
+  label     String   @default("")
+  category  String   @default("features")
+  updatedAt DateTime @updatedAt
+}

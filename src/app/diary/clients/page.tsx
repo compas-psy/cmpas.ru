@@ -72,6 +72,13 @@ export default function ClientsPage() {
             const { getClients } = await import('../actions/clients');
             const data = await getClients(search || undefined, statusFilter);
             setClients(data as unknown as Client[]);
+            // Auto-select client with most recent session (desktop only, first load)
+            if (!selectedClient && !search && data.length > 0 && !isMobile) {
+                const withDates = (data as any[]).filter(c => c.nextSessionDate);
+                const sorted = withDates.sort((a, b) => new Date(b.nextSessionDate).getTime() - new Date(a.nextSessionDate).getTime());
+                const autoId = sorted.length > 0 ? sorted[0].id : data[0].id;
+                fetchClientDetail(autoId);
+            }
         } catch { /* empty */ }
         setLoading(false);
     }, [search, statusFilter]);
