@@ -415,25 +415,25 @@ export default function ClientsPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="space-y-6 overflow-x-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Клиенты</h1>
                     <p className="text-muted-foreground text-sm mt-1">{clients.filter(c => c.status === 'active').length} активных клиентов</p>
                 </div>
-                <div className="flex gap-2">
-                    <Link href="/diary/clients/import" className="flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
+                <div className="flex gap-2 shrink-0">
+                    <Link href="/diary/clients/import" className="hidden sm:flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
                         <ClipboardPaste className="w-4 h-4" /> Импорт
                     </Link>
                     <button onClick={() => setShowNewClient(true)}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-all font-bold shadow-card active:scale-[0.98]">
+                        className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-all font-bold shadow-card active:scale-[0.98] text-sm">
                         <Plus className="w-4 h-4" /> Добавить
                     </button>
                 </div>
             </div>
 
             {/* Search + Filter */}
-            <div className="flex gap-3 items-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                 <div className="relative flex-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <input type="text" placeholder="Поиск по имени..." value={search} onChange={e => setSearch(e.target.value)}

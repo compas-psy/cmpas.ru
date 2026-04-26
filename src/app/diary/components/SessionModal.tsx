@@ -154,7 +154,15 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-card rounded-2xl w-full max-w-lg shadow-floating overflow-hidden max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-border/50 bg-sage-50/50">
-                    <h2 className="text-xl font-bold tracking-tight">{editSession ? 'Редактировать запись' : 'Новая запись'}</h2>
+                    <div>
+                        <h2 className="text-xl font-bold tracking-tight">{editSession ? 'Редактировать запись' : 'Новая запись'}</h2>
+                        {editSession && (
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                                {new Date(editSession.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}, {editSession.time}
+                                {editSession.client?.name ? ` · ${editSession.client.name}` : ''}
+                            </p>
+                        )}
+                    </div>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors active:scale-95">
                         <X className="w-5 h-5 text-muted-foreground" />
                     </button>
@@ -298,25 +306,66 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                         </div>
                     )}
 
-                    {/* Notes — link to full flow */}
+                    {/* Notes — inline preview + edit link */}
                     {editSession && (
                         <div>
                             <label className="block text-sm font-semibold mb-3 ml-1 text-foreground/90">
                                 <FileText className="w-4 h-4 inline mr-1 text-muted-foreground" />Заметки по сессии
                             </label>
-                            <button
-                                type="button"
-                                onClick={() => { onClose(); window.location.href = `/diary/session/${editSession.id}/notes`; }}
-                                className="w-full px-4 py-3.5 border border-border rounded-2xl text-sm font-semibold text-forest-700 hover:bg-sage-50 transition-colors flex items-center justify-between min-h-[48px]"
-                            >
-                                <span>Открыть редактор заметок</span>
-                                <span className="text-muted-foreground">→</span>
-                            </button>
-                            {(smartNotesData.blocks.length > 0 || smartNotesData.privateNotes) && (
-                                <div className="mt-2 text-xs text-muted-foreground ml-1">
-                                    {smartNotesData.blocks.length > 0 && `${smartNotesData.blocks.length} блоков`}
-                                    {smartNotesData.privateNotes && ' · есть приватные заметки'}
+                            {/* Show inline notes preview if they exist */}
+                            {(smartNotesData.blocks.length > 0 || formData.notes) ? (
+                                <div className="space-y-3">
+                                    {/* Free-text notes */}
+                                    {formData.notes && (
+                                        <div className="px-4 py-3 bg-sage-50 rounded-2xl border border-sage-200">
+                                            <p className="text-sm text-foreground/80 line-clamp-3">{formData.notes}</p>
+                                        </div>
+                                    )}
+                                    {/* Structured blocks summary */}
+                                    {smartNotesData.blocks.length > 0 && (
+                                        <div className="space-y-2">
+                                            {smartNotesData.blocks.map((block: any) => {
+                                                const defName = block.definitionId === 'observation' ? '👁 Наблюдение'
+                                                    : block.definitionId === 'dynamics' ? '📈 Динамика'
+                                                    : block.definitionId === 'intervention' ? '🛠 Интервенция'
+                                                    : block.definitionId === 'homework' ? '📝 ДЗ'
+                                                    : block.definitionId === 'next_step' ? '➡️ След.шаг'
+                                                    : block.definitionId === 'request' ? '🎯 Запрос'
+                                                    : block.definitionId === 'resources' ? '💪 Ресурсы'
+                                                    : block.definitionId === 'anamnesis' ? '📋 Анамнез'
+                                                    : block.definitionId;
+                                                const firstValue = Object.values(block.values || {}).find((v: any) => v?.trim?.());
+                                                return (
+                                                    <div key={block.id} className="px-4 py-3 bg-muted/50 rounded-2xl border border-border">
+                                                        <div className="text-xs font-bold text-muted-foreground mb-1">{defName}</div>
+                                                        {firstValue && <p className="text-sm text-foreground/80 line-clamp-2">{firstValue as string}</p>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {smartNotesData.privateNotes && (
+                                        <div className="px-4 py-3 bg-forest-800/5 rounded-2xl border border-forest-800/10">
+                                            <div className="text-xs font-bold text-forest-700 mb-1">🔒 Приватные</div>
+                                            <p className="text-sm text-foreground/70 line-clamp-2">{smartNotesData.privateNotes}</p>
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => { onClose(); window.location.href = `/diary/session/${editSession.id}/notes`; }}
+                                        className="w-full px-4 py-2.5 text-sm font-semibold text-forest-700 hover:bg-sage-50 transition-colors flex items-center justify-center gap-2 rounded-xl border border-border"
+                                    >
+                                        <FileText className="w-4 h-4" /> Редактировать заметки
+                                    </button>
                                 </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => { onClose(); window.location.href = `/diary/session/${editSession.id}/notes`; }}
+                                    className="w-full px-4 py-3.5 border border-dashed border-border rounded-2xl text-sm font-semibold text-muted-foreground hover:text-forest-700 hover:border-forest-700/30 hover:bg-sage-50 transition-colors flex items-center justify-center gap-2 min-h-[48px]"
+                                >
+                                    <FileText className="w-4 h-4" /> Добавить заметки
+                                </button>
                             )}
                         </div>
                     )}
