@@ -5,7 +5,7 @@ import {
     Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2, Lock, Eye,
     CalendarCheck, RefreshCw, AlertCircle, ChevronDown, ChevronUp,
     Clock, Minus, Shield, Zap, Sparkles, Copy, Layers, EyeOff,
-    Tag, MoreHorizontal, Check, Loader2
+    Tag, MoreHorizontal, Check, Loader2, Monitor, Building2, Shuffle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
@@ -515,9 +515,9 @@ export default function AvailabilityPage() {
             {/* Schedule Mode Indicator */}
             <div className="grid grid-cols-3 gap-3">
                 {[
-                    { mode: 'private', icon: '🔒', label: 'Приватный', desc: 'Клиенты не видят расписание' },
-                    { mode: 'preview', icon: '👁', label: 'Просмотр', desc: 'Клиенты видят окна, но не могут записаться' },
-                    { mode: 'booking', icon: '✅', label: 'Запись', desc: 'Клиенты могут записываться самостоятельно' },
+                    { mode: 'private', Icon: Lock, label: 'Приватный', desc: 'Клиенты не видят расписание' },
+                    { mode: 'preview', Icon: Eye, label: 'Просмотр', desc: 'Клиенты видят окна, но не могут записаться' },
+                    { mode: 'booking', Icon: CalendarCheck, label: 'Запись', desc: 'Клиенты могут записываться самостоятельно' },
                 ].map(m => (
                     <button key={m.mode}
                         onClick={async () => {
@@ -528,7 +528,7 @@ export default function AvailabilityPage() {
                         disabled={savingMode}
                         className={`p-4 rounded-2xl border text-left transition-all ${settings.scheduleMode === m.mode ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-sage-50'}`}>
                         <div className="flex items-center gap-3">
-                            <span className="text-xl">{m.icon}</span>
+                            <m.Icon className="w-5 h-5 text-muted-foreground" strokeWidth={1.8} />
                             <div>
                                 <div className="text-[14px] font-bold text-foreground">{m.label}</div>
                                 <div className="text-[11px] text-muted-foreground">{m.desc}</div>
@@ -607,7 +607,7 @@ export default function AvailabilityPage() {
                                 const minTime = allStarts.length > 0 ? allStarts.sort()[0] : '--:--';
                                 const maxTime = allEnds.length > 0 ? allEnds.sort().reverse()[0] : '--:--';
                                 // Format label
-                                const formatIcon = rule.format === 'online' ? '💻' : rule.format === 'offline' ? '🏢' : '🔀';
+                                const FormatIcon = rule.format === 'online' ? Monitor : rule.format === 'offline' ? Building2 : Shuffle;
                                 const formatLabel = rule.format === 'online' ? 'Онлайн' : rule.format === 'offline' ? 'Офлайн' : 'Гибрид';
                                 const audienceLabel = rule.audienceFilter === 'all' ? 'Все клиенты' : rule.audienceFilter === 'new' ? 'Только новые' : 'Только постоянные';
                                 // Day range title
@@ -623,8 +623,8 @@ export default function AvailabilityPage() {
                                             {/* Row 1: icon + format badge + title + time range + duration + break + audience */}
                                             <div className="flex flex-col sm:flex-row items-start gap-3">
                                                 {/* Format icon */}
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ backgroundColor: (rule.color || '#4F46E5') + '15' }}>
-                                                    {formatIcon}
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: (rule.color || '#4F46E5') + '15' }}>
+                                                    <FormatIcon className="w-5 h-5" style={{ color: rule.color || '#4F46E5' }} strokeWidth={1.8} />
                                                 </div>
                                                 <div className="flex-1 min-w-0 w-full">
                                                     <div className="flex items-center gap-2 flex-wrap">
@@ -633,6 +633,13 @@ export default function AvailabilityPage() {
                                                         </span>
                                                         <span className="text-[14px] sm:text-[15px] font-bold text-foreground truncate">{dayRangeTitle}</span>
                                                         {!rule.isActive && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-destructive/10 text-destructive">ОТКЛ</span>}
+                                                        {(rule.startDate || rule.endDate) && (
+                                                            <span className="text-[11px] text-muted-foreground font-medium">
+                                                                {rule.startDate ? new Date(rule.startDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '…'}
+                                                                {' – '}
+                                                                {rule.endDate ? new Date(rule.endDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '…'}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {/* Row 2: Day chips + time info */}
                                                     <div className="flex items-center gap-1 mt-2 flex-wrap">
@@ -647,8 +654,8 @@ export default function AvailabilityPage() {
                                                     {/* Mobile time/duration info */}
                                                     <div className="flex items-center gap-3 mt-2 text-[12px] text-muted-foreground sm:hidden">
                                                         <span className="font-bold text-foreground tabular-nums">{minTime} – {maxTime}</span>
-                                                        <span>⏱ {rule.duration} мин</span>
-                                                        <span>☕ {rule.breakDuration} мин</span>
+                                                        <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {rule.duration} мин</span>
+                                                        <span className="flex items-center gap-0.5"><Coffee className="w-3 h-3" /> {rule.breakDuration} мин</span>
                                                     </div>
                                                 </div>
                                                 {/* Right: time + duration + break + toggles */}
@@ -656,8 +663,8 @@ export default function AvailabilityPage() {
                                                     <div className="text-right hidden sm:block">
                                                         <div className="text-[14px] font-bold text-foreground tabular-nums">{minTime} – {maxTime}</div>
                                                         <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 justify-end">
-                                                            <span>⏱ {rule.duration} мин</span>
-                                                            <span>☕ {rule.breakDuration} мин</span>
+                                                            <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {rule.duration} мин</span>
+                                                            <span className="flex items-center gap-0.5"><Coffee className="w-3 h-3" /> {rule.breakDuration} мин</span>
                                                         </div>
                                                     </div>
                                                     {/* Toggle */}
@@ -981,12 +988,20 @@ export default function AvailabilityPage() {
                             <div className="space-y-2">
                                 {DAY_LABELS.map((dayName, dayIndex) => {
                                     const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a, b) => a.startTime.localeCompare(b.startTime));
-                                    if (daySlots.length === 0) return null;
+                                    // Deduplicate: group by startTime+endTime, keep first
+                                    const seen = new Set<string>();
+                                    const uniqueSlots = daySlots.filter(s => {
+                                        const key = `${s.startTime}-${s.endTime}`;
+                                        if (seen.has(key)) return false;
+                                        seen.add(key);
+                                        return true;
+                                    });
+                                    if (uniqueSlots.length === 0) return null;
                                     return (
                                         <div key={dayIndex} className="flex items-center gap-2">
                                             <span className="w-7 text-[11px] font-bold text-muted-foreground uppercase shrink-0">{dayName}</span>
                                             <div className="flex flex-wrap gap-1.5 flex-1">
-                                                {daySlots.map(s => (
+                                                {uniqueSlots.map(s => (
                                                     <div key={s.id} className="flex items-center gap-1 px-2 py-1 bg-muted/30 border border-border/50 rounded-lg text-[12px] font-bold group/es">
                                                         <span className="tabular-nums">{s.startTime}–{s.endTime}</span>
                                                         <button type="button" onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover/es:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
@@ -1077,7 +1092,7 @@ export default function AvailabilityPage() {
                                                     {previewTimes.map(t => (
                                                         <div key={t.time} className="px-3 py-2.5 bg-accent/5 border border-accent/20 rounded-xl text-center">
                                                             <div className="text-sm font-bold text-foreground">{t.time}</div>
-                                                            <div className="text-[10px] text-muted-foreground">{t.format === 'offline' ? '🏢 Кабинет' : '🖥️ Онлайн'}</div>
+                                                            <div className="text-[10px] text-muted-foreground">{t.format === 'offline' ? 'Кабинет' : 'Онлайн'}</div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -1266,13 +1281,13 @@ export default function AvailabilityPage() {
 function Modal({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: React.ReactNode }) {
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card rounded-2xl w-full max-w-lg shadow-floating overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between p-5 border-b border-border/50 bg-sage-50/50">
+            <div className="bg-card rounded-2xl w-full max-w-lg shadow-floating flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between p-5 border-b border-border/50 bg-sage-50/50 rounded-t-2xl">
                     <h2 className="text-lg font-bold tracking-tight">{title}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-5 h-5" /></button>
                 </div>
                 <div className="p-5 space-y-4 overflow-auto telegram-miniapp-scrollbar-hide">{children}</div>
-                <div className="p-5 border-t border-border/50 bg-sage-50/50 flex gap-3">
+                <div className="p-5 border-t border-border/50 bg-sage-50/50 flex gap-3 rounded-b-2xl">
                     <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/80 transition-all">Отмена</button>
                     <button onClick={onSubmit} className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-forest-700 transition-all shadow-sm">Сохранить</button>
                 </div>

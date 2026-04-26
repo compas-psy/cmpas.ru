@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SmartNotesEditor, SmartNotesData } from '@/components/psidairy/SmartNotesEditor';
+import { TimePicker } from '@/components/ui/date-picker';
 
 type SessionModalProps = {
     isOpen: boolean;
@@ -293,12 +294,9 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                         <span className="text-base">⚠️</span>
                                         <span>Нет слотов в расписании. Укажите время вручную:</span>
                                     </div>
-                                    <input
-                                        type="time"
-                                        lang="ru"
+                                    <TimePicker
                                         value={formData.time}
-                                        onChange={e => setFormData(s => ({ ...s, time: e.target.value }))}
-                                        className="w-full border border-border rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-ring/50 min-h-[48px]"
+                                        onChange={t => setFormData(s => ({ ...s, time: t }))}
                                     />
                                     <p className="text-xs text-muted-foreground ml-1">Запись создастся вне расписания</p>
                                 </div>
