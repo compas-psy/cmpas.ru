@@ -840,25 +840,53 @@ export default function AvailabilityPage() {
                     </div>
 
                     {/* Card 2: Booking Link */}
-                    {psychologistId && (
-                        <div className="bg-card border border-border rounded-2xl shadow-card p-5">
+                    {psychologistId && (() => {
+                        const bookingUrl = `https://cmpas.ru/bot/book/${psychologistId}`;
+                        const isPrivate = settings.scheduleMode === 'private';
+                        return (
+                        <div className={`bg-card border border-border rounded-2xl shadow-card p-5 ${isPrivate ? 'opacity-60' : ''}`}>
                             <div className="flex items-center gap-2 mb-3">
                                 <CalendarCheck className="w-4 h-4 text-primary" />
                                 <div>
                                     <h3 className="text-[14px] font-bold text-foreground">Ссылка на самозапись</h3>
-                                    <p className="text-[11px] text-muted-foreground">Поделитесь ссылкой с клиентами</p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        {isPrivate ? 'Недоступна в приватном режиме' : 'Поделитесь ссылкой с клиентами'}
+                                    </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
-                                <span className="flex-1 text-[13px] font-medium text-foreground truncate">cmpas.ru/book/{psychologistId}</span>
-                                <button onClick={() => { navigator.clipboard.writeText(`https://cmpas.ru/book/${psychologistId}`); toast.success('Ссылка скопирована'); }}
-                                    className="p-1.5 hover:bg-primary/10 rounded-lg text-muted-foreground hover:text-primary transition-colors shrink-0">
-                                    <Copy className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <a href={`/book/${psychologistId}`} target="_blank" className="block mt-2 text-[12px] text-muted-foreground hover:text-primary font-medium">Настроить вид страницы →</a>
+                            {isPrivate ? (
+                                <div className="flex items-center gap-2 bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5">
+                                    <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
+                                    <span className="text-[12px] text-muted-foreground">Включите режим «Просмотр» или «Запись» чтобы активировать ссылку</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
+                                        <span className="flex-1 text-[13px] font-medium text-foreground truncate">cmpas.ru/bot/book/{psychologistId}</span>
+                                        <button onClick={() => { navigator.clipboard.writeText(bookingUrl); toast.success('Ссылка скопирована'); }}
+                                            className="p-1.5 hover:bg-primary/10 rounded-lg text-muted-foreground hover:text-primary transition-colors shrink-0" title="Копировать">
+                                            <Copy className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3">
+                                        <button onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(bookingUrl)}&text=${encodeURIComponent('Запишитесь на сессию:')}`, '_blank'); }}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-[#2AABEE]/10 text-[#2AABEE] hover:bg-[#2AABEE]/20 transition-colors">
+                                            Telegram
+                                        </button>
+                                        <button onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent('Запишитесь на сессию: ' + bookingUrl)}`, '_blank'); }}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors">
+                                            WhatsApp
+                                        </button>
+                                        <button onClick={() => { navigator.clipboard.writeText(bookingUrl); toast.success('Ссылка скопирована'); }}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-muted/50 text-foreground hover:bg-muted transition-colors">
+                                            <Copy className="w-3 h-3" /> Копировать
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Card 3: Statistics placeholder */}
                     <div className="bg-card border border-border rounded-2xl shadow-card p-5">
@@ -992,6 +1020,26 @@ export default function AvailabilityPage() {
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Действует с"><DatePicker value={editingRule.startDate ? new Date(editingRule.startDate).toISOString().split('T')[0] : ''} onChange={d => setEditingRule(r => r ? { ...r, startDate: d } : r)} /></Field>
                     <Field label="Действует по"><DatePicker value={editingRule.endDate ? new Date(editingRule.endDate).toISOString().split('T')[0] : ''} onChange={d => setEditingRule(r => r ? { ...r, endDate: d } : r)} /></Field>
+                </div>
+                <Field label="Дни недели">
+                    <div className="flex flex-wrap gap-2">
+                        {DAY_LABELS.map((d, i) => (
+                            <button key={i} type="button"
+                                className={`w-11 h-11 rounded-full text-sm font-semibold transition-all ${activeDays.includes(i) ? 'text-white shadow-md' : 'bg-muted/50 text-muted-foreground'}`}
+                                style={activeDays.includes(i) ? { backgroundColor: editingRule.color || '#4F46E5' } : {}}
+                                disabled
+                                title="Дни определяются рабочими часами">
+                                {d}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">Дни определяются рабочими часами ниже</p>
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Рабочее время">
+                        <div className="text-sm font-bold text-foreground tabular-nums">{minTime} – {maxTime}</div>
+                        <p className="text-[11px] text-muted-foreground">Редактируется через рабочие часы</p>
+                    </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Формат">
