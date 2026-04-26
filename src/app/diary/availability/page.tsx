@@ -113,7 +113,11 @@ export default function AvailabilityPage() {
 
     // Schedule Rules state
     const [showNewRule, setShowNewRule] = useState(false);
-    const initialRuleData = { name: '', color: RULE_COLORS[0], format: 'online', addressId: '', duration: 50, breakDuration: 15, audienceFilter: 'all', startDate: '', endDate: '' };
+    const initialRuleData = {
+        name: '', color: RULE_COLORS[0], format: 'online', addressId: '', duration: 50, breakDuration: 15, audienceFilter: 'all', startDate: '', endDate: '',
+        daysOfWeek: [0, 1, 2, 3, 4] as number[], startTime: '09:00', endTime: '18:00',
+        hasLunch: false, lunchStart: '13:00', lunchEnd: '14:00',
+    };
     const [newRuleData, setNewRuleData] = useState(initialRuleData);
     const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
     const [editingRule, setEditingRule] = useState<ScheduleRule | null>(null);
@@ -387,8 +391,14 @@ export default function AvailabilityPage() {
 
     const handleCreateRule = async () => {
         if (!newRuleData.name.trim()) { toast.error('Введите название'); return; }
-        const payload: any = { 
-            name: newRuleData.name.trim(), 
+        if (!newRuleData.startDate || !newRuleData.endDate) { toast.error('Укажите даты действия'); return; }
+        if (newRuleData.daysOfWeek.length === 0) { toast.error('Выберите дни недели'); return; }
+        if (newRuleData.startTime >= newRuleData.endTime) { toast.error('Некорректное время'); return; }
+        if (newRuleData.hasLunch && (newRuleData.lunchStart <= newRuleData.startTime || newRuleData.lunchEnd >= newRuleData.endTime || newRuleData.lunchStart >= newRuleData.lunchEnd)) {
+            toast.error('Некорректное время обеда'); return;
+        }
+        const payload: any = {
+            name: newRuleData.name.trim(),
             color: newRuleData.color,
             format: newRuleData.format,
             duration: newRuleData.duration,
@@ -400,7 +410,24 @@ export default function AvailabilityPage() {
         if (newRuleData.endDate) payload.endDate = new Date(newRuleData.endDate);
         
         const res = await createScheduleRule(payload);
-        if (res.success) {
+        if (res.success && res.data?.id) {
+            // Now create slots for this rule
+            try {
+                await createAvailabilitySlot({
+                    startDate: newRuleData.startDate,
+                    endDate: newRuleData.endDate,
+                    daysOfWeek: newRuleData.daysOfWeek,
+                    startTime: newRuleData.startTime,
+                    endTime: newRuleData.endTime,
+                    duration: newRuleData.duration,
+                    hasLunch: newRuleData.hasLunch,
+                    lunchStart: newRuleData.lunchStart,
+                    lunchEnd: newRuleData.lunchEnd,
+                    format: newRuleData.format,
+                    addressId: newRuleData.addressId || '',
+                    scheduleRuleId: res.data.id,
+                });
+            } catch { /* slots creation failed but rule exists */ }
             toast.success('Правило создано');
             setShowNewRule(false);
             setNewRuleData(initialRuleData);
@@ -513,7 +540,7 @@ export default function AvailabilityPage() {
             </div>
 
             {/* Schedule Mode Indicator */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible">
                 {[
                     { mode: 'private', Icon: Lock, label: 'Приватный', desc: 'Клиенты не видят расписание' },
                     { mode: 'preview', Icon: Eye, label: 'Просмотр', desc: 'Клиенты видят окна, но не могут записаться' },
@@ -526,7 +553,7 @@ export default function AvailabilityPage() {
                             setSavingMode(false);
                         }}
                         disabled={savingMode}
-                        className={`p-4 rounded-2xl border text-left transition-all ${settings.scheduleMode === m.mode ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-sage-50'}`}>
+                        className={`p-4 rounded-2xl border text-left transition-all shrink-0 sm:shrink ${settings.scheduleMode === m.mode ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-sage-50'}`}>
                         <div className="flex items-center gap-3">
                             <m.Icon className="w-5 h-5 text-muted-foreground" strokeWidth={1.8} />
                             <div>
@@ -861,7 +888,7 @@ export default function AvailabilityPage() {
 
 {/* ── Modals ── */}
 
-            {/* New Rule Modal */}
+            {/* New Rule Modal — unified: rule + days + time + lunch */}
             {showNewRule && <Modal title="Новое правило" onClose={() => setShowNewRule(false)} onSubmit={handleCreateRule}>
                 <Field label="Название">
                     <input type="text" value={newRuleData.name} onChange={e => setNewRuleData(d => ({ ...d, name: e.target.value }))} placeholder="Основное расписание" className="inp" autoFocus />
@@ -869,13 +896,9 @@ export default function AvailabilityPage() {
                 <Field label="Цвет">
                     <div className="flex gap-2 flex-wrap">
                         {RULE_COLORS.map(c => (
-                            <button
-                                key={c}
-                                type="button"
-                                onClick={() => setNewRuleData(d => ({ ...d, color: c }))}
+                            <button key={c} type="button" onClick={() => setNewRuleData(d => ({ ...d, color: c }))}
                                 className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${newRuleData.color === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'}`}
-                                style={{ backgroundColor: c }}
-                            >
+                                style={{ backgroundColor: c }}>
                                 {newRuleData.color === c && <Check className="w-4 h-4 text-white" />}
                             </button>
                         ))}
@@ -885,19 +908,42 @@ export default function AvailabilityPage() {
                     <Field label="Действует с"><DatePicker value={newRuleData.startDate} onChange={d => setNewRuleData(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                     <Field label="Действует по"><DatePicker value={newRuleData.endDate} onChange={d => setNewRuleData(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                 </div>
+                <Field label="Дни недели">
+                    <div className="flex flex-wrap gap-2">
+                        {DAY_LABELS.map((d, i) => (
+                            <button key={i} type="button" onClick={() => setNewRuleData(s => ({ ...s, daysOfWeek: s.daysOfWeek.includes(i) ? s.daysOfWeek.filter(x => x !== i) : [...s.daysOfWeek, i].sort() }))}
+                                className={`w-11 h-11 rounded-full text-sm font-semibold transition-all ${newRuleData.daysOfWeek.includes(i) ? 'text-white shadow-md' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}
+                                style={newRuleData.daysOfWeek.includes(i) ? { backgroundColor: newRuleData.color } : {}}>
+                                {d}
+                            </button>
+                        ))}
+                    </div>
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Начало рабочего дня"><TimePicker value={newRuleData.startTime} onChange={t => setNewRuleData(s => ({ ...s, startTime: t }))} /></Field>
+                    <Field label="Конец рабочего дня"><TimePicker value={newRuleData.endTime} onChange={t => setNewRuleData(s => ({ ...s, endTime: t }))} /></Field>
+                </div>
+                <div className="bg-muted/30 p-4 rounded-2xl space-y-3 border border-border/50">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={newRuleData.hasLunch} onChange={e => setNewRuleData(s => ({ ...s, hasLunch: e.target.checked }))} className="w-5 h-5 rounded border-border accent-primary" />
+                        <span className="text-sm font-semibold">Перерыв (Обед)</span>
+                    </label>
+                    {newRuleData.hasLunch && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="Начало обеда"><TimePicker value={newRuleData.lunchStart} onChange={t => setNewRuleData(s => ({ ...s, lunchStart: t }))} /></Field>
+                            <Field label="Конец обеда"><TimePicker value={newRuleData.lunchEnd} onChange={t => setNewRuleData(s => ({ ...s, lunchEnd: t }))} /></Field>
+                        </div>
+                    )}
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Формат">
                         <select value={newRuleData.format} onChange={e => setNewRuleData(s => ({ ...s, format: e.target.value }))} className="inp bg-white">
-                            <option value="online">Онлайн</option>
-                            <option value="offline">Кабинет</option>
-                            <option value="both">Онлайн + Кабинет</option>
+                            <option value="online">Онлайн</option><option value="offline">Кабинет</option><option value="both">Онлайн + Кабинет</option>
                         </select>
                     </Field>
                     <Field label="Аудитория">
                         <select value={newRuleData.audienceFilter} onChange={e => setNewRuleData(s => ({ ...s, audienceFilter: e.target.value }))} className="inp bg-white">
-                            <option value="all">Все клиенты</option>
-                            <option value="regular">Только мои постоянные</option>
-                            <option value="new">Только новые (извне)</option>
+                            <option value="all">Все клиенты</option><option value="regular">Только постоянные</option><option value="new">Только новые</option>
                         </select>
                     </Field>
                 </div>

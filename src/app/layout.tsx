@@ -74,6 +74,7 @@ export default function RootLayout({
         <AnalyticsProvider>
           {children}
         </AnalyticsProvider>
+        <div id="datepicker-portal" />
       </body>
     </html>
   );
