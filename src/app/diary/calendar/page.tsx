@@ -223,9 +223,9 @@ export default function DiaryCalendarView() {
     }
 
     return (
-        <div className="space-y-6 pb-12">
+        <div className="space-y-3 md:space-y-6 pb-12">
             {/* ── TOOLBAR ── */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 md:gap-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                         <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-foreground leading-[1.1]">Календарь</h1>
@@ -274,17 +274,17 @@ export default function DiaryCalendarView() {
             </div>
 
             {/* Mobile date label */}
-            <div className="md:hidden text-[15px] font-bold text-foreground capitalize -mt-2">{getHeaderText()}</div>
+            <div className="md:hidden text-[14px] font-bold text-foreground capitalize -mt-1">{getHeaderText()}</div>
 
             {/* ── CONTENT ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-5">
                 {/* Calendar Grid / Week / Day */}
                 <div className="lg:col-span-2">
                     {viewMode === 'month' && (
                         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
                             <div className="grid grid-cols-7 bg-sage-50">
                                 {['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map(d => (
-                                    <div key={d} className="p-2 md:p-3 text-center text-[11px] font-bold text-muted-foreground border-r border-b border-border/40 last:border-r-0 uppercase tracking-wider">{d}</div>
+                                    <div key={d} className="p-1.5 md:p-3 text-center text-[10px] md:text-[11px] font-bold text-muted-foreground border-r border-b border-border/40 last:border-r-0 uppercase tracking-wider">{d}</div>
                                 ))}
                             </div>
                             <div className="grid grid-cols-7">
@@ -298,10 +298,10 @@ export default function DiaryCalendarView() {
                                         <button
                                             key={i}
                                             onClick={() => { setSelectedDate(day); setSelectedSession(null); }}
-                                            className={`p-1.5 md:p-2 border-r border-b border-border/30 last:border-r-0 hover:bg-sage-50/50 transition-colors text-left relative min-h-[52px] md:min-h-[100px] ${!isCurrentMonth ? 'opacity-30' : ''} ${isToday ? 'bg-sage-50/80' : ''} ${isSelected ? 'bg-primary/5 ring-2 ring-primary ring-inset' : ''}`}
+                                            className={`p-1 md:p-2 border-r border-b border-border/30 last:border-r-0 hover:bg-sage-50/50 transition-colors text-left relative min-h-[38px] md:min-h-[100px] ${!isCurrentMonth ? 'opacity-30' : ''} ${isToday ? 'bg-sage-50/80' : ''} ${isSelected ? 'bg-primary/5 ring-2 ring-primary ring-inset' : ''}`}
                                         >
                                             {/* Day number */}
-                                            <span className={`text-[13px] font-bold w-7 h-7 flex items-center justify-center rounded-lg mb-1 ${isToday ? 'bg-primary text-primary-foreground' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'}`}>
+                                            <span className={`text-[12px] md:text-[13px] font-bold w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-lg mb-0.5 md:mb-1 ${isToday ? 'bg-primary text-primary-foreground' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'}`}>
                                                 {day.getDate()}
                                             </span>
                                             {/* Session labels */}
@@ -326,7 +326,7 @@ export default function DiaryCalendarView() {
                                             {/* Mobile: just dots */}
                                             {daySessions.length > 0 && (
                                                 <div className="flex gap-0.5 mt-0.5 md:hidden">
-                                                    {daySessions.slice(0, 4).map(s => (
+                                                    {daySessions.slice(0, 3).map(s => (
                                                         <div key={s.id} className={`w-1.5 h-1.5 rounded-full ${(typeColors[s.type] || defaultTypeColor).dot}`} />
                                                     ))}
                                                 </div>
@@ -346,7 +346,7 @@ export default function DiaryCalendarView() {
                         const now = new Date();
 
                         return (
-                            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+                            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden max-h-[40vh] md:max-h-none overflow-y-auto">
                                 {/* Week Header: time col + 7 day cols */}
                                 <div className="grid grid-cols-[50px_repeat(7,1fr)] border-b border-border bg-sage-50">
                                     <div className="border-r border-border/30" />
@@ -448,7 +448,7 @@ export default function DiaryCalendarView() {
                         const sorted = selectedSessions.sort((a, b) => a.time.localeCompare(b.time));
 
                         return (
-                            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+                            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden max-h-[45vh] md:max-h-none overflow-y-auto">
                                 {/* Day subtitle */}
                                 <div className="px-5 py-3 border-b border-border/50 text-center">
                                     <span className="text-[14px] font-semibold text-muted-foreground capitalize">
@@ -667,7 +667,7 @@ export default function DiaryCalendarView() {
                         );
                     })()}
                     {/* Legend */}
-                    <div className="flex items-center gap-5 flex-wrap mt-3 px-1">
+                    <div className="flex items-center gap-3 md:gap-5 flex-wrap mt-2 md:mt-3 px-1">
                         {([
                             ['individual', 'Индивидуальная'],
                             ['couple', 'Парная'],
@@ -687,6 +687,14 @@ export default function DiaryCalendarView() {
 
                 {/* ── Right Rail: Session Detail / Day List ── */}
                 <div className="space-y-4">
+                    {/* Mobile section divider */}
+                    <div className="lg:hidden flex items-center gap-2 -mb-2">
+                        <div className="h-px flex-1 bg-border/60" />
+                        <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                            {selectedSession ? 'Детали сессии' : `Записи · ${selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`}
+                        </span>
+                        <div className="h-px flex-1 bg-border/60" />
+                    </div>
                     {selectedSession ? (
                         /* Session Detail Panel — matches mockup */
                         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
