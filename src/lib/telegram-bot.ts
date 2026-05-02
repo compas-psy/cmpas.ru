@@ -12,17 +12,25 @@ if (!BOT_TOKEN) {
     }
 }
 
+// Custom Telegram API URL (mirror/proxy for Russia-based servers)
+const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
+
 // Create Telegraf with optional HTTPS proxy for servers behind restrictive firewalls
 function createBot() {
     if (!BOT_TOKEN) return null;
     try {
-        const opts: any = {};
+        const opts: any = {
+            telegram: {
+                apiRoot: TELEGRAM_API_URL,
+            }
+        };
         if (TELEGRAM_PROXY) {
             const { HttpsProxyAgent } = require('https-proxy-agent');
             const agent = new HttpsProxyAgent(TELEGRAM_PROXY);
-            opts.telegram = { agent };
+            opts.telegram.agent = agent;
             console.log(`[TG Bot] Using proxy: ${TELEGRAM_PROXY.replace(/\/\/.*@/, '//*:*@')}`);
         }
+        console.log(`[TG Bot] API root: ${TELEGRAM_API_URL}`);
         return new Telegraf(BOT_TOKEN, opts);
     } catch (e) {
         console.error('[TG Bot] Failed to create Telegraf:', e);

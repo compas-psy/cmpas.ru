@@ -114,6 +114,14 @@ jobs:
               if ! grep -q '^TINKOFF_PASSWORD=' .env; then
                 echo "TINKOFF_PASSWORD=MwTygrFgyCLUQcFu" >> .env
               fi
+              # Ensure Telegram API URL (proxy/mirror for Russia)
+              if ! grep -q '^TELEGRAM_API_URL=' .env; then
+                echo "TELEGRAM_API_URL=https://api.telegram.org" >> .env
+              fi
+              # Ensure TELEGRAM_PROXY (optional HTTPS proxy for Telegram)
+              if ! grep -q '^TELEGRAM_PROXY=' .env; then
+                echo "TELEGRAM_PROXY=" >> .env
+              fi
             fi
             
             # Show AUTH_SECRET fingerprint (first 8 chars) for debugging

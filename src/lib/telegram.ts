@@ -4,6 +4,7 @@
  */
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
+const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 
 // Lazy-init proxy agent
 let _proxyAgent: any = null;
@@ -40,7 +41,7 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        const url = `${TELEGRAM_API_URL}/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
         const body = {
             chat_id: chatId,
             text,
