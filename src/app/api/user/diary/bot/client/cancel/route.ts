@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { bot } from '@/lib/telegram-bot';
+import { sendTelegramMessage } from '@/lib/telegram';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -20,10 +20,10 @@ export async function POST(req: Request) {
         });
 
         // Notify psychologist
-        if (session.psychologist?.telegramChatId && bot) {
+        if (session.psychologist?.telegramChatId) {
             try {
                 const dateStr = format(new Date(session.date), 'd MMMM', { locale: ru });
-                await bot.telegram.sendMessage(
+                await sendTelegramMessage(
                     session.psychologist.telegramChatId,
                     `⚠️ <b>Отмена сессии</b>\n\nКлиент ${clientName || 'по ссылке'} отменил запись:\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n\nСлот снова доступен для записи.`,
                     { parse_mode: 'HTML' }

@@ -5,6 +5,9 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: always
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "3000:3000"
     environment:
@@ -18,6 +21,7 @@ services:
       - AUTH_TRUST_HOST=true
       - AUTH_URL=https://cmpas.ru
       - DADATA_API_KEY=${DADATA_API_KEY:-}
+      - TELEGRAM_PROXY=${TELEGRAM_PROXY:-}
     env_file:
       - .env
     depends_on:

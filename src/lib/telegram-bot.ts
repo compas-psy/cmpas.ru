@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 
 if (!BOT_TOKEN) {
     if (process.env.NODE_ENV !== 'development') {
@@ -11,7 +12,25 @@ if (!BOT_TOKEN) {
     }
 }
 
-export const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
+// Create Telegraf with optional HTTPS proxy for servers behind restrictive firewalls
+function createBot() {
+    if (!BOT_TOKEN) return null;
+    try {
+        const opts: any = {};
+        if (TELEGRAM_PROXY) {
+            const { HttpsProxyAgent } = require('https-proxy-agent');
+            const agent = new HttpsProxyAgent(TELEGRAM_PROXY);
+            opts.telegram = { agent };
+            console.log(`[TG Bot] Using proxy: ${TELEGRAM_PROXY.replace(/\/\/.*@/, '//*:*@')}`);
+        }
+        return new Telegraf(BOT_TOKEN, opts);
+    } catch (e) {
+        console.error('[TG Bot] Failed to create Telegraf:', e);
+        return null;
+    }
+}
+
+export const bot = createBot();
 
 async function showPsyMenu(ctx: Context, psy: any) {
     await ctx.reply(`Добро пожаловать в кабинет психолога, ${psy.name || 'Специалист'}!`,

@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { bot } from '@/lib/telegram-bot';
+import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
@@ -12,8 +12,8 @@ async function notifyUser(
     maxId: string | null | undefined,
     text: string
 ) {
-    if (tgId && bot) {
-        try { await bot.telegram.sendMessage(tgId, text, { parse_mode: 'HTML' }); }
+    if (tgId) {
+        try { await sendTelegramMessage(tgId, text, { parse_mode: 'HTML' }); }
         catch (e) { console.error('[notify] Telegram error:', e); }
     }
     if (maxId) {
