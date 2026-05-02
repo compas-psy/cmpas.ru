@@ -306,15 +306,36 @@ export default function DiaryCalendarPage() {
     };
 
     const handleShareLink = async () => {
-        if (!userId) return;
+        if (!userId) { toast.error('Не удалось получить ссылку'); return; }
         const bookUrl = `https://cmpas.ru/bot/book/${userId}`;
-        if (navigator.share) {
+        
+        // Try Web Share API first (mobile)
+        if (typeof navigator !== 'undefined' && navigator.share) {
             try {
-                await navigator.share({ title: 'Записаться на сессию', text: 'Выберите удобное время для сессии', url: bookUrl });
-            } catch { /* cancelled */ }
-        } else {
-            await navigator.clipboard.writeText(bookUrl);
-            toast.success('Ссылка скопирована в буфер обмена');
+                await navigator.share({ title: 'Записаться на сессию', url: bookUrl });
+                return;
+            } catch { /* user cancelled or not supported */ }
+        }
+        
+        // Fallback: clipboard
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(bookUrl);
+            } else {
+                // Textarea fallback for non-secure contexts
+                const ta = document.createElement('textarea');
+                ta.value = bookUrl;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            toast.success('Ссылка скопирована! Отправьте её клиенту в мессенджере');
+        } catch {
+            // Last resort: show the link
+            toast.info(`Ссылка для записи: ${bookUrl}`, { duration: 10000 });
         }
     };
 

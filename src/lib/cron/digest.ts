@@ -11,7 +11,7 @@ import { ru } from 'date-fns/locale';
 
 async function notify(tgId: string | null, maxId: string | null, text: string) {
     if (tgId) await sendTelegramMessage(tgId, text, { parse_mode: 'HTML' }).catch(console.error);
-    if (maxId) await sendMaxMessage(maxId, text).catch(console.error);
+    if (maxId) await sendMaxMessage(maxId, text.replace(/<[^>]+>/g, '')).catch(console.error);
 }
 
 /**
@@ -51,15 +51,20 @@ export async function processMorningDigest() {
             if (!psy) continue;
 
             const dateStr = format(today, 'd MMMM, EEEE', { locale: ru });
-            let msg = `☀️ <b>${dateStr}</b>\n\n`;
-            msg += `📋 Сегодня ${sessions.length} ${sessions.length === 1 ? 'сессия' : sessions.length < 5 ? 'сессии' : 'сессий'}:\n\n`;
+            const count = sessions.length;
+            const word = count === 1 ? 'сессия' : count < 5 ? 'сессии' : 'сессий';
+            const lines = [
+                `☀️ <b>${dateStr}</b>`,
+                '',
+                `📋 Сегодня ${count} ${word}:`,
+                '',
+                ...sessions.map(s => {
+                    const icon = s.format === 'online' ? '💻' : '🏢';
+                    return `${s.time} — ${s.client.name} ${icon}`;
+                })
+            ];
 
-            sessions.forEach((s, i) => {
-                const formatIcon = s.format === 'online' ? '💻' : '🏢';
-                msg += `${s.time} — ${s.client.name} ${formatIcon}\n`;
-            });
-
-            await notify(psy.telegramChatId, psy.maxChatId, msg);
+            await notify(psy.telegramChatId, psy.maxChatId, lines.join('\n'));
         }
     } catch (error) {
         console.error('[processMorningDigest] Error:', error);
@@ -97,7 +102,6 @@ export async function processWeeklyDigest() {
             const cancelled = allSessions.filter(s => s.status === 'cancelled').length;
             const uniqueClients = new Set(allSessions.map(s => s.clientId)).size;
 
-            // Новые клиенты за неделю
             const newClients = await db.diaryClient.count({
                 where: {
                     psychologistId,
@@ -111,13 +115,17 @@ export async function processWeeklyDigest() {
             });
             if (!psy) continue;
 
-            let msg = `📊 <b>Итоги недели</b>\n\n`;
-            msg += `✅ Проведено: ${completed} ${completed === 1 ? 'сессия' : completed < 5 ? 'сессии' : 'сессий'}\n`;
-            if (cancelled > 0) msg += `❌ Отменено: ${cancelled}\n`;
-            msg += `👥 Клиентов: ${uniqueClients}\n`;
-            if (newClients > 0) msg += `🆕 Новых: ${newClients}\n`;
+            const word = completed === 1 ? 'сессия' : completed < 5 ? 'сессии' : 'сессий';
+            const lines = [
+                '📊 <b>Итоги недели</b>',
+                '',
+                `✅ Проведено: ${completed} ${word}`,
+                ...(cancelled > 0 ? [`❌ Отменено: ${cancelled}`] : []),
+                `👥 Клиентов: ${uniqueClients}`,
+                ...(newClients > 0 ? [`🆕 Новых: ${newClients}`] : []),
+            ];
 
-            await notify(psy.telegramChatId, psy.maxChatId, msg);
+            await notify(psy.telegramChatId, psy.maxChatId, lines.join('\n'));
         }
     } catch (error) {
         console.error('[processWeeklyDigest] Error:', error);
