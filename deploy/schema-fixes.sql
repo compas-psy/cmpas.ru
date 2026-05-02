@@ -169,3 +169,25 @@ ALTER TABLE "PsychologistSettings" ADD COLUMN IF NOT EXISTS "bookingHorizonDays"
 
 ALTER TABLE "AvailabilitySlot" ALTER COLUMN "duration" DROP NOT NULL;
 ALTER TABLE "AvailabilitySlot" ALTER COLUMN "format" DROP NOT NULL;
+
+-- Bot-centric CJ release (May 2026)
+-- DiarySession: post-session nudge tracking
+ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "postSessionNudged" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "clientMoodRating" INTEGER;
+
+-- NotificationSettings: proactive bot messages
+ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "morningDigestEnabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "weeklyDigestEnabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "clientMoodCheckEnabled" BOOLEAN NOT NULL DEFAULT false;
+
+-- Payment: rebillId for recurring charges
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "rebillId" TEXT;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "tinkoffPaymentId" TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'Payment_tinkoffPaymentId_key') THEN
+    CREATE UNIQUE INDEX "Payment_tinkoffPaymentId_key" ON "Payment"("tinkoffPaymentId");
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'Payment_status_idx') THEN
+    CREATE INDEX "Payment_status_idx" ON "Payment"("status");
+  END IF;
+END $$;
