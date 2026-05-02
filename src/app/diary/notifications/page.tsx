@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Bell, BellRing, Send, Save, Loader2 } from 'lucide-react';
+import { Bell, BellRing, Send, Save, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 type NotifSettings = {
@@ -12,12 +12,15 @@ type NotifSettings = {
     reminderTemplate: string;
     clientRescheduleEnabled: boolean;
     clientCancelEnabled: boolean;
+    morningDigestEnabled: boolean;
+    weeklyDigestEnabled: boolean;
     clientReminder25hEnabled: boolean;
     clientReminder25hTemplate: string;
     clientReminder1hEnabled: boolean;
     clientReminder1hTemplate: string;
     clientPsyCancelEnabled: boolean;
     clientPsyCancelTemplate: string;
+    clientMoodCheckEnabled: boolean;
 };
 
 const REMINDER_INTERVALS = [
@@ -197,6 +200,27 @@ export default function NotificationsPage() {
                 </div>
             </div>
 
+            {/* Proactive bot notifications */}
+            <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
+                <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
+                    </div>
+                    Бот-ассистент
+                </h2>
+                <p className="text-xs text-muted-foreground mb-4 -mt-1">Проактивные сообщения от бота в Telegram и MAX</p>
+                <div className="space-y-3">
+                    <NotifRow
+                        label="Утренний дайджест" desc="Каждое утро — список сессий на день (если есть)"
+                        enabled={settings.morningDigestEnabled} onToggle={v => update('morningDigestEnabled', v)}
+                    />
+                    <NotifRow
+                        label="Еженедельная сводка" desc="По понедельникам — статистика за прошлую неделю"
+                        enabled={settings.weeklyDigestEnabled} onToggle={v => update('weeklyDigestEnabled', v)}
+                    />
+                </div>
+            </div>
+
             {/* Client notifications */}
             <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-card overflow-hidden">
                 <h2 className="text-base md:text-xl font-semibold mb-4 flex items-center gap-2.5 text-foreground tracking-tight">
@@ -223,6 +247,10 @@ export default function NotificationsPage() {
                         enabled={settings.clientPsyCancelEnabled} onToggle={v => update('clientPsyCancelEnabled', v)}
                         template={settings.clientPsyCancelTemplate} onTemplateChange={v => update('clientPsyCancelTemplate', v)}
                         testType="clientPsyCancel" onTest={handleTest}
+                    />
+                    <NotifRow
+                        label="Оценка после сессии" desc="Спросить клиента о самочувствии через 30 мин после сессии"
+                        enabled={settings.clientMoodCheckEnabled} onToggle={v => update('clientMoodCheckEnabled', v)}
                     />
                 </div>
             </div>

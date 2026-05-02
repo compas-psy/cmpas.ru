@@ -1,0 +1,26 @@
+{
+  "name": "КОМПАС — Ежедневник Психолога",
+  "short_name": "КОМПАС",
+  "description": "Сервис для ведения частной практики психолога",
+  "start_url": "/diary",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#1a4d3a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo-tree.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-tree.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "health"],
+  "lang": "ru"
+}

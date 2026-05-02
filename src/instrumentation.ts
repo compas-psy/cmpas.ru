@@ -2,14 +2,45 @@ export async function register() {
     if (process.env.NEXT_RUNTIME === 'nodejs') {
         const cron = await import('node-cron');
         const { processReminders } = await import('./lib/cron/reminders');
+        const { processMorningDigest, processWeeklyDigest } = await import('./lib/cron/digest');
+        const { processPostSessionNudge } = await import('./lib/cron/post-session');
 
-        // Задача запускается каждые 15 минут
+        // Напоминания каждые 15 минут
         cron.schedule('*/15 * * * *', async () => {
             console.log('[CRON] Запуск рассылки уведомлений (каждые 15 минут)');
             try {
                 await processReminders();
             } catch (error) {
                 console.error('[CRON] Ошибка при рассылке уведомлений:', error);
+            }
+        });
+
+        // Утренний дайджест — 08:00 МСК (05:00 UTC)
+        cron.schedule('0 5 * * *', async () => {
+            console.log('[CRON] Утренний дайджест');
+            try {
+                await processMorningDigest();
+            } catch (error) {
+                console.error('[CRON] Ошибка утреннего дайджеста:', error);
+            }
+        });
+
+        // Еженедельная сводка — понедельник 10:00 МСК (07:00 UTC)
+        cron.schedule('0 7 * * 1', async () => {
+            console.log('[CRON] Еженедельная сводка');
+            try {
+                await processWeeklyDigest();
+            } catch (error) {
+                console.error('[CRON] Ошибка еженедельной сводки:', error);
+            }
+        });
+
+        // Пост-сессионный nudge — каждые 30 минут
+        cron.schedule('*/30 * * * *', async () => {
+            try {
+                await processPostSessionNudge();
+            } catch (error) {
+                console.error('[CRON] Ошибка пост-сессионного nudge:', error);
             }
         });
 

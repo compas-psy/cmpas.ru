@@ -5,7 +5,7 @@ import {
     Calendar as CalendarIcon, Plus, User, Video, MapPin,
     AlertTriangle, FileText, Sparkles, CheckCircle2,
     ChevronRight, Coffee, Users, TrendingUp, LayoutList,
-    Filter, MoreVertical, X, BookOpen, Shield, Clock
+    Filter, MoreVertical, X, BookOpen, Shield, Clock, Share2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
@@ -93,6 +93,7 @@ export default function DiaryCalendarPage() {
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [prevWeek, setPrevWeek] = useState({ sessions: 0, clients: 0 });
+    const [userId, setUserId] = useState('');
     const filterRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = useCallback(async () => {
@@ -141,6 +142,7 @@ export default function DiaryCalendarPage() {
                     const parts = d.user.name.trim().split(/\s+/);
                     setUserName(parts.length > 1 ? parts[parts.length - 1] : parts[0]);
                 }
+                if (d?.user?.id) setUserId(d.user.id);
             })
             .catch(() => { });
 
@@ -303,6 +305,19 @@ export default function DiaryCalendarPage() {
         return <BookOpen className="w-4 h-4 text-forest-600" />;
     };
 
+    const handleShareLink = async () => {
+        if (!userId) return;
+        const bookUrl = `https://cmpas.ru/bot/book/${userId}`;
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: 'Записаться на сессию', text: 'Выберите удобное время для сессии', url: bookUrl });
+            } catch { /* cancelled */ }
+        } else {
+            await navigator.clipboard.writeText(bookUrl);
+            toast.success('Ссылка скопирована в буфер обмена');
+        }
+    };
+
 
     if (loading) {
         return (
@@ -328,6 +343,12 @@ export default function DiaryCalendarPage() {
                     <p className="text-muted-foreground text-[13px] mt-0.5 font-medium capitalize">
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
+                    {userId && (
+                        <button onClick={handleShareLink}
+                            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-sage-100 hover:bg-sage-200 text-forest-700 text-[12px] font-semibold transition-colors active:scale-95">
+                            <Share2 className="w-3.5 h-3.5" /> Отправить ссылку клиенту
+                        </button>
+                    )}
                 </div>
 
                 {/* Week strip */}

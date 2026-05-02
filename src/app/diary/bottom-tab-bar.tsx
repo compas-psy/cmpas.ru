@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Layers, Users, Clock, Settings } from 'lucide-react';
+import { Layers, Users, CalendarDays, Clock, Settings } from 'lucide-react';
 
 const tabs = [
     { href: '/diary', label: 'Сегодня', icon: Layers, exact: true },
+    { href: '/diary/calendar', label: 'Календарь', icon: CalendarDays },
     { href: '/diary/clients', label: 'Клиенты', icon: Users },
     { href: '/diary/availability', label: 'Расписание', icon: Clock },
-    { href: '/diary/settings', label: 'Настройки', icon: Settings },
+    { href: '/diary/settings', label: 'Ещё', icon: Settings },
 ];
 
 export function BottomTabBar() {

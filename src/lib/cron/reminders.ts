@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { sendTelegramMessage } from '../telegram';
-import { sendMaxMessage } from '../max';
+import { sendMaxMessage as sendMaxText } from '../max';
+import { sendMaxMessage as sendMaxFull } from '../max-bot';
 
 /** Отправляет уведомление через Telegram и/или MAX в зависимости от привязанных аккаунтов */
 async function sendNotification(
@@ -10,7 +11,21 @@ async function sendNotification(
     options?: Parameters<typeof sendTelegramMessage>[2]
 ) {
     if (tgChatId) await sendTelegramMessage(tgChatId, text, options);
-    if (maxChatId) await sendMaxMessage(maxChatId, text);
+    if (maxChatId) {
+        // Convert TG inline_keyboard to MAX buttons format
+        const tgKeyboard = (options as any)?.reply_markup?.inline_keyboard;
+        if (tgKeyboard) {
+            const maxButtons = tgKeyboard.map((row: any[]) =>
+                row.map((b: any) => b.url
+                    ? { text: b.text, url: b.url }
+                    : { text: b.text, payload: b.callback_data || b.payload || '' }
+                )
+            );
+            await sendMaxFull(maxChatId, text.replace(/<[^>]+>/g, ''), maxButtons);
+        } else {
+            await sendMaxText(maxChatId, text.replace(/<[^>]+>/g, ''));
+        }
+    }
 }
 
 /**

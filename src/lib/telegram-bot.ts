@@ -242,6 +242,73 @@ export function setupBot() {
         }
     });
 
+    // Session Confirm Callback (from 24h reminder)
+    bot.action(/confirm_session_(.+)/, async (ctx) => {
+        const sessionId = ctx.match[1];
+        const tgId = ctx.from?.id.toString();
+
+        const session = await db.diarySession.findUnique({
+            where: { id: sessionId },
+            include: { client: true, psychologist: true }
+        });
+
+        if (!session || session.client.telegramChatId !== tgId) {
+            return ctx.answerCbQuery('Сессия не найдена.', { show_alert: true });
+        }
+
+        await ctx.editMessageText(`✅ Отлично, ждём вас!\n\n📅 ${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n📍 ${session.format === 'offline' ? 'Очно' : 'Онлайн'}`);
+        await ctx.answerCbQuery('Спасибо за подтверждение!');
+
+        // Notify Psy
+        if (session.psychologist.telegramChatId) {
+            try {
+                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `✅ Клиент ${session.client.name} подтвердил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
+            } catch (e) { }
+        }
+    });
+
+    // Session Reschedule Callback (from 24h reminder)
+    bot.action(/reschedule_session_(.+)/, async (ctx) => {
+        const sessionId = ctx.match[1];
+        const tgId = ctx.from?.id.toString();
+
+        const session = await db.diarySession.findUnique({
+            where: { id: sessionId },
+            include: { client: true }
+        });
+
+        if (!session || session.client.telegramChatId !== tgId) {
+            return ctx.answerCbQuery('Сессия не найдена.', { show_alert: true });
+        }
+
+        const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${session.psychologistId}?c=${session.clientId}&v=${Date.now()}`;
+        await ctx.editMessageText(`🔄 Чтобы перенести сессию, выберите новое время:`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '📅 Выбрать новое время', web_app: { url: bookUrl } }]
+                ]
+            }
+        });
+        await ctx.answerCbQuery();
+    });
+
+    // Mood rating callback (post-session)
+    bot.action(/mood_(\d+)_(.+)/, async (ctx) => {
+        const rating = parseInt(ctx.match[1]);
+        const sessionId = ctx.match[2];
+
+        try {
+            await db.diarySession.update({
+                where: { id: sessionId },
+                data: { clientMoodRating: rating } as any
+            });
+        } catch (e) { console.error('[mood callback]', e); }
+
+        const emojis = ['', '😊', '🙂', '😐', '😔', '😢'];
+        await ctx.editMessageText(`${emojis[rating] || '✅'} Спасибо за обратную связь! Ваша оценка сохранена.`);
+        await ctx.answerCbQuery();
+    });
+
     // Inline Query Handler (For Psy to send quick booking links in chats)
     bot.on('inline_query', async (ctx) => {
         try {
