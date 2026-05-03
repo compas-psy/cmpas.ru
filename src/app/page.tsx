@@ -1,103 +1,93 @@
 import type { Metadata } from 'next';
-import Header from '@/components/psidairy/Header';
-import Hero from '@/components/psidairy/Hero';
-import ValueSection from '@/components/psidairy/ValueSection';
-import Gallery from '@/components/psidairy/Gallery';
-import Reviews from '@/components/psidairy/Reviews';
-import Specifications from '@/components/psidairy/Specifications';
-import PriceDelivery from '@/components/psidairy/PriceDelivery';
-import FAQ from '@/components/psidairy/FAQ';
-import OrderForm from '@/components/psidairy/OrderForm';
-import Footer from '@/components/psidairy/Footer';
+import LandingHeader from '@/components/landing/Header';
+import Hero from '@/components/landing/Hero';
+import BeforeAfter from '@/components/landing/BeforeAfter';
+import HowItWorks from '@/components/landing/HowItWorks';
+import PsychologistDay from '@/components/landing/PsychologistDay';
+import ClientFlow from '@/components/landing/ClientFlow';
+import Features from '@/components/landing/Features';
+import PositioningBand from '@/components/landing/PositioningBand';
+import Security from '@/components/landing/Security';
+import Pricing from '@/components/landing/Pricing';
+import FAQ from '@/components/landing/FAQ';
+import FinalCTA from '@/components/landing/FinalCTA';
+import LandingFooter from '@/components/landing/Footer';
 
 export const metadata: Metadata = {
-  title: "Ежедневник Психолога — купить профессиональный планер для записей сессий",
-  description: "Ежедневник психолога с анкетами клиентов, разделом супервизии и местом для записей сессий. Формат А5, 272 страницы. Разработан практикующими психологами. Доставка по России.",
-  keywords: [
-    "ежедневник психолога",
-    "купить ежедневник для психолога",
-    "планер психолога",
-    "блокнот психолога",
-    "записи сессий психолога",
-    "анкета клиента психолога",
-    "ежедневник для частной практики",
-    "супервизия записи",
-    "инструменты психолога",
-    "профилактика выгорания психолога"
-  ],
-  openGraph: {
-    title: "Ежедневник Психолога | Compas",
-    description: "Профессиональный ежедневник с анкетами клиентов, записями сессий и разделом супервизии. Ваш компас в мире психологии.",
-    url: 'https://cmpas.ru',
-    siteName: 'Compas',
-    images: [
-      {
-        url: '/images/hero.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'Ежедневник Психолога — профессиональный планер для психологов',
-      }
+    title: "КОМПАС — онлайн-кабинет психолога для записи, клиентов и заметок",
+    description: "КОМПАС помогает психологам вести расписание, клиентскую базу, запись на сессии, заметки и уведомления через Telegram и MAX.",
+    keywords: [
+        "кабинет психолога",
+        "запись на сессию онлайн",
+        "онлайн запись психолог",
+        "расписание психолога",
+        "клиенты психолога",
+        "заметки после сессии",
+        "telegram бот психолога",
     ],
-    locale: 'ru_RU',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Ежедневник Психолога | Compas',
-    description: 'Профессиональный ежедневник для записей сессий и супервизии',
-    images: ['/images/hero.jpg'],
-  },
-  alternates: {
-    canonical: 'https://cmpas.ru',
-  }
+    openGraph: {
+        title: "КОМПАС — умный кабинет психолога",
+        description: "Клиенты сами записываются, а вы видите день, клиентов и заметки в одном спокойном рабочем пространстве.",
+        url: 'https://cmpas.ru',
+        siteName: 'КОМПАС',
+        locale: 'ru_RU',
+        type: 'website',
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'КОМПАС — умный кабинет психолога',
+        description: 'Запись, клиенты, заметки и уведомления в одном спокойном рабочем пространстве.',
+    },
+    alternates: {
+        canonical: 'https://cmpas.ru',
+    },
 };
 
-export default function Home() {
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: 'Ежедневник Психолога',
-    image: 'https://cmpas.ru/images/hero.jpg',
-    description: 'Профессиональный ежедневник для психолога с анкетами клиентов, разделом для записей сессий и супервизии. Разработан практикующими психологами для частной практики.',
-    brand: {
-      '@type': 'Brand',
-      name: 'Compas',
-    },
-    offers: {
-      '@type': 'Offer',
-      url: 'https://www.ozon.ru/product/ezhednevnik-nedatirovannyy-a5-listov-272-3514667316/',
-      priceCurrency: 'RUB',
-      availability: 'https://schema.org/InStock',
-      itemCondition: 'https://schema.org/NewCondition',
-      seller: {
-        '@type': 'Organization',
-        name: 'Compas',
-      },
-    },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.9',
-      reviewCount: '47',
-    },
-  };
+export default function HomePage() {
+    const jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'КОМПАС',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web',
+        description: 'Онлайн-кабинет для психологов: запись клиентов, расписание, заметки и уведомления через Telegram и MAX.',
+        url: 'https://cmpas.ru',
+        offers: {
+            '@type': 'Offer',
+            price: '990',
+            priceCurrency: 'RUB',
+            priceValidUntil: '2027-12-31',
+        },
+        aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: '4.9',
+            reviewCount: '47',
+        },
+        author: {
+            '@type': 'Organization',
+            name: 'КОМПАС',
+        },
+    };
 
-  return (
-    <main className="min-h-screen bg-background font-sans">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      <Header />
-      <Hero />
-      <ValueSection />
-      <Gallery />
-      <Reviews />
-      <Specifications />
-      <PriceDelivery />
-      <FAQ />
-      <OrderForm />
-      <Footer />
-    </main>
-  );
+    return (
+        <main className="min-h-screen bg-[#F7F8F4] font-[family-name:var(--font-geist-sans)]">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
+            <LandingHeader />
+            <Hero />
+            <BeforeAfter />
+            <HowItWorks />
+            <PsychologistDay />
+            <ClientFlow />
+            <Features />
+            <PositioningBand />
+            <Security />
+            <Pricing />
+            <FAQ />
+            <FinalCTA />
+            <LandingFooter />
+        </main>
+    );
 }
-
