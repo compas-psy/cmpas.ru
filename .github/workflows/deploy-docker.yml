@@ -3,6 +3,9 @@ name: Deploy with Docker
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - 'android/**'
+      - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
 jobs:
