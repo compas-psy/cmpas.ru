@@ -2,7 +2,11 @@ package ru.cmpas.app.data.api
 
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONObject
 import ru.cmpas.app.data.datastore.UserPreferences
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,13 +39,11 @@ class AuthInterceptor @Inject constructor(
             val refreshToken = runBlocking { userPreferences.getRefreshToken() }
             if (refreshToken != null) {
                 response.close()
-                // Try refreshing token
-                val refreshed = tryRefreshToken(chain, refreshToken)
-                if (refreshed != null) {
-                    // Retry original request with new token
+                val newToken = tryRefreshToken(chain, refreshToken)
+                if (newToken != null) {
                     val newRequest = chain.request().newBuilder()
                         .removeHeader("Authorization")
-                        .addHeader("Authorization", "Bearer $refreshed")
+                        .addHeader("Authorization", "Bearer $newToken")
                         .addHeader("X-Client", "android")
                         .build()
                     return chain.proceed(newRequest)
@@ -54,22 +56,19 @@ class AuthInterceptor @Inject constructor(
 
     private fun tryRefreshToken(chain: Interceptor.Chain, refreshToken: String): String? {
         return try {
-            val refreshRequest = okhttp3.Request.Builder()
+            val jsonBody = """{"refreshToken":"$refreshToken"}"""
+            val body = jsonBody.toRequestBody("application/json".toMediaType())
+
+            val refreshRequest = Request.Builder()
                 .url("https://cmpas.ru/api/mobile/auth/refresh")
-                .post(
-                    okhttp3.RequestBody.create(
-                        okhttp3.MediaType.parse("application/json"),
-                        """{"refreshToken":"$refreshToken"}"""
-                    )
-                )
+                .post(body)
                 .build()
 
             val refreshResponse = chain.proceed(refreshRequest)
             if (refreshResponse.isSuccessful) {
-                val body = refreshResponse.body?.string()
+                val responseBody = refreshResponse.body?.string()
                 refreshResponse.close()
-                // Parse tokens
-                val json = org.json.JSONObject(body ?: "{}")
+                val json = JSONObject(responseBody ?: "{}")
                 val newAccessToken = json.optString("accessToken")
                 val newRefreshToken = json.optString("refreshToken")
                 if (newAccessToken.isNotEmpty()) {
@@ -82,7 +81,7 @@ class AuthInterceptor @Inject constructor(
                 refreshResponse.close()
                 null
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

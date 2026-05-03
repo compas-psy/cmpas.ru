@@ -41,11 +41,32 @@ jobs:
       - name: Generate Gradle wrapper
         working-directory: android
         run: |
-          # Install gradle temporarily to generate wrapper
           wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.9
           chmod +x gradlew
+
+      - name: Restore debug keystore
+        id: keystore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: compas-debug-keystore-v1
+
+      - name: Create debug keystore (if not cached)
+        if: steps.keystore-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v \
+            -keystore ~/.android/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 36500 \
+            -dname "CN=KOMPAS Debug, OU=Dev, O=cmpas.ru, L=Moscow, ST=Moscow, C=RU" \
+            -noprompt
 
       - name: Build Debug APK
         working-directory: android
