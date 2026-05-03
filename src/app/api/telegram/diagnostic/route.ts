@@ -77,5 +77,24 @@ export async function GET() {
         }
     }
 
+    // Test 5: MAX API connectivity (botapi.max.ru)
+    const maxToken = process.env.MAX_BOT_TOKEN;
+    if (maxToken) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+            const res = await fetch('https://botapi.max.ru/me', {
+                signal: controller.signal,
+                headers: { 'Authorization': maxToken },
+            });
+            const data = await res.json();
+            results.tests.maxApi = { ok: !!data.user_id, status: res.status, botName: data.name };
+        } catch (e: any) {
+            results.tests.maxApi = { ok: false, error: e.name === 'AbortError' ? 'Timeout (5s)' : e.message };
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
     return NextResponse.json(results);
 }

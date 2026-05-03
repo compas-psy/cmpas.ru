@@ -268,33 +268,135 @@ async function handleSessions(userId: number) {
     return sendMaxMessage(userId, 'Аккаунт не найден. Перейдите по ссылке от вашего психолога.');
 }
 
+async function handleHelp(userId: number) {
+    const mid = maxId(userId);
+    const psy = await db.user.findFirst({ where: { maxChatId: mid } });
+
+    if (psy) {
+        return sendMaxMessage(userId,
+            '📋 Доступные команды:\n\n' +
+            '/sessions — ваши ближайшие сессии\n' +
+            '/link — ссылка для записи клиентов\n' +
+            '/help — эта справка\n\n' +
+            'Также вы можете открыть кабинет по кнопке ниже.',
+            [
+                [{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }],
+                [{ text: '📅 Календарь', url: `${APP_URL}/diary/calendar` }],
+            ]
+        );
+    }
+
+    return sendMaxMessage(userId,
+        '📋 Доступные команды:\n\n' +
+        '/sessions — ваши ближайшие записи\n' +
+        '/help — эта справка\n' +
+        '/connect — привязать аккаунт психолога',
+        [[{ text: '💼 Открыть КОМПАС', url: `${APP_URL}/diary` }]]
+    );
+}
+
+async function handleShareLink(userId: number) {
+    const mid = maxId(userId);
+    const psy = await db.user.findFirst({ where: { maxChatId: mid } });
+
+    if (!psy) {
+        return sendMaxMessage(userId, 'Эта команда доступна только для психологов.');
+    }
+
+    const bookUrl = `${APP_URL}/bot/book/${psy.id}`;
+    return sendMaxMessage(userId,
+        `🔗 Ссылка для записи клиентов:\n\n${bookUrl}\n\nОтправьте эту ссылку клиенту — он сможет выбрать удобное время.`,
+        [[{ text: '📅 Открыть страницу записи', url: bookUrl }]]
+    );
+}
+
 async function handleCallback(callbackId: string, userId: number, payload: string) {
-    if (payload.startsWith('cancel_')) {
-        const sessionId = payload.replace('cancel_', '');
-        const mid = maxId(userId);
+    const mid = maxId(userId);
+
+    // ── Cancel session ──
+    if (payload.startsWith('cancel_session_') || payload.startsWith('cancel_')) {
+        const sessionId = payload.replace('cancel_session_', '').replace('cancel_', '');
         const session = await db.diarySession.findUnique({
             where: { id: sessionId },
-            include: { client: true }
+            include: { client: true, psychologist: true }
         });
-        if (!session || session.client.maxChatId !== mid) {
-            return sendMaxMessage(userId, 'Сессия не найдена или нет доступа.');
+        if (!session) {
+            await maxApi(`/answers/${callbackId}`, {});
+            return sendMaxMessage(userId, 'Сессия не найдена.');
         }
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
         await sendMaxMessage(userId, `❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
-        // Notify psychologist
-        if (session.client.psychologistId) {
-            const psy = await db.user.findUnique({ where: { id: session.client.psychologistId } });
-            if (psy?.maxChatId) {
-                await sendMaxMessage(psy.maxChatId,
-                    `❌ Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`
-                );
-            }
+        // Notify psychologist via MAX
+        const psyMaxId = (session.psychologist as any)?.maxChatId;
+        if (psyMaxId) {
+            await sendMaxMessage(psyMaxId,
+                `⚠️ Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`
+            );
         }
     }
 
-    // MAX API: answer callback to dismiss loading spinner on button
-    // Endpoint: POST /answers/{callback_id}
+    // ── Confirm session (from 24h reminder) ──
+    else if (payload.startsWith('confirm_session_')) {
+        const sessionId = payload.replace('confirm_session_', '');
+        const session = await db.diarySession.findUnique({
+            where: { id: sessionId },
+            include: { client: true, psychologist: true }
+        });
+        if (!session) {
+            await maxApi(`/answers/${callbackId}`, {});
+            return sendMaxMessage(userId, 'Сессия не найдена.');
+        }
+        const formatText = session.format === 'offline' ? 'Очно' : 'Онлайн';
+        await sendMaxMessage(userId, `✅ Отлично, ждём вас!\n\n📅 ${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n📍 ${formatText}`);
+
+        // Notify psychologist
+        const psyMaxId = (session.psychologist as any)?.maxChatId;
+        if (psyMaxId) {
+            await sendMaxMessage(psyMaxId,
+                `✅ Клиент ${session.client.name} подтвердил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`
+            );
+        }
+    }
+
+    // ── Reschedule session ──
+    else if (payload.startsWith('reschedule_session_')) {
+        const sessionId = payload.replace('reschedule_session_', '');
+        const session = await db.diarySession.findUnique({
+            where: { id: sessionId },
+            include: { client: true }
+        });
+        if (!session) {
+            await maxApi(`/answers/${callbackId}`, {});
+            return sendMaxMessage(userId, 'Сессия не найдена.');
+        }
+        const bookUrl = `${APP_URL}/bot/book/${session.psychologistId}?c=${session.clientId}`;
+        await sendMaxMessage(userId,
+            '🔄 Чтобы перенести сессию, выберите новое время:',
+            [[{ text: '📅 Выбрать новое время', url: bookUrl }]]
+        );
+    }
+
+    // ── Mood rating (post-session nudge) ──
+    else if (payload.startsWith('mood_')) {
+        const parts = payload.split('_'); // mood_1_sessionId
+        const rating = parseInt(parts[1]);
+        const sessionId = parts.slice(2).join('_');
+
+        try {
+            await db.diarySession.update({
+                where: { id: sessionId },
+                data: { clientMoodRating: rating } as any
+            });
+            const emojis: Record<number, string> = { 1: '😊', 2: '🙂', 3: '😐', 4: '😔', 5: '😢' };
+            await sendMaxMessage(userId, `${emojis[rating] || '👍'} Спасибо за обратную связь! Ваш ответ записан.`);
+        } catch (e) {
+            console.error('[MAX Bot] mood callback error:', e);
+            await sendMaxMessage(userId, 'Спасибо! (не удалось сохранить ответ)');
+        }
+    }
+
+    // Answer callback to dismiss loading spinner on button
     await maxApi(`/answers/${callbackId}`, {});
 }
 
@@ -325,14 +427,31 @@ export async function handleMaxUpdate(update: MaxUpdate) {
                 await handleStart(userId, param);
             } else if (text === '/connect') {
                 await handleConnect(userId);
-            } else if (text === '/sessions') {
+            } else if (text === '/sessions' || text === '/сессии') {
                 await handleSessions(userId);
+            } else if (text === '/help' || text === '/помощь' || text === 'Помощь') {
+                await handleHelp(userId);
+            } else if (text === '/link' || text === '/ссылка' || text === '🔗 Ссылка на запись') {
+                await handleShareLink(userId);
             } else {
-                // Default response
-                await sendMaxMessage(userId,
-                    'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/connect — привязать аккаунт',
-                    [[{ text: '💼 Открыть КОМПАС', url: `${APP_URL}/diary` }]]
-                );
+                // Smart default: determine if psy or client
+                const mid = maxId(userId);
+                const psy = await db.user.findFirst({ where: { maxChatId: mid } });
+                if (psy) {
+                    await sendMaxMessage(userId,
+                        `Выберите действие:`,
+                        [
+                            [{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }],
+                            [{ text: '🔗 Ссылка для клиента', url: `${APP_URL}/bot/book/${psy.id}` }],
+                            [{ text: '🗓 Мои сессии', payload: '/sessions' }],
+                        ]
+                    );
+                } else {
+                    await sendMaxMessage(userId,
+                        'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/help — помощь',
+                        [[{ text: '💼 Открыть КОМПАС', url: `${APP_URL}/diary` }]]
+                    );
+                }
             }
         }
 
