@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         });
 
         // Build magic link URL (mobile app will intercept via deep link)
-        const baseUrl = process.env.NEXTAUTH_URL || 'https://cmpas.ru';
+        const baseUrl = process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'https://cmpas.ru';
         const magicLink = `${baseUrl}/api/mobile/auth/verify?token=${token}&email=${encodeURIComponent(email)}`;
 
         // Send email

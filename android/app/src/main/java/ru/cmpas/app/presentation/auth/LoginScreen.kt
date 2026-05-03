@@ -1,9 +1,11 @@
 package ru.cmpas.app.presentation.auth
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -12,12 +14,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.presentation.theme.Forest800
 
 @Composable
 fun LoginScreen(
@@ -26,6 +33,7 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.isAuthenticated) {
         if (uiState.isAuthenticated) onLoginSuccess()
@@ -45,13 +53,30 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Logo area
+            Surface(
+                modifier = Modifier.size(72.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = Forest800,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        "К",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Text(
                 text = "КОМПАС",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "Умный кабинет психолога",
@@ -78,6 +103,15 @@ fun LoginScreen(
                         onSubmit = {
                             focusManager.clearFocus()
                             viewModel.requestMagicLink()
+                        },
+                        onYandexLogin = {
+                            // Open Yandex OAuth in browser
+                            val yandexUrl = "https://oauth.yandex.ru/authorize" +
+                                    "?response_type=code" +
+                                    "&client_id=1b261cbc153045beb7d707389fc27515" +
+                                    "&redirect_uri=${Uri.encode("https://cmpas.ru/api/mobile/auth/yandex/callback")}" +
+                                    "&force_confirm=yes"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(yandexUrl)))
                         },
                     )
                     LoginStep.CHECK_EMAIL -> CheckEmailStep(
@@ -110,8 +144,43 @@ private fun EmailInputStep(
     error: String?,
     onEmailChange: (String) -> Unit,
     onSubmit: () -> Unit,
+    onYandexLogin: () -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Yandex button first (primary CTA)
+        Button(
+            onClick = onYandexLogin,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFFC3F1D), // Yandex red
+                contentColor = Color.White,
+            ),
+        ) {
+            Text("Войти через Яндекс", style = MaterialTheme.typography.labelLarge)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Divider
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outline)
+            Text(
+                "  или  ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outline)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Email field
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
@@ -130,7 +199,7 @@ private fun EmailInputStep(
             shape = MaterialTheme.shapes.medium,
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = onSubmit,
@@ -147,7 +216,7 @@ private fun EmailInputStep(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             } else {
-                Text("Войти", style = MaterialTheme.typography.labelLarge)
+                Text("Войти по email", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
