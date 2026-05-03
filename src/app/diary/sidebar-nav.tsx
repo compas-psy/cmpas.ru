@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
     Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle,
     BarChart3, FileText, Layers, StickyNote, Stethoscope,
-    ChevronRight
+    ChevronRight, Sparkles
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -34,6 +34,7 @@ const navGroups = [
             { href: '/diary/notifications', label: 'Уведомления', icon: Bell },
             { href: '/diary/integrations', label: 'Интеграции', icon: Link2 },
             { href: '/diary/settings', label: 'Настройки', icon: Settings },
+            { href: '/diary/changelog', label: 'Что нового', icon: Sparkles },
             { href: '/diary/help', label: 'Помощь', icon: HelpCircle },
         ],
     },
