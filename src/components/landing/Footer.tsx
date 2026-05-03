@@ -10,16 +10,15 @@ const footerLinks = {
     ],
     company: [
         { href: '/paperdiary', label: 'Ежедневник' },
-        { href: '/diary/changelog', label: 'Что нового' },
+        { href: 'https://t.me/psy_notebook', label: 'Telegram-канал' },
     ],
     support: [
-        { href: '/diary/help', label: 'База знаний' },
         { href: '#security', label: 'Безопасность' },
+        { href: 'https://t.me/psy_notebook', label: 'Написать нам' },
     ],
     legal: [
         { href: '/legal/privacy', label: 'Политика конфиденциальности' },
         { href: '/legal/terms', label: 'Пользовательское соглашение' },
-        { href: '/legal/consent', label: 'Согласие на обработку ПДн' },
     ],
 };
 
@@ -84,8 +83,7 @@ export default function LandingFooter() {
                 <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <p className="text-[12px] text-white/40">© 2026 КОМПАС. Все права защищены.</p>
                     <div className="flex items-center gap-4">
-                        <span className="text-[12px] text-white/40">Telegram</span>
-                        <span className="text-[12px] text-white/40">MAX</span>
+                        <a href="https://t.me/psy_notebook" target="_blank" rel="noopener noreferrer" className="text-[12px] text-white/40 hover:text-white/70 transition-colors">Telegram</a>
                     </div>
                 </div>
             </div>
