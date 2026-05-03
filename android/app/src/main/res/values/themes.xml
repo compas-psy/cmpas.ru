@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash screen theme -->
+    <style name="Theme.Compas" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Compas.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="postSplashScreenTheme">@style/Theme.Compas</item>
+    </style>
+
+    <!-- КОМПАС Brand Colors -->
+    <color name="splash_bg">#FAF8F5</color>
+    <color name="forest_800">#1A4D3A</color>
+    <color name="forest_700">#1E5A44</color>
+    <color name="gold_accent">#C9A961</color>
+    <color name="sage_100">#E8EDE4</color>
+    <color name="sage_50">#F2F5EE</color>
+    <color name="surface_light">#FAF8F5</color>
+    <color name="on_surface">#142018</color>
+    <color name="on_surface_variant">#5F6C64</color>
+</resources>

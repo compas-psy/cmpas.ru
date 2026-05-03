@@ -1,0 +1,215 @@
+package ru.cmpas.app.presentation.auth
+
+import androidx.compose.animation.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+
+@Composable
+fun LoginScreen(
+    onLoginSuccess: () -> Unit,
+    viewModel: LoginViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(uiState.isAuthenticated) {
+        if (uiState.isAuthenticated) onLoginSuccess()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .systemBarsPadding(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp)
+                .align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // Logo area
+            Text(
+                text = "КОМПАС",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Умный кабинет психолога",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            AnimatedContent(
+                targetState = uiState.step,
+                transitionSpec = {
+                    fadeIn() + slideInHorizontally { it / 2 } togetherWith
+                            fadeOut() + slideOutHorizontally { -it / 2 }
+                },
+                label = "auth-step",
+            ) { step ->
+                when (step) {
+                    LoginStep.EMAIL -> EmailInputStep(
+                        email = uiState.email,
+                        isLoading = uiState.isLoading,
+                        error = uiState.error,
+                        onEmailChange = viewModel::onEmailChange,
+                        onSubmit = {
+                            focusManager.clearFocus()
+                            viewModel.requestMagicLink()
+                        },
+                    )
+                    LoginStep.CHECK_EMAIL -> CheckEmailStep(
+                        email = uiState.email,
+                        onResend = viewModel::requestMagicLink,
+                    )
+                    LoginStep.VERIFY -> VerifyingStep()
+                }
+            }
+        }
+
+        // Bottom text
+        Text(
+            text = "30 дней бесплатно · Без привязки карты",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+                .fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun EmailInputStep(
+    email: String,
+    isLoading: Boolean,
+    error: String?,
+    onEmailChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        OutlinedTextField(
+            value = email,
+            onValueChange = onEmailChange,
+            label = { Text("Email") },
+            placeholder = { Text("maria@example.com") },
+            leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Email,
+                imeAction = ImeAction.Go,
+            ),
+            keyboardActions = KeyboardActions(onGo = { onSubmit() }),
+            singleLine = true,
+            isError = error != null,
+            supportingText = error?.let { { Text(it) } },
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Button(
+            onClick = onSubmit,
+            enabled = email.isNotBlank() && !isLoading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            } else {
+                Text("Войти", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CheckEmailStep(
+    email: String,
+    onResend: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            Icons.Outlined.Email,
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Проверьте почту",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Мы отправили ссылку для входа на\n$email",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        TextButton(onClick = onResend) {
+            Text("Отправить ещё раз")
+        }
+    }
+}
+
+@Composable
+private fun VerifyingStep() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            "Проверяем ссылку...",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+enum class LoginStep { EMAIL, CHECK_EMAIL, VERIFY }
+
+data class LoginUiState(
+    val email: String = "",
+    val step: LoginStep = LoginStep.EMAIL,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val isAuthenticated: Boolean = false,
+)
