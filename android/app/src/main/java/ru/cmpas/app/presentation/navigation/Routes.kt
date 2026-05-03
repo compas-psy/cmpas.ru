@@ -17,6 +17,9 @@ sealed class Screen(val route: String) {
     data object SessionDetail : Screen("session/{id}") {
         fun createRoute(id: String) = "session/$id"
     }
+    data object PostSessionNote : Screen("notes/post-session/{sessionId}") {
+        fun createRoute(sessionId: String) = "notes/post-session/$sessionId"
+    }
     // Client-facing
     data object Booking : Screen("booking/{psychologistId}") {
         fun createRoute(id: String) = "booking/$id"
@@ -29,9 +32,9 @@ enum class BottomNavItem(
     val label: String,
     val icon: ImageVector,
 ) {
-    TODAY(Screen.Dashboard, "Главная", Icons.Outlined.Home),
+    TODAY(Screen.Dashboard, "Сегодня", Icons.Outlined.CalendarToday),
     CALENDAR(Screen.Calendar, "Календарь", Icons.Outlined.CalendarMonth),
     CLIENTS(Screen.Clients, "Клиенты", Icons.Outlined.People),
     NOTES(Screen.Notes, "Заметки", Icons.Outlined.EditNote),
-    SETTINGS(Screen.Settings, "Ещё", Icons.Outlined.MoreHoriz),
+    MORE(Screen.Settings, "Ещё", Icons.Outlined.MoreHoriz),
 }

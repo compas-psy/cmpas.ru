@@ -35,7 +35,35 @@ val CompasAccentLight = Color(0xFFF5E6C8)
 val CompasDestructive = Color(0xFFE35D4F)
 val CompasSuccess = Color(0xFF2F6A52)
 
-// Dark theme
+// ═══════════════════════════════════════════
+// Status Colors — badges, dots, indicators
+// ═══════════════════════════════════════════
+
+// Orange (payment, warnings)
+val CompasOrange = Color(0xFFE8A435)
+val CompasOrangeSoft = Color(0xFFFFF3E0)
+
+// Status dots for client list
+val StatusDotGreen = Color(0xFF4CAF50)
+val StatusDotYellow = Color(0xFFFFC107)
+val StatusDotRed = Color(0xFFE35D4F)
+val StatusDotGrey = Color(0xFFBDBDBD)
+
+// Badge colors
+val BadgePaidBg = Color(0xFFE7F0EA)
+val BadgePaidText = Color(0xFF2F6A52)
+val BadgeUnpaidBg = Color(0xFFFFF3E0)
+val BadgeUnpaidText = Color(0xFFE8A435)
+val BadgeConsentBg = Color(0xFFFCE4E4)
+val BadgeConsentText = Color(0xFFE35D4F)
+val BadgeHomeworkBg = Color(0xFFE7F0EA)
+val BadgeHomeworkText = Color(0xFF2F6A52)
+val BadgeSeriesBg = Color(0xFFF5E6C8)
+val BadgeSeriesText = Color(0xFF8B6914)
+val BadgeFirstMeetBg = Color(0xFFE7F0EA)
+val BadgeFirstMeetText = Color(0xFF1D4735)
+
+// Dark theme (unused for now — always light)
 val DarkBackground = Color(0xFF0F1A14)
 val DarkSurface = Color(0xFF1A2920)
 val DarkSurfaceVariant = Color(0xFF243529)

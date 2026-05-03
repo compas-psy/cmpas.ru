@@ -32,17 +32,45 @@ export async function GET(req: NextRequest) {
             orderBy: { name: 'asc' },
         });
 
-        const formatted = clients.map(c => ({
-            id: c.id,
-            name: c.name,
-            email: c.email || null,
-            phone: c.phone || null,
-            telegramId: c.telegramChatId || null,
-            sessionsCount: c._count.sessions,
-            lastSessionDate: c.sessions[0]?.date?.toISOString().split('T')[0] || null,
-            notes: null,
-            status: (c.status || 'active').toUpperCase(),
-        }));
+        const now = new Date();
+        // Get upcoming sessions for all clients in one query
+        const upcomingSessions = await db.diarySession.findMany({
+            where: {
+                psychologistId: auth.userId,
+                date: { gte: now },
+                status: { not: 'cancelled' },
+            },
+            select: { clientId: true, date: true, time: true },
+            orderBy: { date: 'asc' },
+        });
+
+        // Build a map: clientId -> next session
+        const nextSessionMap = new Map<string, { date: string; time: string }>();
+        for (const s of upcomingSessions) {
+            if (s.clientId && !nextSessionMap.has(s.clientId)) {
+                nextSessionMap.set(s.clientId, {
+                    date: s.date.toISOString().split('T')[0],
+                    time: s.time || '',
+                });
+            }
+        }
+
+        const formatted = clients.map(c => {
+            const nextSess = nextSessionMap.get(c.id);
+            return {
+                id: c.id,
+                name: c.name,
+                email: c.email || null,
+                phone: c.phone || null,
+                telegramId: c.telegramChatId || null,
+                sessionsCount: c._count.sessions,
+                lastSessionDate: c.sessions[0]?.date?.toISOString().split('T')[0] || null,
+                notes: null,
+                status: (c.status || 'active').toUpperCase(),
+                nextSessionDate: nextSess?.date || null,
+                nextSessionTime: nextSess?.time || null,
+            };
+        });
 
         return NextResponse.json(formatted);
     } catch (error) {

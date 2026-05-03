@@ -1,10 +1,12 @@
 package ru.cmpas.app.presentation.navigation
 
 import androidx.compose.animation.*
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -21,6 +23,10 @@ import ru.cmpas.app.presentation.clients.ClientDetailScreen
 import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
+import ru.cmpas.app.presentation.components.FloatingNavigationDock
+import ru.cmpas.app.presentation.components.ExpandableActionMenu
+import ru.cmpas.app.presentation.components.ActionMenuItem
+import ru.cmpas.app.presentation.components.DefaultActions
 
 @Composable
 fun CompasNavHost(
@@ -28,22 +34,17 @@ fun CompasNavHost(
     isLoggedIn: Boolean,
 ) {
     val startDestination = if (isLoggedIn) Screen.Dashboard.route else Screen.Login.route
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val mainRoutes = BottomNavItem.entries.map { it.screen.route }
+    val showDock = isLoggedIn && currentRoute in mainRoutes
 
-    Scaffold(
-        bottomBar = {
-            // Only show bottom bar on main screens
-            val navBackStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = navBackStackEntry?.destination?.route
-            val mainRoutes = BottomNavItem.entries.map { it.screen.route }
-            if (isLoggedIn && currentRoute in mainRoutes) {
-                CompasBottomBar(navController)
-            }
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Main content — no bottom padding from Scaffold, dock floats on top
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
             enterTransition = { fadeIn() + slideInHorizontally { it / 4 } },
             exitTransition = { fadeOut() + slideOutHorizontally { -it / 4 } },
             popEnterTransition = { fadeIn() + slideInHorizontally { -it / 4 } },
@@ -63,12 +64,29 @@ fun CompasNavHost(
                 DashboardScreen(
                     onSessionClick = { id ->
                         navController.navigate(Screen.SessionDetail.createRoute(id))
-                    }
+                    },
+                    onCalendarClick = {
+                        navController.navigate(Screen.Calendar.route) {
+                            popUpTo(Screen.Dashboard.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onClientClick = { id ->
+                        navController.navigate(Screen.ClientDetail.createRoute(id))
+                    },
                 )
             }
 
             composable(Screen.Calendar.route) {
-                CalendarScreen()
+                CalendarScreen(
+                    onSessionClick = { id ->
+                        navController.navigate(Screen.SessionDetail.createRoute(id))
+                    },
+                    onClientClick = { id ->
+                        navController.navigate(Screen.ClientDetail.createRoute(id))
+                    },
+                )
             }
 
             composable(Screen.Clients.route) {
@@ -80,7 +98,11 @@ fun CompasNavHost(
             }
 
             composable(Screen.Notes.route) {
-                NotesScreen()
+                NotesScreen(
+                    onSessionNoteClick = { sessionId ->
+                        navController.navigate(Screen.PostSessionNote.createRoute(sessionId))
+                    },
+                )
             }
 
             composable(Screen.Settings.route) {
@@ -102,6 +124,9 @@ fun CompasNavHost(
                 SessionDetailScreen(
                     sessionId = sessionId,
                     onBack = { navController.popBackStack() },
+                    onClientClick = { id ->
+                        navController.navigate(Screen.ClientDetail.createRoute(id))
+                    },
                 )
             }
 
@@ -119,22 +144,12 @@ fun CompasNavHost(
                 )
             }
         }
-    }
-}
 
-@Composable
-fun CompasBottomBar(navController: NavHostController) {
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-    ) {
-        BottomNavItem.entries.forEach { item ->
-            NavigationBarItem(
-                selected = currentRoute == item.screen.route,
-                onClick = {
+        // Floating Navigation Dock — above bottom edge
+        if (showDock) {
+            FloatingNavigationDock(
+                currentRoute = currentRoute,
+                onItemClick = { item ->
                     if (currentRoute != item.screen.route) {
                         navController.navigate(item.screen.route) {
                             popUpTo(Screen.Dashboard.route) { saveState = true }
@@ -143,21 +158,20 @@ fun CompasBottomBar(navController: NavHostController) {
                         }
                     }
                 },
-                icon = {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
-                    )
-                },
-                label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
+            // Expandable Action Menu
+            val actionItems = remember(currentRoute) {
+                when (currentRoute) {
+                    Screen.Clients.route -> DefaultActions.clientsActions()
+                    Screen.Notes.route -> DefaultActions.notesActions()
+                    else -> DefaultActions.todayActions()
+                }
+            }
+            ExpandableActionMenu(
+                items = actionItems,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

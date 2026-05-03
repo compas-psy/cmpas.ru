@@ -66,6 +66,16 @@ export async function GET(req: NextRequest) {
         // Count unique new clients this week
         const clientIds = new Set(weekSessions.map(s => s.clientId).filter(Boolean));
 
+        // Get user name
+        const user = await db.user.findUnique({
+            where: { id: auth.userId },
+            select: { name: true },
+        });
+
+        // Build attention items
+        const attentionItems: Array<{type: string; count: number; label: string}> = [];
+        // Could add consent/payment/report checks here in the future
+
         return NextResponse.json({
             todaySessions: formattedSessions,
             nextSession: nextSession ? formattedSessions.find(s => s.id === nextSession.id) : null,
@@ -74,6 +84,8 @@ export async function GET(req: NextRequest) {
                 newClients: clientIds.size,
                 cancelledCount: weekSessions.filter(s => s.status === 'cancelled').length,
             },
+            userName: user?.name || null,
+            attentionItems,
         });
     } catch (error) {
         console.error('[mobile/dashboard]', error);
