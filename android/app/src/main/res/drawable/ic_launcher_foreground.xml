@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Compass needle / N arrow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 L60,54 L54,50 L48,54 Z" />
+    <!-- Compass needle / S arrow -->
+    <path
+        android:fillColor="#B0BEC5"
+        android:pathData="M54,80 L48,54 L54,58 L60,54 Z" />
+    <!-- Outer ring -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:pathData="M54,54m-28,0a28,28 0,1 1,56 0a28,28 0,1 1,-56 0" />
+    <!-- Cardinal dots -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 m-2,0 a2,2 0 1,1 4,0 a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M84,54 m-2,0 a2,2 0 1,1 4,0 a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,84 m-2,0 a2,2 0 1,1 4,0 a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,54 m-2,0 a2,2 0 1,1 4,0 a2,2 0 1,1 -4,0" />
+</vector>
