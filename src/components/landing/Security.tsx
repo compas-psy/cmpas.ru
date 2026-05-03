@@ -25,8 +25,7 @@ const items = [
 
 export default function Security() {
     return (
-        <section id="security" className="py-16 md:py-20 bg-white relative">
-            <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#F7F8F4] to-transparent pointer-events-none" />
+        <section id="security" className="py-14 md:py-16 bg-white">
             <div className="max-w-[1240px] mx-auto px-5 md:px-8">
                 <div className="flex flex-col lg:flex-row items-start gap-12 lg:gap-16">
                     {/* Text */}

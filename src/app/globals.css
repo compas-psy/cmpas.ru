@@ -141,49 +141,6 @@ html {
   scroll-behavior: smooth;
 }
 
-/* ── Landing page: scroll-driven reveal animations ── */
-.landing-reveal {
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.landing-reveal.revealed {
-  opacity: 1;
-  transform: translateY(0);
-}
-.landing-reveal-delay-1 { transition-delay: 0.1s; }
-.landing-reveal-delay-2 { transition-delay: 0.2s; }
-.landing-reveal-delay-3 { transition-delay: 0.3s; }
-.landing-reveal-delay-4 { transition-delay: 0.4s; }
-
-/* Before/After sunset transition */
-.before-card-exit {
-  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.before-card-exit.exited {
-  opacity: 0;
-  transform: translateY(60px) scale(0.92);
-}
-.after-card-enter {
-  opacity: 0;
-  transform: translateY(40px) scale(0.96);
-  transition: opacity 0.8s ease 0.15s, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
-}
-.after-card-enter.entered {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-/* Respect reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .landing-reveal,
-  .before-card-exit,
-  .after-card-enter {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
 
 /* ── Hide scrollbar for mini-app style ── */
 .telegram-miniapp-scrollbar-hide::-webkit-scrollbar {
