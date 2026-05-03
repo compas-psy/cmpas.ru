@@ -7,15 +7,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import ru.cmpas.app.presentation.auth.LoginScreen
 import ru.cmpas.app.presentation.dashboard.DashboardScreen
 import ru.cmpas.app.presentation.calendar.CalendarScreen
 import ru.cmpas.app.presentation.clients.ClientsScreen
+import ru.cmpas.app.presentation.clients.ClientDetailScreen
 import ru.cmpas.app.presentation.notes.NotesScreen
+import ru.cmpas.app.presentation.session.SessionDetailScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
 
 @Composable
@@ -27,7 +31,11 @@ fun CompasNavHost(
 
     Scaffold(
         bottomBar = {
-            if (isLoggedIn) {
+            // Only show bottom bar on main screens
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+            val mainRoutes = BottomNavItem.entries.map { it.screen.route }
+            if (isLoggedIn && currentRoute in mainRoutes) {
                 CompasBottomBar(navController)
             }
         }
@@ -82,6 +90,32 @@ fun CompasNavHost(
                             popUpTo(0) { inclusive = true }
                         }
                     }
+                )
+            }
+
+            // Detail screens
+            composable(
+                route = Screen.SessionDetail.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val sessionId = backStackEntry.arguments?.getString("id") ?: ""
+                SessionDetailScreen(
+                    sessionId = sessionId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(
+                route = Screen.ClientDetail.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val clientId = backStackEntry.arguments?.getString("id") ?: ""
+                ClientDetailScreen(
+                    clientId = clientId,
+                    onBack = { navController.popBackStack() },
+                    onSessionClick = { id ->
+                        navController.navigate(Screen.SessionDetail.createRoute(id))
+                    },
                 )
             }
         }
