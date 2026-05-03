@@ -10,7 +10,10 @@ on:
     branches: [main]
     paths:
       - 'android/**'
-  workflow_dispatch:  # Manual trigger from GitHub UI
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -39,45 +42,41 @@ jobs:
         working-directory: android
         run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Rename APK
+      - name: Get version info
+        id: version
         run: |
           VERSION=$(grep 'versionName' android/app/build.gradle.kts | head -1 | grep -oP '"[^"]*"' | tr -d '"')
           SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
           cp android/app/build/outputs/apk/debug/app-debug.apk "compas-${VERSION}-${SHA}.apk"
-          echo "APK_NAME=compas-${VERSION}-${SHA}.apk" >> $GITHUB_ENV
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
-      - name: Upload APK as artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: compas-android-apk
           path: "compas-*.apk"
           retention-days: 90
 
-      # Create GitHub Release (accessible via Releases tab)
-      - name: Create Release
+      - name: Create GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "android-v${{ env.VERSION }}-${{ github.run_number }}"
-          name: "КОМПАС Android ${{ env.VERSION }} (Build #${{ github.run_number }})"
+          tag_name: "android-v${{ steps.version.outputs.version }}-${{ github.run_number }}"
+          name: "КОМПАС Android ${{ steps.version.outputs.version }} (Build #${{ github.run_number }})"
           body: |
             ## 🤖 КОМПАС для Android
 
-            **Версия:** ${{ env.VERSION }}
+            **Версия:** ${{ steps.version.outputs.version }}
             **Build:** #${{ github.run_number }}
-            **Commit:** `${{ github.sha }}`
+            **Commit:** `${{ steps.version.outputs.sha }}`
 
             ### Установка
             1. Скачайте `.apk` файл ниже
-            2. На телефоне: **Настройки → Безопасность → Разрешить установку из неизвестных источников**
-            3. Откройте скачанный файл → Установить
-
-            > ⚠️ Это debug-сборка для тестирования. Подписанная release-версия будет в Google Play.
+            2. На телефоне: **Настройки → Безопасность → Установка из неизвестных источников**
+            3. Откройте файл → Установить
           files: "compas-*.apk"
           draft: false
           prerelease: true
-        permissions:
-          contents: write
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
