@@ -28,7 +28,7 @@ class DashboardViewModel @Inject constructor(
 
     fun loadDashboard() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val response = api.getDashboard()
                 if (response.isSuccessful) {
@@ -40,12 +40,25 @@ class DashboardViewModel @Inject constructor(
                                 nextSession = data.nextSession,
                                 weekSessionsCount = data.weekStats.sessionsCount,
                                 newClientsCount = data.weekStats.newClients,
+                                isDataLoaded = true,
                             )
                         }
                     }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "Ошибка ${response.code()}: ${response.message()}",
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.localizedMessage ?: "Ошибка подключения",
+                    )
+                }
             }
         }
     }
@@ -58,6 +71,7 @@ data class DashboardUiState(
     val weekSessionsCount: Int = 0,
     val newClientsCount: Int = 0,
     val error: String? = null,
+    val isDataLoaded: Boolean = false,
     val todayFormatted: String = LocalDate.now()
         .format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru"))),
 )

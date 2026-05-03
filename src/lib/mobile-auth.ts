@@ -3,8 +3,8 @@ import { db } from '@/lib/db';
 import * as crypto from 'crypto';
 
 const JWT_SECRET = process.env.AUTH_SECRET || 'fallback-secret';
-const ACCESS_TOKEN_EXPIRY = 15 * 60; // 15 minutes
-const REFRESH_TOKEN_EXPIRY = 30 * 24 * 60 * 60; // 30 days
+const ACCESS_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days (mobile)
+const REFRESH_TOKEN_EXPIRY = 90 * 24 * 60 * 60; // 90 days
 
 // ── Simple JWT implementation ──
 // Using HMAC-SHA256 for simplicity. For production, consider jose library.

@@ -29,9 +29,9 @@ enum class BottomNavItem(
     val label: String,
     val icon: ImageVector,
 ) {
-    TODAY(Screen.Dashboard, "Сегодня", Icons.Outlined.Dashboard),
+    TODAY(Screen.Dashboard, "Главная", Icons.Outlined.Home),
     CALENDAR(Screen.Calendar, "Календарь", Icons.Outlined.CalendarMonth),
     CLIENTS(Screen.Clients, "Клиенты", Icons.Outlined.People),
-    NOTES(Screen.Notes, "Заметки", Icons.Outlined.StickyNote2),
+    NOTES(Screen.Notes, "Заметки", Icons.Outlined.EditNote),
     SETTINGS(Screen.Settings, "Ещё", Icons.Outlined.MoreHoriz),
 }
