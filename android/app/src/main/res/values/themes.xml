@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Splash screen theme -->
-    <style name="Theme.Compas" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Compas" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#F7F8F4</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
     <style name="Theme.Compas.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#1D4735</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_tree</item>
         <item name="postSplashScreenTheme">@style/Theme.Compas</item>
     </style>
 
-    <!-- КОМПАС Brand Colors (matching cmpas.ru) -->
+    <!-- КОМПАС Brand Colors (cmpas.ru) -->
     <color name="splash_bg">#1D4735</color>
     <color name="forest_900">#143D2F</color>
     <color name="forest_800">#1D4735</color>

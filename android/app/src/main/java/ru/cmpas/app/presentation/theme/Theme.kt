@@ -1,8 +1,6 @@
 package ru.cmpas.app.presentation.theme
 
 import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -11,7 +9,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// Light scheme matching cmpas.ru website exactly
+// ═══════════════════════════════════════════
+// ALWAYS light theme — matching cmpas.ru
+// ═══════════════════════════════════════════
 private val CompasLightColorScheme = lightColorScheme(
     primary = Forest800,                    // #1D4735
     onPrimary = Color.White,
@@ -23,9 +23,9 @@ private val CompasLightColorScheme = lightColorScheme(
     secondaryContainer = Sage100,           // #EEF4EF
     onSecondaryContainer = Forest900,
 
-    tertiary = CompasAccent,                // #CC9E50 (gold)
+    tertiary = CompasAccent,                // #CC9E50
     onTertiary = Color.White,
-    tertiaryContainer = CompasAccentLight,  // #F5E6C8
+    tertiaryContainer = CompasAccentLight,
     onTertiaryContainer = Color(0xFF3D2E0F),
 
     background = CompasBackground,          // #F7F8F4
@@ -42,54 +42,27 @@ private val CompasLightColorScheme = lightColorScheme(
     onError = Color.White,
     errorContainer = Color(0xFFFCE4E4),
     onErrorContainer = Color(0xFF5F1412),
-)
 
-private val CompasDarkColorScheme = darkColorScheme(
-    primary = Sage150,                      // Light green on dark
-    onPrimary = Forest900,
-    primaryContainer = Forest700,
-    onPrimaryContainer = Sage50,
+    inverseSurface = Forest900,
+    inverseOnSurface = Sage50,
+    inversePrimary = Sage150,
 
-    secondary = Sage200,
-    onSecondary = Forest900,
-    secondaryContainer = Forest600,
-    onSecondaryContainer = Sage50,
-
-    tertiary = CompasAccent,
-    onTertiary = Color(0xFF3D2E0F),
-    tertiaryContainer = Color(0xFF5C4A1E),
-    onTertiaryContainer = CompasAccentLight,
-
-    background = DarkBackground,            // #0F1A14
-    onBackground = Sage50,
-    surface = DarkSurface,                  // #1A2920
-    onSurface = Sage50,
-    surfaceVariant = DarkSurfaceVariant,    // #243529
-    onSurfaceVariant = Sage200,
-
-    outline = Color(0xFF3A4F42),
-    outlineVariant = Color(0xFF2D3F34),
-
-    error = Color(0xFFFF8A80),
-    onError = Color(0xFF5F1412),
-    errorContainer = Color(0xFF5F1412),
-    onErrorContainer = Color(0xFFFF8A80),
+    surfaceTint = Forest800,
 )
 
 @Composable
 fun CompasTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) CompasDarkColorScheme else CompasLightColorScheme
+    // Always use light theme to match the website
+    val colorScheme = CompasLightColorScheme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Status bar color matches background
-            window.statusBarColor = if (darkTheme) DarkBackground.toArgb() else CompasBackground.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            window.statusBarColor = CompasBackground.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
         }
     }
 

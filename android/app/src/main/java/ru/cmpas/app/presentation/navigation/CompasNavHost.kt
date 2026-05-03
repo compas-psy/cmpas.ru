@@ -95,7 +95,7 @@ fun CompasBottomBar(navController: NavHostController) {
 
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = NavigationBarDefaults.Elevation,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         BottomNavItem.entries.forEach { item ->
             NavigationBarItem(
@@ -115,8 +115,15 @@ fun CompasBottomBar(navController: NavHostController) {
                         contentDescription = item.label,
                     )
                 },
-                label = { Text(item.label) },
+                label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
                 alwaysShowLabel = true,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
             )
         }
     }

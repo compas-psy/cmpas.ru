@@ -3,6 +3,7 @@ package ru.cmpas.app.presentation.auth
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,9 +15,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -24,7 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import ru.cmpas.app.presentation.theme.Forest800
+import ru.cmpas.app.R
 
 @Composable
 fun LoginScreen(
@@ -52,21 +56,13 @@ fun LoginScreen(
                 .align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Logo area
-            Surface(
-                modifier = Modifier.size(72.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = Forest800,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        "К",
-                        color = Color.White,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
+            // Logo — tree from website
+            Image(
+                painter = painterResource(id = R.drawable.logo_tree),
+                contentDescription = "КОМПАС",
+                modifier = Modifier.size(80.dp),
+                contentScale = ContentScale.Fit,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -74,6 +70,7 @@ fun LoginScreen(
                 text = "КОМПАС",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -105,7 +102,6 @@ fun LoginScreen(
                             viewModel.requestMagicLink()
                         },
                         onYandexLogin = {
-                            // Open Yandex OAuth in browser
                             val yandexUrl = "https://oauth.yandex.ru/authorize" +
                                     "?response_type=code" +
                                     "&client_id=1b261cbc153045beb7d707389fc27515" +
@@ -147,7 +143,7 @@ private fun EmailInputStep(
     onYandexLogin: () -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Yandex button first (primary CTA)
+        // Yandex button
         Button(
             onClick = onYandexLogin,
             modifier = Modifier
@@ -155,14 +151,14 @@ private fun EmailInputStep(
                 .height(52.dp),
             shape = MaterialTheme.shapes.medium,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFFC3F1D), // Yandex red
+                containerColor = Color(0xFFFC3F1D),
                 contentColor = Color.White,
             ),
         ) {
             Text("Войти через Яндекс", style = MaterialTheme.typography.labelLarge)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Divider
         Row(
@@ -178,9 +174,9 @@ private fun EmailInputStep(
             HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outline)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Email field
+        // Email
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
@@ -197,6 +193,11 @@ private fun EmailInputStep(
             supportingText = error?.let { { Text(it) } },
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+            ),
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -208,6 +209,9 @@ private fun EmailInputStep(
                 .fillMaxWidth()
                 .height(52.dp),
             shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+            ),
         ) {
             if (isLoading) {
                 CircularProgressIndicator(
@@ -234,26 +238,20 @@ private fun CheckEmailStep(
             modifier = Modifier.size(56.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
-
         Spacer(modifier = Modifier.height(16.dp))
-
         Text(
             text = "Проверьте почту",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
         Text(
             text = "Мы отправили ссылку для входа на\n$email",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-
         Spacer(modifier = Modifier.height(24.dp))
-
         TextButton(onClick = onResend) {
             Text("Отправить ещё раз")
         }
@@ -263,7 +261,7 @@ private fun CheckEmailStep(
 @Composable
 private fun VerifyingStep() {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator()
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             "Проверяем ссылку...",

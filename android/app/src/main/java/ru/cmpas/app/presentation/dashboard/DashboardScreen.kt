@@ -1,6 +1,6 @@
 package ru.cmpas.app.presentation.dashboard
 
-import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,9 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.R
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
@@ -32,26 +35,40 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            "Сегодня",
-                            style = MaterialTheme.typography.headlineMedium,
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(id = R.drawable.logo_tree),
+                            contentDescription = "КОМПАС",
+                            modifier = Modifier.size(32.dp),
+                            contentScale = ContentScale.Fit,
                         )
-                        Text(
-                            uiState.todayFormatted,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Сегодня",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                            Text(
+                                uiState.todayFormatted,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 },
                 actions = {
                     IconButton(onClick = { /* notifications */ }) {
-                        Icon(Icons.Outlined.Notifications, contentDescription = "Уведомления")
+                        Icon(
+                            Icons.Outlined.Notifications,
+                            contentDescription = "Уведомления",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
@@ -60,10 +77,12 @@ fun DashboardScreen(
             FloatingActionButton(
                 onClick = { /* add session */ },
                 containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Добавить сессию")
             }
         },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -72,7 +91,7 @@ fun DashboardScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Next session card (hero)
+            // Next session card
             uiState.nextSession?.let { session ->
                 item {
                     NextSessionCard(session = session, onClick = { onSessionClick(session.id) })
@@ -88,19 +107,18 @@ fun DashboardScreen(
                 )
             }
 
-            // Today's sessions
+            // Today's sessions header
             item {
                 Text(
                     "Расписание",
                     style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                 )
             }
 
             if (uiState.todaySessions.isEmpty()) {
-                item {
-                    EmptyDayCard()
-                }
+                item { EmptyDayCard() }
             } else {
                 items(uiState.todaySessions, key = { it.id }) { session ->
                     SessionCard(
@@ -131,7 +149,6 @@ private fun NextSessionCard(session: Session, onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar circle
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -178,17 +195,29 @@ private fun StatsRow(sessionsToday: Int, weekSessions: Int, newClients: Int) {
 
 @Composable
 private fun StatChip(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(
+    Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = CardDefaults.outlinedCardBorder(),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -206,12 +235,12 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Time indicator
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     session.startTime,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     session.endTime,
@@ -222,7 +251,6 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Divider line
             Box(
                 modifier = Modifier
                     .width(3.dp)
@@ -231,7 +259,7 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
                     .background(
                         when (session.status) {
                             SessionStatus.CONFIRMED -> MaterialTheme.colorScheme.primary
-                            SessionStatus.PENDING -> MaterialTheme.colorScheme.secondary
+                            SessionStatus.PENDING -> MaterialTheme.colorScheme.tertiary
                             SessionStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
                             SessionStatus.CANCELLED -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.outline
@@ -242,7 +270,11 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(session.clientName, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    session.clientName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 Text(
                     if (session.format == SessionFormat.ONLINE) "Онлайн" else "Очно",
                     style = MaterialTheme.typography.bodySmall,
@@ -250,7 +282,6 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
                 )
             }
 
-            // Status indicator
             Surface(
                 shape = MaterialTheme.shapes.extraSmall,
                 color = when (session.status) {
@@ -269,6 +300,11 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
                     },
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall,
+                    color = when (session.status) {
+                        SessionStatus.CONFIRMED -> MaterialTheme.colorScheme.primary
+                        SessionStatus.CANCELLED -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }
@@ -277,13 +313,18 @@ private fun SessionCard(session: Session, onClick: () -> Unit) {
 
 @Composable
 private fun EmptyDayCard() {
-    Surface(
+    Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = CardDefaults.outlinedCardBorder(),
     ) {
         Column(
-            modifier = Modifier.padding(32.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
@@ -296,12 +337,12 @@ private fun EmptyDayCard() {
             Text(
                 "Свободный день",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 "Нет запланированных сессий",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
