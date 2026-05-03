@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     try {
         const clients = await db.diaryClient.findMany({
             where: {
-                userId: auth.userId,
+                psychologistId: auth.userId,
                 ...(search && {
                     name: { contains: search, mode: 'insensitive' as const },
                 }),
@@ -37,11 +37,11 @@ export async function GET(req: NextRequest) {
             name: c.name,
             email: c.email || null,
             phone: c.phone || null,
-            telegramId: c.telegramId || null,
+            telegramId: c.telegramChatId || null,
             sessionsCount: c._count.sessions,
             lastSessionDate: c.sessions[0]?.date?.toISOString().split('T')[0] || null,
             notes: null,
-            status: 'ACTIVE',
+            status: (c.status || 'active').toUpperCase(),
         }));
 
         return NextResponse.json(formatted);
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
         const client = await db.diaryClient.create({
             data: {
-                userId: auth.userId,
+                psychologistId: auth.userId,
                 name,
                 email: email || null,
                 phone: phone || null,

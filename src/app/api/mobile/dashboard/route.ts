@@ -19,23 +19,23 @@ export async function GET(req: NextRequest) {
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
 
-        // Today's sessions
+        // Today's sessions (field is psychologistId, not userId)
         const todaySessions = await db.diarySession.findMany({
             where: {
-                userId: auth.userId,
+                psychologistId: auth.userId,
                 date: { gte: today, lt: tomorrow },
                 status: { not: 'cancelled' },
             },
             include: {
                 client: { select: { id: true, name: true } },
             },
-            orderBy: { startTime: 'asc' },
+            orderBy: { time: 'asc' },
         });
 
         // Week stats
         const weekSessions = await db.diarySession.findMany({
             where: {
-                userId: auth.userId,
+                psychologistId: auth.userId,
                 date: { gte: weekAgo, lt: tomorrow },
             },
             select: { status: true, clientId: true, date: true },
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         const now = new Date();
         const nextSession = todaySessions.find(s => {
             const sessionTime = new Date(s.date);
-            const [h, m] = (s.startTime || '00:00').split(':').map(Number);
+            const [h, m] = (s.time || '00:00').split(':').map(Number);
             sessionTime.setHours(h, m);
             return sessionTime > now;
         });
@@ -55,11 +55,11 @@ export async function GET(req: NextRequest) {
             clientId: s.client?.id || '',
             clientName: s.client?.name || 'Без имени',
             date: s.date.toISOString().split('T')[0],
-            startTime: s.startTime || '00:00',
-            endTime: s.endTime || '00:00',
+            startTime: s.time || '00:00',
+            endTime: s.endTime || '',
             status: (s.status || 'PENDING').toUpperCase(),
-            format: s.format === 'in_person' ? 'IN_PERSON' : 'ONLINE',
-            videoLink: s.videoLink || null,
+            format: s.format === 'in_person' || s.format === 'offline' ? 'IN_PERSON' : 'ONLINE',
+            videoLink: null,
             notes: null,
         }));
 
