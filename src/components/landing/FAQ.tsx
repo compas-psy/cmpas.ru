@@ -58,7 +58,7 @@ export default function FAQ() {
     };
 
     return (
-        <section className="py-24 md:py-32 bg-white">
+        <section className="py-16 md:py-20 bg-white">
             <div className="max-w-[1240px] mx-auto px-5 md:px-8">
                 <h2 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.015em] text-[#142018] mb-10 md:mb-14">
                     Частые вопросы

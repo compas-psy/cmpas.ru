@@ -12,7 +12,7 @@ const included = [
 
 export default function Pricing() {
     return (
-        <section id="pricing" className="py-24 md:py-32 bg-[#F7F8F4]">
+        <section id="pricing" className="py-16 md:py-20 bg-[#F7F8F4]">
             <div className="max-w-[1240px] mx-auto px-5 md:px-8">
                 <div className="text-center mb-12 md:mb-14">
                     <h2 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.015em] text-[#142018] mb-3">

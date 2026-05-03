@@ -20,7 +20,7 @@ const points = [
 
 export default function PositioningBand() {
     return (
-        <section className="py-20 md:py-28 relative overflow-hidden" style={{
+        <section className="py-16 md:py-24 relative overflow-hidden" style={{
             background: 'radial-gradient(circle at 80% 20%, rgba(204, 158, 80, 0.16), transparent 34%), linear-gradient(135deg, #143D2F 0%, #1D4735 55%, #285B46 100%)',
         }}>
             <div className="max-w-[1240px] mx-auto px-5 md:px-8 relative z-10">

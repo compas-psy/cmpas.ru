@@ -137,12 +137,12 @@ function NotificationBubble() {
 
 export default function Hero() {
     return (
-        <section className="relative pt-[96px] md:pt-[100px] pb-16 md:pb-24 overflow-hidden">
+        <section className="relative pt-[96px] md:pt-[100px] pb-10 md:pb-16 overflow-hidden">
             {/* Subtle bg gradient */}
             <div className="absolute inset-0 bg-gradient-to-b from-sage-50/80 to-[#F7F8F4] pointer-events-none" />
 
             <div className="relative max-w-[1240px] mx-auto px-5 md:px-8">
-                <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-8 min-h-[660px] lg:min-h-[700px]">
+                <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-8 min-h-[580px] lg:min-h-[640px]">
                     {/* Left: Text */}
                     <div className="flex-[46] w-full lg:max-w-[520px]">
                         {/* Badge */}

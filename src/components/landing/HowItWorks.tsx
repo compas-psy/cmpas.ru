@@ -1,4 +1,16 @@
+'use client';
+
 import { Send, CalendarDays, Bell, StickyNote } from 'lucide-react';
+import { useReveal } from './useReveal';
+
+function RevealItem({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+    const ref = useReveal(0.1);
+    return (
+        <div ref={ref} className={`landing-reveal ${delay ? `landing-reveal-delay-${delay}` : ''}`}>
+            {children}
+        </div>
+    );
+}
 
 const steps = [
     {
@@ -77,10 +89,13 @@ const steps = [
 
 export default function HowItWorks() {
     return (
-        <section id="how-it-works" className="py-24 md:py-32 bg-white">
-            <div className="max-w-[1240px] mx-auto px-5 md:px-8">
+        <section id="how-it-works" className="py-16 md:py-20 bg-white relative">
+            {/* Gradient bridge from previous section */}
+            <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-[#F7F8F4] to-white pointer-events-none" />
+
+            <div className="max-w-[1240px] mx-auto px-5 md:px-8 relative">
                 {/* Header */}
-                <div className="text-center mb-14 md:mb-16">
+                <div className="text-center mb-10 md:mb-12">
                     <h2 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.015em] text-[#142018] mb-3">
                         Как работает первая запись
                     </h2>
@@ -89,33 +104,30 @@ export default function HowItWorks() {
                     </p>
                 </div>
 
-                {/* Steps */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
-                    {steps.map((step) => (
-                        <div key={step.num} className="group">
-                            <div className="bg-[#F7F8F4] rounded-[24px] p-5 md:p-6 h-full border border-[#E4E9E3]/60 hover:shadow-card transition-shadow duration-300">
-                                {/* Step number + icon */}
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-8 h-8 rounded-full bg-forest-800 flex items-center justify-center text-white text-[13px] font-bold shrink-0">
-                                        {step.num}
-                                    </div>
-                                    <step.icon className="w-4.5 h-4.5 text-[#5F6C64]" />
-                                </div>
-                                <h3 className="text-[15px] font-semibold text-[#142018] leading-snug">
-                                    {step.title}
-                                </h3>
-                                {/* Mockup */}
-                                {step.mockup}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                {/* Steps with connected line */}
+                <div className="relative">
+                    {/* Connecting line (desktop) */}
+                    <div className="hidden lg:block absolute top-[52px] left-[calc(12.5%+16px)] right-[calc(12.5%+16px)] h-[2px]">
+                        <div className="w-full h-full bg-gradient-to-r from-sage-200 via-forest-800/20 to-sage-200 rounded-full" />
+                    </div>
 
-                {/* Dotted connector line (desktop only) */}
-                <div className="hidden lg:flex justify-center mt-6">
-                    <div className="flex items-center gap-1">
-                        {Array.from({length: 40}).map((_, i) => (
-                            <div key={i} className="w-1 h-1 rounded-full bg-[#E4E9E3]" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                        {steps.map((step, idx) => (
+                            <RevealItem key={step.num} delay={idx + 1}>
+                                <div className="bg-[#F7F8F4] rounded-[24px] p-5 md:p-6 h-full border border-[#E4E9E3]/60 hover:shadow-card hover:border-[#E4E9E3] transition-all duration-300 relative">
+                                    {/* Step number + icon */}
+                                    <div className="flex items-center gap-3 mb-2 relative z-10">
+                                        <div className="w-9 h-9 rounded-full bg-forest-800 flex items-center justify-center text-white text-[13px] font-bold shrink-0 shadow-sm">
+                                            {step.num}
+                                        </div>
+                                        <step.icon className="w-4.5 h-4.5 text-[#5F6C64]" />
+                                    </div>
+                                    <h3 className="text-[15px] font-semibold text-[#142018] leading-snug">
+                                        {step.title}
+                                    </h3>
+                                    {step.mockup}
+                                </div>
+                            </RevealItem>
                         ))}
                     </div>
                 </div>

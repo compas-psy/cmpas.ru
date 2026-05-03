@@ -1,10 +1,12 @@
-import { CheckCircle } from 'lucide-react';
+'use client';
 
-/* ── Phone Frame wrapper ── */
+import { CheckCircle } from 'lucide-react';
+import { useReveal } from './useReveal';
+
 function PhoneFrame({ children, label }: { children: React.ReactNode; label: string }) {
     return (
         <div className="flex flex-col items-center">
-            <div className="w-[220px] md:w-[240px] bg-white rounded-[28px] border-2 border-[#E4E9E3] shadow-floating overflow-hidden">
+            <div className="w-[220px] md:w-[240px] bg-white rounded-[28px] border-2 border-[#E4E9E3] shadow-floating overflow-hidden hover:shadow-[0_20px_50px_rgba(20,32,24,0.12)] transition-shadow duration-500">
                 {/* Status bar */}
                 <div className="h-7 bg-forest-800 flex items-center justify-between px-4">
                     <span className="text-white/70 text-[9px] font-semibold">9:41</span>
@@ -21,12 +23,17 @@ function PhoneFrame({ children, label }: { children: React.ReactNode; label: str
 }
 
 export default function ClientFlow() {
+    const textRef = useReveal();
+    const phonesRef = useReveal(0.08);
+
     return (
-        <section id="client-flow" className="py-24 md:py-32 bg-white">
-            <div className="max-w-[1240px] mx-auto px-5 md:px-8">
-                <div className="flex flex-col lg:flex-row items-center gap-14 lg:gap-16">
+        <section id="client-flow" className="py-16 md:py-20 bg-white relative">
+            <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#F7F8F4] to-transparent pointer-events-none" />
+
+            <div className="max-w-[1240px] mx-auto px-5 md:px-8 relative">
+                <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-14">
                     {/* Text */}
-                    <div className="lg:max-w-[400px] shrink-0">
+                    <div ref={textRef} className="landing-reveal lg:max-w-[400px] shrink-0">
                         <h2 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.015em] text-[#142018] mb-4">
                             Клиенту не&nbsp;нужно разбираться в&nbsp;системе
                         </h2>
@@ -48,14 +55,13 @@ export default function ClientFlow() {
                     </div>
 
                     {/* Phone mockups */}
-                    <div className="flex-1 flex flex-wrap justify-center gap-6 md:gap-8">
-                        {/* Screen 1: Booking */}
+                    <div ref={phonesRef} className="landing-reveal flex-1 flex flex-wrap justify-center gap-5 md:gap-6">
                         <PhoneFrame label="Выбор времени">
                             <div className="p-4">
                                 <div className="text-[14px] font-bold text-[#142018] mb-3">Запись на сессию</div>
                                 <div className="text-[11px] font-bold text-[#5F6C64] mb-2">Выберите дату</div>
                                 <div className="grid grid-cols-7 gap-0.5 mb-3">
-                                    {Array.from({length: 7}, (_, i) => ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]).map(d => (
+                                    {['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d => (
                                         <div key={d} className="text-[8px] text-[#5F6C64] text-center font-semibold">{d}</div>
                                     ))}
                                     {[12,13,14,15,16,17,18].map(d => (
@@ -76,7 +82,6 @@ export default function ClientFlow() {
                             </div>
                         </PhoneFrame>
 
-                        {/* Screen 2: Confirmation */}
                         <PhoneFrame label="Подтверждение">
                             <div className="p-4 text-center">
                                 <div className="w-12 h-12 rounded-full bg-sage-100 flex items-center justify-center mx-auto mb-3 mt-4">
@@ -103,7 +108,6 @@ export default function ClientFlow() {
                             </div>
                         </PhoneFrame>
 
-                        {/* Screen 3: My sessions */}
                         <PhoneFrame label="Мои записи">
                             <div className="p-4">
                                 <div className="text-[14px] font-bold text-[#142018] mb-3">Мои записи</div>

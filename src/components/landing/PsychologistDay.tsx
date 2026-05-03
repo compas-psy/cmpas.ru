@@ -1,10 +1,23 @@
+'use client';
+
 import { Sun, User, StickyNote, Moon } from 'lucide-react';
+import { useReveal } from './useReveal';
+
+function RevealCard({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+    const ref = useReveal(0.1);
+    return (
+        <div ref={ref} className={`landing-reveal ${delay ? `landing-reveal-delay-${delay}` : ''}`}>
+            {children}
+        </div>
+    );
+}
 
 const cards = [
     {
         time: '08:00',
         icon: Sun,
         title: 'Утро: сегодня 3 сессии',
+        gradient: 'from-amber-50/80 to-white',
         mockup: (
             <div className="mt-4 space-y-2">
                 {[
@@ -22,9 +35,6 @@ const cards = [
                         }`}>{s.format}</span>
                     </div>
                 ))}
-                <div className="text-center pt-1">
-                    <span className="text-[11px] font-medium text-forest-800 cursor-pointer hover:underline">Открыть календарь →</span>
-                </div>
             </div>
         ),
     },
@@ -32,6 +42,7 @@ const cards = [
         time: '14:30',
         icon: User,
         title: 'Перед встречей: карточка клиента',
+        gradient: 'from-sage-50 to-white',
         mockup: (
             <div className="mt-4 bg-white rounded-xl border border-[#E4E9E3] p-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -55,6 +66,7 @@ const cards = [
         time: '15:00',
         icon: StickyNote,
         title: 'После сессии: заметка',
+        gradient: 'from-violet-50/40 to-white',
         mockup: (
             <div className="mt-4 bg-white rounded-xl border border-[#E4E9E3] p-4">
                 <div className="text-[12px] font-semibold text-[#142018] mb-2">Новая заметка</div>
@@ -69,6 +81,7 @@ const cards = [
         time: '21:00',
         icon: Moon,
         title: 'Вечер: день закрыт',
+        gradient: 'from-indigo-50/30 to-white',
         mockup: (
             <div className="mt-4 bg-white rounded-xl border border-[#E4E9E3] p-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -91,10 +104,13 @@ const cards = [
 
 export default function PsychologistDay() {
     return (
-        <section id="psychologist-day" className="py-24 md:py-32 bg-[#F7F8F4]">
-            <div className="max-w-[1240px] mx-auto px-5 md:px-8">
+        <section id="psychologist-day" className="py-16 md:py-20 bg-white relative">
+            {/* Soft gradient top */}
+            <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#F7F8F4] to-transparent pointer-events-none" />
+
+            <div className="max-w-[1240px] mx-auto px-5 md:px-8 relative">
                 {/* Header */}
-                <div className="text-center mb-14 md:mb-16">
+                <div className="text-center mb-10 md:mb-12">
                     <h2 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.015em] text-[#142018] mb-3">
                         Рабочий день психолога
                     </h2>
@@ -103,23 +119,25 @@ export default function PsychologistDay() {
                     </p>
                 </div>
 
-                {/* Cards 2×2 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-                    {cards.map((card) => {
+                {/* Cards 2×2 with staggered reveal */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                    {cards.map((card, idx) => {
                         const Icon = card.icon;
                         return (
-                            <div key={card.time} className="bg-white rounded-[24px] border border-[#E4E9E3] p-6 md:p-7 hover:shadow-card transition-shadow duration-300">
-                                <div className="flex items-center gap-3 mb-1">
-                                    <div className="w-9 h-9 rounded-xl bg-sage-100 flex items-center justify-center">
-                                        <Icon className="w-4.5 h-4.5 text-forest-800" />
+                            <RevealCard key={card.time} delay={idx < 2 ? idx + 1 : idx - 1}>
+                                <div className={`bg-gradient-to-br ${card.gradient} rounded-[24px] border border-[#E4E9E3] p-6 md:p-7 hover:shadow-card-hover transition-all duration-300 h-full`}>
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <div className="w-9 h-9 rounded-xl bg-sage-100 flex items-center justify-center">
+                                            <Icon className="w-4.5 h-4.5 text-forest-800" />
+                                        </div>
+                                        <span className="text-[12px] font-bold text-[#5F6C64] uppercase tracking-wider tabular-nums">{card.time}</span>
                                     </div>
-                                    <span className="text-[12px] font-bold text-[#5F6C64] uppercase tracking-wider tabular-nums">{card.time}</span>
+                                    <h3 className="text-[16px] font-bold text-[#142018] leading-snug">
+                                        {card.title}
+                                    </h3>
+                                    {card.mockup}
                                 </div>
-                                <h3 className="text-[16px] font-bold text-[#142018] leading-snug">
-                                    {card.title}
-                                </h3>
-                                {card.mockup}
-                            </div>
+                            </RevealCard>
                         );
                     })}
                 </div>
