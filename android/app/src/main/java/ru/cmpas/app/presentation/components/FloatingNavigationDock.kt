@@ -2,6 +2,7 @@ package ru.cmpas.app.presentation.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -15,18 +16,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.navigation.BottomNavItem
 
 /**
- * Floating Navigation Dock — полупрозрачная плавающая капсула
- * над нижним краем экрана в стиле Telegram.
+ * Floating Navigation Dock — плавающая стеклянная капсула
+ * в стиле Telegram / iOS tab bar.
  *
- * - Мягкая тень
- * - Активный пункт = pill-фон primaryContainer
- * - Крупные tap-targets 56dp
- * - Отступ от краёв 16dp, от низа 12dp
+ * - Высота ~72dp, bottom padding 20dp
+ * - navigationBarsPadding()
+ * - Активный item: мягкая круглая "лужица" (CircleShape), не pill
+ * - Равномерные item'ы без раздувания
+ * - Иконки 24dp, активная 26dp
+ * - Label 12sp минимум
  */
 @Composable
 fun FloatingNavigationDock(
@@ -37,21 +40,23 @@ fun FloatingNavigationDock(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 20.dp)
             .shadow(
-                elevation = 12.dp,
-                shape = RoundedCornerShape(28.dp),
-                ambientColor = Color.Black.copy(alpha = 0.08f),
-                spotColor = Color.Black.copy(alpha = 0.12f),
+                elevation = 16.dp,
+                shape = RoundedCornerShape(32.dp),
+                ambientColor = Color.Black.copy(alpha = 0.06f),
+                spotColor = Color.Black.copy(alpha = 0.1f),
             ),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(32.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        tonalElevation = 3.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .height(72.dp)
+                .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -61,6 +66,7 @@ fun FloatingNavigationDock(
                     item = item,
                     isSelected = isSelected,
                     onClick = { onItemClick(item) },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -72,49 +78,54 @@ private fun DockItem(
     item: BottomNavItem,
     isSelected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val animatedAlpha by animateFloatAsState(
-        targetValue = if (isSelected) 1f else 0f,
+    val iconSize by animateDpAsState(
+        targetValue = if (isSelected) 26.dp else 24.dp,
         animationSpec = tween(200),
-        label = "pill_alpha",
+        label = "icon_size",
     )
 
     Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
             .clickable(
-                indication = ripple(bounded = true, radius = 28.dp),
+                indication = ripple(bounded = true, radius = 32.dp),
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onClick,
             )
-            .then(
-                if (isSelected) {
-                    Modifier.background(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = animatedAlpha),
-                        RoundedCornerShape(16.dp),
-                    )
-                } else Modifier
-            )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = item.label,
-            modifier = Modifier.size(24.dp),
-            tint = if (isSelected)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(2.dp))
+        // Icon with soft circle behind if selected
+        Box(contentAlignment = Alignment.Center) {
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
+                )
+            }
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.label,
+                modifier = Modifier.size(iconSize),
+                tint = if (isSelected)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = item.label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
             color = if (isSelected)
                 MaterialTheme.colorScheme.primary
             else
                 MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
         )
     }
 }

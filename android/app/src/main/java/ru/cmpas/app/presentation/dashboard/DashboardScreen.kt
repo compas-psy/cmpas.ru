@@ -14,10 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -62,7 +63,7 @@ fun DashboardScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp), // space for floating dock
+        contentPadding = PaddingValues(bottom = 120.dp), // dock + FAB space
     ) {
         // ─── Header ───
         item {
@@ -82,12 +83,13 @@ fun DashboardScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-        }
 
-        // ─── Smart Actions ───
-        if (uiState.nextSession != null) {
+            // ─── Smart Actions (conditional) ───
             item {
-                SmartActionsSection(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                SmartActionsSection(
+                    session = session,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
         }
 
@@ -177,7 +179,7 @@ private fun TodayHeader(userName: String?, todayFormatted: String) {
 }
 
 // ═══════════════════════════════════════════
-// Hero Card: Next Session
+// Hero Card: Next Session — крупная, информативная
 // ═══════════════════════════════════════════
 
 @Composable
@@ -205,8 +207,8 @@ private fun NextSessionHeroCard(
 
             // Client + Time row
             Row(verticalAlignment = Alignment.Top) {
-                AvatarCircle(name = session.clientName, size = 48.dp)
-                Spacer(Modifier.width(12.dp))
+                AvatarCircle(name = session.clientName, size = 52.dp)
+                Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         session.clientName,
@@ -217,19 +219,20 @@ private fun NextSessionHeroCard(
                     if (session.occurrenceIndex != null) {
                         Text(
                             "${session.occurrenceIndex}-я сессия",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     // Time remaining
                     val minutesUntil = getMinutesUntil(session.startTime)
                     if (minutesUntil != null && minutesUntil > 0) {
+                        Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Schedule, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Outlined.Schedule, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.width(4.dp))
                             Text(
                                 "через $minutesUntil мин",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -237,11 +240,11 @@ private fun NextSessionHeroCard(
                 }
                 // Time block
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
@@ -252,7 +255,7 @@ private fun NextSessionHeroCard(
                         )
                         Text(
                             "${if (session.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн"} · ${if (session.format == SessionFormat.ONLINE) "Zoom" else "Кабинет"}",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
@@ -262,15 +265,34 @@ private fun NextSessionHeroCard(
             // Previous notes summary
             if (!session.previousNotesSummary.isNullOrBlank()) {
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    session.previousNotesSummary!!,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Text(
+                        session.previousNotesSummary!!,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                    )
+                }
             }
 
-            // Action buttons
+            // Status badges row
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                PaymentBadge(session.paymentStatus)
+                ConsentBadge(session.consentStatus)
+                HomeworkBadge(session.homeworkStatus)
+                if (session.occurrenceIndex != null && session.seriesTotal != null) {
+                    SeriesBadge(session.occurrenceIndex, session.seriesTotal)
+                }
+            }
+
+            // Action buttons — крупные, 80dp height
             Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -292,30 +314,67 @@ private fun HeroActionButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    OutlinedButton(
+    Surface(
+        modifier = modifier.height(80.dp),
         onClick = onClick,
-        modifier = modifier.height(64.dp),
-        shape = RoundedCornerShape(12.dp),
-        contentPadding = PaddingValues(4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = ButtonDefaults.outlinedButtonBorder(enabled = true),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, Modifier.size(20.dp))
-            Spacer(Modifier.height(2.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
             Text(
                 label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 14.sp),
                 maxLines = 2,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
 }
 
 // ═══════════════════════════════════════════
-// Smart Actions
+// Smart Actions — условные, по контексту сессии
 // ═══════════════════════════════════════════
 
 @Composable
-private fun SmartActionsSection(modifier: Modifier = Modifier) {
+private fun SmartActionsSection(
+    session: Session,
+    modifier: Modifier = Modifier,
+) {
+    // Собираем только релевантные действия
+    val actions = buildList {
+        if (session.isRecurring) {
+            add(Triple("Занять тот же слот\nчерез неделю", Icons.Outlined.Replay, {}))
+        }
+        if (session.seriesTotal != null) {
+            add(Triple("Продлить серию", Icons.Outlined.TrendingUp, {}))
+        }
+        if (session.paymentStatus == PaymentStatus.UNPAID || session.paymentStatus == PaymentStatus.PARTIAL) {
+            add(Triple("Отметить оплату", Icons.Outlined.CreditCard, {}))
+        }
+        if (session.consentStatus == ConsentStatus.MISSING || session.consentStatus == ConsentStatus.EXPIRED) {
+            add(Triple("Запросить согласие", Icons.Outlined.Description, {}))
+        }
+        // Всегда показываем базовые, если осталось место
+        if (size < 2) {
+            add(Triple("Изменить слот", Icons.Outlined.Edit, {}))
+        }
+        if (size < 4) {
+            add(Triple("Пауза", Icons.Outlined.PauseCircle, {}))
+        }
+    }
+
+    if (actions.isEmpty()) return
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -327,21 +386,26 @@ private fun SmartActionsSection(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SmartActionChip("Занять тот же слот\nчерез неделю", Icons.Outlined.Replay, {}, Modifier.weight(1f))
-                SmartActionChip("Продлить серию", Icons.Outlined.TrendingUp, {}, Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SmartActionChip("Изменить слот", Icons.Outlined.Edit, {}, Modifier.weight(1f))
-                SmartActionChip("Пауза", Icons.Outlined.PauseCircle, {}, Modifier.weight(1f))
+            Spacer(Modifier.height(10.dp))
+
+            // Выводим по 2 в строке
+            val rows = actions.chunked(2)
+            rows.forEachIndexed { index, row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    row.forEach { (label, icon, onClick) ->
+                        SmartActionChip(label, icon, onClick, Modifier.weight(1f))
+                    }
+                    // Заполняем пустое место если нечётное
+                    if (row.size == 1) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+                if (index < rows.lastIndex) {
+                    Spacer(Modifier.height(8.dp))
+                }
             }
         }
     }
