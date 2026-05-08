@@ -25,12 +25,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.R
 import ru.cmpas.app.domain.model.*
 import ru.cmpas.app.presentation.components.*
-import ru.cmpas.app.presentation.theme.*
 import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -63,9 +59,8 @@ fun DashboardScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 120.dp), // dock + FAB space
+        contentPadding = PaddingValues(bottom = 120.dp),
     ) {
-        // ─── Header ───
         item {
             TodayHeader(
                 userName = uiState.userName,
@@ -73,7 +68,6 @@ fun DashboardScreen(
             )
         }
 
-        // ─── Hero: Next Session ───
         uiState.nextSession?.let { session ->
             item {
                 NextSessionHeroCard(
@@ -84,7 +78,6 @@ fun DashboardScreen(
                 )
             }
 
-            // ─── Smart Actions (conditional) ───
             item {
                 SmartActionsSection(
                     session = session,
@@ -93,7 +86,6 @@ fun DashboardScreen(
             }
         }
 
-        // ─── Today's Schedule ───
         item {
             SectionHeader(
                 title = "Сегодня",
@@ -104,9 +96,7 @@ fun DashboardScreen(
         }
 
         if (uiState.todaySessions.isEmpty()) {
-            item {
-                EmptyDayCard(modifier = Modifier.padding(horizontal = 16.dp))
-            }
+            item { EmptyDayCard(modifier = Modifier.padding(horizontal = 16.dp)) }
         } else {
             items(uiState.todaySessions, key = { it.id }) { session ->
                 SessionTimelineRow(
@@ -117,7 +107,6 @@ fun DashboardScreen(
             }
         }
 
-        // ─── Attention Cards ───
         if (uiState.attentionItems.isNotEmpty()) {
             item {
                 SectionHeader(
@@ -135,16 +124,13 @@ fun DashboardScreen(
     }
 }
 
-// ═══════════════════════════════════════════
-// Header: greeting + date + avatar + bell
-// ═══════════════════════════════════════════
-
 @Composable
 private fun TodayHeader(userName: String?, todayFormatted: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .statusBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
@@ -178,10 +164,6 @@ private fun TodayHeader(userName: String?, todayFormatted: String) {
     }
 }
 
-// ═══════════════════════════════════════════
-// Hero Card: Next Session — крупная, информативная
-// ═══════════════════════════════════════════
-
 @Composable
 private fun NextSessionHeroCard(
     session: Session,
@@ -197,7 +179,6 @@ private fun NextSessionHeroCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            // Label
             Text(
                 "Следующая сессия",
                 style = MaterialTheme.typography.labelMedium,
@@ -205,7 +186,6 @@ private fun NextSessionHeroCard(
             )
             Spacer(Modifier.height(12.dp))
 
-            // Client + Time row
             Row(verticalAlignment = Alignment.Top) {
                 AvatarCircle(name = session.clientName, size = 52.dp)
                 Spacer(Modifier.width(14.dp))
@@ -223,7 +203,6 @@ private fun NextSessionHeroCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    // Time remaining
                     val minutesUntil = getMinutesUntil(session.startTime)
                     if (minutesUntil != null && minutesUntil > 0) {
                         Spacer(Modifier.height(4.dp))
@@ -238,7 +217,6 @@ private fun NextSessionHeroCard(
                         }
                     }
                 }
-                // Time block
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
@@ -262,7 +240,6 @@ private fun NextSessionHeroCard(
                 }
             }
 
-            // Previous notes summary
             if (!session.previousNotesSummary.isNullOrBlank()) {
                 Spacer(Modifier.height(12.dp))
                 Surface(
@@ -279,11 +256,8 @@ private fun NextSessionHeroCard(
                 }
             }
 
-            // Status badges row
             Spacer(Modifier.height(12.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 PaymentBadge(session.paymentStatus)
                 ConsentBadge(session.consentStatus)
                 HomeworkBadge(session.homeworkStatus)
@@ -292,7 +266,6 @@ private fun NextSessionHeroCard(
                 }
             }
 
-            // Action buttons — крупные, 80dp height
             Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -341,36 +314,18 @@ private fun HeroActionButton(
     }
 }
 
-// ═══════════════════════════════════════════
-// Smart Actions — условные, по контексту сессии
-// ═══════════════════════════════════════════
-
 @Composable
 private fun SmartActionsSection(
     session: Session,
     modifier: Modifier = Modifier,
 ) {
-    // Собираем только релевантные действия
     val actions = buildList {
-        if (session.isRecurring) {
-            add(Triple("Занять тот же слот\nчерез неделю", Icons.Outlined.Replay, {}))
-        }
-        if (session.seriesTotal != null) {
-            add(Triple("Продлить серию", Icons.Outlined.TrendingUp, {}))
-        }
-        if (session.paymentStatus == PaymentStatus.UNPAID || session.paymentStatus == PaymentStatus.PARTIAL) {
-            add(Triple("Отметить оплату", Icons.Outlined.CreditCard, {}))
-        }
-        if (session.consentStatus == ConsentStatus.MISSING || session.consentStatus == ConsentStatus.EXPIRED) {
-            add(Triple("Запросить согласие", Icons.Outlined.Description, {}))
-        }
-        // Всегда показываем базовые, если осталось место
-        if (size < 2) {
-            add(Triple("Изменить слот", Icons.Outlined.Edit, {}))
-        }
-        if (size < 4) {
-            add(Triple("Пауза", Icons.Outlined.PauseCircle, {}))
-        }
+        if (session.isRecurring) add(Triple("Занять тот же слот\nчерез неделю", Icons.Outlined.Replay, {}))
+        if (session.seriesTotal != null) add(Triple("Продлить серию", Icons.Outlined.TrendingUp, {}))
+        if (session.paymentStatus == PaymentStatus.UNPAID || session.paymentStatus == PaymentStatus.PARTIAL) add(Triple("Отметить оплату", Icons.Outlined.CreditCard, {}))
+        if (session.consentStatus == ConsentStatus.MISSING || session.consentStatus == ConsentStatus.EXPIRED) add(Triple("Запросить согласие", Icons.Outlined.Description, {}))
+        if (size < 2) add(Triple("Изменить слот", Icons.Outlined.Edit, {}))
+        if (size < 4) add(Triple("Пауза", Icons.Outlined.PauseCircle, {}))
     }
 
     if (actions.isEmpty()) return
@@ -387,10 +342,7 @@ private fun SmartActionsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
-
-            // Выводим по 2 в строке
-            val rows = actions.chunked(2)
-            rows.forEachIndexed { index, row ->
+            actions.chunked(2).forEachIndexed { index, row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -398,22 +350,13 @@ private fun SmartActionsSection(
                     row.forEach { (label, icon, onClick) ->
                         SmartActionChip(label, icon, onClick, Modifier.weight(1f))
                     }
-                    // Заполняем пустое место если нечётное
-                    if (row.size == 1) {
-                        Spacer(Modifier.weight(1f))
-                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
-                if (index < rows.lastIndex) {
-                    Spacer(Modifier.height(8.dp))
-                }
+                if (index < actions.chunked(2).lastIndex) Spacer(Modifier.height(8.dp))
             }
         }
     }
 }
-
-// ═══════════════════════════════════════════
-// Session Timeline Row
-// ═══════════════════════════════════════════
 
 @Composable
 private fun SessionTimelineRow(
@@ -431,7 +374,6 @@ private fun SessionTimelineRow(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Time column
             Column(horizontalAlignment = Alignment.Start) {
                 Text(
                     session.startTime,
@@ -445,14 +387,9 @@ private fun SessionTimelineRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
             Spacer(Modifier.width(12.dp))
-
-            // Avatar
             AvatarCircle(name = session.clientName, size = 36.dp)
             Spacer(Modifier.width(10.dp))
-
-            // Name + format
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     session.clientName,
@@ -466,37 +403,20 @@ private fun SessionTimelineRow(
                 )
             }
 
-            // Status badge
             when {
-                session.homeworkStatus == HomeworkStatus.DONE || session.homeworkStatus == HomeworkStatus.PARTIAL ->
-                    HomeworkBadge(session.homeworkStatus)
-                session.paymentStatus == PaymentStatus.PAID ->
-                    PaymentBadge(PaymentStatus.PAID)
-                session.consentStatus == ConsentStatus.MISSING ->
-                    ConsentBadge(ConsentStatus.MISSING)
+                session.homeworkStatus == HomeworkStatus.DONE || session.homeworkStatus == HomeworkStatus.PARTIAL -> HomeworkBadge(session.homeworkStatus)
+                session.paymentStatus == PaymentStatus.PAID -> PaymentBadge(PaymentStatus.PAID)
+                session.consentStatus == ConsentStatus.MISSING -> ConsentBadge(ConsentStatus.MISSING)
                 else -> {}
             }
-
             Spacer(Modifier.width(4.dp))
-            Icon(
-                Icons.Outlined.ChevronRight,
-                null,
-                Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            )
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
         }
     }
 }
 
-// ═══════════════════════════════════════════
-// Attention Section
-// ═══════════════════════════════════════════
-
 @Composable
-private fun AttentionSection(
-    items: List<AttentionItem>,
-    modifier: Modifier = Modifier,
-) {
+private fun AttentionSection(items: List<AttentionItem>, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -522,23 +442,13 @@ private fun AttentionSection(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        item.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    Text(item.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                 }
-                if (index < items.lastIndex) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                }
+                if (index < items.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             }
         }
     }
 }
-
-// ═══════════════════════════════════════════
-// Empty Day
-// ═══════════════════════════════════════════
 
 @Composable
 private fun EmptyDayCard(modifier: Modifier = Modifier) {
@@ -561,12 +471,8 @@ private fun EmptyDayCard(modifier: Modifier = Modifier) {
     }
 }
 
-// ═══════════════════════════════════════════
-// Utils
-// ═══════════════════════════════════════════
-
 private fun getGreeting(): String {
-    val hour = java.time.LocalTime.now().hour
+    val hour = LocalTime.now().hour
     return when {
         hour < 6 -> "Доброй ночи"
         hour < 12 -> "Доброе утро"
