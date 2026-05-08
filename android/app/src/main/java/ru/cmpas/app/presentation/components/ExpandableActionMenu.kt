@@ -24,10 +24,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Expandable Action Menu — FAB + вертикальное меню действий.
- *
- * Каждый пункт: icon + label + description.
- * Меню раскрывается вверх с scrim.
- * Крупные tap targets 56dp.
+ * FAB намеренно расположен НАД floating dock, а не поверх него.
  */
 data class ActionMenuItem(
     val label: String,
@@ -51,12 +48,11 @@ fun ExpandableActionMenu(
     )
 
     Box(modifier = modifier) {
-        // Scrim — мягкий
         if (expanded) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.25f))
+                    .background(Color.Black.copy(alpha = 0.22f))
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
@@ -64,57 +60,57 @@ fun ExpandableActionMenu(
             )
         }
 
-        // Menu items
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 20.dp, bottom = 100.dp),
+                .padding(end = 18.dp, bottom = 178.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             items.forEachIndexed { index, item ->
                 AnimatedVisibility(
                     visible = expanded,
-                    enter = fadeIn(tween(150, delayMillis = index * 50)) +
+                    enter = fadeIn(tween(150, delayMillis = index * 45)) +
                             scaleIn(
-                                tween(200, delayMillis = index * 50),
-                                initialScale = 0.5f,
+                                tween(200, delayMillis = index * 45),
+                                initialScale = 0.72f,
                             ) +
                             slideInVertically(
-                                tween(200, delayMillis = index * 50),
+                                tween(200, delayMillis = index * 45),
                                 initialOffsetY = { it / 2 },
                             ),
-                    exit = fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.8f),
+                    exit = fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.86f),
                 ) {
                     Surface(
                         modifier = Modifier
-                            .shadow(8.dp, RoundedCornerShape(16.dp))
+                            .widthIn(min = 248.dp, max = 312.dp)
+                            .shadow(10.dp, RoundedCornerShape(20.dp))
                             .clickable {
                                 expanded = false
                                 item.onClick()
                             },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = if (item.isPrimary)
                             MaterialTheme.colorScheme.primaryContainer
                         else
                             MaterialTheme.colorScheme.surface,
-                        tonalElevation = 4.dp,
+                        tonalElevation = 0.dp,
                     ) {
                         Row(
                             modifier = Modifier
-                                .defaultMinSize(minHeight = 56.dp)
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .defaultMinSize(minHeight = 60.dp)
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(38.dp)
                                     .background(
                                         if (item.isPrimary)
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
                                         else
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
                                         CircleShape,
                                     ),
                                 contentAlignment = Alignment.Center,
@@ -127,14 +123,15 @@ fun ExpandableActionMenu(
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     item.label,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 if (item.description != null) {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         item.description,
                                         style = MaterialTheme.typography.bodySmall,
@@ -148,36 +145,32 @@ fun ExpandableActionMenu(
             }
         }
 
-        // FAB — 60dp
         FloatingActionButton(
             onClick = { expanded = !expanded },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 20.dp, bottom = 28.dp)
-                .size(60.dp),
+                .padding(end = 18.dp, bottom = 104.dp)
+                .size(62.dp),
             shape = CircleShape,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 10.dp,
-                pressedElevation = 14.dp,
+                defaultElevation = 12.dp,
+                pressedElevation = 16.dp,
             ),
         ) {
             Icon(
                 Icons.Default.Add,
                 contentDescription = if (expanded) "Закрыть" else "Действия",
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(27.dp)
                     .rotate(rotation),
             )
         }
     }
 }
 
-/**
- * Контекстные действия для каждого экрана.
- */
 object DefaultActions {
     fun todayActions(
         onNewSession: () -> Unit = {},
