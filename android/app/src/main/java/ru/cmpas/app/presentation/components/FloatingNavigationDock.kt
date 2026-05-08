@@ -1,7 +1,7 @@
 package ru.cmpas.app.presentation.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,7 +36,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.navigation.BottomNavItem
 import ru.cmpas.app.presentation.theme.Forest800
 import ru.cmpas.app.presentation.theme.Sage150
@@ -43,11 +46,11 @@ import ru.cmpas.app.presentation.theme.Sage150
 /**
  * Native floating navigation dock.
  *
- * Это не стандартный Material BottomBar, а плавающая мобильная капсула:
- * - учитывает системную navigation bar через navigationBarsPadding();
- * - не перекрывает gesture bar;
- * - активный пункт — мягкая круглая зона;
- * - крупные tap-targets и читаемые labels.
+ * Responsive для узких экранов Fold/малых телефонов:
+ * - все иконки одного размера;
+ * - на узкой ширине подпись показывается только у активного пункта;
+ * - элементы не налезают друг на друга;
+ * - dock учитывает системную navigation bar.
  */
 @Composable
 fun FloatingNavigationDock(
@@ -55,37 +58,48 @@ fun FloatingNavigationDock(
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    BoxWithConstraints(
         modifier = modifier
             .navigationBarsPadding()
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-            .shadow(
-                elevation = 18.dp,
-                shape = RoundedCornerShape(32.dp),
-                ambientColor = Color.Black.copy(alpha = 0.08f),
-                spotColor = Color.Black.copy(alpha = 0.14f),
-            ),
-        shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-        tonalElevation = 0.dp,
+            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
     ) {
-        Row(
+        val compact = maxWidth < 390.dp
+        val dockHeight = if (compact) 68.dp else 74.dp
+        val itemHeight = if (compact) 52.dp else 58.dp
+
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(74.dp)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+                .shadow(
+                    elevation = 18.dp,
+                    shape = RoundedCornerShape(32.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.08f),
+                    spotColor = Color.Black.copy(alpha = 0.14f),
+                ),
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+            tonalElevation = 0.dp,
         ) {
-            BottomNavItem.entries.forEach { item ->
-                val selected = currentRoute == item.screen.route
-                DockItem(
-                    item = item,
-                    selected = selected,
-                    onClick = { onItemClick(item) },
-                    modifier = Modifier.weight(1f),
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(dockHeight)
+                    .padding(horizontal = if (compact) 6.dp else 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BottomNavItem.entries.forEach { item ->
+                    val selected = currentRoute == item.screen.route
+                    DockItem(
+                        item = item,
+                        selected = selected,
+                        compact = compact,
+                        itemHeight = itemHeight,
+                        onClick = { onItemClick(item) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }
@@ -95,14 +109,11 @@ fun FloatingNavigationDock(
 private fun DockItem(
     item: BottomNavItem,
     selected: Boolean,
+    compact: Boolean,
+    itemHeight: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val iconSize by animateDpAsState(
-        targetValue = if (selected) 23.dp else 21.dp,
-        animationSpec = tween(180),
-        label = "dock_icon_size",
-    )
     val scale by animateFloatAsState(
         targetValue = if (selected) 1.02f else 1f,
         animationSpec = tween(180),
@@ -118,10 +129,11 @@ private fun DockItem(
         animationSpec = tween(180),
         label = "dock_label_tint",
     )
+    val showLabel = !compact || selected
 
     Column(
         modifier = modifier
-            .height(58.dp)
+            .height(itemHeight)
             .clip(RoundedCornerShape(24.dp))
             .clickable(
                 indication = ripple(bounded = true, radius = 28.dp),
@@ -134,7 +146,7 @@ private fun DockItem(
     ) {
         Box(
             modifier = Modifier
-                .size(if (selected) 34.dp else 30.dp)
+                .size(if (selected) 36.dp else 32.dp)
                 .clip(CircleShape)
                 .background(if (selected) Sage150 else Color.Transparent),
             contentAlignment = Alignment.Center,
@@ -142,18 +154,25 @@ private fun DockItem(
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
-                modifier = Modifier.size(iconSize),
+                modifier = Modifier.size(22.dp),
                 tint = iconTint,
             )
         }
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = item.label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = labelColor,
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-        )
+
+        AnimatedVisibility(visible = showLabel) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = item.label,
+                    fontSize = if (compact) 10.sp else 11.sp,
+                    lineHeight = if (compact) 11.sp else 12.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = labelColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }
