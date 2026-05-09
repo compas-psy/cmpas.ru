@@ -10,12 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-/**
- * Section header with optional action link.
- * e.g. "Сегодня" + "Смотреть календарь >"
- */
 @Composable
 fun SectionHeader(
     title: String,
@@ -57,8 +54,8 @@ fun SectionHeader(
 }
 
 /**
- * Smart action chip — pill button with icon for quick actions.
- * e.g. "🔄 Занять тот же слот через неделю"
+ * Readable mobile action chip.
+ * Защищает интерфейс от вертикальных переносов на узких экранах.
  */
 @Composable
 fun SmartActionChip(
@@ -68,14 +65,16 @@ fun SmartActionChip(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.defaultMinSize(minHeight = 48.dp),
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         border = ButtonDefaults.outlinedButtonBorder(enabled = true),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -86,9 +85,11 @@ fun SmartActionChip(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text,
+                text.replace("\n", " "),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
