@@ -273,6 +273,7 @@ private fun ClientStatusOverview() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ClientNextSession(client: Client, session: Session?, onSessionClick: (String) -> Unit) {
     SectionHeader(title = "Следующая сессия")
@@ -323,6 +324,7 @@ private fun ClientTherapyOverview(client: Client, onNoteClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ClientSessionRow(session: Session, onClick: () -> Unit) {
     Card(
