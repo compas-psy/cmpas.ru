@@ -53,6 +53,7 @@ fun SectionHeader(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartActionChip(
     text: String,
