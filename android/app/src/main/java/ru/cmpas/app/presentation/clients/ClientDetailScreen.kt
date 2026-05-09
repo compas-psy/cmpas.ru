@@ -35,6 +35,7 @@ fun ClientDetailScreen(
     onSessionClick: (String) -> Unit = {},
     onScheduleClick: () -> Unit = {},
     onNoteClick: () -> Unit = {},
+    onQuickAction: (String) -> Unit = {},
     viewModel: ClientDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -88,7 +89,7 @@ fun ClientDetailScreen(
                     DropdownMenuItem(
                         text = { Text("Пауза в работе") },
                         leadingIcon = { Icon(Icons.Outlined.PauseCircle, null) },
-                        onClick = { showClientMenu = false },
+                        onClick = { showClientMenu = false; onQuickAction("block-time") },
                     )
                 }
             }
@@ -119,8 +120,8 @@ fun ClientDetailScreen(
                                 ClientPrimaryActions(
                                     onScheduleClick = onScheduleClick,
                                     onChangeSlotClick = onScheduleClick,
-                                    onExtendSeriesClick = { tabIndex = 1 },
-                                    onPauseClick = {},
+                                    onExtendSeriesClick = { onQuickAction("repeat-slot") },
+                                    onPauseClick = { onQuickAction("block-time") },
                                 )
                             }
                             item { ClientStatusOverview() }
@@ -183,8 +184,7 @@ private fun RhythmCard(client: Client) {
                 Text("Ритм работы", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(14.dp))
-            val slot = anchoredSlotLabel(client)
-            RhythmInfoLine(Icons.Outlined.Schedule, "Регулярный слот", slot)
+            RhythmInfoLine(Icons.Outlined.Schedule, "Регулярный слот", anchoredSlotLabel(client))
             RhythmInfoLine(Icons.Outlined.Videocam, "Формат", formatLabel(client.anchorFormat))
             RhythmInfoLine(Icons.Outlined.TrendingUp, "Серия", seriesLabel(client))
             RhythmInfoLine(Icons.Outlined.EventAvailable, "Следующая", client.nextSessionDate ?: "Не назначена")
@@ -397,9 +397,11 @@ private fun clientSubtitle(client: Client): String {
 }
 
 private fun anchoredSlotLabel(client: Client): String {
-    return if (client.anchorWeekday != null && client.anchorTime != null) {
-        val day = DayOfWeek.of(client.anchorWeekday).getDisplayName(TextStyle.SHORT, Locale("ru")).replaceFirstChar { it.uppercase() }
-        "$day ${client.anchorTime}"
+    val weekday = client.anchorWeekday
+    val time = client.anchorTime
+    return if (weekday != null && time != null) {
+        val day = DayOfWeek.of(weekday).getDisplayName(TextStyle.SHORT, Locale("ru")).replaceFirstChar { it.uppercase() }
+        "$day $time"
     } else "Не закреплён"
 }
 
