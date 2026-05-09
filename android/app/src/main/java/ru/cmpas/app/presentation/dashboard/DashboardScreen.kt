@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,7 +60,7 @@ fun DashboardScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 120.dp),
+        contentPadding = PaddingValues(bottom = 128.dp),
     ) {
         item {
             TodayHeader(
@@ -81,6 +82,8 @@ fun DashboardScreen(
             item {
                 SmartActionsSection(
                     session = session,
+                    onOpenSession = { onSessionClick(session.id) },
+                    onOpenCalendar = onCalendarClick,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
@@ -129,7 +132,7 @@ private fun TodayHeader(userName: String?, todayFormatted: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
+            // statusBarsPadding is applied once in CompasNavHost for every app screen.
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -171,6 +174,8 @@ private fun NextSessionHeroCard(
     onClientClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val uriHandler = LocalUriHandler.current
+
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -271,9 +276,11 @@ private fun NextSessionHeroCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                HeroActionButton(Icons.Outlined.Videocam, "Открыть\nZoom", Modifier.weight(1f)) {}
-                HeroActionButton(Icons.Outlined.Description, "Подгото-\nвиться", Modifier.weight(1f)) {}
-                HeroActionButton(Icons.Outlined.CreditCard, "Оплата", Modifier.weight(1f)) {}
+                HeroActionButton(Icons.Outlined.Videocam, "Открыть\nZoom", Modifier.weight(1f)) {
+                    session.meetingUrl?.takeIf { it.isNotBlank() }?.let { uriHandler.openUri(it) } ?: onClick()
+                }
+                HeroActionButton(Icons.Outlined.Description, "Подгото-\nвиться", Modifier.weight(1f)) { onClick() }
+                HeroActionButton(Icons.Outlined.CreditCard, "Оплата", Modifier.weight(1f)) { onClick() }
                 HeroActionButton(Icons.Outlined.Person, "Карточка", Modifier.weight(1f)) { onClientClick() }
             }
         }
@@ -317,15 +324,17 @@ private fun HeroActionButton(
 @Composable
 private fun SmartActionsSection(
     session: Session,
+    onOpenSession: () -> Unit,
+    onOpenCalendar: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val actions = buildList {
-        if (session.isRecurring) add(Triple("Занять тот же слот\nчерез неделю", Icons.Outlined.Replay, {}))
-        if (session.seriesTotal != null) add(Triple("Продлить серию", Icons.Outlined.TrendingUp, {}))
-        if (session.paymentStatus == PaymentStatus.UNPAID || session.paymentStatus == PaymentStatus.PARTIAL) add(Triple("Отметить оплату", Icons.Outlined.CreditCard, {}))
-        if (session.consentStatus == ConsentStatus.MISSING || session.consentStatus == ConsentStatus.EXPIRED) add(Triple("Запросить согласие", Icons.Outlined.Description, {}))
-        if (size < 2) add(Triple("Изменить слот", Icons.Outlined.Edit, {}))
-        if (size < 4) add(Triple("Пауза", Icons.Outlined.PauseCircle, {}))
+        if (session.isRecurring) add(Triple("Занять тот же слот\nчерез неделю", Icons.Outlined.Replay, onOpenCalendar))
+        if (session.seriesTotal != null) add(Triple("Продлить серию", Icons.Outlined.TrendingUp, onOpenCalendar))
+        if (session.paymentStatus == PaymentStatus.UNPAID || session.paymentStatus == PaymentStatus.PARTIAL) add(Triple("Отметить оплату", Icons.Outlined.CreditCard, onOpenSession))
+        if (session.consentStatus == ConsentStatus.MISSING || session.consentStatus == ConsentStatus.EXPIRED) add(Triple("Запросить согласие", Icons.Outlined.Description, onOpenSession))
+        if (size < 2) add(Triple("Изменить слот", Icons.Outlined.Edit, onOpenCalendar))
+        if (size < 4) add(Triple("Пауза", Icons.Outlined.PauseCircle, onOpenCalendar))
     }
 
     if (actions.isEmpty()) return
