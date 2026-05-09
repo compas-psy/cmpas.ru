@@ -180,8 +180,8 @@ object DefaultActions {
     ) = listOf(
         ActionMenuItem("Новая запись", "Запланировать сессию", Icons.Outlined.CalendarMonth, isPrimary = true, onNewSession),
         ActionMenuItem("Заметка после сессии", "Записать наблюдения", Icons.Outlined.EditNote, onClick = onPostNote),
-        ActionMenuItem("Заблокировать слот", "Занять время в расписании", Icons.Outlined.Block, onClick = onBlockSlot),
-        ActionMenuItem("Отметить оплату", "По последней сессии", Icons.Outlined.CreditCard, onClick = onMarkPayment),
+        ActionMenuItem("Добавить блокировку", "Закрыть окно в расписании", Icons.Outlined.EventBusy, onClick = onBlockSlot),
+        ActionMenuItem("Отметить оплату", "По ближайшей сессии", Icons.Outlined.CreditCard, onClick = onMarkPayment),
     )
 
     fun calendarActions(
@@ -191,7 +191,7 @@ object DefaultActions {
         onScheduleSettings: () -> Unit = {},
     ) = listOf(
         ActionMenuItem("Новая запись", "Добавить сессию в расписание", Icons.Outlined.CalendarMonth, isPrimary = true, onNewSession),
-        ActionMenuItem("Блокировка времени", "Личное время / перерыв", Icons.Outlined.Block, onClick = onBlockTime),
+        ActionMenuItem("Добавить блокировку", "Личное время / перерыв", Icons.Outlined.EventBusy, onClick = onBlockTime),
         ActionMenuItem("Повторить слот", "Скопировать на следующую неделю", Icons.Outlined.Replay, onClick = onRepeatSlot),
         ActionMenuItem("Настроить расписание", "Рабочие часы и правила", Icons.Outlined.Settings, onClick = onScheduleSettings),
     )
@@ -200,12 +200,12 @@ object DefaultActions {
         onNewClient: () -> Unit = {},
         onScheduleSession: () -> Unit = {},
         onSendBookingLink: () -> Unit = {},
-        onImportClients: () -> Unit = {},
+        onBlockTime: () -> Unit = {},
     ) = listOf(
         ActionMenuItem("Добавить клиента", "Новая карточка клиента", Icons.Outlined.PersonAdd, isPrimary = true, onNewClient),
         ActionMenuItem("Запланировать сессию", "Выбрать клиента и время", Icons.Outlined.CalendarMonth, onClick = onScheduleSession),
         ActionMenuItem("Отправить ссылку записи", "Ссылка для самозаписи", Icons.Outlined.Share, onClick = onSendBookingLink),
-        ActionMenuItem("Импорт клиентов", "Из файла или контактов", Icons.Outlined.Upload, onClick = onImportClients),
+        ActionMenuItem("Добавить блокировку", "Закрыть окно в расписании", Icons.Outlined.EventBusy, onClick = onBlockTime),
     )
 
     fun notesActions(

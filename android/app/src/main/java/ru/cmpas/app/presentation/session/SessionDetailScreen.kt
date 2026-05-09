@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,24 +27,29 @@ import java.time.LocalTime
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionDetailScreen(
-    sessionId: String, onBack: () -> Unit, onClientClick: (String) -> Unit = {},
+    sessionId: String,
+    onBack: () -> Unit,
+    onClientClick: (String) -> Unit = {},
+    onNoteClick: (String) -> Unit = {},
+    onQuickAction: (String) -> Unit = {},
     viewModel: SessionDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val uriHandler = LocalUriHandler.current
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
 
     Column(Modifier.fillMaxSize()) {
-        // Header
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
             if (uiState.session != null) {
-                Spacer(Modifier.width(4.dp)); AvatarCircle(name = uiState.session!!.clientName, size = 36.dp); Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(4.dp))
+                AvatarCircle(name = uiState.session!!.clientName, size = 36.dp)
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(uiState.session!!.clientName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(if (uiState.session!!.format == SessionFormat.ONLINE) "Онлайн · Zoom" else "Офлайн · Кабинет",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (uiState.session!!.format == SessionFormat.ONLINE) "Онлайн · Zoom" else "Офлайн · Кабинет", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = {}) { Icon(Icons.Outlined.MoreVert, "Ещё") }
+                IconButton(onClick = { onQuickAction("new-session") }) { Icon(Icons.Outlined.MoreVert, "Ещё") }
             }
         }
 
@@ -54,8 +60,7 @@ fun SessionDetailScreen(
                 val isUpcoming = isSessionUpcoming(session)
                 val isPast = isSessionPast(session)
 
-                LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Hero card
+                LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp, bottom = 132.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item {
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(1.dp)) {
                             Column(Modifier.padding(20.dp)) {
@@ -75,8 +80,7 @@ fun SessionDetailScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(if (session.format == SessionFormat.ONLINE) Icons.Outlined.Videocam else Icons.Outlined.LocationOn, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(Modifier.width(4.dp))
-                                    Text("${if (session.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн"} · ${if (session.format == SessionFormat.ONLINE) "Zoom" else "Кабинет"}",
-                                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${if (session.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн"} · ${if (session.format == SessionFormat.ONLINE) "Zoom" else "Кабинет"}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 val mins = getMinutesUntilSession(session)
                                 if (mins != null && mins > 0) {
@@ -91,14 +95,8 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Status badges
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PaymentBadge(session.paymentStatus); ConsentBadge(session.consentStatus); HomeworkBadge(session.homeworkStatus)
-                        }
-                    }
+                    item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { PaymentBadge(session.paymentStatus); ConsentBadge(session.consentStatus); HomeworkBadge(session.homeworkStatus) } }
 
-                    // Previous context
                     if (!session.previousNotesSummary.isNullOrBlank()) {
                         item {
                             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -111,45 +109,33 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Pre-session actions (prominent when upcoming)
                     if (isUpcoming) {
                         item {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SessionAction(Icons.Outlined.Videocam, "Открыть\nZoom", Modifier.weight(1f)) {}
-                                SessionAction(Icons.Outlined.Description, "Подгото-\nвиться", Modifier.weight(1f)) {}
+                                SessionAction(Icons.Outlined.Videocam, "Открыть\nZoom", Modifier.weight(1f)) { session.videoLink?.takeIf { it.isNotBlank() }?.let { uriHandler.openUri(it) } }
+                                SessionAction(Icons.Outlined.Description, "Подгото-\nвиться", Modifier.weight(1f)) { onNoteClick(session.id) }
                                 SessionAction(Icons.Outlined.Person, "Карточка\nклиента", Modifier.weight(1f)) { onClientClick(session.clientId) }
                             }
                         }
                     }
 
-                    // Post-session actions — главный блок когда сессия прошла/идёт
                     item {
-                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (isPast) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface)) {
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = if (isPast) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp)) {
-                                Text(if (isPast) "Завершите сессию" else "После сессии",
-                                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                                    color = if (isPast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                Text(if (isPast) "Завершите сессию" else "После сессии", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = if (isPast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                                 Spacer(Modifier.height(12.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SmartActionChip("Завершить", Icons.Outlined.CheckCircle, { viewModel.updateStatus(session.id, "COMPLETED") }, Modifier.weight(1f))
-                                    SmartActionChip("Голосовая\nзаметка", Icons.Outlined.Mic, {}, Modifier.weight(1f))
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SmartActionChip("Занять слот\nчерез неделю", Icons.Outlined.Replay, {}, Modifier.weight(1f))
-                                    SmartActionChip("Продлить\nсерию", Icons.Outlined.TrendingUp, {}, Modifier.weight(1f))
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SmartActionChip("Отметить\nоплату", Icons.Outlined.CreditCard, {}, Modifier.weight(1f))
-                                    SmartActionChip("Пауза", Icons.Outlined.PauseCircle, {}, Modifier.weight(1f))
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SmartActionChip("Завершить", Icons.Outlined.CheckCircle, { viewModel.updateStatus(session.id, "COMPLETED") }, Modifier.fillMaxWidth())
+                                    SmartActionChip("Голосовая заметка", Icons.Outlined.Mic, { onNoteClick(session.id) }, Modifier.fillMaxWidth())
+                                    SmartActionChip("Занять слот через неделю", Icons.Outlined.Replay, { onQuickAction("repeat-slot") }, Modifier.fillMaxWidth())
+                                    SmartActionChip("Продлить серию", Icons.Outlined.TrendingUp, { onQuickAction("repeat-slot") }, Modifier.fillMaxWidth())
+                                    SmartActionChip("Отметить оплату", Icons.Outlined.CreditCard, { onQuickAction("payment") }, Modifier.fillMaxWidth())
+                                    SmartActionChip("Пауза", Icons.Outlined.PauseCircle, { onQuickAction("block-time") }, Modifier.fillMaxWidth())
                                 }
                             }
                         }
                     }
 
-                    // Notes
                     if (!session.notes.isNullOrBlank()) {
                         item {
                             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -164,19 +150,18 @@ fun SessionDetailScreen(
                             }
                         }
                     }
-                    item { Spacer(Modifier.height(100.dp)) }
                 }
             }
             uiState.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(uiState.error!!); Spacer(Modifier.height(16.dp)); OutlinedButton(onClick = onBack) { Text("Назад") } } }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(uiState.error!!); Spacer(Modifier.height(16.dp)); OutlinedButton(onClick = onBack) { Text("Назад") } }
+            }
         }
     }
 }
 
 @Composable
 private fun SessionAction(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(modifier = modifier.height(76.dp), onClick = onClick, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface,
-        border = ButtonDefaults.outlinedButtonBorder(enabled = true)) {
+    Surface(modifier = modifier.height(76.dp), onClick = onClick, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, border = ButtonDefaults.outlinedButtonBorder(enabled = true)) {
         Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(4.dp))
             Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 2, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
