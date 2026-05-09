@@ -80,16 +80,17 @@ fun CalendarScreen(
         }
     }
 
-    if (selectedSession != null) {
+    selectedSession?.let { session ->
         SessionBottomSheet(
-            session = selectedSession,
+            session = session,
             onDismiss = { selectedSessionId = null },
-            onOpenClient = { onClientClick(selectedSession.clientId) },
-            onOpenSession = { onSessionClick(selectedSession.id) },
+            onOpenClient = { onClientClick(session.clientId) },
+            onOpenSession = { onSessionClick(session.id) },
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompasSegmentedControl(
     items: List<String>,
@@ -393,6 +394,7 @@ fun SessionBottomSheet(session: Session, onDismiss: () -> Unit, onOpenClient: ()
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NextStepRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)) {

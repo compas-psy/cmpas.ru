@@ -53,10 +53,7 @@ fun SectionHeader(
     }
 }
 
-/**
- * Readable mobile action chip.
- * Защищает интерфейс от вертикальных переносов на узких экранах.
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartActionChip(
     text: String,
