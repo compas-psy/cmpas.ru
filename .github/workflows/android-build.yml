@@ -38,13 +38,11 @@ jobs:
       - name: Install SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Generate Gradle wrapper
-        working-directory: android
+      - name: Install Gradle 8.9
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
-          /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.9
-          chmod +x gradlew
+          /tmp/gradle-8.9/bin/gradle --version
 
       - name: Restore debug keystore
         id: keystore-cache
@@ -70,7 +68,7 @@ jobs:
 
       - name: Build Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace 2>&1
+        run: /tmp/gradle-8.9/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1
 
       - name: Prepare APK
         id: apk
