@@ -40,8 +40,6 @@ fun CompasNavHost(
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            // One source of truth for top safe area across all app screens.
-            // Prevents every page header from sliding under the Android status bar.
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
@@ -103,6 +101,8 @@ fun CompasNavHost(
                     clientId = it.arguments?.getString("id") ?: "",
                     onBack = { navController.popBackStack() },
                     onSessionClick = { id -> navController.navigate(Screen.SessionDetail.createRoute(id)) },
+                    onScheduleClick = { navController.navigateTopLevel(Screen.Calendar) },
+                    onNoteClick = { navController.navigateTopLevel(Screen.Notes) },
                 )
             }
         }
@@ -128,17 +128,17 @@ fun CompasNavHost(
                         onNewClient = { navController.navigateTopLevel(Screen.Clients) },
                         onScheduleSession = { navController.navigateTopLevel(Screen.Calendar) },
                         onSendBookingLink = { navController.navigateTopLevel(Screen.Clients) },
-                        onImportClients = { navController.navigateTopLevel(Screen.Clients) },
+                        onBlockTime = { navController.navigateTopLevel(Screen.Calendar) },
                     )
                     Screen.Notes.route -> DefaultActions.notesActions(
-                        onVoiceNote = { navController.navigateTopLevel(Screen.Notes) },
-                        onLastSessionNote = { navController.navigateTopLevel(Screen.Notes) },
-                        onTextNote = { navController.navigateTopLevel(Screen.Notes) },
-                        onTemplateNote = { navController.navigateTopLevel(Screen.Notes) },
+                        onVoiceNote = { navController.navigate(Screen.PostSessionNote.createRoute("voice")) },
+                        onLastSessionNote = { navController.navigate(Screen.PostSessionNote.createRoute("last")) },
+                        onTextNote = { navController.navigate(Screen.PostSessionNote.createRoute("text")) },
+                        onTemplateNote = { navController.navigate(Screen.PostSessionNote.createRoute("template")) },
                     )
                     else -> DefaultActions.todayActions(
                         onNewSession = { navController.navigateTopLevel(Screen.Calendar) },
-                        onPostNote = { navController.navigateTopLevel(Screen.Notes) },
+                        onPostNote = { navController.navigate(Screen.PostSessionNote.createRoute("quick")) },
                         onBlockSlot = { navController.navigateTopLevel(Screen.Calendar) },
                         onMarkPayment = { navController.navigateTopLevel(Screen.Dashboard) },
                     )
