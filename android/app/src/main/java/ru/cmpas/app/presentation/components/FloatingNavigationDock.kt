@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.navigation.BottomNavItem
@@ -46,11 +47,11 @@ import ru.cmpas.app.presentation.theme.Sage150
 /**
  * Native floating navigation dock.
  *
- * Responsive для узких экранов Fold/малых телефонов:
+ * Исправлено для Samsung Fold / narrow screens:
+ * - dock не режет активную подпись;
  * - все иконки одного размера;
- * - на узкой ширине подпись показывается только у активного пункта;
- * - элементы не налезают друг на друга;
- * - dock учитывает системную navigation bar.
+ * - на compact-ширине подпись есть только у активного пункта;
+ * - нижний safe-area учитывается через navigationBarsPadding().
  */
 @Composable
 fun FloatingNavigationDock(
@@ -62,22 +63,22 @@ fun FloatingNavigationDock(
         modifier = modifier
             .navigationBarsPadding()
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            .padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
     ) {
         val compact = maxWidth < 390.dp
-        val dockHeight = if (compact) 68.dp else 74.dp
-        val itemHeight = if (compact) 52.dp else 58.dp
+        val dockHeight = if (compact) 78.dp else 78.dp
+        val itemHeight = if (compact) 64.dp else 62.dp
 
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
                     elevation = 18.dp,
-                    shape = RoundedCornerShape(32.dp),
+                    shape = RoundedCornerShape(34.dp),
                     ambientColor = Color.Black.copy(alpha = 0.08f),
                     spotColor = Color.Black.copy(alpha = 0.14f),
                 ),
-            shape = RoundedCornerShape(32.dp),
+            shape = RoundedCornerShape(34.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
             tonalElevation = 0.dp,
         ) {
@@ -85,7 +86,7 @@ fun FloatingNavigationDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(dockHeight)
-                    .padding(horizontal = if (compact) 6.dp else 8.dp, vertical = 8.dp),
+                    .padding(horizontal = if (compact) 6.dp else 10.dp, vertical = 7.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -110,12 +111,12 @@ private fun DockItem(
     item: BottomNavItem,
     selected: Boolean,
     compact: Boolean,
-    itemHeight: androidx.compose.ui.unit.Dp,
+    itemHeight: Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.02f else 1f,
+        targetValue = if (selected) 1.01f else 1f,
         animationSpec = tween(180),
         label = "dock_item_scale",
     )
@@ -134,9 +135,9 @@ private fun DockItem(
     Column(
         modifier = modifier
             .height(itemHeight)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(26.dp))
             .clickable(
-                indication = ripple(bounded = true, radius = 28.dp),
+                indication = ripple(bounded = true, radius = 30.dp),
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onClick,
             )
@@ -161,11 +162,11 @@ private fun DockItem(
 
         AnimatedVisibility(visible = showLabel) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = item.label,
                     fontSize = if (compact) 10.sp else 11.sp,
-                    lineHeight = if (compact) 11.sp else 12.sp,
+                    lineHeight = if (compact) 12.sp else 13.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                     color = labelColor,
                     maxLines = 1,
