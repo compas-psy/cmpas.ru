@@ -277,7 +277,7 @@ private fun NextSessionHeroCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 HeroActionButton(Icons.Outlined.Videocam, "Открыть\nZoom", Modifier.weight(1f)) {
-                    session.meetingUrl?.takeIf { it.isNotBlank() }?.let { uriHandler.openUri(it) } ?: onClick()
+                    session.videoLink?.takeIf { it.isNotBlank() }?.let { uriHandler.openUri(it) } ?: onClick()
                 }
                 HeroActionButton(Icons.Outlined.Description, "Подгото-\nвиться", Modifier.weight(1f)) { onClick() }
                 HeroActionButton(Icons.Outlined.CreditCard, "Оплата", Modifier.weight(1f)) { onClick() }
