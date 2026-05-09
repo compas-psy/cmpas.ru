@@ -30,35 +30,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 
-/**
- * Native post-session note capture.
- *
- * Минимально рабочий экран, чтобы переход из "Заметок" больше не ронял приложение.
- * Дальше его можно подключить к API сохранения заметок, но уже сейчас он закрывает
- * основной mobile-сценарий: быстро зафиксировать заметку после сессии.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PostSessionNoteScreen(
     sessionId: String,
     onBack: () -> Unit,
     onSaved: () -> Unit,
+    viewModel: PostSessionNoteViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf(NoteMode.BLOCKS) }
     var request by remember { mutableStateOf("") }
     var observation by remember { mutableStateOf("") }
@@ -66,38 +69,33 @@ fun PostSessionNoteScreen(
     var dynamics by remember { mutableStateOf("") }
     var nextStep by remember { mutableStateOf("") }
 
+    fun buildNoteText(): String = buildString {
+        appendLine("Формат: ${mode.label}")
+        appendBlock("Запрос", request)
+        appendBlock("Наблюдение", observation)
+        appendBlock("Интервенция", intervention)
+        appendBlock("Динамика", dynamics)
+        appendBlock("Следующий шаг", nextStep)
+    }.trim()
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            text = "Заметка после сессии",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = "Сессия $sessionId",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("Заметка после сессии", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Сессия $sessionId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Назад")
-                    }
+                    IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
-            Surface(
-                tonalElevation = 2.dp,
-                color = MaterialTheme.colorScheme.surface,
-            ) {
+            Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.surface) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -107,21 +105,24 @@ fun PostSessionNoteScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedButton(
-                        onClick = onBack,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Text("Позже")
-                    }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) { Text("Позже") }
                     Button(
-                        onClick = onSaved,
+                        enabled = !uiState.isSaving,
+                        onClick = {
+                            val text = buildNoteText()
+                            viewModel.saveNote(sessionId, text) { success, message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                    if (success) onSaved()
+                                }
+                            }
+                        },
                         modifier = Modifier.weight(1.4f),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     ) {
                         Icon(Icons.Outlined.Save, contentDescription = null)
-                        Text("Сохранить")
+                        Text(if (uiState.isSaving) "Сохраняю…" else "Сохранить")
                     }
                 }
             }
@@ -135,18 +136,9 @@ fun PostSessionNoteScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 1.dp,
-            ) {
+            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Как зафиксировать?",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Text("Как зафиксировать?", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         NoteMode.entries.forEach { item ->
@@ -176,27 +168,12 @@ fun PostSessionNoteScreen(
             NoteBlockField("Динамика", "Что изменилось, что осталось сложным", dynamics) { dynamics = it }
             NoteBlockField("Следующий шаг", "ДЗ, договорённости, фокус следующей встречи", nextStep) { nextStep = it }
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Outlined.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
                         Text("AI-помощник", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "После сохранения можно будет сделать резюме, теги и подготовку к следующей сессии.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("После сохранения можно будет сделать резюме, теги и подготовку к следующей сессии.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     TextButton(onClick = {}) { Text("Позже") }
                 }
@@ -206,30 +183,21 @@ fun PostSessionNoteScreen(
 }
 
 @Composable
-private fun NoteBlockField(
-    title: String,
-    placeholder: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-    ) {
+private fun NoteBlockField(title: String, placeholder: String, value: String, onValueChange: (String) -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                placeholder = { Text(placeholder) },
-                shape = RoundedCornerShape(16.dp),
-            )
+            OutlinedTextField(value = value, onValueChange = onValueChange, modifier = Modifier.fillMaxWidth(), minLines = 2, placeholder = { Text(placeholder) }, shape = RoundedCornerShape(16.dp))
         }
+    }
+}
+
+private fun StringBuilder.appendBlock(title: String, content: String) {
+    if (content.isNotBlank()) {
+        appendLine()
+        appendLine("$title:")
+        appendLine(content.trim())
     }
 }
 
