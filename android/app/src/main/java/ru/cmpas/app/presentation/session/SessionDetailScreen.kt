@@ -60,7 +60,10 @@ fun SessionDetailScreen(
                 val isUpcoming = isSessionUpcoming(session)
                 val isPast = isSessionPast(session)
 
-                LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp, bottom = 132.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 132.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     item {
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(1.dp)) {
                             Column(Modifier.padding(20.dp)) {
