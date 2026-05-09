@@ -233,6 +233,7 @@ private fun ClientPrimaryActions(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ClientActionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Surface(
