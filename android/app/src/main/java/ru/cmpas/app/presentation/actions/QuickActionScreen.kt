@@ -2,7 +2,6 @@ package ru.cmpas.app.presentation.actions
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,11 +22,11 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -44,9 +43,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
@@ -58,7 +55,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -95,6 +91,9 @@ fun QuickActionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
+    val isoDate = selectedDate?.toString()
+    val timeText = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm"))
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -125,15 +124,28 @@ fun QuickActionScreen(
                         Text("Отмена")
                     }
                     Button(
+                        enabled = !uiState.isSaving,
                         onClick = {
-                            scope.launch { snackbarHostState.showSnackbar("Сохранено локально. Подключение серверного действия — следующий шаг.") }
-                            onDone()
+                            viewModel.saveAction(
+                                type = type,
+                                primary = primary,
+                                secondary = secondary,
+                                selectedClient = selectedClient,
+                                date = isoDate,
+                                time = timeText,
+                                comment = comment,
+                            ) { success, message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                    if (success) onDone()
+                                }
+                            }
                         },
                         modifier = Modifier.weight(1.4f),
                         shape = RoundedCornerShape(16.dp),
                     ) {
                         Icon(Icons.Outlined.Save, contentDescription = null)
-                        Text(config.button)
+                        Text(if (uiState.isSaving) "Сохраняю…" else config.button)
                     }
                 }
             }
@@ -190,10 +202,7 @@ fun QuickActionScreen(
             }
 
             if (config.showSlotMode) {
-                SlotModeSelector(
-                    useCustomTime = useCustomTime,
-                    onModeChange = { useCustomTime = it },
-                )
+                SlotModeSelector(useCustomTime = useCustomTime, onModeChange = { useCustomTime = it })
             }
 
             if (config.needsDateTime) {
@@ -206,7 +215,7 @@ fun QuickActionScreen(
                     )
                     PickerField(
                         label = if (config.showSlotMode && !useCustomTime) "Слот" else "Время",
-                        value = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: if (config.showSlotMode && !useCustomTime) "Свободный слот" else "Выбрать время",
+                        value = timeText ?: if (config.showSlotMode && !useCustomTime) "Свободный слот" else "Выбрать время",
                         modifier = Modifier.weight(1f),
                         onClick = { showTimePicker = true },
                     )
@@ -249,8 +258,10 @@ fun QuickActionScreen(
     if (showTimePicker) {
         val initial = selectedTime ?: LocalTime.of(14, 0)
         val timePickerState = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = true)
-        TimePickerDialog(
+        AlertDialog(
             onDismissRequest = { showTimePicker = false },
+            title = { Text("Выберите время") },
+            text = { TimePicker(state = timePickerState) },
             confirmButton = {
                 TextButton(onClick = {
                     selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
@@ -258,7 +269,7 @@ fun QuickActionScreen(
                 }) { Text("Выбрать") }
             },
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Отмена") } },
-        ) { TimePicker(state = timePickerState) }
+        )
     }
 }
 
@@ -288,13 +299,7 @@ private fun ClientSelector(
                 DropdownMenuItem(text = { Text("Клиенты не найдены") }, onClick = { expanded = false })
             } else {
                 clients.forEach { client ->
-                    DropdownMenuItem(
-                        text = { Text(client.name) },
-                        onClick = {
-                            onSelect(client)
-                            expanded = false
-                        },
-                    )
+                    DropdownMenuItem(text = { Text(client.name) }, onClick = { onSelect(client); expanded = false })
                 }
             }
         }
@@ -304,16 +309,8 @@ private fun ClientSelector(
 @Composable
 private fun SlotModeSelector(useCustomTime: Boolean, onModeChange: (Boolean) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AssistChip(
-            onClick = { onModeChange(false) },
-            label = { Text("Свободный слот") },
-            leadingIcon = { Icon(Icons.Outlined.Schedule, null) },
-        )
-        AssistChip(
-            onClick = { onModeChange(true) },
-            label = { Text("Кастомное время") },
-            leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null) },
-        )
+        AssistChip(onClick = { onModeChange(false) }, label = { Text("Свободный слот") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null) })
+        AssistChip(onClick = { onModeChange(true) }, label = { Text("Кастомное время") }, leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null) })
     }
 }
 
@@ -346,75 +343,11 @@ private data class QuickActionConfig(
 )
 
 private fun quickActionConfig(type: String): QuickActionConfig = when (type) {
-    "new-client" -> QuickActionConfig(
-        title = "Добавить клиента",
-        subtitle = "Новая карточка",
-        description = "Создайте карточку клиента, чтобы планировать сессии, вести заметки и документы.",
-        primaryLabel = "Имя клиента",
-        secondaryLabel = "Телефон или Telegram",
-        button = "Добавить",
-        icon = Icons.Outlined.PersonAdd,
-        needsDateTime = false,
-    )
-    "new-session" -> QuickActionConfig(
-        title = "Новая запись",
-        subtitle = "Сессия в расписании",
-        description = "Выберите клиента из списка, затем дату и свободный слот. При необходимости можно указать кастомное время.",
-        primaryLabel = "Клиент",
-        secondaryLabel = "Формат: онлайн / офлайн",
-        button = "Записать",
-        icon = Icons.Outlined.CalendarMonth,
-        needsExistingClient = true,
-        showSlotMode = true,
-    )
-    "block-time" -> QuickActionConfig(
-        title = "Добавить блокировку",
-        subtitle = "Закрыть окно в расписании",
-        description = "Выберите дату и время блокировки через пикеры. Блокировка нужна для личного времени, перерыва, отпуска или внешней встречи.",
-        primaryLabel = "Название блокировки",
-        secondaryLabel = "Тип: перерыв / отпуск / личное",
-        button = "Заблокировать",
-        icon = Icons.Outlined.EventBusy,
-    )
-    "booking-link" -> QuickActionConfig(
-        title = "Ссылка записи",
-        subtitle = "Для клиента",
-        description = "Выберите клиента из списка и подготовьте ссылку самозаписи для отправки в мессенджере.",
-        primaryLabel = "Клиент",
-        secondaryLabel = "Комментарий к ссылке",
-        button = "Подготовить",
-        icon = Icons.Outlined.Link,
-        needsExistingClient = true,
-        needsDateTime = false,
-    )
-    "payment" -> QuickActionConfig(
-        title = "Отметить оплату",
-        subtitle = "По ближайшей сессии",
-        description = "Выберите клиента и укажите сумму. Позже действие будет связано с серверным статусом оплаты.",
-        primaryLabel = "Клиент",
-        secondaryLabel = "Сумма",
-        button = "Отметить",
-        icon = Icons.Outlined.CreditCard,
-        needsExistingClient = true,
-        needsDateTime = false,
-    )
-    "repeat-slot" -> QuickActionConfig(
-        title = "Повторить слот",
-        subtitle = "Следующая неделя",
-        description = "Выберите клиента из списка, дату, время и количество повторов для регулярной работы.",
-        primaryLabel = "Клиент",
-        secondaryLabel = "Количество повторов",
-        button = "Повторить",
-        icon = Icons.Outlined.Replay,
-        needsExistingClient = true,
-    )
-    else -> QuickActionConfig(
-        title = "Быстрое действие",
-        subtitle = "КОМПАС",
-        description = "Заполните основные поля. Действие будет расширено серверной логикой позже.",
-        primaryLabel = "Название",
-        showSecondaryField = false,
-        button = "Сохранить",
-        icon = Icons.Outlined.CalendarMonth,
-    )
+    "new-client" -> QuickActionConfig("Добавить клиента", "Новая карточка", "Создайте карточку клиента, чтобы планировать сессии, вести заметки и документы.", "Имя клиента", "Телефон или email", true, "Добавить", Icons.Outlined.PersonAdd, needsDateTime = false)
+    "new-session" -> QuickActionConfig("Новая запись", "Сессия в расписании", "Выберите клиента из списка, затем дату и свободный слот. При необходимости можно указать кастомное время.", "Клиент", "Формат: онлайн / офлайн", true, "Записать", Icons.Outlined.CalendarMonth, needsExistingClient = true, showSlotMode = true)
+    "block-time" -> QuickActionConfig("Добавить блокировку", "Закрыть окно в расписании", "Выберите дату и время блокировки через пикеры. Блокировка нужна для личного времени, перерыва, отпуска или внешней встречи.", "Название блокировки", "Тип: перерыв / отпуск / личное", true, "Заблокировать", Icons.Outlined.EventBusy)
+    "booking-link" -> QuickActionConfig("Ссылка записи", "Для клиента", "Выберите клиента из списка и подготовьте ссылку самозаписи для отправки в мессенджере.", "Клиент", "Комментарий к ссылке", true, "Подготовить", Icons.Outlined.Link, needsExistingClient = true, needsDateTime = false)
+    "payment" -> QuickActionConfig("Отметить оплату", "По ближайшей сессии", "Выберите клиента и укажите сумму. Позже действие будет связано с серверным статусом оплаты.", "Клиент", "Сумма", true, "Отметить", Icons.Outlined.CreditCard, needsExistingClient = true, needsDateTime = false)
+    "repeat-slot" -> QuickActionConfig("Повторить слот", "Следующая неделя", "Выберите клиента из списка, дату, время и количество повторов для регулярной работы.", "Клиент", "Количество повторов", true, "Повторить", Icons.Outlined.Replay, needsExistingClient = true)
+    else -> QuickActionConfig("Быстрое действие", "КОМПАС", "Заполните основные поля.", "Название", showSecondaryField = false, button = "Сохранить", icon = Icons.Outlined.CalendarMonth)
 }
