@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,7 +48,6 @@ fun CalendarScreen(
             .fillMaxSize()
             .padding(bottom = 100.dp),
     ) {
-        // Header
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -65,7 +65,6 @@ fun CalendarScreen(
             }
         }
 
-        // Custom Segmented Control
         CompasSegmentedControl(
             items = listOf("День", "Неделя", "Месяц", "Список"),
             selectedIndex = uiState.viewMode.ordinal,
@@ -73,7 +72,6 @@ fun CalendarScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
 
-        // Content by mode
         when (uiState.viewMode) {
             CalendarViewMode.DAY -> DayView(uiState, viewModel, onSelect = { selectedSessionId = it })
             CalendarViewMode.WEEK -> WeekView(uiState, viewModel, onSelect = { selectedSessionId = it })
@@ -84,17 +82,13 @@ fun CalendarScreen(
 
     if (selectedSession != null) {
         SessionBottomSheet(
-            session = selectedSession!!,
+            session = selectedSession,
             onDismiss = { selectedSessionId = null },
-            onOpenClient = { onClientClick(selectedSession!!.clientId) },
-            onOpenSession = { onSessionClick(selectedSession!!.id) },
+            onOpenClient = { onClientClick(selectedSession.clientId) },
+            onOpenSession = { onSessionClick(selectedSession.id) },
         )
     }
 }
-
-// ═══════════════════════════════════════════
-// Custom Segmented Control (не Material)
-// ═══════════════════════════════════════════
 
 @Composable
 fun CompasSegmentedControl(
@@ -134,10 +128,6 @@ fun CompasSegmentedControl(
     }
 }
 
-// ═══════════════════════════════════════════
-// DAY VIEW
-// ═══════════════════════════════════════════
-
 @Composable
 private fun DayView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSelect: (String) -> Unit) {
     HorizontalDateStrip(uiState.selectedDate, uiState.sessions, { viewModel.selectDate(it) }, Modifier.padding(vertical = 8.dp))
@@ -145,20 +135,15 @@ private fun DayView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSe
     SessionList(daySessions, uiState.isLoading, onSelect)
 }
 
-// ═══════════════════════════════════════════
-// WEEK VIEW — лента 7 дней + summary + список
-// ═══════════════════════════════════════════
-
 @Composable
 private fun WeekView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSelect: (String) -> Unit) {
     val weekStart = uiState.selectedDate.with(DayOfWeek.MONDAY)
     val weekDays = (0L..6L).map { weekStart.plusDays(it) }
     val weekSessions = uiState.sessions.filter {
         val d = try { LocalDate.parse(it.date) } catch (_: Exception) { null }
-        d != null && d in weekDays.first()..weekDays.last()
+        d != null && !d.isBefore(weekDays.first()) && !d.isAfter(weekDays.last())
     }
 
-    // Smart summary
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
@@ -171,7 +156,6 @@ private fun WeekView(uiState: CalendarUiState, viewModel: CalendarViewModel, onS
         }
     }
 
-    // Day selector
     HorizontalDateStrip(uiState.selectedDate, uiState.sessions, { viewModel.selectDate(it) }, Modifier.padding(vertical = 4.dp))
 
     val daySessions = uiState.sessions.filter { it.date == uiState.selectedDate.toString() }.sortedBy { it.startTime }
@@ -186,26 +170,20 @@ private fun WeekStat(value: String, label: String) {
     }
 }
 
-// ═══════════════════════════════════════════
-// MONTH VIEW — сетка + список выбранного дня
-// ═══════════════════════════════════════════
-
 @Composable
 private fun MonthView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSelect: (String) -> Unit) {
     val ym = YearMonth.of(uiState.selectedDate.year, uiState.selectedDate.month)
     val firstDay = ym.atDay(1)
     val daysInMonth = ym.lengthOfMonth()
-    val startOffset = (firstDay.dayOfWeek.value - 1) // Mon=0
+    val startOffset = (firstDay.dayOfWeek.value - 1)
     val today = LocalDate.now()
 
-    // Day-of-week headers
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
         listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс").forEach {
             Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
-    // Grid
     val cells = startOffset + daysInMonth
     val rows = (cells + 6) / 7
     Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -263,10 +241,6 @@ private fun MonthDayCell(day: Int, isSelected: Boolean, isToday: Boolean, sessio
     }
 }
 
-// ═══════════════════════════════════════════
-// LIST VIEW — группировка
-// ═══════════════════════════════════════════
-
 @Composable
 private fun ListView(uiState: CalendarUiState, onSelect: (String) -> Unit) {
     val today = LocalDate.now()
@@ -286,8 +260,8 @@ private fun ListView(uiState: CalendarUiState, onSelect: (String) -> Unit) {
         when {
             d == today -> groups["Сегодня"]!!.add(s)
             d == tomorrow -> groups["Завтра"]!!.add(s)
-            d <= weekEnd -> groups["Эта неделя"]!!.add(s)
-            d <= nextWeekEnd -> groups["Следующая неделя"]!!.add(s)
+            !d.isAfter(weekEnd) -> groups["Эта неделя"]!!.add(s)
+            !d.isAfter(nextWeekEnd) -> groups["Следующая неделя"]!!.add(s)
             else -> groups["Позже"]!!.add(s)
         }
     }
@@ -301,10 +275,6 @@ private fun ListView(uiState: CalendarUiState, onSelect: (String) -> Unit) {
         }
     }
 }
-
-// ═══════════════════════════════════════════
-// Shared: SessionList, DateStrip, SessionRow
-// ═══════════════════════════════════════════
 
 @Composable
 private fun SessionList(sessions: List<Session>, isLoading: Boolean, onSelect: (String) -> Unit) {
@@ -379,13 +349,10 @@ private fun CalendarSessionRow(session: Session, isCurrentTime: Boolean, onClick
     }
 }
 
-// ═══════════════════════════════════════════
-// Bottom Sheet — с блоком "Что дальше"
-// ═══════════════════════════════════════════
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionBottomSheet(session: Session, onDismiss: () -> Unit, onOpenClient: () -> Unit, onOpenSession: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -402,23 +369,24 @@ fun SessionBottomSheet(session: Session, onDismiss: () -> Unit, onOpenClient: ()
                 if (session.paymentStatus == PaymentStatus.UNPAID) { Text(" · ", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("Не оплачено", color = CompasDestructive) } }
             Spacer(Modifier.height(16.dp))
 
-            // Quick actions
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BottomSheetAction(Icons.Outlined.Person, "Карточка", Modifier.weight(1f)) { onOpenClient(); onDismiss() }
-                BottomSheetAction(Icons.Outlined.Videocam, "Встреча", Modifier.weight(1f)) {}
-                BottomSheetAction(Icons.Outlined.SwapHoriz, "Перенести", Modifier.weight(1f)) {}
-                BottomSheetAction(Icons.Outlined.CreditCard, "Оплата", Modifier.weight(1f)) {}
+                BottomSheetAction(Icons.Outlined.Videocam, "Встреча", Modifier.weight(1f)) {
+                    session.videoLink?.takeIf { it.isNotBlank() }?.let { uriHandler.openUri(it) } ?: onOpenSession()
+                    onDismiss()
+                }
+                BottomSheetAction(Icons.Outlined.SwapHoriz, "Перенести", Modifier.weight(1f)) { onOpenSession(); onDismiss() }
+                BottomSheetAction(Icons.Outlined.CreditCard, "Оплата", Modifier.weight(1f)) { onOpenSession(); onDismiss() }
             }
 
-            // "Что дальше" — conditional
             Spacer(Modifier.height(16.dp))
             Text("Что дальше", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                NextStepRow(Icons.Outlined.Replay, "Занять тот же слот через неделю") {}
-                if (!session.isRecurring) NextStepRow(Icons.Outlined.Lock, "Закрепить регулярный слот") {}
-                if (session.isRecurring) NextStepRow(Icons.Outlined.SkipNext, "Пропустить неделю") {}
-                if (session.seriesId != null || session.seriesTotal != null) NextStepRow(Icons.Outlined.TrendingUp, "Продлить серию") {}
+                NextStepRow(Icons.Outlined.Replay, "Занять тот же слот через неделю") { onOpenSession(); onDismiss() }
+                if (!session.isRecurring) NextStepRow(Icons.Outlined.Lock, "Закрепить регулярный слот") { onOpenSession(); onDismiss() }
+                if (session.isRecurring) NextStepRow(Icons.Outlined.SkipNext, "Пропустить неделю") { onOpenSession(); onDismiss() }
+                if (session.seriesId != null || session.seriesTotal != null) NextStepRow(Icons.Outlined.TrendingUp, "Продлить серию") { onOpenSession(); onDismiss() }
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -446,7 +414,7 @@ private fun BottomSheetAction(icon: ImageVector, label: String, modifier: Modifi
 private fun isCurrentSession(session: Session): Boolean {
     return try { val now = java.time.LocalTime.now(); val s = session.startTime.split(":"); val e = session.endTime.split(":")
         val start = java.time.LocalTime.of(s[0].toInt(), s[1].toInt()); val end = java.time.LocalTime.of(e[0].toInt(), e[1].toInt())
-        session.date == LocalDate.now().toString() && now in start..end } catch (_: Exception) { false }
+        session.date == LocalDate.now().toString() && !now.isBefore(start) && !now.isAfter(end) } catch (_: Exception) { false }
 }
 
 private fun getMinutesBetween(start: String, end: String): Int {
