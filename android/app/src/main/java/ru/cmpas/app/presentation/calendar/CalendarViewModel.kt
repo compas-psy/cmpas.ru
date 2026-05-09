@@ -8,9 +8,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.local.LocalPracticeStore
+import ru.cmpas.app.data.local.LocalScheduleBlockStore
 import ru.cmpas.app.domain.model.Session
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 enum class CalendarViewMode { DAY, WEEK, MONTH, LIST }
@@ -18,14 +19,14 @@ enum class CalendarViewMode { DAY, WEEK, MONTH, LIST }
 @HiltViewModel
 class CalendarViewModel @Inject constructor(
     private val api: CompasApi,
+    private val localStore: LocalPracticeStore,
+    private val blockStore: LocalScheduleBlockStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CalendarUiState())
     val uiState = _uiState.asStateFlow()
 
-    init {
-        loadSessions()
-    }
+    init { loadSessions() }
 
     fun selectDate(date: LocalDate) {
         _uiState.update { it.copy(selectedDate = date) }
@@ -34,54 +35,59 @@ class CalendarViewModel @Inject constructor(
 
     fun setViewMode(mode: CalendarViewMode) {
         _uiState.update { it.copy(viewMode = mode) }
+        loadSessions()
     }
 
     fun loadSessions() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
+            val range = currentRange(_uiState.value)
+            val localSessions = localStore.getSessions(from = range.first, to = range.second)
+            val localBlocks = blockStore.getBlocks(from = range.first, to = range.second)
             try {
-                val state = _uiState.value
-                val from: String
-                val to: String
-                when (state.viewMode) {
-                    CalendarViewMode.DAY -> {
-                        from = state.selectedDate.toString()
-                        to = state.selectedDate.toString()
-                    }
-                    CalendarViewMode.WEEK -> {
-                        val start = state.selectedDate.minusDays(state.selectedDate.dayOfWeek.value.toLong() - 1)
-                        from = start.toString()
-                        to = start.plusDays(6).toString()
-                    }
-                    CalendarViewMode.MONTH -> {
-                        val start = state.selectedDate.withDayOfMonth(1)
-                        from = start.toString()
-                        to = start.plusMonths(1).minusDays(1).toString()
-                    }
-                    CalendarViewMode.LIST -> {
-                        from = state.selectedDate.toString()
-                        to = state.selectedDate.plusDays(14).toString()
-                    }
-                }
-                val response = api.getSessions(from = from, to = to)
-                if (response.isSuccessful) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            sessions = response.body() ?: emptyList(),
-                        )
-                    }
-                } else {
-                    _uiState.update { it.copy(isLoading = false) }
+                val response = api.getSessions(from = range.first, to = range.second)
+                val remoteSessions = if (response.isSuccessful) response.body().orEmpty() else emptyList()
+                remoteSessions.forEach { localStore.upsertSession(it) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        sessions = mergeSessions(remoteSessions, localStore.getSessions(range.first, range.second), localBlocks),
+                    )
                 }
             } catch (_: Exception) {
-                _uiState.update { it.copy(isLoading = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        sessions = mergeSessions(emptyList(), localSessions, localBlocks),
+                    )
+                }
             }
         }
     }
 
     fun getSessionsForDate(date: LocalDate): List<Session> {
         return _uiState.value.sessions.filter { it.date == date.toString() }
+    }
+
+    private fun currentRange(state: CalendarUiState): Pair<String, String> {
+        return when (state.viewMode) {
+            CalendarViewMode.DAY -> state.selectedDate.toString() to state.selectedDate.toString()
+            CalendarViewMode.WEEK -> {
+                val start = state.selectedDate.minusDays(state.selectedDate.dayOfWeek.value.toLong() - 1)
+                start.toString() to start.plusDays(6).toString()
+            }
+            CalendarViewMode.MONTH -> {
+                val start = state.selectedDate.withDayOfMonth(1)
+                start.toString() to start.plusMonths(1).minusDays(1).toString()
+            }
+            CalendarViewMode.LIST -> state.selectedDate.toString() to state.selectedDate.plusDays(14).toString()
+        }
+    }
+
+    private fun mergeSessions(remote: List<Session>, local: List<Session>, blocks: List<Session>): List<Session> {
+        return (remote + local + blocks)
+            .distinctBy { it.id }
+            .sortedWith(compareBy<Session> { it.date }.thenBy { it.startTime })
     }
 }
 

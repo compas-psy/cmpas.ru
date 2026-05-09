@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,10 +24,7 @@ fun SettingsScreen(
     var detail by remember { mutableStateOf<SettingsDetail?>(null) }
 
     if (detail != null) {
-        SettingsDetailScreen(
-            detail = detail!!,
-            onBack = { detail = null },
-        )
+        SettingsDetailScreen(detail = detail!!, onBack = { detail = null })
         return
     }
 
@@ -39,9 +37,7 @@ fun SettingsScreen(
         },
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 136.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -49,9 +45,7 @@ fun SettingsScreen(
                 ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Surface(modifier = Modifier.size(52.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("ИМ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
+                            Box(contentAlignment = Alignment.Center) { Text("ИМ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer) }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -79,11 +73,7 @@ fun SettingsScreen(
                 }
             }
 
-            item {
-                TextButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
-                    Text("Выйти", color = MaterialTheme.colorScheme.error)
-                }
-            }
+            item { TextButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text("Выйти", color = MaterialTheme.colorScheme.error) } }
         }
     }
 }
@@ -107,9 +97,7 @@ private fun SettingsDetailScreen(detail: SettingsDetail, onBack: () -> Unit) {
                         Text(detail.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -159,18 +147,13 @@ private fun SettingsDetailScreen(detail: SettingsDetail, onBack: () -> Unit) {
 private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
     Column {
         Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)) {
-            Column { content() }
-        }
+        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)) { Column { content() } }
     }
 }
 
 @Composable
 private fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -231,9 +214,7 @@ private fun DocumentRow(title: String, ready: Boolean) {
 
 @Composable
 private fun ActionButton(text: String, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) {
-        Text(text)
-    }
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(text) }
 }
 
 private enum class SettingsDetail(val title: String, val subtitle: String) {

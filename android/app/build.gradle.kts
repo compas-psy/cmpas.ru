@@ -16,8 +16,8 @@ android {
         applicationId = "ru.cmpas.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -54,7 +54,6 @@ android {
 }
 
 dependencies {
-    // Compose BOM
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
     implementation(libs.compose.ui)
@@ -66,7 +65,6 @@ dependencies {
     implementation(libs.compose.foundation)
     debugImplementation(libs.compose.ui.tooling)
 
-    // AndroidX
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime)
@@ -74,34 +72,23 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(libs.core.splashscreen)
 
-    // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Network
     implementation(libs.retrofit)
     implementation(libs.retrofit.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.serialization.json)
 
-    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // DataStore
     implementation(libs.datastore)
-
-    // Coil
     implementation(libs.coil.compose)
 
-    // Coroutines
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
-
-    // Firebase
-    // implementation(platform(libs.firebase.bom))
-    // implementation(libs.firebase.messaging)
 }
