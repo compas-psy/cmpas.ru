@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import ru.cmpas.app.presentation.actions.QuickActionScreen
 import ru.cmpas.app.presentation.auth.LoginScreen
 import ru.cmpas.app.presentation.dashboard.DashboardScreen
 import ru.cmpas.app.presentation.calendar.CalendarScreen
@@ -80,6 +81,16 @@ fun CompasNavHost(
                 })
             }
             composable(
+                Screen.QuickAction.route,
+                arguments = listOf(navArgument("type") { type = NavType.StringType }),
+            ) {
+                QuickActionScreen(
+                    type = it.arguments?.getString("type") ?: "default",
+                    onBack = { navController.popBackStack() },
+                    onDone = { navController.popBackStack() },
+                )
+            }
+            composable(
                 Screen.PostSessionNote.route,
                 arguments = listOf(navArgument("sessionId") { type = NavType.StringType }),
             ) {
@@ -94,15 +105,19 @@ fun CompasNavHost(
                     sessionId = it.arguments?.getString("id") ?: "",
                     onBack = { navController.popBackStack() },
                     onClientClick = { id -> navController.navigate(Screen.ClientDetail.createRoute(id)) },
+                    onNoteClick = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
+                    onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
                 )
             }
-            composable(Screen.ClientDetail.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            composable(Screen.ClientDetail.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                val clientId = entry.arguments?.getString("id") ?: ""
                 ClientDetailScreen(
-                    clientId = it.arguments?.getString("id") ?: "",
+                    clientId = clientId,
                     onBack = { navController.popBackStack() },
                     onSessionClick = { id -> navController.navigate(Screen.SessionDetail.createRoute(id)) },
-                    onScheduleClick = { navController.navigateTopLevel(Screen.Calendar) },
-                    onNoteClick = { navController.navigateTopLevel(Screen.Notes) },
+                    onScheduleClick = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    onNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute("client-$clientId")) },
+                    onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
                 )
             }
         }
@@ -119,16 +134,16 @@ fun CompasNavHost(
             val actionItems = remember(currentRoute) {
                 when (currentRoute) {
                     Screen.Calendar.route -> DefaultActions.calendarActions(
-                        onNewSession = { navController.navigateTopLevel(Screen.Calendar) },
-                        onBlockTime = { navController.navigateTopLevel(Screen.Calendar) },
-                        onRepeatSlot = { navController.navigateTopLevel(Screen.Calendar) },
+                        onNewSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                        onBlockTime = { navController.navigate(Screen.QuickAction.createRoute("block-time")) },
+                        onRepeatSlot = { navController.navigate(Screen.QuickAction.createRoute("repeat-slot")) },
                         onScheduleSettings = { navController.navigateTopLevel(Screen.Settings) },
                     )
                     Screen.Clients.route -> DefaultActions.clientsActions(
-                        onNewClient = { navController.navigateTopLevel(Screen.Clients) },
-                        onScheduleSession = { navController.navigateTopLevel(Screen.Calendar) },
-                        onSendBookingLink = { navController.navigateTopLevel(Screen.Clients) },
-                        onBlockTime = { navController.navigateTopLevel(Screen.Calendar) },
+                        onNewClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
+                        onScheduleSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                        onSendBookingLink = { navController.navigate(Screen.QuickAction.createRoute("booking-link")) },
+                        onBlockTime = { navController.navigate(Screen.QuickAction.createRoute("block-time")) },
                     )
                     Screen.Notes.route -> DefaultActions.notesActions(
                         onVoiceNote = { navController.navigate(Screen.PostSessionNote.createRoute("voice")) },
@@ -137,10 +152,10 @@ fun CompasNavHost(
                         onTemplateNote = { navController.navigate(Screen.PostSessionNote.createRoute("template")) },
                     )
                     else -> DefaultActions.todayActions(
-                        onNewSession = { navController.navigateTopLevel(Screen.Calendar) },
+                        onNewSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
                         onPostNote = { navController.navigate(Screen.PostSessionNote.createRoute("quick")) },
-                        onBlockSlot = { navController.navigateTopLevel(Screen.Calendar) },
-                        onMarkPayment = { navController.navigateTopLevel(Screen.Dashboard) },
+                        onBlockSlot = { navController.navigate(Screen.QuickAction.createRoute("block-time")) },
+                        onMarkPayment = { navController.navigate(Screen.QuickAction.createRoute("payment")) },
                     )
                 }
             }
