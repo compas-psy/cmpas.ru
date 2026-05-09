@@ -1,6 +1,8 @@
 package ru.cmpas.app.presentation.actions
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -21,54 +22,78 @@ import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
+import ru.cmpas.app.domain.model.Client
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
-/**
- * Lightweight native form for FAB quick actions.
- *
- * Server mutations can be attached later, but every action now has an actual screen,
- * predictable flow and no dead click.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickActionScreen(
     type: String,
     onBack: () -> Unit,
     onDone: () -> Unit,
+    viewModel: QuickActionViewModel = hiltViewModel(),
 ) {
     val config = quickActionConfig(type)
+    val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
     var primary by remember { mutableStateOf("") }
     var secondary by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("") }
-    var time by remember { mutableStateOf("") }
+    var selectedClient by remember { mutableStateOf<Client?>(null) }
+    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
+    var useCustomTime by remember { mutableStateOf(false) }
     var comment by remember { mutableStateOf("") }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -101,7 +126,7 @@ fun QuickActionScreen(
                     }
                     Button(
                         onClick = {
-                            scope.launch { snackbarHostState.showSnackbar("Сохранено локально. Серверное действие будет подключено на следующем шаге.") }
+                            scope.launch { snackbarHostState.showSnackbar("Сохранено локально. Подключение серверного действия — следующий шаг.") }
                             onDone()
                         },
                         modifier = Modifier.weight(1.4f),
@@ -135,46 +160,57 @@ fun QuickActionScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = primary,
-                onValueChange = { primary = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(config.primaryLabel) },
-                singleLine = true,
-                shape = RoundedCornerShape(18.dp),
-            )
-
-            if (config.secondaryLabel != null) {
+            if (config.needsExistingClient) {
+                ClientSelector(
+                    clients = uiState.clients,
+                    isLoading = uiState.isLoadingClients,
+                    selectedClient = selectedClient,
+                    onSelect = { selectedClient = it },
+                )
+            } else {
                 OutlinedTextField(
-                    value = secondary,
-                    onValueChange = { secondary = it },
+                    value = primary,
+                    onValueChange = { primary = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(config.secondaryLabel) },
+                    label = { Text(config.primaryLabel) },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = if (config.secondaryIsPhone) KeyboardType.Phone else KeyboardType.Text),
                     shape = RoundedCornerShape(18.dp),
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (config.showSecondaryField) {
                 OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Дата") },
-                    placeholder = { Text("ДД.ММ") },
+                    value = secondary,
+                    onValueChange = { secondary = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(config.secondaryLabel ?: "Дополнительно") },
                     singleLine = true,
                     shape = RoundedCornerShape(18.dp),
                 )
-                OutlinedTextField(
-                    value = time,
-                    onValueChange = { time = it },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Время") },
-                    placeholder = { Text("14:00") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
+            }
+
+            if (config.showSlotMode) {
+                SlotModeSelector(
+                    useCustomTime = useCustomTime,
+                    onModeChange = { useCustomTime = it },
                 )
+            }
+
+            if (config.needsDateTime) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PickerField(
+                        label = "Дата",
+                        value = selectedDate?.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) ?: "Выбрать дату",
+                        modifier = Modifier.weight(1f),
+                        onClick = { showDatePicker = true },
+                    )
+                    PickerField(
+                        label = if (config.showSlotMode && !useCustomTime) "Слот" else "Время",
+                        value = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: if (config.showSlotMode && !useCustomTime) "Свободный слот" else "Выбрать время",
+                        modifier = Modifier.weight(1f),
+                        onClick = { showTimePicker = true },
+                    )
+                }
             }
 
             OutlinedTextField(
@@ -189,6 +225,110 @@ fun QuickActionScreen(
             Spacer(Modifier.height(96.dp))
         }
     }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean = true
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        selectedDate = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+                    }
+                    showDatePicker = false
+                }) { Text("Выбрать") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } },
+        ) { DatePicker(state = datePickerState) }
+    }
+
+    if (showTimePicker) {
+        val initial = selectedTime ?: LocalTime.of(14, 0)
+        val timePickerState = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = true)
+        TimePickerDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
+                    showTimePicker = false
+                }) { Text("Выбрать") }
+            },
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Отмена") } },
+        ) { TimePicker(state = timePickerState) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClientSelector(
+    clients: List<Client>,
+    isLoading: Boolean,
+    selectedClient: Client?,
+    onSelect: (Client) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selectedClient?.name ?: if (isLoading) "Загружаю клиентов…" else "Выбрать клиента",
+            onValueChange = {},
+            readOnly = true,
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            label = { Text("Клиент") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            shape = RoundedCornerShape(18.dp),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (clients.isEmpty()) {
+                DropdownMenuItem(text = { Text("Клиенты не найдены") }, onClick = { expanded = false })
+            } else {
+                clients.forEach { client ->
+                    DropdownMenuItem(
+                        text = { Text(client.name) },
+                        onClick = {
+                            onSelect(client)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlotModeSelector(useCustomTime: Boolean, onModeChange: (Boolean) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AssistChip(
+            onClick = { onModeChange(false) },
+            label = { Text("Свободный слот") },
+            leadingIcon = { Icon(Icons.Outlined.Schedule, null) },
+        )
+        AssistChip(
+            onClick = { onModeChange(true) },
+            label = { Text("Кастомное время") },
+            leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null) },
+        )
+    }
+}
+
+@Composable
+private fun PickerField(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = {},
+        readOnly = true,
+        modifier = modifier.clickable(onClick = onClick),
+        label = { Text(label) },
+        singleLine = true,
+        shape = RoundedCornerShape(18.dp),
+        trailingIcon = { Icon(Icons.Outlined.CalendarMonth, null) },
+    )
 }
 
 private data class QuickActionConfig(
@@ -197,9 +337,12 @@ private data class QuickActionConfig(
     val description: String,
     val primaryLabel: String,
     val secondaryLabel: String? = null,
-    val secondaryIsPhone: Boolean = false,
+    val showSecondaryField: Boolean = true,
     val button: String,
     val icon: ImageVector,
+    val needsExistingClient: Boolean = false,
+    val needsDateTime: Boolean = true,
+    val showSlotMode: Boolean = false,
 )
 
 private fun quickActionConfig(type: String): QuickActionConfig = when (type) {
@@ -209,23 +352,25 @@ private fun quickActionConfig(type: String): QuickActionConfig = when (type) {
         description = "Создайте карточку клиента, чтобы планировать сессии, вести заметки и документы.",
         primaryLabel = "Имя клиента",
         secondaryLabel = "Телефон или Telegram",
-        secondaryIsPhone = true,
         button = "Добавить",
         icon = Icons.Outlined.PersonAdd,
+        needsDateTime = false,
     )
     "new-session" -> QuickActionConfig(
         title = "Новая запись",
         subtitle = "Сессия в расписании",
-        description = "Выберите клиента, дату и время. После сохранения запись появится в календаре.",
+        description = "Выберите клиента из списка, затем дату и свободный слот. При необходимости можно указать кастомное время.",
         primaryLabel = "Клиент",
         secondaryLabel = "Формат: онлайн / офлайн",
         button = "Записать",
         icon = Icons.Outlined.CalendarMonth,
+        needsExistingClient = true,
+        showSlotMode = true,
     )
     "block-time" -> QuickActionConfig(
         title = "Добавить блокировку",
         subtitle = "Закрыть окно в расписании",
-        description = "Используйте блокировку для личного времени, перерыва, отпуска или внешней встречи.",
+        description = "Выберите дату и время блокировки через пикеры. Блокировка нужна для личного времени, перерыва, отпуска или внешней встречи.",
         primaryLabel = "Название блокировки",
         secondaryLabel = "Тип: перерыв / отпуск / личное",
         button = "Заблокировать",
@@ -234,35 +379,41 @@ private fun quickActionConfig(type: String): QuickActionConfig = when (type) {
     "booking-link" -> QuickActionConfig(
         title = "Ссылка записи",
         subtitle = "Для клиента",
-        description = "Подготовьте ссылку самозаписи. Её можно отправить клиенту в мессенджере.",
-        primaryLabel = "Клиент или сегмент",
+        description = "Выберите клиента из списка и подготовьте ссылку самозаписи для отправки в мессенджере.",
+        primaryLabel = "Клиент",
         secondaryLabel = "Комментарий к ссылке",
         button = "Подготовить",
         icon = Icons.Outlined.Link,
+        needsExistingClient = true,
+        needsDateTime = false,
     )
     "payment" -> QuickActionConfig(
         title = "Отметить оплату",
         subtitle = "По ближайшей сессии",
-        description = "Зафиксируйте оплату вручную. Позже действие будет связано с серверным статусом оплаты.",
-        primaryLabel = "Клиент / сессия",
+        description = "Выберите клиента и укажите сумму. Позже действие будет связано с серверным статусом оплаты.",
+        primaryLabel = "Клиент",
         secondaryLabel = "Сумма",
         button = "Отметить",
         icon = Icons.Outlined.CreditCard,
+        needsExistingClient = true,
+        needsDateTime = false,
     )
     "repeat-slot" -> QuickActionConfig(
         title = "Повторить слот",
         subtitle = "Следующая неделя",
-        description = "Быстро создайте запись в том же временном окне для регулярной работы.",
+        description = "Выберите клиента из списка, дату, время и количество повторов для регулярной работы.",
         primaryLabel = "Клиент",
         secondaryLabel = "Количество повторов",
         button = "Повторить",
         icon = Icons.Outlined.Replay,
+        needsExistingClient = true,
     )
     else -> QuickActionConfig(
         title = "Быстрое действие",
         subtitle = "КОМПАС",
         description = "Заполните основные поля. Действие будет расширено серверной логикой позже.",
         primaryLabel = "Название",
+        showSecondaryField = false,
         button = "Сохранить",
         icon = Icons.Outlined.CalendarMonth,
     )
