@@ -3,6 +3,7 @@ package ru.cmpas.app.data.local
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ru.cmpas.app.domain.model.Client
