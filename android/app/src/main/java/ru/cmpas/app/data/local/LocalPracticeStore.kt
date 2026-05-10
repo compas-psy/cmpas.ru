@@ -3,6 +3,7 @@ package ru.cmpas.app.data.local
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ru.cmpas.app.domain.model.Client
@@ -33,14 +34,12 @@ class LocalPracticeStore @Inject constructor(
             notes = notes?.ifBlank { null },
             status = ClientStatus.ACTIVE,
         )
-        val updated = getClients().filterNot { it.id == client.id } + client
-        prefs.edit().putString(KEY_CLIENTS, json.encodeToString(updated)).apply()
+        prefs.edit().putString(KEY_CLIENTS, json.encodeToString(getClients().filterNot { it.id == client.id } + client)).apply()
         return client
     }
 
     fun upsertClient(client: Client) {
-        val updated = getClients().filterNot { it.id == client.id } + client
-        prefs.edit().putString(KEY_CLIENTS, json.encodeToString(updated)).apply()
+        prefs.edit().putString(KEY_CLIENTS, json.encodeToString(getClients().filterNot { it.id == client.id } + client)).apply()
     }
 
     fun getClients(): List<Client> {
@@ -48,14 +47,7 @@ class LocalPracticeStore @Inject constructor(
         return runCatching { json.decodeFromString<List<Client>>(raw) }.getOrDefault(emptyList())
     }
 
-    fun createSession(
-        client: Client,
-        date: String,
-        startTime: String,
-        endTime: String,
-        format: SessionFormat,
-        notes: String?,
-    ): Session {
+    fun createSession(client: Client, date: String, startTime: String, endTime: String, format: SessionFormat, notes: String?): Session {
         val session = Session(
             id = "local-session-${System.currentTimeMillis()}",
             clientId = client.id,
@@ -70,14 +62,12 @@ class LocalPracticeStore @Inject constructor(
             consentStatus = ConsentStatus.OK,
             homeworkStatus = HomeworkStatus.NOT_ASSIGNED,
         )
-        val updated = getSessions().filterNot { it.id == session.id } + session
-        prefs.edit().putString(KEY_SESSIONS, json.encodeToString(updated)).apply()
+        prefs.edit().putString(KEY_SESSIONS, json.encodeToString(getSessions().filterNot { it.id == session.id } + session)).apply()
         return session
     }
 
     fun upsertSession(session: Session) {
-        val updated = getSessions().filterNot { it.id == session.id } + session
-        prefs.edit().putString(KEY_SESSIONS, json.encodeToString(updated)).apply()
+        prefs.edit().putString(KEY_SESSIONS, json.encodeToString(getSessions().filterNot { it.id == session.id } + session)).apply()
     }
 
     fun getSessions(from: String? = null, to: String? = null): List<Session> {
@@ -97,14 +87,13 @@ class LocalPracticeStore @Inject constructor(
             text = text,
             createdAt = LocalDateTime.now().toString(),
         )
-        val updated = getNotes() + note
-        prefs.edit().putString(KEY_NOTES, json.encodeToString(updated)).apply()
-
-        getSessions().firstOrNull { it.id == sessionId }?.let { session ->
-            upsertSession(session.copy(notes = text))
-        }
-
+        prefs.edit().putString(KEY_NOTES, json.encodeToString(getNotes().filterNot { it.sessionId == sessionId } + note)).apply()
+        getSessions().firstOrNull { it.id == sessionId }?.let { session -> upsertSession(session.copy(notes = text)) }
         return note
+    }
+
+    fun getLatestNote(sessionId: String): LocalNoteDto? {
+        return getNotes().filter { it.sessionId == sessionId }.maxByOrNull { it.createdAt }
     }
 
     fun getNotes(): List<LocalNoteDto> {
