@@ -38,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,22 @@ fun PostSessionNoteScreen(
     var intervention by remember { mutableStateOf("") }
     var dynamics by remember { mutableStateOf("") }
     var nextStep by remember { mutableStateOf("") }
+    var plainSavedText by remember { mutableStateOf("") }
+    var restored by remember { mutableStateOf(false) }
+
+    LaunchedEffect(sessionId) { viewModel.loadNote(sessionId) }
+    LaunchedEffect(uiState.savedText) {
+        val saved = uiState.savedText.orEmpty()
+        if (!restored && saved.isNotBlank()) {
+            request = extractBlock(saved, "Запрос")
+            observation = extractBlock(saved, "Наблюдение")
+            intervention = extractBlock(saved, "Интервенция")
+            dynamics = extractBlock(saved, "Динамика")
+            nextStep = extractBlock(saved, "Следующий шаг")
+            plainSavedText = saved
+            restored = true
+        }
+    }
 
     fun buildNoteText(): String = buildString {
         appendLine("Формат: ${mode.label}")
@@ -76,6 +93,10 @@ fun PostSessionNoteScreen(
         appendBlock("Интервенция", intervention)
         appendBlock("Динамика", dynamics)
         appendBlock("Следующий шаг", nextStep)
+        if (request.isBlank() && observation.isBlank() && intervention.isBlank() && dynamics.isBlank() && nextStep.isBlank() && plainSavedText.isNotBlank()) {
+            appendLine()
+            appendLine(plainSavedText.trim())
+        }
     }.trim()
 
     Scaffold(
@@ -88,20 +109,14 @@ fun PostSessionNoteScreen(
                         Text("Сессия $sessionId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, contentDescription = "Назад") }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, contentDescription = "Назад") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
             Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.surface) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -129,11 +144,7 @@ fun PostSessionNoteScreen(
         },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxSize().padding(paddingValues).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
@@ -162,6 +173,9 @@ fun PostSessionNoteScreen(
                 }
             }
 
+            if (plainSavedText.isNotBlank() && request.isBlank() && observation.isBlank() && intervention.isBlank() && dynamics.isBlank() && nextStep.isBlank()) {
+                NoteBlockField("Сохранённый текст", "Текст заметки", plainSavedText) { plainSavedText = it }
+            }
             NoteBlockField("Запрос", "Что было главным запросом клиента?", request) { request = it }
             NoteBlockField("Наблюдение", "Эмоциональный фон, контакт, важные проявления", observation) { observation = it }
             NoteBlockField("Интервенция", "Что использовали в работе", intervention) { intervention = it }
@@ -199,6 +213,16 @@ private fun StringBuilder.appendBlock(title: String, content: String) {
         appendLine("$title:")
         appendLine(content.trim())
     }
+}
+
+private fun extractBlock(text: String, title: String): String {
+    val marker = "$title:"
+    val start = text.indexOf(marker)
+    if (start < 0) return ""
+    val after = text.substring(start + marker.length)
+    val nextMarkers = listOf("Запрос:", "Наблюдение:", "Интервенция:", "Динамика:", "Следующий шаг:").filterNot { it == marker }
+    val end = nextMarkers.map { after.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: after.length
+    return after.substring(0, end).trim()
 }
 
 private enum class NoteMode(val label: String) {
