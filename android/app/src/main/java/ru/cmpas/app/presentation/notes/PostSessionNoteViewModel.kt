@@ -20,22 +20,35 @@ class PostSessionNoteViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PostSessionNoteUiState())
     val uiState = _uiState.asStateFlow()
 
+    fun loadNote(sessionId: String) {
+        viewModelScope.launch {
+            val localText = localStore.getLatestNote(sessionId)?.text
+            if (!localText.isNullOrBlank()) {
+                _uiState.update { it.copy(savedText = localText) }
+                return@launch
+            }
+            runCatching {
+                val response = api.getSessions()
+                val remoteText = response.body()?.firstOrNull { it.id == sessionId }?.notes
+                if (!remoteText.isNullOrBlank()) _uiState.update { it.copy(savedText = remoteText) }
+            }
+        }
+    }
+
     fun saveNote(sessionId: String, text: String, onFinished: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
                 if (sessionId.isNotBlank() && !sessionId.startsWith("quick") && !sessionId.startsWith("voice") && !sessionId.startsWith("text") && !sessionId.startsWith("template") && !sessionId.startsWith("client-") && !sessionId.startsWith("local-")) {
                     val response = api.updateSession(sessionId, UpdateSessionRequest(notes = text))
-                    if (response.isSuccessful) {
-                        response.body()?.let { localStore.upsertSession(it) }
-                    }
+                    if (response.isSuccessful) response.body()?.let { localStore.upsertSession(it) }
                 }
                 localStore.saveNote(sessionId = sessionId, text = text)
-                _uiState.update { it.copy(isSaving = false) }
+                _uiState.update { it.copy(isSaving = false, savedText = text) }
                 onFinished(true, "Заметка сохранена")
             } catch (_: Exception) {
                 localStore.saveNote(sessionId = sessionId, text = text)
-                _uiState.update { it.copy(isSaving = false) }
+                _uiState.update { it.copy(isSaving = false, savedText = text) }
                 onFinished(true, "Заметка сохранена локально")
             }
         }
@@ -44,4 +57,5 @@ class PostSessionNoteViewModel @Inject constructor(
 
 data class PostSessionNoteUiState(
     val isSaving: Boolean = false,
+    val savedText: String? = null,
 )
