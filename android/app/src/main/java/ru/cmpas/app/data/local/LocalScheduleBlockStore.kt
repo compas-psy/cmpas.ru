@@ -3,6 +3,7 @@ package ru.cmpas.app.data.local
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ru.cmpas.app.domain.model.ConsentStatus
@@ -36,11 +37,7 @@ class LocalScheduleBlockStore @Inject constructor(
         return block.toSession()
     }
 
-    fun getBlocks(from: String, to: String): List<Session> {
-        return loadDtos()
-            .filter { it.date >= from && it.date <= to }
-            .map { it.toSession() }
-    }
+    fun getBlocks(from: String, to: String): List<Session> = loadDtos().filter { it.date >= from && it.date <= to }.map { it.toSession() }
 
     private fun loadDtos(): List<ScheduleBlockDto> {
         val raw = prefs.getString(KEY_BLOCKS, null) ?: return emptyList()
