@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { FileText, Plus, EyeOff, RefreshCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { FileText, Plus, EyeOff, RefreshCcw, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SpecialistDocument = {
@@ -28,9 +28,11 @@ const documentTypes = [
 ];
 
 export default function DocumentsPage() {
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [documents, setDocuments] = useState<SpecialistDocument[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [form, setForm] = useState({
         title: '',
         type: 'informed_consent',
@@ -38,6 +40,8 @@ export default function DocumentsPage() {
         content: '',
         fileUrl: '',
         fileName: '',
+        fileMimeType: '',
+        fileSizeBytes: 0,
         sendOnNewClient: true,
         sendOnFirstSession: true,
         requiresAcknowledgement: false,
@@ -58,9 +62,32 @@ export default function DocumentsPage() {
 
     useEffect(() => { loadDocuments(); }, []);
 
+    const handleFileUpload = async (file: File) => {
+        setUploading(true);
+        try {
+            const data = new FormData();
+            data.append('file', file);
+            const response = await fetch('/api/diary/documents/upload', { method: 'POST', body: data });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось загрузить файл');
+            setForm(f => ({
+                ...f,
+                fileUrl: result.fileUrl,
+                fileName: result.fileName || file.name,
+                fileMimeType: result.fileMimeType || file.type,
+                fileSizeBytes: result.fileSizeBytes || file.size,
+                title: f.title || file.name.replace(/\.[^.]+$/, ''),
+            }));
+            toast.success('Файл загружен');
+        } catch (e: any) {
+            toast.error(e?.message || 'Не удалось загрузить файл');
+        }
+        setUploading(false);
+    };
+
     const createDocument = async () => {
         if (!form.title.trim()) { toast.error('Введите название документа'); return; }
-        if (!form.content.trim() && !form.fileUrl.trim()) { toast.error('Добавьте текст документа или ссылку на файл'); return; }
+        if (!form.content.trim() && !form.fileUrl.trim()) { toast.error('Загрузите файл, вставьте ссылку или добавьте текст документа'); return; }
         setCreating(true);
         try {
             const { createSpecialistClientDocument } = await import('../actions/client-documents');
@@ -71,13 +98,14 @@ export default function DocumentsPage() {
                 content: form.content.trim() || null,
                 fileUrl: form.fileUrl.trim() || null,
                 fileName: form.fileName.trim() || null,
-                fileMimeType: form.fileUrl.trim() ? 'application/octet-stream' : null,
+                fileMimeType: form.fileMimeType || (form.fileUrl.trim() ? 'application/octet-stream' : null),
+                fileSizeBytes: form.fileSizeBytes || null,
                 sendOnNewClient: form.sendOnNewClient,
                 sendOnFirstSession: form.sendOnFirstSession,
                 requiresAcknowledgement: form.requiresAcknowledgement,
             });
             toast.success('Документ добавлен');
-            setForm({ title: '', type: 'informed_consent', version: new Date().toISOString().slice(0, 10), content: '', fileUrl: '', fileName: '', sendOnNewClient: true, sendOnFirstSession: true, requiresAcknowledgement: false });
+            setForm({ title: '', type: 'informed_consent', version: new Date().toISOString().slice(0, 10), content: '', fileUrl: '', fileName: '', fileMimeType: '', fileSizeBytes: 0, sendOnNewClient: true, sendOnFirstSession: true, requiresAcknowledgement: false });
             loadDocuments();
         } catch (e: any) {
             toast.error(e?.message || 'Не удалось добавить документ');
@@ -116,7 +144,7 @@ export default function DocumentsPage() {
                         <div className="py-12 text-center border border-dashed border-border rounded-2xl bg-muted/30">
                             <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
                             <p className="font-semibold text-foreground">Документы пока не добавлены</p>
-                            <p className="text-sm text-muted-foreground mt-1">Добавьте свой PDF/Word по ссылке или вставьте текст документа.</p>
+                            <p className="text-sm text-muted-foreground mt-1">Загрузите PDF/Word с устройства или вставьте текст документа.</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -147,22 +175,27 @@ export default function DocumentsPage() {
 
                 <section className="bg-card border border-border rounded-2xl p-6 shadow-card h-fit xl:sticky xl:top-4">
                     <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><Plus className="w-5 h-5" /> Добавить документ</h2>
-                    <p className="text-sm text-muted-foreground mb-5">Можно вставить текст или указать ссылку на PDF/DOC/DOCX файл.</p>
+                    <p className="text-sm text-muted-foreground mb-5">Загрузите файл с компьютера/телефона, вставьте ссылку или добавьте текст.</p>
                     <div className="space-y-4">
+                        <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.txt,.rtf,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/*" onChange={e => { const file = e.target.files?.[0]; if (file) handleFileUpload(file); e.currentTarget.value = ''; }} />
+                        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 text-primary text-sm font-bold hover:bg-primary/10 disabled:opacity-50">
+                            <Upload className="w-4 h-4" /> {uploading ? 'Загружаю файл...' : 'Загрузить PDF / Word / изображение'}
+                        </button>
+                        {form.fileUrl && <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">Файл загружен: <b>{form.fileName || form.fileUrl}</b></div>}
                         <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none" placeholder="Название документа" />
                         <div className="grid grid-cols-2 gap-3">
                             <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none">{documentTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select>
                             <input value={form.version} onChange={e => setForm(f => ({ ...f, version: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none" placeholder="Версия" />
                         </div>
-                        <input value={form.fileUrl} onChange={e => setForm(f => ({ ...f, fileUrl: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none" placeholder="Ссылка на файл, например https://.../document.pdf" />
-                        <input value={form.fileName} onChange={e => setForm(f => ({ ...f, fileName: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none" placeholder="Имя файла, например informed-consent.pdf" />
+                        <input value={form.fileUrl} onChange={e => setForm(f => ({ ...f, fileUrl: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none" placeholder="Ссылка на файл заполнится автоматически после загрузки" />
+                        <input value={form.fileName} onChange={e => setForm(f => ({ ...f, fileName: e.target.value }))} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none" placeholder="Имя файла" />
                         <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} rows={7} className="w-full px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none resize-none" placeholder="Текст документа, если файла нет" />
                         <div className="space-y-3 rounded-2xl border border-border p-4 bg-muted/20">
                             <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={form.sendOnNewClient} onChange={e => setForm(f => ({ ...f, sendOnNewClient: e.target.checked }))} /> Автоотправка новому клиенту</label>
                             <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={form.sendOnFirstSession} onChange={e => setForm(f => ({ ...f, sendOnFirstSession: e.target.checked }))} /> Автоотправка перед первой сессией</label>
                             <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={form.requiresAcknowledgement} onChange={e => setForm(f => ({ ...f, requiresAcknowledgement: e.target.checked }))} /> Просить подтвердить ознакомление</label>
                         </div>
-                        <button onClick={createDocument} disabled={creating} className="w-full px-5 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-forest-700 disabled:opacity-50">{creating ? 'Добавляю...' : 'Добавить документ'}</button>
+                        <button onClick={createDocument} disabled={creating || uploading} className="w-full px-5 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-forest-700 disabled:opacity-50">{creating ? 'Добавляю...' : 'Добавить документ'}</button>
                     </div>
                 </section>
             </div>
