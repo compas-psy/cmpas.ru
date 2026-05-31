@@ -27,6 +27,12 @@ const documentTypes = [
     { value: 'custom', label: 'Другое' },
 ];
 
+async function safeJson(response: Response) {
+    const text = await response.text();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return { success: false, error: text.slice(0, 300) }; }
+}
+
 export default function DocumentsPage() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [documents, setDocuments] = useState<SpecialistDocument[]>([]);
@@ -68,8 +74,8 @@ export default function DocumentsPage() {
             const data = new FormData();
             data.append('file', file);
             const response = await fetch('/api/diary/documents/upload', { method: 'POST', body: data });
-            const result = await response.json();
-            if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось загрузить файл');
+            const result = await safeJson(response);
+            if (!response.ok || !result?.success) throw new Error(result?.error || `Не удалось загрузить файл. Код ответа: ${response.status}`);
             setForm(f => ({
                 ...f,
                 fileUrl: result.fileUrl,

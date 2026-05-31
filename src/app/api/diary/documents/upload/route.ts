@@ -17,6 +17,10 @@ const ALLOWED_MIME_TYPES = new Set([
     'image/png',
 ]);
 
+function jsonError(message: string, status = 500) {
+    return NextResponse.json({ success: false, error: message }, { status });
+}
+
 function safeFileName(name: string) {
     const ext = path.extname(name).toLowerCase().slice(0, 12);
     const base = path.basename(name, ext).replace(/[^a-zA-Z0-9а-яА-ЯёЁ._-]+/g, '-').slice(0, 80) || 'document';
@@ -24,46 +28,38 @@ function safeFileName(name: string) {
 }
 
 export async function POST(request: Request) {
-    const session = await auth();
-    if (!session?.user?.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return jsonError('Нужно войти в аккаунт', 401);
+
+        const formData = await request.formData();
+        const file = formData.get('file');
+
+        if (!(file instanceof File)) return jsonError('Файл не найден', 400);
+        if (file.size <= 0) return jsonError('Файл пустой', 400);
+        if (file.size > MAX_FILE_SIZE) return jsonError('Файл слишком большой. Максимум 15 МБ', 400);
+        if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) return jsonError('Поддерживаются PDF, DOC, DOCX, TXT, RTF, JPG и PNG', 400);
+
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        const userDir = path.join(process.cwd(), 'public', 'uploads', 'client-documents', session.user.id);
+        await mkdir(userDir, { recursive: true });
+
+        const storedName = safeFileName(file.name || 'document');
+        const filePath = path.join(userDir, storedName);
+        await writeFile(filePath, buffer);
+
+        const fileUrl = `/uploads/client-documents/${session.user.id}/${storedName}`;
+
+        return NextResponse.json({
+            success: true,
+            fileUrl,
+            fileName: file.name,
+            fileMimeType: file.type || 'application/octet-stream',
+            fileSizeBytes: file.size,
+        });
+    } catch (error) {
+        console.error('document upload failed:', error);
+        return jsonError('Не удалось загрузить файл на сервер. Попробуйте файл меньше 15 МБ или другой формат.', 500);
     }
-
-    const formData = await request.formData();
-    const file = formData.get('file');
-
-    if (!(file instanceof File)) {
-        return NextResponse.json({ error: 'Файл не найден' }, { status: 400 });
-    }
-
-    if (file.size <= 0) {
-        return NextResponse.json({ error: 'Файл пустой' }, { status: 400 });
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: 'Файл слишком большой. Максимум 15 МБ' }, { status: 400 });
-    }
-
-    if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) {
-        return NextResponse.json({ error: 'Поддерживаются PDF, DOC, DOCX, TXT, RTF, JPG и PNG' }, { status: 400 });
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const userDir = path.join(process.cwd(), 'public', 'uploads', 'client-documents', session.user.id);
-    await mkdir(userDir, { recursive: true });
-
-    const storedName = safeFileName(file.name || 'document');
-    const filePath = path.join(userDir, storedName);
-    await writeFile(filePath, buffer);
-
-    const fileUrl = `/uploads/client-documents/${session.user.id}/${storedName}`;
-
-    return NextResponse.json({
-        success: true,
-        fileUrl,
-        fileName: file.name,
-        fileMimeType: file.type || 'application/octet-stream',
-        fileSizeBytes: file.size,
-    });
 }
