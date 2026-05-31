@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Plus, EyeOff, RefreshCcw, Upload } from 'lucide-react';
+import { FileText, Plus, RefreshCcw, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SpecialistDocument = {
@@ -31,6 +31,14 @@ async function safeJson(response: Response) {
     const text = await response.text();
     if (!text) return null;
     try { return JSON.parse(text); } catch { return { success: false, error: text.slice(0, 300) }; }
+}
+
+function openFileUrl(fileUrl: string) {
+    if (fileUrl.startsWith('/api/diary/documents/file/')) return fileUrl;
+    if (fileUrl.startsWith('/uploads/client-documents/')) {
+        return fileUrl.replace('/uploads/client-documents/', '/api/diary/documents/file/');
+    }
+    return fileUrl;
 }
 
 export default function DocumentsPage() {
@@ -97,7 +105,7 @@ export default function DocumentsPage() {
         setCreating(true);
         try {
             const { createSpecialistClientDocument } = await import('../actions/client-documents');
-            await createSpecialistClientDocument({
+            const result = await createSpecialistClientDocument({
                 title: form.title.trim(),
                 type: form.type,
                 version: form.version.trim() || new Date().toISOString().slice(0, 10),
@@ -110,6 +118,7 @@ export default function DocumentsPage() {
                 sendOnFirstSession: form.sendOnFirstSession,
                 requiresAcknowledgement: form.requiresAcknowledgement,
             });
+            if (!result?.success) throw new Error(result?.error || 'Не удалось добавить документ');
             toast.success('Документ добавлен');
             setForm({ title: '', type: 'informed_consent', version: new Date().toISOString().slice(0, 10), content: '', fileUrl: '', fileName: '', fileMimeType: '', fileSizeBytes: 0, sendOnNewClient: true, sendOnFirstSession: true, requiresAcknowledgement: false });
             loadDocuments();
@@ -119,14 +128,15 @@ export default function DocumentsPage() {
         setCreating(false);
     };
 
-    const deactivate = async (id: string) => {
+    const setActive = async (id: string, isActive: boolean) => {
         try {
-            const { deactivateSpecialistClientDocument } = await import('../actions/client-documents');
-            await deactivateSpecialistClientDocument(id);
-            toast.success('Документ отключён');
+            const { setSpecialistClientDocumentActive } = await import('../actions/client-documents');
+            const result = await setSpecialistClientDocumentActive(id, isActive);
+            if (!result?.success) throw new Error(result?.error || 'Не удалось изменить статус документа');
+            toast.success(isActive ? 'Документ включён' : 'Документ отключён');
             loadDocuments();
-        } catch {
-            toast.error('Не удалось отключить документ');
+        } catch (e: any) {
+            toast.error(e?.message || 'Не удалось изменить статус документа');
         }
     };
 
@@ -164,14 +174,16 @@ export default function DocumentsPage() {
                                                 {!doc.isActive && <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">отключён</span>}
                                             </div>
                                             <p className="text-sm text-muted-foreground mt-1">{documentTypes.find(t => t.value === doc.type)?.label || doc.type}</p>
-                                            {doc.fileUrl && <a className="text-sm text-primary hover:underline mt-2 inline-block" href={doc.fileUrl} target="_blank" rel="noreferrer">Открыть файл{doc.fileName ? `: ${doc.fileName}` : ''}</a>}
+                                            {doc.fileUrl && <a className="text-sm text-primary hover:underline mt-2 inline-block" href={openFileUrl(doc.fileUrl)} target="_blank" rel="noreferrer">Открыть файл{doc.fileName ? `: ${doc.fileName}` : ''}</a>}
                                             <div className="flex flex-wrap gap-2 mt-3">
                                                 {doc.sendOnNewClient && <span className="text-xs px-2 py-1 rounded-lg bg-sage-100 text-forest-700 font-semibold">новому клиенту</span>}
                                                 {doc.sendOnFirstSession && <span className="text-xs px-2 py-1 rounded-lg bg-sage-100 text-forest-700 font-semibold">перед первой сессией</span>}
                                                 {doc.requiresAcknowledgement && <span className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 font-semibold">ознакомление</span>}
                                             </div>
                                         </div>
-                                        {doc.isActive && <button onClick={() => deactivate(doc.id)} className="p-2 rounded-xl hover:bg-muted text-muted-foreground" title="Отключить"><EyeOff className="w-4 h-4" /></button>}
+                                        <button onClick={() => setActive(doc.id, !doc.isActive)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${doc.isActive ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}>
+                                            {doc.isActive ? 'Отключить' : 'Включить'}
+                                        </button>
                                     </div>
                                 </div>
                             ))}
