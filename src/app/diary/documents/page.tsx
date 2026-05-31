@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Plus, RefreshCcw, Upload } from 'lucide-react';
+import { FileText, Plus, RefreshCcw, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SpecialistDocument = {
@@ -15,6 +15,7 @@ type SpecialistDocument = {
     sendOnNewClient: boolean;
     sendOnFirstSession: boolean;
     requiresAcknowledgement: boolean;
+    deliveriesCount?: number;
 };
 
 const documentTypes = [
@@ -140,6 +141,20 @@ export default function DocumentsPage() {
         }
     };
 
+    const deleteDocument = async (doc: SpecialistDocument) => {
+        const ok = window.confirm(`Удалить документ «${doc.title}»? Если он уже отправлялся клиентам, система не удалит его и предложит отключить.`);
+        if (!ok) return;
+        try {
+            const { deleteSpecialistClientDocument } = await import('../actions/client-documents');
+            const result = await deleteSpecialistClientDocument(doc.id);
+            if (!result?.success) throw new Error(result?.error || 'Не удалось удалить документ');
+            toast.success('Документ удалён');
+            loadDocuments();
+        } catch (e: any) {
+            toast.error(e?.message || 'Не удалось удалить документ');
+        }
+    };
+
     return (
         <div className="space-y-6 pb-12">
             <div className="flex items-center justify-between gap-4">
@@ -172,6 +187,7 @@ export default function DocumentsPage() {
                                                 <h3 className="font-bold text-foreground truncate">{doc.title}</h3>
                                                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">v {doc.version}</span>
                                                 {!doc.isActive && <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">отключён</span>}
+                                                {!!doc.deliveriesCount && <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold">отправок: {doc.deliveriesCount}</span>}
                                             </div>
                                             <p className="text-sm text-muted-foreground mt-1">{documentTypes.find(t => t.value === doc.type)?.label || doc.type}</p>
                                             {doc.fileUrl && <a className="text-sm text-primary hover:underline mt-2 inline-block" href={openFileUrl(doc.fileUrl)} target="_blank" rel="noreferrer">Открыть файл{doc.fileName ? `: ${doc.fileName}` : ''}</a>}
@@ -181,9 +197,14 @@ export default function DocumentsPage() {
                                                 {doc.requiresAcknowledgement && <span className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 font-semibold">ознакомление</span>}
                                             </div>
                                         </div>
-                                        <button onClick={() => setActive(doc.id, !doc.isActive)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${doc.isActive ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}>
-                                            {doc.isActive ? 'Отключить' : 'Включить'}
-                                        </button>
+                                        <div className="flex flex-col gap-2 shrink-0">
+                                            <button onClick={() => setActive(doc.id, !doc.isActive)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${doc.isActive ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}>
+                                                {doc.isActive ? 'Отключить' : 'Включить'}
+                                            </button>
+                                            <button onClick={() => deleteDocument(doc)} className="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-700 hover:bg-red-50 flex items-center justify-center gap-1">
+                                                <Trash2 className="w-3 h-3" /> Удалить
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
