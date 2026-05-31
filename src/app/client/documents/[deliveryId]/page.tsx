@@ -3,6 +3,14 @@ import { getDocumentDelivery } from '@/lib/client-workflow';
 
 export const dynamic = 'force-dynamic';
 
+function openFileUrl(fileUrl: string) {
+    if (fileUrl.startsWith('/api/diary/documents/file/')) return fileUrl;
+    if (fileUrl.startsWith('/uploads/client-documents/')) {
+        return fileUrl.replace('/uploads/client-documents/', '/api/diary/documents/file/');
+    }
+    return fileUrl;
+}
+
 export default async function ClientDocumentPage({ params, searchParams }: { params: Promise<{ deliveryId: string }>; searchParams: Promise<{ t?: string }> }) {
     const { deliveryId } = await params;
     const { t: token } = await searchParams;
@@ -25,7 +33,7 @@ export default async function ClientDocumentPage({ params, searchParams }: { par
                 {delivery.documentContent ? (
                     <section className="mb-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm leading-6">{delivery.documentContent}</section>
                 ) : delivery.fileUrl ? (
-                    <a href={delivery.fileUrl} target="_blank" rel="noreferrer" className="mb-6 block rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm font-semibold text-[#1a4d3a] underline">
+                    <a href={openFileUrl(delivery.fileUrl)} target="_blank" rel="noreferrer" className="mb-6 block rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm font-semibold text-[#1a4d3a] underline">
                         Открыть файл документа{delivery.fileName ? `: ${delivery.fileName}` : ''}
                     </a>
                 ) : (
