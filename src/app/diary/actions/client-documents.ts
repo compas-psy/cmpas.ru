@@ -49,20 +49,22 @@ export async function createSpecialistClientDocument(data: {
 }) {
     const psychologistId = await getPsychologistId();
     const title = data.title?.trim();
+    const content = data.content?.trim() || '';
+    const fileUrl = data.fileUrl?.trim() || null;
     if (!title) throw new Error('Название документа обязательно');
-    if (!data.content && !data.fileUrl) throw new Error('Нужен текст документа или ссылка на файл');
+    if (!content && !fileUrl) throw new Error('Нужен текст документа или файл');
 
     const id = randomUUID();
     const now = new Date();
     const version = data.version?.trim() || new Date().toISOString().slice(0, 10);
-    const hashSource = `${title}:${version}:${data.content || ''}:${data.fileUrl || ''}`;
+    const hashSource = `${title}:${version}:${content}:${fileUrl || ''}`;
     const contentHash = createHash('sha256').update(hashSource).digest('hex');
 
     await db.$executeRaw`
         INSERT INTO "PsychologistClientDocument"
             (id, "psychologistId", title, type, version, content, "contentHash", "fileUrl", "fileName", "fileMimeType", "fileSizeBytes", "sendOnNewClient", "sendOnFirstSession", "requiresAcknowledgement", "isActive", "createdAt", "updatedAt")
         VALUES
-            (${id}, ${psychologistId}, ${title}, ${data.type || 'custom'}, ${version}, ${data.content || null}, ${contentHash}, ${data.fileUrl || null}, ${data.fileName || null}, ${data.fileMimeType || null}, ${data.fileSizeBytes || null}, ${!!data.sendOnNewClient}, ${!!data.sendOnFirstSession}, ${!!data.requiresAcknowledgement}, true, ${now}, ${now})
+            (${id}, ${psychologistId}, ${title}, ${data.type || 'custom'}, ${version}, ${content}, ${contentHash}, ${fileUrl}, ${data.fileName || null}, ${data.fileMimeType || null}, ${data.fileSizeBytes || null}, ${!!data.sendOnNewClient}, ${!!data.sendOnFirstSession}, ${!!data.requiresAcknowledgement}, true, ${now}, ${now})
     `;
 
     return { success: true, id };
