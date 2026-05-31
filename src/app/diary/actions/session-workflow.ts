@@ -5,20 +5,12 @@ import { auth } from '@/auth';
 import { createSession } from './sessions';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
+import { buildSessionClientMessage, clientBookingLink, clientConsentLink } from '@/lib/client-workflow';
 
 async function getPsychologistId() {
     const session = await auth();
     if (!session?.user?.id) throw new Error('Unauthorized');
     return session.user.id;
-}
-
-function bookingLink(psychologistId: string, clientId: string) {
-    const base = process.env.AUTH_URL || 'https://cmpas.ru';
-    return `${base}/bot/book/${psychologistId}?c=${clientId}`;
-}
-
-function formatDate(date: Date) {
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export async function createSessionWithClientNotice(data: {
@@ -42,16 +34,21 @@ export async function createSessionWithClientNotice(data: {
 
     if (!full) return { session, notice: { status: 'not_found' as const } };
 
-    const psyName = full.psychologist.psychologistSettings?.fullName || full.psychologist.name || 'специалисту';
-    const link = bookingLink(psychologistId, full.clientId);
+    const psyName = full.psychologist.psychologistSettings?.fullName || full.psychologist.name || 'специалист';
+    const bookingLink = clientBookingLink(psychologistId, full.clientId);
+    const consentLink = clientConsentLink(psychologistId, full.clientId);
     const onlineLink = full.format === 'online' ? full.psychologist.psychologistSettings?.onlineSessionLink : null;
-    const text = [
-        `${full.client.name}, здравствуйте.`,
-        `Подтверждаю запись на консультацию к ${psyName}: ${formatDate(full.date)} в ${full.time}.`,
-        full.format === 'offline' ? 'Формат: очная встреча.' : 'Формат: онлайн-консультация.',
-        onlineLink ? `Ссылка для подключения: ${onlineLink}` : '',
-        `Подтвердить, перенести или отменить встречу можно здесь: ${link}`,
-    ].filter(Boolean).join('\n');
+    const text = buildSessionClientMessage({
+        clientName: full.client.name,
+        psychologistName: psyName,
+        date: full.date,
+        time: full.time,
+        format: full.format,
+        onlineLink,
+        consentLink,
+        bookingLink,
+        alreadyConsented: !!full.client.consentDate,
+    });
 
     let sentTo: string | null = null;
     if (full.client.telegramChatId) {
@@ -68,7 +65,8 @@ export async function createSessionWithClientNotice(data: {
             status: sentTo ? 'sent' as const : 'manual' as const,
             channel: sentTo,
             text,
-            link,
+            bookingLink,
+            consentLink,
         },
     };
 }
