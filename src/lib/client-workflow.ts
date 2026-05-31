@@ -40,33 +40,26 @@ export function clientDocumentLink(deliveryId: string) {
     return `${publicBaseUrl()}/client/documents/${deliveryId}?t=${token}`;
 }
 
-export async function ensureDefaultSpecialistDocument(psychologistId: string) {
-    const existing = await db.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM "PsychologistClientDocument"
+export async function getAutoSendDocuments(psychologistId: string, trigger: 'new_client' | 'first_session' | 'session') {
+    const flag = trigger === 'new_client' ? 'sendOnNewClient' : 'sendOnFirstSession';
+    const rows = await db.$queryRaw<Array<{
+        id: string;
+        title: string;
+        version: string;
+        contentHash: string;
+        fileUrl: string | null;
+    }>>`
+        SELECT id, title, version, "contentHash", "fileUrl"
+        FROM "PsychologistClientDocument"
         WHERE "psychologistId" = ${psychologistId}
-          AND type = 'informed_consent_offer'
           AND "isActive" = true
-        ORDER BY "createdAt" DESC
-        LIMIT 1
+          AND (
+            (${flag} = 'sendOnNewClient' AND "sendOnNewClient" = true)
+            OR (${flag} = 'sendOnFirstSession' AND "sendOnFirstSession" = true)
+          )
+        ORDER BY "sortOrder" ASC, "createdAt" ASC
     `;
-
-    if (existing[0]?.id) return existing[0].id;
-
-    const id = randomUUID();
-    const now = new Date();
-    const title = 'Информированное согласие / оферта';
-    const version = '2026-04-01-v1';
-    const content = `ИНФОРМИРОВАННОЕ СОГЛАСИЕ\n(порядок оказания консультативных услуг)\n\nНастоящий документ определяет правила оказания психологических консультативных услуг специалистом и порядок их оказания.\n\nОплата консультации является акцептом условий документа. Акцептом является 100% оплата услуг по QR-коду или направленной платежной ссылке в мессенджере и/или по электронной почте.\n\nКлиенту необходимо ознакомиться с условиями до оплаты и начала консультации. Документ содержит условия проведения консультации, порядок оплаты, права и обязанности сторон, правила отмены и переноса консультаций, ответственность сторон и реквизиты специалиста.`;
-    const contentHash = createHash('sha256').update(content).digest('hex');
-
-    await db.$executeRaw`
-        INSERT INTO "PsychologistClientDocument"
-            (id, "psychologistId", title, type, version, content, "contentHash", "isActive", "createdAt", "updatedAt")
-        VALUES
-            (${id}, ${psychologistId}, ${title}, 'informed_consent_offer', ${version}, ${content}, ${contentHash}, true, ${now}, ${now})
-    `;
-
-    return id;
+    return rows;
 }
 
 export async function createClientDocumentDelivery(params: {
@@ -75,9 +68,8 @@ export async function createClientDocumentDelivery(params: {
     sessionId?: string | null;
     channel?: string | null;
     recipientContact?: string | null;
-    documentId?: string | null;
+    documentId: string;
 }) {
-    const documentId = params.documentId || await ensureDefaultSpecialistDocument(params.psychologistId);
     const documentRows = await db.$queryRaw<Array<{
         id: string;
         title: string;
@@ -85,7 +77,7 @@ export async function createClientDocumentDelivery(params: {
         contentHash: string;
     }>>`
         SELECT id, title, version, "contentHash" FROM "PsychologistClientDocument"
-        WHERE id = ${documentId} AND "psychologistId" = ${params.psychologistId} AND "isActive" = true
+        WHERE id = ${params.documentId} AND "psychologistId" = ${params.psychologistId} AND "isActive" = true
         LIMIT 1
     `;
 
@@ -105,6 +97,73 @@ export async function createClientDocumentDelivery(params: {
     return { deliveryId: id, documentId: doc.id, title: doc.title, version: doc.version, link: clientDocumentLink(id) };
 }
 
+export async function createAutoDocumentDeliveries(params: {
+    psychologistId: string;
+    clientId: string;
+    sessionId?: string | null;
+    trigger: 'new_client' | 'first_session' | 'session';
+    channel?: string | null;
+    recipientContact?: string | null;
+}) {
+    const docs = await getAutoSendDocuments(params.psychologistId, params.trigger);
+    const deliveries = [] as Array<{ deliveryId: string; documentId: string; title: string; version: string; link: string }>;
+
+    for (const doc of docs) {
+        deliveries.push(await createClientDocumentDelivery({
+            psychologistId: params.psychologistId,
+            clientId: params.clientId,
+            sessionId: params.sessionId,
+            channel: params.channel,
+            recipientContact: params.recipientContact,
+            documentId: doc.id,
+        }));
+    }
+
+    return deliveries;
+}
+
+export async function getPaymentInstruction(psychologistId: string, sessionId?: string | null, clientId?: string | null) {
+    const rows = await db.$queryRaw<Array<{
+        isEnabled: boolean;
+        paymentText: string | null;
+        paymentLink: string | null;
+        paymentQrUrl: string | null;
+        prepaymentRequired: boolean;
+        paymentDueText: string | null;
+    }>>`
+        SELECT "isEnabled", "paymentText", "paymentLink", "paymentQrUrl", "prepaymentRequired", "paymentDueText"
+        FROM "PsychologistPaymentSettings"
+        WHERE "psychologistId" = ${psychologistId}
+        LIMIT 1
+    `;
+
+    const settings = rows[0];
+    if (!settings?.isEnabled) return null;
+    if (!settings.paymentText && !settings.paymentLink && !settings.paymentQrUrl) return null;
+
+    if (sessionId && clientId) {
+        const id = randomUUID();
+        const now = new Date();
+        await db.$executeRaw`
+            INSERT INTO "SessionPaymentRequest"
+                (id, "sessionId", "psychologistId", "clientId", status, "paymentTextSnapshot", "paymentLinkSnapshot", "paymentQrUrlSnapshot", "sentAt", "createdAt", "updatedAt")
+            VALUES
+                (${id}, ${sessionId}, ${psychologistId}, ${clientId}, 'sent', ${settings.paymentText}, ${settings.paymentLink}, ${settings.paymentQrUrl}, ${now}, ${now}, ${now})
+        `;
+    }
+
+    const lines = [
+        settings.prepaymentRequired ? 'Оплата консультации производится по инструкции специалиста.' : 'Оплата консультации: по договорённости со специалистом.',
+        settings.paymentDueText ? `Срок оплаты: ${settings.paymentDueText}` : '',
+        settings.paymentText || '',
+        settings.paymentLink ? `Ссылка на оплату: ${settings.paymentLink}` : '',
+        settings.paymentQrUrl ? `QR-код для оплаты: ${settings.paymentQrUrl}` : '',
+        'КОМПАС не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
+    ];
+
+    return lines.filter(Boolean).join('\n');
+}
+
 export async function getDocumentDelivery(deliveryId: string, token?: string | null) {
     if (!verifyDocumentDeliveryToken(deliveryId, token)) throw new Error('Некорректная ссылка документа');
 
@@ -118,12 +177,16 @@ export async function getDocumentDelivery(deliveryId: string, token?: string | n
         acknowledgedAt: Date | null;
         clientName: string;
         psychologistName: string | null;
-        documentContent: string;
+        documentContent: string | null;
+        fileUrl: string | null;
+        fileName: string | null;
     }>>`
         SELECT d.id, d.status, d."documentTitle", d."documentVersion", d."sentAt", d."openedAt", d."acknowledgedAt",
                c.name as "clientName",
                COALESCE(ps."fullName", u.name) as "psychologistName",
-               doc.content as "documentContent"
+               doc.content as "documentContent",
+               doc."fileUrl" as "fileUrl",
+               doc."fileName" as "fileName"
         FROM "ClientDocumentDelivery" d
         JOIN "DiaryClient" c ON c.id = d."clientId"
         JOIN "User" u ON u.id = d."psychologistId"
@@ -169,19 +232,22 @@ export function buildSessionClientMessage(params: {
     time: string;
     format: string;
     onlineLink?: string | null;
-    documentLink?: string | null;
+    documentLinks?: Array<{ title: string; link: string }>;
     bookingLink: string;
     paymentText?: string | null;
 }) {
     const dateText = params.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    const documentText = params.documentLinks?.length
+        ? ['Перед оплатой и первой встречей, пожалуйста, ознакомьтесь с документами специалиста:', ...params.documentLinks.map(d => `— ${d.title}: ${d.link}`)].join('\n')
+        : '';
+
     const lines = [
         `${params.clientName}, здравствуйте.`,
         '',
         `Подтверждаю запись на консультацию к ${params.psychologistName}: ${dateText} в ${params.time}.`,
         `Формат: ${params.format === 'offline' ? 'очная встреча' : 'онлайн-консультация'}.`,
         params.onlineLink && params.format !== 'offline' ? `Ссылка для подключения: ${params.onlineLink}` : '',
-        '',
-        params.documentLink ? `Перед оплатой и первой встречей, пожалуйста, ознакомьтесь с условиями работы: ${params.documentLink}` : '',
+        documentText,
         params.paymentText || '',
         `Подтвердить, перенести или отменить встречу можно здесь: ${params.bookingLink}`,
     ];
