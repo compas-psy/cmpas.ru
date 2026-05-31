@@ -25,13 +25,16 @@ export async function listSpecialistClientDocuments() {
             sendOnNewClient: boolean;
             sendOnFirstSession: boolean;
             requiresAcknowledgement: boolean;
+            deliveriesCount: number;
             createdAt: Date;
             updatedAt: Date;
         }>>`
-            SELECT id, title, type, version, "fileUrl", "fileName", "fileMimeType", "isActive", "sendOnNewClient", "sendOnFirstSession", "requiresAcknowledgement", "createdAt", "updatedAt"
-            FROM "PsychologistClientDocument"
-            WHERE "psychologistId" = ${psychologistId}
-            ORDER BY "isActive" DESC, "sortOrder" ASC, "createdAt" DESC
+            SELECT d.id, d.title, d.type, d.version, d."fileUrl", d."fileName", d."fileMimeType", d."isActive", d."sendOnNewClient", d."sendOnFirstSession", d."requiresAcknowledgement", COUNT(cd.id)::int as "deliveriesCount", d."createdAt", d."updatedAt"
+            FROM "PsychologistClientDocument" d
+            LEFT JOIN "ClientDocumentDelivery" cd ON cd."documentId" = d.id
+            WHERE d."psychologistId" = ${psychologistId}
+            GROUP BY d.id
+            ORDER BY d."isActive" DESC, d."sortOrder" ASC, d."createdAt" DESC
         `;
     } catch (error) {
         console.error('listSpecialistClientDocuments failed:', error);
@@ -93,6 +96,30 @@ export async function setSpecialistClientDocumentActive(id: string, isActive: bo
     } catch (error) {
         console.error('setSpecialistClientDocumentActive failed:', error);
         return { success: false, error: isActive ? 'Не удалось включить документ' : 'Не удалось отключить документ' };
+    }
+}
+
+export async function deleteSpecialistClientDocument(id: string) {
+    try {
+        const psychologistId = await getPsychologistId();
+        const rows = await db.$queryRaw<Array<{ count: number }>>`
+            SELECT COUNT(*)::int as count
+            FROM "ClientDocumentDelivery"
+            WHERE "documentId" = ${id} AND "psychologistId" = ${psychologistId}
+        `;
+        const count = rows[0]?.count || 0;
+        if (count > 0) {
+            return { success: false, error: 'Документ уже отправлялся клиентам. Его нельзя удалить, чтобы сохранить журнал. Отключите документ.' };
+        }
+
+        await db.$executeRaw`
+            DELETE FROM "PsychologistClientDocument"
+            WHERE id = ${id} AND "psychologistId" = ${psychologistId}
+        `;
+        return { success: true };
+    } catch (error) {
+        console.error('deleteSpecialistClientDocument failed:', error);
+        return { success: false, error: 'Не удалось удалить документ' };
     }
 }
 
