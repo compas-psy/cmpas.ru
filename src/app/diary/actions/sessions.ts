@@ -4,6 +4,9 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
+import { sendTelegramMessage } from '@/lib/telegram';
+import { sendMaxMessage } from '@/lib/max-bot';
+import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -38,6 +41,66 @@ export async function getSessionsByDate(date: Date) {
         include: { client: { select: { id: true, name: true, questionnaire: { select: { data: true } }, consentDate: true } } },
         orderBy: { time: 'asc' },
     });
+}
+
+async function createClientNoticeForSession(psychologistId: string, sessionId: string, isFirstSession: boolean) {
+    const full = await db.diarySession.findFirst({
+        where: { id: sessionId, psychologistId },
+        include: {
+            client: true,
+            psychologist: { include: { psychologistSettings: true } },
+        },
+    });
+
+    if (!full) return { status: 'not_found' as const };
+
+    const channel = full.client.telegramChatId ? 'telegram' : (full.client as any).maxChatId ? 'max' : 'manual';
+    const recipientContact = full.client.telegramChatId || (full.client as any).maxChatId || full.client.phone || full.client.email || null;
+    const deliveries = isFirstSession ? await createAutoDocumentDeliveries({
+        psychologistId,
+        clientId: full.clientId,
+        sessionId: full.id,
+        trigger: 'first_session',
+        channel,
+        recipientContact,
+    }) : [];
+
+    const psyName = full.psychologist.psychologistSettings?.fullName || full.psychologist.name || 'специалист';
+    const bookingLink = clientBookingLink(psychologistId, full.clientId);
+    const onlineLink = full.format === 'online' ? full.psychologist.psychologistSettings?.onlineSessionLink : null;
+    const paymentText = await getPaymentInstruction(psychologistId, full.id, full.clientId);
+    const text = buildSessionClientMessage({
+        clientName: full.client.name,
+        psychologistName: psyName,
+        date: full.date,
+        time: full.time,
+        format: full.format,
+        onlineLink,
+        documentLinks: deliveries.map(d => ({ title: d.title, link: d.link })),
+        paymentText,
+        bookingLink,
+    });
+
+    let sentTo: string | null = null;
+    try {
+        if (full.client.telegramChatId) {
+            await sendTelegramMessage(full.client.telegramChatId, text, { parse_mode: 'HTML' });
+            sentTo = 'telegram';
+        } else if ((full.client as any).maxChatId) {
+            await sendMaxMessage((full.client as any).maxChatId, text);
+            sentTo = 'max';
+        }
+    } catch (error) {
+        console.error('client notice send failed:', error);
+    }
+
+    return {
+        status: sentTo ? 'sent' as const : 'manual' as const,
+        channel: sentTo,
+        text,
+        bookingLink,
+        documentLinks: deliveries.map(d => ({ title: d.title, link: d.link, deliveryId: d.deliveryId })),
+    };
 }
 
 export async function createSession(data: {
@@ -117,7 +180,14 @@ export async function createSession(data: {
         autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
     }
 
-    return session;
+    let notice: any = null;
+    try {
+        notice = await createClientNoticeForSession(psychologistId, session.id, sessionsCount === 1);
+    } catch (error) {
+        console.error('create client notice failed:', error);
+    }
+
+    return { ...session, notice } as any;
 }
 
 export async function updateSession(id: string, data: {
