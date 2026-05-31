@@ -50,6 +50,9 @@ export async function getAddresses() {
 
 export async function createAddress(data: { name: string; address: string }) {
     const psychologistId = await getPsychologistId();
+    let settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
+    if (!settings) settings = await db.psychologistSettings.create({ data: { psychologistId } });
+
     const result = await db.psychologistAddress.create({
         data: { psychologistId, name: data.name, address: data.address }
     });
@@ -67,20 +70,27 @@ export async function createAddress(data: { name: string; address: string }) {
 
 export async function deleteAddress(id: string) {
     const psychologistId = await getPsychologistId();
+    const address = await db.psychologistAddress.findFirst({ where: { id, psychologistId }, select: { id: true } });
+    if (!address) throw new Error('Кабинет не найден');
+
     // If deleting primary, clear it
     const settings = await db.psychologistSettings.findUnique({ where: { psychologistId }, select: { officeAddress: true } });
     if (settings?.officeAddress === id) {
         await db.psychologistSettings.update({ where: { psychologistId }, data: { officeAddress: null } });
     }
-    await db.psychologistAddress.delete({ where: { id } });
+    await db.psychologistAddress.delete({ where: { id: address.id } });
     revalidatePath('/diary/settings');
 }
 
 export async function setPrimaryAddress(addressId: string) {
     const psychologistId = await getPsychologistId();
-    await db.psychologistSettings.update({
+    const address = await db.psychologistAddress.findFirst({ where: { id: addressId, psychologistId }, select: { id: true } });
+    if (!address) throw new Error('Кабинет не найден');
+
+    await db.psychologistSettings.upsert({
         where: { psychologistId },
-        data: { officeAddress: addressId },
+        create: { psychologistId, officeAddress: address.id },
+        update: { officeAddress: address.id },
     });
     revalidatePath('/diary/settings');
 }
@@ -97,16 +107,37 @@ export async function updateSettings(data: {
     autoSync?: boolean;
     blockConflicts?: boolean;
     notifyTelegram?: boolean;
+    notifyAds?: boolean;
+    timeFormat?: string;
+    dateFormat?: string;
+    weekStartsOn?: string;
     scheduleMode?: string;
     maxSessionsPerDay?: number | null;
     bookingHorizonDays?: number;
     bookingBufferHours?: number;
 }) {
     const psychologistId = await getPsychologistId();
+    const safeData = {
+        ...(typeof data.timezone === 'string' ? { timezone: data.timezone } : {}),
+        ...(typeof data.defaultSessionDuration === 'number' ? { defaultSessionDuration: data.defaultSessionDuration } : {}),
+        ...(typeof data.sessionBreak === 'number' ? { sessionBreak: data.sessionBreak } : {}),
+        ...(typeof data.onlineSessionLink === 'string' ? { onlineSessionLink: data.onlineSessionLink.trim() || null } : {}),
+        ...(typeof data.officeAddress === 'string' ? { officeAddress: data.officeAddress || null } : {}),
+        ...(typeof data.cancellationHours === 'number' ? { cancellationHours: Math.max(0, data.cancellationHours) } : {}),
+        ...(typeof data.cancellationFee === 'number' ? { cancellationFee: Math.min(100, Math.max(0, data.cancellationFee)) } : {}),
+        ...(typeof data.cancellationText === 'string' ? { cancellationText: data.cancellationText } : {}),
+        ...(typeof data.autoSync === 'boolean' ? { autoSync: data.autoSync } : {}),
+        ...(typeof data.blockConflicts === 'boolean' ? { blockConflicts: data.blockConflicts } : {}),
+        ...(typeof data.scheduleMode === 'string' ? { scheduleMode: data.scheduleMode } : {}),
+        ...(typeof data.maxSessionsPerDay === 'number' || data.maxSessionsPerDay === null ? { maxSessionsPerDay: data.maxSessionsPerDay } : {}),
+        ...(typeof data.bookingHorizonDays === 'number' ? { bookingHorizonDays: data.bookingHorizonDays } : {}),
+        ...(typeof data.bookingBufferHours === 'number' ? { bookingBufferHours: data.bookingBufferHours } : {}),
+    };
+
     const settings = await db.psychologistSettings.upsert({
         where: { psychologistId },
-        create: { psychologistId, ...data },
-        update: data,
+        create: { psychologistId, ...safeData },
+        update: safeData,
     });
     revalidatePath('/diary/settings');
     return settings;
