@@ -5,7 +5,7 @@ import { auth } from '@/auth';
 import { createSession } from './sessions';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
-import { buildSessionClientMessage, clientBookingLink, clientConsentLink } from '@/lib/client-workflow';
+import { buildSessionClientMessage, clientBookingLink, createClientDocumentDelivery } from '@/lib/client-workflow';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -36,8 +36,15 @@ export async function createSessionWithClientNotice(data: {
 
     const psyName = full.psychologist.psychologistSettings?.fullName || full.psychologist.name || 'специалист';
     const bookingLink = clientBookingLink(psychologistId, full.clientId);
-    const consentLink = clientConsentLink(psychologistId, full.clientId);
     const onlineLink = full.format === 'online' ? full.psychologist.psychologistSettings?.onlineSessionLink : null;
+    const delivery = await createClientDocumentDelivery({
+        psychologistId,
+        clientId: full.clientId,
+        sessionId: full.id,
+        channel: full.client.telegramChatId ? 'telegram' : (full.client as any).maxChatId ? 'max' : 'manual',
+        recipientContact: full.client.telegramChatId || (full.client as any).maxChatId || full.client.phone || full.client.email || null,
+    });
+
     const text = buildSessionClientMessage({
         clientName: full.client.name,
         psychologistName: psyName,
@@ -45,9 +52,8 @@ export async function createSessionWithClientNotice(data: {
         time: full.time,
         format: full.format,
         onlineLink,
-        consentLink,
+        documentLink: delivery.link,
         bookingLink,
-        alreadyConsented: !!full.client.consentDate,
     });
 
     let sentTo: string | null = null;
@@ -66,7 +72,8 @@ export async function createSessionWithClientNotice(data: {
             channel: sentTo,
             text,
             bookingLink,
-            consentLink,
+            documentLink: delivery.link,
+            documentDeliveryId: delivery.deliveryId,
         },
     };
 }
