@@ -24,6 +24,8 @@ services:
       - TELEGRAM_PROXY=${TELEGRAM_PROXY:-}
     env_file:
       - .env
+    volumes:
+      - uploaded_files:/app/public/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,3 +66,4 @@ services:
 volumes:
   db_data:
   mail_queue:
+  uploaded_files:
