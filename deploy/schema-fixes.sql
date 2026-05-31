@@ -191,3 +191,106 @@ DO $$ BEGIN
     CREATE INDEX "Payment_status_idx" ON "Payment"("status");
   END IF;
 END $$;
+
+-- Specialist client documents and payment instructions
+CREATE TABLE IF NOT EXISTS "PsychologistClientDocument" (
+  "id" TEXT NOT NULL,
+  "psychologistId" TEXT NOT NULL,
+  "title" TEXT NOT NULL,
+  "type" TEXT NOT NULL DEFAULT 'custom',
+  "version" TEXT NOT NULL,
+  "content" TEXT NOT NULL DEFAULT '',
+  "contentHash" TEXT NOT NULL,
+  "fileUrl" TEXT,
+  "fileName" TEXT,
+  "fileMimeType" TEXT,
+  "fileSizeBytes" INTEGER,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "sendOnNewClient" BOOLEAN NOT NULL DEFAULT false,
+  "sendOnFirstSession" BOOLEAN NOT NULL DEFAULT false,
+  "requiresAcknowledgement" BOOLEAN NOT NULL DEFAULT false,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PsychologistClientDocument_pkey" PRIMARY KEY ("id")
+);
+
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "content" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "fileUrl" TEXT;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "fileName" TEXT;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "fileMimeType" TEXT;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "fileSizeBytes" INTEGER;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "sendOnNewClient" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "sendOnFirstSession" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "requiresAcknowledgement" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "PsychologistClientDocument" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+UPDATE "PsychologistClientDocument" SET "content" = '' WHERE "content" IS NULL;
+ALTER TABLE "PsychologistClientDocument" ALTER COLUMN "content" SET DEFAULT '';
+ALTER TABLE "PsychologistClientDocument" ALTER COLUMN "content" SET NOT NULL;
+
+CREATE TABLE IF NOT EXISTS "ClientDocumentDelivery" (
+  "id" TEXT NOT NULL,
+  "psychologistId" TEXT NOT NULL,
+  "clientId" TEXT NOT NULL,
+  "sessionId" TEXT,
+  "documentId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'sent',
+  "deliveryChannel" TEXT NOT NULL DEFAULT 'manual',
+  "recipientContact" TEXT,
+  "documentTitle" TEXT NOT NULL,
+  "documentVersion" TEXT NOT NULL,
+  "documentContentHash" TEXT NOT NULL,
+  "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "openedAt" TIMESTAMP(3),
+  "acknowledgedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "ClientDocumentDelivery_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "PsychologistPaymentSettings" (
+  "id" TEXT NOT NULL,
+  "psychologistId" TEXT NOT NULL,
+  "isEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "paymentText" TEXT,
+  "paymentLink" TEXT,
+  "paymentQrUrl" TEXT,
+  "prepaymentRequired" BOOLEAN NOT NULL DEFAULT true,
+  "paymentDueText" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PsychologistPaymentSettings_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "SessionPaymentRequest" (
+  "id" TEXT NOT NULL,
+  "sessionId" TEXT NOT NULL,
+  "psychologistId" TEXT NOT NULL,
+  "clientId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'sent',
+  "amount" INTEGER,
+  "currency" TEXT NOT NULL DEFAULT 'RUB',
+  "paymentTextSnapshot" TEXT,
+  "paymentLinkSnapshot" TEXT,
+  "paymentQrUrlSnapshot" TEXT,
+  "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "markedPaidAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "SessionPaymentRequest_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_psychologistId_idx" ON "PsychologistClientDocument"("psychologistId");
+CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_isActive_idx" ON "PsychologistClientDocument"("isActive");
+CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_sendOnNewClient_idx" ON "PsychologistClientDocument"("sendOnNewClient");
+CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_sendOnFirstSession_idx" ON "PsychologistClientDocument"("sendOnFirstSession");
+CREATE INDEX IF NOT EXISTS "ClientDocumentDelivery_psychologistId_idx" ON "ClientDocumentDelivery"("psychologistId");
+CREATE INDEX IF NOT EXISTS "ClientDocumentDelivery_clientId_idx" ON "ClientDocumentDelivery"("clientId");
+CREATE INDEX IF NOT EXISTS "ClientDocumentDelivery_sessionId_idx" ON "ClientDocumentDelivery"("sessionId");
+CREATE INDEX IF NOT EXISTS "ClientDocumentDelivery_documentId_idx" ON "ClientDocumentDelivery"("documentId");
+CREATE INDEX IF NOT EXISTS "ClientDocumentDelivery_status_idx" ON "ClientDocumentDelivery"("status");
+CREATE UNIQUE INDEX IF NOT EXISTS "PsychologistPaymentSettings_psychologistId_key" ON "PsychologistPaymentSettings"("psychologistId");
+CREATE INDEX IF NOT EXISTS "SessionPaymentRequest_sessionId_idx" ON "SessionPaymentRequest"("sessionId");
+CREATE INDEX IF NOT EXISTS "SessionPaymentRequest_psychologistId_idx" ON "SessionPaymentRequest"("psychologistId");
+CREATE INDEX IF NOT EXISTS "SessionPaymentRequest_clientId_idx" ON "SessionPaymentRequest"("clientId");
+CREATE INDEX IF NOT EXISTS "SessionPaymentRequest_status_idx" ON "SessionPaymentRequest"("status");
