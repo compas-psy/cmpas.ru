@@ -80,20 +80,28 @@ export async function createSpecialistClientDocument(data: {
     }
 }
 
-export async function deactivateSpecialistClientDocument(id: string) {
+export async function setSpecialistClientDocumentActive(id: string, isActive: boolean) {
     try {
         const psychologistId = await getPsychologistId();
         const now = new Date();
         await db.$executeRaw`
             UPDATE "PsychologistClientDocument"
-            SET "isActive" = false, "updatedAt" = ${now}
+            SET "isActive" = ${isActive}, "updatedAt" = ${now}
             WHERE id = ${id} AND "psychologistId" = ${psychologistId}
         `;
         return { success: true };
     } catch (error) {
-        console.error('deactivateSpecialistClientDocument failed:', error);
-        return { success: false, error: 'Не удалось отключить документ' };
+        console.error('setSpecialistClientDocumentActive failed:', error);
+        return { success: false, error: isActive ? 'Не удалось включить документ' : 'Не удалось отключить документ' };
     }
+}
+
+export async function deactivateSpecialistClientDocument(id: string) {
+    return setSpecialistClientDocumentActive(id, false);
+}
+
+export async function activateSpecialistClientDocument(id: string) {
+    return setSpecialistClientDocumentActive(id, true);
 }
 
 export async function listClientDocumentDeliveries(clientId: string) {
