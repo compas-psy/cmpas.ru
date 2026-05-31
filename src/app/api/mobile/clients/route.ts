@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
+import { normalizePhone, phoneLookupVariants } from '@/lib/clients/phone';
 
-/**
- * GET /api/mobile/clients
- * Returns client list for the authenticated psychologist.
- * Query: ?search=...
- */
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
@@ -18,7 +14,11 @@ export async function GET(req: NextRequest) {
             where: {
                 psychologistId: auth.userId,
                 ...(search && {
-                    name: { contains: search, mode: 'insensitive' as const },
+                    OR: [
+                        { name: { contains: search, mode: 'insensitive' as const } },
+                        { phone: { contains: search.replace(/\s/g, ''), mode: 'insensitive' as const } },
+                        { email: { contains: search, mode: 'insensitive' as const } },
+                    ],
                 }),
             },
             include: {
@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
         });
 
         const now = new Date();
-        // Get upcoming sessions for all clients in one query
         const upcomingSessions = await db.diarySession.findMany({
             where: {
                 psychologistId: auth.userId,
@@ -44,7 +43,6 @@ export async function GET(req: NextRequest) {
             orderBy: { date: 'asc' },
         });
 
-        // Build a map: clientId -> next session
         const nextSessionMap = new Map<string, { date: string; time: string }>();
         for (const s of upcomingSessions) {
             if (s.clientId && !nextSessionMap.has(s.clientId)) {
@@ -79,11 +77,6 @@ export async function GET(req: NextRequest) {
     }
 }
 
-/**
- * POST /api/mobile/clients
- * Create a new client.
- * Body: { name, email?, phone? }
- */
 export async function POST(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
@@ -95,23 +88,42 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Name required' }, { status: 400 });
         }
 
-        const client = await db.diaryClient.create({
-            data: {
-                psychologistId: auth.userId,
-                name,
-                email: email || null,
-                phone: phone || null,
-            },
-        });
+        const normalizedPhone = normalizePhone(phone);
+        const variants = phoneLookupVariants(normalizedPhone || phone);
+        const existing = variants.length ? await db.diaryClient.findFirst({
+            where: { psychologistId: auth.userId, phone: { in: variants } },
+            orderBy: { updatedAt: 'desc' },
+        }) : null;
+
+        const client = existing
+            ? await db.diaryClient.update({
+                where: { id: existing.id },
+                data: {
+                    ...(existing.status === 'archived' ? { status: 'active' } : {}),
+                    ...(!existing.email && email ? { email } : {}),
+                    ...(!existing.phone && normalizedPhone ? { phone: normalizedPhone } : {}),
+                },
+            })
+            : await db.diaryClient.create({
+                data: {
+                    psychologistId: auth.userId,
+                    name: name.trim(),
+                    email: email || null,
+                    phone: normalizedPhone,
+                },
+            });
+
+        const sessionsCount = existing ? await db.diarySession.count({ where: { clientId: client.id } }) : 0;
 
         return NextResponse.json({
             id: client.id,
             name: client.name,
             email: client.email,
             phone: client.phone,
-            sessionsCount: 0,
+            sessionsCount,
             lastSessionDate: null,
-            status: 'ACTIVE',
+            status: (client.status || 'active').toUpperCase(),
+            alreadyExists: !!existing,
         });
     } catch (error) {
         console.error('[mobile/clients]', error);
