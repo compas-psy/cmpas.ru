@@ -1,5 +1,7 @@
 package ru.cmpas.app.presentation.clients
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,7 +44,53 @@ fun ClientDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     var tabIndex by remember { mutableStateOf(0) }
     var showClientMenu by remember { mutableStateOf(false) }
+    var showMessageDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     LaunchedEffect(clientId) { viewModel.loadClient(clientId) }
+
+    // Handle manual message result: open share sheet
+    LaunchedEffect(uiState.messageResult) {
+        val r = uiState.messageResult
+        if (r is MessageResult.Manual) {
+            val text = r.readyText
+            val phone = r.phone
+            // Try WhatsApp first if phone available, then generic share
+            if (phone != null) {
+                val normalized = phone.replace("[^+\\d]".toRegex(), "")
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$normalized?text=${Uri.encode(text)}"))
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    context.startActivity(intent)
+                    viewModel.clearMessageResult()
+                    return@LaunchedEffect
+                } catch (_: Exception) {}
+            }
+            // Fallback: generic share
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(Intent.createChooser(intent, "Отправить сообщение").apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            })
+            viewModel.clearMessageResult()
+        }
+    }
+
+    // Handle invite link: copy + share
+    LaunchedEffect(uiState.inviteLink) {
+        val link = uiState.inviteLink ?: return@LaunchedEffect
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "Для получения уведомлений откройте ссылку: $link")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(Intent.createChooser(intent, "Отправить приглашение").apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
+        viewModel.clearInviteLink()
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -102,12 +151,81 @@ fun ClientDetailScreen(
             uiState.client != null -> {
                 val client = uiState.client!!
 
+                // Messenger status indicator + write button
+                val detail = uiState.clientDetail
+                if (detail != null) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (detail.hasMessenger) {
+                            val icon = if (detail.messengerChannel == "telegram") Icons.Outlined.Send else Icons.Outlined.Message
+                            Icon(icon, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (detail.messengerChannel == "telegram") "Telegram ✓" else "MAX ✓",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Icon(Icons.Outlined.NotificationsOff, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Не в боте", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        if (detail.hasMessenger) {
+                            TextButton(
+                                onClick = { showMessageDialog = true },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Icon(Icons.Outlined.Send, null, Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Написать", style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else {
+                            TextButton(
+                                onClick = { viewModel.generateInviteLink(clientId) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                enabled = !uiState.isGeneratingInvite,
+                            ) {
+                                if (uiState.isGeneratingInvite) {
+                                    CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
+                                } else {
+                                    Icon(Icons.Outlined.Link, null, Modifier.size(14.dp))
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                Text("Пригласить в бот", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+
                 CompasSegmentedControl(
                     items = listOf("Обзор", "Записи", "Заметки", "Документы"),
                     selectedIndex = tabIndex,
                     onSelect = { tabIndex = it },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+
+                // Send message dialog
+                if (showMessageDialog) {
+                    SendMessageDialog(
+                        onSend = { text ->
+                            viewModel.sendMessage(clientId, "custom", text = text)
+                            showMessageDialog = false
+                        },
+                        onDismiss = { showMessageDialog = false },
+                        isSending = uiState.isSendingMessage,
+                    )
+                }
+
+                // Sent result toast
+                val msgResult = uiState.messageResult
+                if (msgResult is MessageResult.Sent) {
+                    LaunchedEffect(msgResult) { viewModel.clearMessageResult() }
+                } else if (msgResult is MessageResult.Error) {
+                    LaunchedEffect(msgResult) { viewModel.clearMessageResult() }
+                }
 
                 LazyColumn(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp),
@@ -416,4 +534,37 @@ private fun formatLabel(format: SessionFormat?): String = when (format) {
 
 private fun seriesLabel(client: Client): String {
     return if (client.packageTotal != null && client.packageCompleted != null) "${client.packageCompleted} из ${client.packageTotal}" else "Не задана"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SendMessageDialog(
+    onSend: (String) -> Unit,
+    onDismiss: () -> Unit,
+    isSending: Boolean = false,
+) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Написать клиенту") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Сообщение") },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                placeholder = { Text("Привет! Напоминаю о встрече…") },
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (text.isNotBlank()) onSend(text.trim()) },
+                enabled = text.isNotBlank() && !isSending,
+            ) {
+                if (isSending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text("Отправить")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
 }

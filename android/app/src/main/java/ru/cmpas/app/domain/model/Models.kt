@@ -169,6 +169,108 @@ data class AuthTokens(
 // Notes
 // ═══════════════════════════════════════════
 
+// ═══════════════════════════════════════════
+// Client detail (extended)
+// ═══════════════════════════════════════════
+
+@Serializable
+data class ClientDetail(
+    val id: String,
+    val name: String,
+    val email: String? = null,
+    val phone: String? = null,
+    val telegramId: String? = null,
+    val maxId: String? = null,
+    val sessionsCount: Int = 0,
+    val lastSessionDate: String? = null,
+    val status: ClientStatus = ClientStatus.ACTIVE,
+    val consentDate: String? = null,
+    val recentSessions: List<Session> = emptyList(),
+    val hasMessenger: Boolean = false,
+    val messengerChannel: String? = null, // "telegram" | "max" | null
+)
+
+// ═══════════════════════════════════════════
+// Messaging
+// ═══════════════════════════════════════════
+
+@Serializable
+data class SendMessageResponse(
+    val status: String,  // "telegram" | "max" | "manual"
+    val sentAt: String? = null,
+    val readyText: String? = null, // for manual delivery
+    val phone: String? = null,
+)
+
+@Serializable
+data class InviteResponse(
+    val inviteLink: String,
+    val channel: String,
+    val expiresAt: String,
+    val clientName: String,
+    val phone: String? = null,
+)
+
+// ═══════════════════════════════════════════
+// Schedule blocks
+// ═══════════════════════════════════════════
+
+@Serializable
+data class TimeBlock(
+    val id: String,
+    val date: String,
+    val startTime: String,
+    val endTime: String,
+    val type: String,
+    val reason: String? = null,
+)
+
+@Serializable
+data class CreateBlockResponse(
+    val ok: Boolean,
+    val created: Int,
+)
+
+// ═══════════════════════════════════════════
+// Free times for reschedule
+// ═══════════════════════════════════════════
+
+@Serializable
+data class FreeTimesResponse(
+    val date: String,
+    val times: List<String>, // ["10:00", "11:00", ...]
+)
+
+// ═══════════════════════════════════════════
+// Scheduled messages
+// ═══════════════════════════════════════════
+
+@Serializable
+data class ScheduledMessage(
+    val id: String,
+    val clientId: String,
+    val sessionId: String? = null,
+    val channel: String,
+    val text: String,
+    val sendAt: String,
+    val status: String,
+    val readyText: String? = null,
+)
+
+// ═══════════════════════════════════════════
+// Dashboard with booking link
+// ═══════════════════════════════════════════
+
+@Serializable
+data class DashboardDataV2(
+    val todaySessions: List<Session>,
+    val nextSession: Session?,
+    val weekStats: WeekStats,
+    val userName: String? = null,
+    val attentionItems: List<AttentionItem> = emptyList(),
+    val bookingLink: String? = null,
+)
+
 @Serializable
 data class SessionNote(
     val id: String,
