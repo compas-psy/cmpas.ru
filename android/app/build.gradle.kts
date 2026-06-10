@@ -16,19 +16,34 @@ android {
         applicationId = "ru.cmpas.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
     }
 
+    signingConfigs {
+        // Stable signing key committed to the repo so every APK (debug or
+        // release) is signed identically -> installs update in place instead
+        // of forcing an uninstall. Safe to commit: it only signs our own
+        // sideloaded distribution builds, not Play Store releases.
+        create("compas") {
+            storeFile = rootProject.file("keystore/compas-release.jks")
+            storePassword = "compas2026"
+            keyAlias = "compas"
+            keyPassword = "compas2026"
+        }
+    }
+
     buildTypes {
         debug {
+            signingConfig = signingConfigs.getByName("compas")
             buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
         }
         release {
+            signingConfig = signingConfigs.getByName("compas")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
