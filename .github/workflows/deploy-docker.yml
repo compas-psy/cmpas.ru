@@ -166,6 +166,7 @@ jobs:
             docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
               ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"trialEndsAt\" TIMESTAMP(3);
               ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
+              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"fcmToken\" TEXT;
               ALTER TABLE \"DiaryClient\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
             " 2>/dev/null && echo "Pre-migration: OK" || echo "Pre-migration: skipped (postgres not running yet)"
 
