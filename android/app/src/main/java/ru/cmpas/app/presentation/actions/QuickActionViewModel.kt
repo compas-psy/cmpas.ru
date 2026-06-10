@@ -54,9 +54,12 @@ class QuickActionViewModel @Inject constructor(
             _uiState.update { it.copy(isLoadingSlots = true) }
             val fallback = buildLocalSlots(date)
             try {
-                val psychologistId = api.getProfile().body()?.id ?: "me"
-                val response = api.getAvailableSlots(psychologistId = psychologistId, from = date, to = date)
-                val slots = if (response.isSuccessful) response.body().orEmpty().filter { it.available } else emptyList()
+                val response = api.getFreeTimes(date = date)
+                val slots = if (response.isSuccessful) {
+                    response.body()?.times.orEmpty().map { start ->
+                        TimeSlot(date, start, addMinutes(start, 50), available = true)
+                    }
+                } else emptyList()
                 _uiState.update { it.copy(isLoadingSlots = false, availableSlots = if (slots.isNotEmpty()) slots else fallback) }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isLoadingSlots = false, availableSlots = fallback) }
