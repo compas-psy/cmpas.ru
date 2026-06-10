@@ -44,6 +44,7 @@ class DashboardViewModel @Inject constructor(
                                 newClientsCount = data.weekStats.newClients,
                                 attentionItems = data.attentionItems,
                                 userName = data.userName ?: it.userName,
+                                bookingLink = data.bookingLink,
                                 isDataLoaded = true,
                             )
                         }
@@ -88,6 +89,7 @@ data class DashboardUiState(
     val newClientsCount: Int = 0,
     val userName: String? = null,
     val attentionItems: List<AttentionItem> = emptyList(),
+    val bookingLink: String? = null,
     val error: String? = null,
     val isDataLoaded: Boolean = false,
     val todayFormatted: String = LocalDate.now()

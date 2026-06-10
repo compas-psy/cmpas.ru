@@ -105,7 +105,47 @@ export function setupBot() {
             return showPsyMenu(ctx, psy);
         }
 
-        // 2. Check if Client coming directly from booking link
+        // 2a. Handle invite token (c_<token>) — psychologist invited this client
+        if (payload?.startsWith('c_')) {
+            const token = payload.slice(2);
+            try {
+                const invite = await db.clientInviteToken.findUnique({
+                    where: { token },
+                    include: { client: true },
+                });
+                if (invite && !invite.usedAt && invite.expiresAt > new Date()) {
+                    const client = invite.client;
+                    // Link Telegram to this DiaryClient
+                    await db.diaryClient.update({
+                        where: { id: client.id },
+                        data: { telegramChatId: tgId },
+                    });
+                    await db.clientInviteToken.update({
+                        where: { id: invite.id },
+                        data: { usedAt: new Date() },
+                    });
+                    const targetPsy = await db.user.findUnique({
+                        where: { id: invite.psychologistId },
+                        select: { name: true, psychologistSettings: { select: { fullName: true } } },
+                    });
+                    const psyName = targetPsy?.psychologistSettings?.fullName || targetPsy?.name || 'Ваш специалист';
+                    await ctx.reply(
+                        `Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту (${psyName}). Теперь вы будете получать уведомления о встречах здесь.`,
+                    );
+                    return;
+                } else if (invite?.usedAt) {
+                    await ctx.reply('Эта ссылка уже была использована. Попросите специалиста отправить новую.');
+                    return;
+                } else {
+                    await ctx.reply('Ссылка недействительна или устарела. Попросите специалиста отправить новую.');
+                    return;
+                }
+            } catch (e) {
+                console.error('[telegram-bot] invite token error:', e);
+            }
+        }
+
+        // 2b. Check if Client coming directly from booking link
         if (payload?.startsWith('psy_')) {
             let psychologistId = payload.replace('psy_', '');
             let linkClientId: string | undefined;

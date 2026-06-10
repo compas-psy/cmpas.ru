@@ -42,6 +42,7 @@ model User {
   telegramUsername String?
   telegramClients  TelegramClient[]
   maxChatId        String?          @unique
+  fcmToken         String?
 
   // Trial & Billing
   trialEndsAt        DateTime?
@@ -779,4 +780,39 @@ model SystemConfig {
   label     String   @default("")
   category  String   @default("features")
   updatedAt DateTime @updatedAt
+}
+
+// Scheduled (delayed) client messages — set by psychologist to be sent at a future time
+model ScheduledClientMessage {
+  id             String    @id @default(cuid())
+  psychologistId String
+  clientId       String
+  sessionId      String?
+  channel        String    // "telegram" | "max" | "manual"
+  text           String
+  sendAt         DateTime
+  status         String    @default("pending") // "pending" | "sent" | "failed" | "manual_pending"
+  sentAt         DateTime?
+  errorMsg       String?
+  createdAt      DateTime  @default(now())
+
+  @@index([psychologistId])
+  @@index([clientId])
+  @@index([sendAt])
+  @@index([status])
+}
+
+// Invite tokens for clients to link their Telegram/MAX account to a client card
+model ClientInviteToken {
+  id             String    @id @default(cuid())
+  psychologistId String
+  clientId       String
+  token          String    @unique
+  channel        String    // "telegram" | "max"
+  usedAt         DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+
+  @@index([token])
+  @@index([clientId])
 }

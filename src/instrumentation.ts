@@ -4,6 +4,7 @@ export async function register() {
         const { processReminders } = await import('./lib/cron/reminders');
         const { processMorningDigest, processWeeklyDigest } = await import('./lib/cron/digest');
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
+        const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
 
         // Напоминания каждые 15 минут
         cron.schedule('*/15 * * * *', async () => {
@@ -41,6 +42,15 @@ export async function register() {
                 await processPostSessionNudge();
             } catch (error) {
                 console.error('[CRON] Ошибка пост-сессионного nudge:', error);
+            }
+        });
+
+        // Отложенные сообщения клиентам — каждые 5 минут
+        cron.schedule('*/5 * * * *', async () => {
+            try {
+                await processScheduledMessages();
+            } catch (error) {
+                console.error('[CRON] Ошибка отложенных сообщений:', error);
             }
         });
 
