@@ -1,5 +1,7 @@
 package ru.cmpas.app.presentation.actions
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -61,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -85,6 +89,7 @@ fun QuickActionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var primary by remember { mutableStateOf("") }
     var secondary by remember { mutableStateOf("") }
@@ -102,6 +107,45 @@ fun QuickActionScreen(
 
     LaunchedEffect(isoDate, type) {
         if (type == "new-session" && !isoDate.isNullOrBlank()) viewModel.loadAvailableSlots(isoDate)
+    }
+
+    // When an invite link is ready — open share sheet
+    LaunchedEffect(uiState.onboardingInviteLink) {
+        val link = uiState.onboardingInviteLink ?: return@LaunchedEffect
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "Для уведомлений о сессиях откройте ссылку: $link")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Отправить приглашение").apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
+        viewModel.clearOnboardingInvite()
+    }
+
+    // When manual message text is ready — open WhatsApp or generic share
+    LaunchedEffect(uiState.onboardingManualText) {
+        val text = uiState.onboardingManualText ?: return@LaunchedEffect
+        val phone = uiState.onboardingManualPhone
+        if (phone != null) {
+            val normalized = phone.replace("[^+\\d]".toRegex(), "")
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$normalized?text=${Uri.encode(text)}"))
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(intent)
+                viewModel.dismissOnboarding()
+                return@LaunchedEffect
+            } catch (_: Exception) {}
+        }
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Отправить сообщение").apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
+        viewModel.dismissOnboarding()
     }
 
     Scaffold(
@@ -239,6 +283,98 @@ fun QuickActionScreen(
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Отмена") } },
         )
     }
+
+    // Onboarding dialog: shown after first session for a new client
+    uiState.onboardingInfo?.let { info ->
+        OnboardingDialog(
+            info = info,
+            isBusy = uiState.isOnboardingBusy,
+            onInviteTelegram = { viewModel.generateOnboardingInvite(info.clientId, "telegram") },
+            onInviteMax = { viewModel.generateOnboardingInvite(info.clientId, "max") },
+            onManualMessage = { viewModel.sendOnboardingManualMessage(info.clientId, info.sessionId) },
+            onDismiss = { viewModel.dismissOnboarding(); onDone() },
+        )
+    }
+}
+
+@Composable
+private fun OnboardingDialog(
+    info: OnboardingInfo,
+    isBusy: Boolean,
+    onInviteTelegram: () -> Unit,
+    onInviteMax: () -> Unit,
+    onManualMessage: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Связаться с клиентом", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Клиент ${info.clientName} добавлен. Отправьте ему приглашение в бота — после этого он будет получать уведомления о сессиях.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isBusy, onClick = onInviteTelegram),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column {
+                            Text("Пригласить в Telegram", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("Ссылка для подключения бота", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isBusy, onClick = onInviteMax),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Link, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                        Column {
+                            Text("Пригласить в MAX", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("Ссылка для MAX мессенджера", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isBusy, onClick = onManualMessage),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.PersonAdd, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                        Column {
+                            Text("Написать первым", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("WhatsApp, SMS или другой мессенджер", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                if (isBusy) {
+                    Text("Подготавливаю…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Пропустить") } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
