@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
-import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery, stripTelegramHtml } from '@/lib/client-workflow';
+import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
 const MAX_BOT_USERNAME = process.env.MAX_BOT_USERNAME || '';
@@ -103,11 +103,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             documentLinks = [{ title: delivery.title, link: delivery.link }];
         }
 
-        let htmlText: string;
+        let text: string;
         if (session) {
             const onlineLink = session.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
             const paymentText = await getPaymentInstruction(auth.userId, session.id, clientId);
-            htmlText = buildSessionClientMessage({
+            text = buildSessionClientMessage({
                 clientName: client.name,
                 psychologistName: psyName,
                 date: session.date,
@@ -120,16 +120,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             });
         } else {
             const lines = [`${client.name}, здравствуйте.`, '', `На связи ${psyName}.`];
-            if (documentLinks.length) lines.push('Документы для ознакомления:', ...documentLinks.map(d => `${d.title}: ${d.link}`));
+            if (documentLinks.length) lines.push('Документы для ознакомления:', ...documentLinks.map(d => `— ${d.title}: ${d.link}`));
             lines.push(`Ссылка для управления записями: ${bookingLink}`);
-            htmlText = lines.filter(Boolean).join('\n');
+            text = lines.filter(Boolean).join('\n');
         }
 
-        const plainText = stripTelegramHtml(htmlText);
         const chatId = channel === 'telegram' ? client.telegramChatId : (client as any).maxChatId as string | null;
         if (chatId) {
-            if (channel === 'telegram') await sendTelegramMessage(chatId, htmlText, { disable_web_page_preview: true, link_preview_options: { is_disabled: true } });
-            else await sendMaxMessage(chatId, plainText);
+            if (channel === 'telegram') await sendTelegramMessage(chatId, text);
+            else await sendMaxMessage(chatId, text);
             return NextResponse.json({ status: 'sent', channel });
         }
 
@@ -137,14 +136,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
         await db.clientInviteToken.create({ data: { psychologistId: auth.userId, clientId, token, channel, expiresAt } });
         await db.scheduledClientMessage.create({
-            data: { psychologistId: auth.userId, clientId, sessionId: session?.id ?? null, channel, text: channel === 'telegram' ? htmlText : plainText, sendAt: expiresAt, status: 'pending' },
+            data: { psychologistId: auth.userId, clientId, sessionId: session?.id ?? null, channel, text, sendAt: expiresAt, status: 'pending' },
         });
 
         return NextResponse.json({
             status: 'pending',
             channel,
             inviteLink: buildInviteLink(channel, token),
-            readyText: plainText,
+            readyText: text,
             phone: client.phone ?? null,
         });
     } catch (error) {

@@ -3,7 +3,7 @@
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { randomBytes } from 'crypto';
-import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery, stripTelegramHtml } from '@/lib/client-workflow';
+import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 
@@ -81,9 +81,11 @@ function buildInviteLink(channel: OnboardingChannel, token: string) {
 /**
  * Send the onboarding message(s) to a client via the chosen priority messenger.
  *
- * - Telegram receives HTML formatting and hidden links via bot.
- * - MAX/manual paths receive clean plain text, so the message is not polluted with HTML tags.
- * - If the client is not connected, we queue a channel-appropriate message and return a ready text + invite link.
+ * - If the client is already connected to that messenger → sends immediately via bot.
+ * - If not connected → cannot push (Telegram/MAX forbid first contact). We then:
+ *     1. queue the message to auto-deliver the moment the client opens the bot,
+ *     2. generate an invite deep-link to share,
+ *     3. return ready-to-copy text for manual delivery.
  */
 export async function sendClientOnboarding(
     clientId: string,
@@ -120,11 +122,11 @@ export async function sendClientOnboarding(
         documentLinks = [{ title: delivery.title, link: delivery.link }];
     }
 
-    let htmlText: string;
+    let text: string;
     if (session) {
         const onlineLink = session.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
         const paymentText = await getPaymentInstruction(psychologistId, session.id, clientId);
-        htmlText = buildSessionClientMessage({
+        text = buildSessionClientMessage({
             clientName: client.name,
             psychologistName: psyName,
             date: session.date,
@@ -138,21 +140,17 @@ export async function sendClientOnboarding(
     } else {
         const lines = [`${client.name}, здравствуйте.`, '', `На связи ${psyName}.`];
         if (documentLinks.length) {
-            lines.push('Документы для ознакомления:', ...documentLinks.map(d => `${d.title}: ${d.link}`));
+            lines.push('Документы для ознакомления:', ...documentLinks.map(d => `— ${d.title}: ${d.link}`));
         }
         lines.push(`Ссылка для управления записями: ${bookingLink}`);
-        htmlText = lines.filter(Boolean).join('\n');
+        text = lines.filter(Boolean).join('\n');
     }
 
-    const plainText = stripTelegramHtml(htmlText);
     const chatId = opts.channel === 'telegram' ? client.telegramChatId : (client as any).maxChatId as string | null;
 
     if (chatId) {
-        if (opts.channel === 'telegram') {
-            await sendTelegramMessage(chatId, htmlText, { disable_web_page_preview: true, link_preview_options: { is_disabled: true } });
-        } else {
-            await sendMaxMessage(chatId, plainText);
-        }
+        if (opts.channel === 'telegram') await sendTelegramMessage(chatId, text);
+        else await sendMaxMessage(chatId, text);
         return { status: 'sent' as const, channel: opts.channel };
     }
 
@@ -171,7 +169,7 @@ export async function sendClientOnboarding(
             clientId,
             sessionId: session?.id ?? null,
             channel: opts.channel,
-            text: opts.channel === 'telegram' ? htmlText : plainText,
+            text,
             sendAt: expiresAt,
             status: 'pending',
         },
@@ -181,7 +179,7 @@ export async function sendClientOnboarding(
         status: 'pending' as const,
         channel: opts.channel,
         inviteLink: buildInviteLink(opts.channel, token),
-        readyText: plainText,
+        readyText: text,
         phone: client.phone ?? null,
     };
 }
