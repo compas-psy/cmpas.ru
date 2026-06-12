@@ -920,14 +920,13 @@ function QSection({ title, children }: { title: string; children: React.ReactNod
 
 // ======================== CLIENT ONBOARDING MODAL ========================
 // Shown when psychologist adds a new client + their first session.
-// Offers: invite to Telegram/MAX, or compose manual message for WhatsApp/SMS.
+// Offers: invite to Telegram/MAX, or compose manual message for VK.
 function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
     const [step, setStep] = useState<'loading' | 'main' | 'invite' | 'message'>('loading');
     const [status, setStatus] = useState<{ clientName: string; phone: string | null; hasTelegram: boolean; hasMax: boolean } | null>(null);
     const [inviteLink, setInviteLink] = useState<string | null>(null);
     const [inviteChannel, setInviteChannel] = useState<'telegram' | 'max'>('telegram');
     const [manualText, setManualText] = useState<string | null>(null);
-    const [manualPhone, setManualPhone] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [busy, setBusy] = useState(false);
 
@@ -960,7 +959,6 @@ function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClos
             const { buildNewClientWelcomeText } = await import('../actions/client-onboarding');
             const res = await buildNewClientWelcomeText(clientId);
             setManualText(res.text);
-            setManualPhone(res.phone);
             setStep('message');
         } catch { toast.error('Не удалось подготовить сообщение'); }
         setBusy(false);
@@ -973,10 +971,11 @@ function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClos
         toast.success('Скопировано');
     };
 
-    const openWhatsApp = (text: string, phone: string | null) => {
-        if (!phone) { toast.info('Нет номера телефона. Скопируйте текст и отправьте вручную.'); return; }
-        const normalized = phone.replace(/[^\d]/g, '');
-        window.open(`https://wa.me/${normalized}?text=${encodeURIComponent(text)}`, '_blank');
+    // Copy text + open VK messages (client's VK ID unknown, opens general inbox)
+    const openVK = async (text: string) => {
+        try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+        toast.success('Текст скопирован — вставьте клиенту в ВКонтакте');
+        window.open('https://vk.com/im', '_blank');
     };
 
     return (
@@ -1038,7 +1037,7 @@ function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClos
                                     className="w-full flex items-center gap-3 px-4 py-3 bg-muted hover:bg-muted/70 rounded-xl text-sm font-semibold text-foreground transition-all active:scale-[0.98] disabled:opacity-50"
                                 >
                                     <Send className="w-4 h-4 shrink-0" />
-                                    Написать первым (WhatsApp / SMS)
+                                    Написать первым в ВКонтакте
                                 </button>
                             </div>
                         </>
@@ -1058,12 +1057,10 @@ function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClos
                                     {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                     {copied ? 'Скопировано' : 'Скопировать'}
                                 </button>
-                                {status?.phone && (
-                                    <button onClick={() => openWhatsApp(`Для уведомлений откройте ссылку: ${inviteLink}`, status.phone)}
-                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
-                                        WhatsApp
-                                    </button>
-                                )}
+                                <button onClick={() => openVK(`Для уведомлений о сессиях откройте ссылку: ${inviteLink}`)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#0077FF]/10 text-[#0077FF] border border-[#0077FF]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    ВКонтакте
+                                </button>
                             </div>
                             <button onClick={() => setStep('main')} className="w-full text-xs text-muted-foreground hover:text-foreground py-1">← Назад</button>
                         </>
@@ -1080,12 +1077,10 @@ function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClos
                                     {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                     {copied ? 'Скопировано' : 'Скопировать'}
                                 </button>
-                                {manualPhone && (
-                                    <button onClick={() => openWhatsApp(manualText, manualPhone)}
-                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
-                                        WhatsApp
-                                    </button>
-                                )}
+                                <button onClick={() => openVK(manualText)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#0077FF]/10 text-[#0077FF] border border-[#0077FF]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    ВКонтакте
+                                </button>
                             </div>
                             <button onClick={() => setStep('main')} className="w-full text-xs text-muted-foreground hover:text-foreground py-1">← Назад</button>
                         </>

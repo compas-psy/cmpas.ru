@@ -123,20 +123,25 @@ fun QuickActionScreen(
         viewModel.clearOnboardingInvite()
     }
 
-    // When manual message text is ready — open WhatsApp or generic share
+    // When manual message text is ready — try VK app, then generic share
     LaunchedEffect(uiState.onboardingManualText) {
         val text = uiState.onboardingManualText ?: return@LaunchedEffect
-        val phone = uiState.onboardingManualPhone
-        if (phone != null) {
-            val normalized = phone.replace("[^+\\d]".toRegex(), "")
+        // Try VK native app first
+        try {
+            val vkIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vk://im")).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(vkIntent)
+        } catch (_: Exception) {
+            // VK app not installed — open browser
             try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$normalized?text=${Uri.encode(text)}"))
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                context.startActivity(intent)
-                viewModel.dismissOnboarding()
-                return@LaunchedEffect
+                val vkWeb = Intent(Intent.ACTION_VIEW, Uri.parse("https://vk.com/im")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(vkWeb)
             } catch (_: Exception) {}
         }
+        // Also open share sheet so user can paste the copied text anywhere
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
@@ -363,7 +368,7 @@ private fun OnboardingDialog(
                         Icon(Icons.Outlined.PersonAdd, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
                         Column {
                             Text("Написать первым", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text("WhatsApp, SMS или другой мессенджер", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("ВКонтакте или другой мессенджер", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
