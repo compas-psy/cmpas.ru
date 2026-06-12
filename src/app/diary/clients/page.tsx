@@ -167,7 +167,9 @@ export default function ClientsPage() {
             await deleteClient(selectedClient.id);
             toast.success('Клиент удалён'); setShowDeleteConfirm(false); setDeleteConfirmName('');
             setSelectedClient(null); fetchClients();
-        } catch { toast.error('Ошибка при удалении'); }
+        } catch (e) {
+            toast.error(e instanceof Error ? `Ошибка при удалении: ${e.message}` : 'Ошибка при удалении');
+        }
     };
 
     const saveNotes = async (sessionId: string, notes: string) => {
