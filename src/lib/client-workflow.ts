@@ -9,6 +9,33 @@ export function publicBaseUrl() {
     return process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'https://cmpas.ru';
 }
 
+export function escapeTelegramHtml(value: string) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+export function stripTelegramHtml(value: string) {
+    return value
+        .replace(/<a\s+href="([^"]+)"[^>]*>(.*?)<\/a>/g, '$2: $1')
+        .replace(/<b>(.*?)<\/b>/g, '$1')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&quot;/g, '"')
+        .replace(/&gt;/g, '>')
+        .replace(/&lt;/g, '<')
+        .replace(/&amp;/g, '&');
+}
+
+function firstName(name: string) {
+    return name.trim().split(/\s+/)[0] || name;
+}
+
+function safeUrl(url: string) {
+    return escapeTelegramHtml(url.trim());
+}
+
 export function clientActionToken(psychologistId: string, clientId: string) {
     return createHash('sha256')
         .update(`${psychologistId}:${clientId}:${appSecret()}`)
@@ -180,13 +207,15 @@ export async function getDocumentDelivery(deliveryId: string, token?: string | n
         documentContent: string | null;
         fileUrl: string | null;
         fileName: string | null;
+        requiresAcknowledgement: boolean;
     }>>`
         SELECT d.id, d.status, d."documentTitle", d."documentVersion", d."sentAt", d."openedAt", d."acknowledgedAt",
                c.name as "clientName",
                COALESCE(ps."fullName", u.name) as "psychologistName",
                doc.content as "documentContent",
                doc."fileUrl" as "fileUrl",
-               doc."fileName" as "fileName"
+               doc."fileName" as "fileName",
+               doc."requiresAcknowledgement" as "requiresAcknowledgement"
         FROM "ClientDocumentDelivery" d
         JOIN "DiaryClient" c ON c.id = d."clientId"
         JOIN "User" u ON u.id = d."psychologistId"
@@ -199,17 +228,19 @@ export async function getDocumentDelivery(deliveryId: string, token?: string | n
     const delivery = rows[0];
     if (!delivery) throw new Error('Документ не найден');
 
-    if (!delivery.openedAt) {
-        const now = new Date();
+    const now = new Date();
+    if (!delivery.openedAt || !delivery.acknowledgedAt) {
         await db.$executeRaw`
             UPDATE "ClientDocumentDelivery"
-            SET status = CASE WHEN status = 'sent' THEN 'opened' ELSE status END,
-                "openedAt" = ${now},
+            SET status = 'acknowledged',
+                "openedAt" = COALESCE("openedAt", ${now}),
+                "acknowledgedAt" = COALESCE("acknowledgedAt", ${now}),
                 "updatedAt" = ${now}
             WHERE id = ${deliveryId}
         `;
-        delivery.openedAt = now;
-        if (delivery.status === 'sent') delivery.status = 'opened';
+        if (!delivery.openedAt) delivery.openedAt = now;
+        if (!delivery.acknowledgedAt) delivery.acknowledgedAt = now;
+        delivery.status = 'acknowledged';
     }
 
     return delivery;
@@ -237,19 +268,27 @@ export function buildSessionClientMessage(params: {
     paymentText?: string | null;
 }) {
     const dateText = params.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    const formatText = params.format === 'offline' ? 'очная встреча' : 'онлайн-консультация';
     const documentText = params.documentLinks?.length
-        ? ['Перед оплатой и первой встречей, пожалуйста, ознакомьтесь с документами специалиста:', ...params.documentLinks.map(d => `— ${d.title}: ${d.link}`)].join('\n')
+        ? [
+            'Записываясь на консультацию, вы соглашаетесь с условиями договора:',
+            ...params.documentLinks.map(d => `<a href="${safeUrl(d.link)}">${escapeTelegramHtml(d.title)}</a>`),
+        ].join('\n')
+        : '';
+    const paymentText = params.paymentText
+        ? escapeTelegramHtml(params.paymentText).replace(/\n{3,}/g, '\n\n')
         : '';
 
     const lines = [
-        `${params.clientName}, здравствуйте.`,
+        `<b>${escapeTelegramHtml(firstName(params.clientName))}, здравствуйте!</b>`,
         '',
-        `Подтверждаю запись на консультацию к ${params.psychologistName}: ${dateText} в ${params.time}.`,
-        `Формат: ${params.format === 'offline' ? 'очная встреча' : 'онлайн-консультация'}.`,
-        params.onlineLink && params.format !== 'offline' ? `Ссылка для подключения: ${params.onlineLink}` : '',
+        `Подтверждаю запись на консультацию: <b>${escapeTelegramHtml(dateText)} в ${escapeTelegramHtml(params.time)}</b>`,
+        '',
+        `Формат: <b>${escapeTelegramHtml(formatText)}</b>`,
+        params.onlineLink && params.format !== 'offline' ? `<a href="${safeUrl(params.onlineLink)}">Ссылка для подключения</a>` : '',
         documentText,
-        params.paymentText || '',
-        `Подтвердить, перенести или отменить встречу можно здесь: ${params.bookingLink}`,
+        paymentText,
+        `Подтвердить, перенести или отменить встречу можно <a href="${safeUrl(params.bookingLink)}">здесь</a>.`,
     ];
 
     return lines.filter(Boolean).join('\n');
