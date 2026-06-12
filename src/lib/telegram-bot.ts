@@ -132,6 +132,27 @@ export function setupBot() {
                     await ctx.reply(
                         `Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту (${psyName}). Теперь вы будете получать уведомления о встречах здесь.`,
                     );
+
+                    // Deliver any onboarding messages that were queued while the
+                    // client wasn't yet connected (notification + documents).
+                    try {
+                        const queued = await db.scheduledClientMessage.findMany({
+                            where: { clientId: invite.clientId, channel: 'telegram', status: 'pending' },
+                        });
+                        for (const m of queued) {
+                            try {
+                                await ctx.telegram.sendMessage(tgId, m.text);
+                                await db.scheduledClientMessage.update({
+                                    where: { id: m.id },
+                                    data: { status: 'sent', sentAt: new Date() },
+                                });
+                            } catch (e) {
+                                console.error('[telegram-bot] queued onboarding delivery failed:', e);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[telegram-bot] queued onboarding lookup failed:', e);
+                    }
                     return;
                 } else if (invite?.usedAt) {
                     await ctx.reply('Эта ссылка уже была использована. Попросите специалиста отправить новую.');
