@@ -22,6 +22,8 @@ function getProxyAgent() {
 // Опции для кнопок
 export type SendMessageOptions = {
     parse_mode?: string;
+    disable_web_page_preview?: boolean;
+    link_preview_options?: { is_disabled?: boolean };
     reply_markup?: {
         inline_keyboard: { text: string, callback_data?: string, url?: string, web_app?: { url: string } }[][];
     };
@@ -46,6 +48,8 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
             chat_id: chatId,
             text,
             parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            link_preview_options: { is_disabled: true },
             ...options
         };
 
