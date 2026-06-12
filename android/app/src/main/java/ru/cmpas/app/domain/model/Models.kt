@@ -211,6 +211,39 @@ data class InviteResponse(
     val phone: String? = null,
 )
 
+// ── New-client onboarding ──
+@Serializable
+data class OnboardingDoc(
+    val id: String,
+    val title: String,
+)
+
+@Serializable
+data class OnboardingOptions(
+    val clientName: String,
+    val phone: String? = null,
+    val hasTelegram: Boolean = false,
+    val hasMax: Boolean = false,
+    val documents: List<OnboardingDoc> = emptyList(),
+    val hasSession: Boolean = false,
+)
+
+@Serializable
+data class OnboardingSendRequest(
+    val channel: String,            // "telegram" | "max"
+    val sendNotification: Boolean,
+    val documentId: String? = null,
+)
+
+@Serializable
+data class OnboardingResult(
+    val status: String,             // "sent" | "pending"
+    val channel: String,
+    val inviteLink: String? = null,
+    val readyText: String? = null,
+    val phone: String? = null,
+)
+
 // ═══════════════════════════════════════════
 // Schedule blocks
 // ═══════════════════════════════════════════

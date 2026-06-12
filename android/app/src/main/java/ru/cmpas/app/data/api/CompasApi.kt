@@ -82,6 +82,18 @@ interface CompasApi {
         @Body body: InviteRequest,
     ): Response<InviteResponse>
 
+    // New-client onboarding: options + send (notification + document)
+    @GET("clients/{id}/onboarding")
+    suspend fun getOnboardingOptions(
+        @Path("id") id: String,
+    ): Response<OnboardingOptions>
+
+    @POST("clients/{id}/onboarding")
+    suspend fun sendOnboarding(
+        @Path("id") id: String,
+        @Body body: OnboardingSendRequest,
+    ): Response<OnboardingResult>
+
     // ── Schedule blocks ──
     @GET("blocks")
     suspend fun getBlocks(

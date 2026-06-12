@@ -10,11 +10,12 @@ import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateClientRequest
 import ru.cmpas.app.data.api.CreateSessionRequest
-import ru.cmpas.app.data.api.InviteRequest
-import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.data.local.LocalScheduleBlockStore
 import ru.cmpas.app.domain.model.Client
+import ru.cmpas.app.domain.model.OnboardingOptions
+import ru.cmpas.app.domain.model.OnboardingResult
+import ru.cmpas.app.domain.model.OnboardingSendRequest
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.TimeSlot
 import java.time.LocalTime
@@ -111,41 +112,24 @@ class QuickActionViewModel @Inject constructor(
 
     // ── Onboarding (after first session created for a new client) ──
 
-    fun generateOnboardingInvite(clientId: String, channel: String = "telegram") {
+    fun loadOnboardingOptions(clientId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isOnboardingBusy = true) }
             try {
-                val r = api.createInviteLink(clientId, InviteRequest(channel = channel))
-                if (r.isSuccessful) {
-                    _uiState.update { it.copy(isOnboardingBusy = false, onboardingInviteLink = r.body()?.inviteLink) }
-                } else {
-                    _uiState.update { it.copy(isOnboardingBusy = false) }
-                }
+                val r = api.getOnboardingOptions(clientId)
+                _uiState.update { it.copy(isOnboardingBusy = false, onboardingOptions = if (r.isSuccessful) r.body() else null) }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isOnboardingBusy = false) }
             }
         }
     }
 
-    fun sendOnboardingManualMessage(clientId: String, sessionId: String?) {
+    fun submitOnboarding(clientId: String, channel: String, sendNotification: Boolean, documentId: String?) {
         viewModelScope.launch {
             _uiState.update { it.copy(isOnboardingBusy = true) }
             try {
-                val type = if (sessionId != null) "reminder" else "custom"
-                val text = if (sessionId == null) "Здравствуйте! Я занесла вас в систему записи." else null
-                val r = api.sendMessage(clientId, SendMessageRequest(type = type, text = text, sessionId = sessionId))
-                if (r.isSuccessful) {
-                    val body = r.body()
-                    _uiState.update {
-                        it.copy(
-                            isOnboardingBusy = false,
-                            onboardingManualText = if (body?.status == "manual") body.readyText else null,
-                            onboardingManualPhone = if (body?.status == "manual") body.phone else null,
-                        )
-                    }
-                } else {
-                    _uiState.update { it.copy(isOnboardingBusy = false) }
-                }
+                val r = api.sendOnboarding(clientId, OnboardingSendRequest(channel, sendNotification, documentId))
+                _uiState.update { it.copy(isOnboardingBusy = false, onboardingResult = if (r.isSuccessful) r.body() else null) }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isOnboardingBusy = false) }
             }
@@ -153,10 +137,10 @@ class QuickActionViewModel @Inject constructor(
     }
 
     fun dismissOnboarding() = _uiState.update {
-        it.copy(onboardingInfo = null, onboardingInviteLink = null, onboardingManualText = null, onboardingManualPhone = null)
+        it.copy(onboardingInfo = null, onboardingOptions = null, onboardingResult = null)
     }
 
-    fun clearOnboardingInvite() = _uiState.update { it.copy(onboardingInviteLink = null) }
+    fun consumeOnboardingShare() = _uiState.update { it.copy(onboardingResult = it.onboardingResult?.copy(readyText = null, inviteLink = null)) }
 
     // ── Private helpers ──
 
@@ -248,7 +232,6 @@ data class QuickActionUiState(
     // Onboarding state
     val onboardingInfo: OnboardingInfo? = null,
     val isOnboardingBusy: Boolean = false,
-    val onboardingInviteLink: String? = null,
-    val onboardingManualText: String? = null,
-    val onboardingManualPhone: String? = null,
+    val onboardingOptions: OnboardingOptions? = null,
+    val onboardingResult: OnboardingResult? = null,
 )
