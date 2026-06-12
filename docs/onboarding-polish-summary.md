@@ -1,0 +1,1 @@
+Summary: polish client onboarding for first booking, message formatting, and document acceptance logging.
