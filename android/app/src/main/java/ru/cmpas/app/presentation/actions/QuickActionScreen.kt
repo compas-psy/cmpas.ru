@@ -320,14 +320,14 @@ private fun OnboardingDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        result.inviteLink?.let { link ->
+                        result?.inviteLink?.let { link ->
                             Button(
                                 onClick = { onShare("Здравствуйте! Для записи и уведомлений откройте ссылку: $link") },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
                             ) { Icon(Icons.Outlined.Send, null); Text("  Отправить приглашение") }
                         }
-                        result.readyText?.let { text ->
+                        result?.readyText?.let { text ->
                             OutlinedButton(
                                 onClick = { onShare(text) },
                                 modifier = Modifier.fillMaxWidth(),
