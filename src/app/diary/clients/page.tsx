@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus } from 'lucide-react';
+import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -30,6 +30,7 @@ type Client = {
     sessions?: Session[];
     consentVersion?: string | null; consentHash?: string | null; consentDate?: Date | null;
     psychologistId?: string;
+    telegramChatId?: string | null; maxChatId?: string | null;
 };
 
 type Session = {
@@ -60,6 +61,11 @@ export default function ClientsPage() {
     const [questionnaireForm, setQuestionnaireForm] = useState<QuestionnaireData>({});
     const notesTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
     const [isMobile, setIsMobile] = useState(false);
+
+    // Onboarding state: after psychologist adds a new client + first session
+    const [pendingOnboardingClientId, setPendingOnboardingClientId] = useState<string | null>(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const [onboardingClientId, setOnboardingClientId] = useState<string | null>(null);
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 1024);
@@ -115,10 +121,14 @@ export default function ClientsPage() {
         if (!newClient.name.trim()) { toast.error('Введите имя клиента'); return; }
         try {
             const { createClient } = await import('../actions/clients');
-            await createClient(newClient);
-            toast.success('Клиент добавлен');
+            const created = await createClient(newClient);
+            toast.success('Клиент добавлен. Добавьте первую сессию.');
+            // Track this client for onboarding — triggers after first session is saved
+            setPendingOnboardingClientId(created.id);
             setShowNewClient(false); setNewClient({ name: '', phone: '', email: '', gender: '' });
-            fetchClients();
+            await fetchClients();
+            // Auto-select the new client so the user can add a session immediately
+            fetchClientDetail(created.id);
         } catch { toast.error('Ошибка при создании клиента'); }
     };
 
@@ -344,7 +354,14 @@ export default function ClientsPage() {
                 {renderDeleteModal()}
                 {renderQuestionnaireModal()}
                 <SessionModal isOpen={showNewSession} onClose={() => { setShowNewSession(false); setEditingSession(null); }}
-                    onSave={() => { fetchClients(); fetchClientDetail(selectedClient.id); }}
+                    onSave={() => {
+                        fetchClients(); fetchClientDetail(selectedClient.id);
+                        if (pendingOnboardingClientId === selectedClient.id) {
+                            setPendingOnboardingClientId(null);
+                            setOnboardingClientId(selectedClient.id);
+                            setShowOnboarding(true);
+                        }
+                    }}
                     initialClient={{ id: selectedClient.id, name: selectedClient.name }}
                     editSession={editingSession} clients={clients.map(c => ({ id: c.id, name: c.name }))} />
             </div>
@@ -417,6 +434,9 @@ export default function ClientsPage() {
                 </div>
 
                 {showNewClient && <NewClientModal newClient={newClient} setNewClient={setNewClient} onCreate={handleCreateClient} onClose={() => setShowNewClient(false)} />}
+                {showOnboarding && onboardingClientId && (
+                    <ClientOnboardingModal clientId={onboardingClientId} onClose={() => { setShowOnboarding(false); setOnboardingClientId(null); }} />
+                )}
             </div>
         );
     }
@@ -635,9 +655,19 @@ export default function ClientsPage() {
 
             {renderDeleteModal()}
             {renderQuestionnaireModal()}
+            {showOnboarding && onboardingClientId && (
+                <ClientOnboardingModal clientId={onboardingClientId} onClose={() => { setShowOnboarding(false); setOnboardingClientId(null); }} />
+            )}
 
             <SessionModal isOpen={showNewSession} onClose={() => { setShowNewSession(false); setEditingSession(null); }}
-                onSave={() => { fetchClients(); if (selectedClient) fetchClientDetail(selectedClient.id); }}
+                onSave={() => {
+                    fetchClients(); if (selectedClient) fetchClientDetail(selectedClient.id);
+                    if (selectedClient && pendingOnboardingClientId === selectedClient.id) {
+                        setPendingOnboardingClientId(null);
+                        setOnboardingClientId(selectedClient.id);
+                        setShowOnboarding(true);
+                    }
+                }}
                 initialClient={selectedClient ? { id: selectedClient.id, name: selectedClient.name } : undefined}
                 editSession={editingSession} clients={clients.map(c => ({ id: c.id, name: c.name }))} />
         </div>
@@ -887,3 +917,188 @@ function QInput({ label, value, onChange, multiline, type = 'text' }: { label: s
 function QSection({ title, children }: { title: string; children: React.ReactNode }) {
     return <div><h3 className="text-base font-semibold mb-3 text-primary">{title}</h3><div className="space-y-3">{children}</div></div>;
 }
+
+// ======================== CLIENT ONBOARDING MODAL ========================
+// Shown when psychologist adds a new client + their first session.
+// Offers: invite to Telegram/MAX, or compose manual message for WhatsApp/SMS.
+function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
+    const [step, setStep] = useState<'loading' | 'main' | 'invite' | 'message'>('loading');
+    const [status, setStatus] = useState<{ clientName: string; phone: string | null; hasTelegram: boolean; hasMax: boolean } | null>(null);
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [inviteChannel, setInviteChannel] = useState<'telegram' | 'max'>('telegram');
+    const [manualText, setManualText] = useState<string | null>(null);
+    const [manualPhone, setManualPhone] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const { getClientMessengerStatus } = await import('../actions/client-onboarding');
+                const s = await getClientMessengerStatus(clientId);
+                setStatus(s);
+                setStep('main');
+            } catch { setStep('main'); }
+        })();
+    }, [clientId]);
+
+    const handleInvite = async (channel: 'telegram' | 'max') => {
+        setBusy(true);
+        try {
+            const { generateClientInviteLink } = await import('../actions/client-onboarding');
+            const res = await generateClientInviteLink(clientId, channel);
+            setInviteLink(res.inviteLink);
+            setInviteChannel(channel);
+            setStep('invite');
+        } catch { toast.error('Не удалось создать ссылку'); }
+        setBusy(false);
+    };
+
+    const handleManualWrite = async () => {
+        setBusy(true);
+        try {
+            const { buildNewClientWelcomeText } = await import('../actions/client-onboarding');
+            const res = await buildNewClientWelcomeText(clientId);
+            setManualText(res.text);
+            setManualPhone(res.phone);
+            setStep('message');
+        } catch { toast.error('Не удалось подготовить сообщение'); }
+        setBusy(false);
+    };
+
+    const copyText = async (text: string) => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success('Скопировано');
+    };
+
+    const openWhatsApp = (text: string, phone: string | null) => {
+        if (!phone) { toast.info('Нет номера телефона. Скопируйте текст и отправьте вручную.'); return; }
+        const normalized = phone.replace(/[^\d]/g, '');
+        window.open(`https://wa.me/${normalized}?text=${encodeURIComponent(text)}`, '_blank');
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm">
+            <div className="bg-card rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md shadow-floating border border-border animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <MessageCircle className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                            <h2 className="font-bold text-foreground text-base">Связаться с клиентом</h2>
+                            {status && <p className="text-xs text-muted-foreground">{status.clientName}</p>}
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors"><X className="w-4 h-4" /></button>
+                </div>
+
+                <div className="px-6 py-5 space-y-3">
+                    {step === 'loading' && (
+                        <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+                    )}
+
+                    {step === 'main' && status && (
+                        <>
+                            {status.hasTelegram || status.hasMax ? (
+                                <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl p-3 text-xs text-green-700 dark:text-green-400 font-medium">
+                                    {status.hasTelegram ? 'Telegram подключён' : 'MAX подключён'} — можно отправить уведомление прямо из карточки клиента.
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Клиент ещё не подключил бота. Отправьте ему пригласительную ссылку или напишите первым.
+                                </p>
+                            )}
+
+                            <div className="space-y-2 pt-1">
+                                <button
+                                    onClick={() => handleInvite('telegram')}
+                                    disabled={busy}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 border border-[#229ED9]/30 rounded-xl text-sm font-semibold text-[#0088cc] transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                                    Пригласить в Telegram
+                                </button>
+
+                                <button
+                                    onClick={() => handleInvite('max')}
+                                    disabled={busy}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-xl text-sm font-semibold text-primary transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    <MessageCircle className="w-5 h-5 shrink-0" />
+                                    Пригласить в MAX
+                                </button>
+
+                                <button
+                                    onClick={handleManualWrite}
+                                    disabled={busy}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-muted hover:bg-muted/70 rounded-xl text-sm font-semibold text-foreground transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    <Send className="w-4 h-4 shrink-0" />
+                                    Написать первым (WhatsApp / SMS)
+                                </button>
+                            </div>
+                        </>
+                    )}
+
+                    {step === 'invite' && inviteLink && (
+                        <>
+                            <p className="text-sm text-muted-foreground">
+                                Отправьте клиенту эту ссылку удобным способом. Когда он нажмёт на неё и запустит бота — его аккаунт автоматически привяжется к карточке.
+                            </p>
+                            <div className="bg-muted/50 border border-border rounded-xl p-3 font-mono text-xs break-all select-all text-foreground">
+                                {inviteLink}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => copyText(inviteLink)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    {copied ? 'Скопировано' : 'Скопировать'}
+                                </button>
+                                {status?.phone && (
+                                    <button onClick={() => openWhatsApp(`Для уведомлений откройте ссылку: ${inviteLink}`, status.phone)}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                        WhatsApp
+                                    </button>
+                                )}
+                            </div>
+                            <button onClick={() => setStep('main')} className="w-full text-xs text-muted-foreground hover:text-foreground py-1">← Назад</button>
+                        </>
+                    )}
+
+                    {step === 'message' && manualText && (
+                        <>
+                            <p className="text-sm text-muted-foreground">Готовый текст — скопируйте и отправьте клиенту:</p>
+                            <textarea readOnly value={manualText} rows={6}
+                                className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring/50 font-mono" />
+                            <div className="flex gap-2">
+                                <button onClick={() => copyText(manualText)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    {copied ? 'Скопировано' : 'Скопировать'}
+                                </button>
+                                {manualPhone && (
+                                    <button onClick={() => openWhatsApp(manualText, manualPhone)}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                        WhatsApp
+                                    </button>
+                                )}
+                            </div>
+                            <button onClick={() => setStep('main')} className="w-full text-xs text-muted-foreground hover:text-foreground py-1">← Назад</button>
+                        </>
+                    )}
+                </div>
+
+                <div className="px-6 pb-5">
+                    <button onClick={onClose} className="w-full py-3 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors">
+                        Пропустить
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+

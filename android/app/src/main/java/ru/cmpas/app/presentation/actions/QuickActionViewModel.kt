@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateClientRequest
 import ru.cmpas.app.data.api.CreateSessionRequest
+import ru.cmpas.app.data.api.InviteRequest
+import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.data.local.LocalScheduleBlockStore
 import ru.cmpas.app.domain.model.Client
@@ -18,6 +20,14 @@ import ru.cmpas.app.domain.model.TimeSlot
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+
+/** Info passed to the onboarding bottom sheet after a new client's first session is created. */
+data class OnboardingInfo(
+    val clientId: String,
+    val clientName: String,
+    val phone: String?,
+    val sessionId: String?,
+)
 
 @HiltViewModel
 class QuickActionViewModel @Inject constructor(
@@ -99,6 +109,57 @@ class QuickActionViewModel @Inject constructor(
         }
     }
 
+    // ── Onboarding (after first session created for a new client) ──
+
+    fun generateOnboardingInvite(clientId: String, channel: String = "telegram") {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOnboardingBusy = true) }
+            try {
+                val r = api.createInviteLink(clientId, InviteRequest(channel = channel))
+                if (r.isSuccessful) {
+                    _uiState.update { it.copy(isOnboardingBusy = false, onboardingInviteLink = r.body()?.inviteLink) }
+                } else {
+                    _uiState.update { it.copy(isOnboardingBusy = false) }
+                }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isOnboardingBusy = false) }
+            }
+        }
+    }
+
+    fun sendOnboardingManualMessage(clientId: String, sessionId: String?) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOnboardingBusy = true) }
+            try {
+                val type = if (sessionId != null) "reminder" else "custom"
+                val text = if (sessionId == null) "Здравствуйте! Я занесла вас в систему записи." else null
+                val r = api.sendMessage(clientId, SendMessageRequest(type = type, text = text, sessionId = sessionId))
+                if (r.isSuccessful) {
+                    val body = r.body()
+                    _uiState.update {
+                        it.copy(
+                            isOnboardingBusy = false,
+                            onboardingManualText = if (body?.status == "manual") body.readyText else null,
+                            onboardingManualPhone = if (body?.status == "manual") body.phone else null,
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isOnboardingBusy = false) }
+                }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isOnboardingBusy = false) }
+            }
+        }
+    }
+
+    fun dismissOnboarding() = _uiState.update {
+        it.copy(onboardingInfo = null, onboardingInviteLink = null, onboardingManualText = null, onboardingManualPhone = null)
+    }
+
+    fun clearOnboardingInvite() = _uiState.update { it.copy(onboardingInviteLink = null) }
+
+    // ── Private helpers ──
+
     private suspend fun saveClient(name: String, contact: String, notes: String): String {
         require(name.isNotBlank()) { "Укажите имя клиента" }
         val phone = contact.takeIf { it.isNotBlank() && !it.contains("@") }
@@ -120,8 +181,24 @@ class QuickActionViewModel @Inject constructor(
         return try {
             val response = if (!client.id.startsWith("local-")) api.createSession(CreateSessionRequest(client.id, date, time, endTime, format)) else null
             val session = if (response?.isSuccessful == true) response.body() else null
-            if (session != null) { localStore.upsertSession(session); "Запись создана" }
-            else { localStore.createSession(client, date, time, endTime, format, comment); "Запись сохранена локально" }
+            if (session != null) {
+                localStore.upsertSession(session)
+                // Trigger onboarding if this client has no messenger linked
+                if (client.telegramId == null && client.sessionsCount == 0) {
+                    _uiState.update {
+                        it.copy(onboardingInfo = OnboardingInfo(
+                            clientId = client.id,
+                            clientName = client.name,
+                            phone = client.phone,
+                            sessionId = session.id,
+                        ))
+                    }
+                }
+                "Запись создана"
+            } else {
+                localStore.createSession(client, date, time, endTime, format, comment)
+                "Запись сохранена локально"
+            }
         } catch (_: Exception) { localStore.createSession(client, date, time, endTime, format, comment); "Запись сохранена локально" }
     }
 
@@ -168,4 +245,10 @@ data class QuickActionUiState(
     val clients: List<Client> = emptyList(),
     val isLoadingSlots: Boolean = false,
     val availableSlots: List<TimeSlot> = emptyList(),
+    // Onboarding state
+    val onboardingInfo: OnboardingInfo? = null,
+    val isOnboardingBusy: Boolean = false,
+    val onboardingInviteLink: String? = null,
+    val onboardingManualText: String? = null,
+    val onboardingManualPhone: String? = null,
 )
