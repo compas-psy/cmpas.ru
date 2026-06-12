@@ -84,15 +84,22 @@ function getPartsInTz(date: Date, timeZone: string) {
 function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], settings: any, clientId: string | null = null, skipBuffer = false) {
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(Date.UTC(year, month - 1, day));
+    // Use the practice timezone (default Europe/Moscow) for "now" — the server
+    // runs in UTC, but slot times like "17:00" are local wall-clock. Comparing
+    // against UTC hours wrongly offers past slots (e.g. 17:00 at 19:07 MSK).
+    const tz = settings?.timezone || 'Europe/Moscow';
     const now = new Date();
-    const todayStr = toDateStr(now);
+    const nowParts = getPartsInTz(now, tz);
+    const todayStr = `${nowParts.year}-${String(nowParts.month).padStart(2, '0')}-${String(nowParts.day).padStart(2, '0')}`;
     const isToday = dateStr === todayStr;
-    const nowHours = now.getHours() + (now.getMinutes() / 60);
+    const nowH = Number(nowParts.hour);
+    const nowM = Number(nowParts.minute);
 
     // Global settings checks
     const bufferHours = settings?.bookingBufferHours ?? 24;
     const bufferDate = new Date(now.getTime() + bufferHours * 60 * 60 * 1000);
-    const bufferDateStr = toDateStr(bufferDate);
+    const bufferParts = getPartsInTz(bufferDate, tz);
+    const bufferDateStr = `${bufferParts.year}-${String(bufferParts.month).padStart(2, '0')}-${String(bufferParts.day).padStart(2, '0')}`;
     // If the check date is historically earlier or earlier than buffer date
     if (dateStr < todayStr) return [];
     
@@ -161,14 +168,14 @@ function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, sl
             if (skipBuffer) {
                 // Psychologist manually creating — no buffer restriction, only skip past times for today
                 if (isToday) {
-                    if (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes())) {
+                    if (h < nowH || (h === nowH && m <= nowM)) {
                         currentTotalMins += duration + breakDuration;
                         continue;
                     }
                 }
             } else if (isToday || dateStr === bufferDateStr) {
                  // bufferDate comparison. If this exact slot starts before the buffer Date/Time, skip it.
-                 const [bH, bM] = [bufferDate.getHours(), bufferDate.getMinutes()];
+                 const [bH, bM] = [Number(bufferParts.hour), Number(bufferParts.minute)];
                  if (dateStr === bufferDateStr && (h < bH || (h === bH && m < bM))) {
                      currentTotalMins += duration + breakDuration;
                      continue;

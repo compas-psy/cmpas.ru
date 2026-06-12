@@ -113,7 +113,7 @@ fun QuickActionScreen(
     LaunchedEffect(uiState.onboardingInviteLink) {
         val link = uiState.onboardingInviteLink ?: return@LaunchedEffect
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
+            this.type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, "Для уведомлений о сессиях откройте ссылку: $link")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -143,7 +143,7 @@ fun QuickActionScreen(
         }
         // Also open share sheet so user can paste the copied text anywhere
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
+            this.type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }

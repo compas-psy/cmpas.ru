@@ -105,8 +105,19 @@ export async function restoreClient(id: string) {
 }
 
 export async function deleteClient(id: string) {
-    await getPsychologistId();
-    await db.diaryClient.delete({ where: { id } });
+    const psychologistId = await getPsychologistId();
+
+    // Standalone tables (ClientInviteToken, ScheduledClientMessage) reference
+    // clientId without a Prisma relation/cascade, so they would otherwise be
+    // orphaned or block deletion. Clean them up explicitly first.
+    try {
+        await db.$executeRaw`DELETE FROM "ClientInviteToken" WHERE "clientId" = ${id}`;
+        await db.$executeRaw`DELETE FROM "ScheduledClientMessage" WHERE "clientId" = ${id}`;
+    } catch {
+        // Tables may not exist in some environments — ignore.
+    }
+
+    await db.diaryClient.deleteMany({ where: { id, psychologistId } });
     revalidatePath('/diary');
     revalidatePath('/diary/clients');
 }
