@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.actions
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,7 +30,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -70,8 +70,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import ru.cmpas.app.domain.model.Client
-import ru.cmpas.app.domain.model.OnboardingOptions
-import ru.cmpas.app.domain.model.OnboardingResult
 import ru.cmpas.app.domain.model.TimeSlot
 import java.time.Instant
 import java.time.LocalDate
@@ -111,17 +109,48 @@ fun QuickActionScreen(
         if (type == "new-session" && !isoDate.isNullOrBlank()) viewModel.loadAvailableSlots(isoDate)
     }
 
-    // Native first touch: open the system share sheet so the psychologist can
-    // pick the messenger + the exact chat with this client and send right away.
-    val shareText: (String) -> Unit = { text ->
+    // When an invite link is ready — open share sheet
+    LaunchedEffect(uiState.onboardingInviteLink) {
+        val link = uiState.onboardingInviteLink ?: return@LaunchedEffect
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            this.type = "text/plain"
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "Для уведомлений о сессиях откройте ссылку: $link")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Отправить приглашение").apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
+        viewModel.clearOnboardingInvite()
+    }
+
+    // When manual message text is ready — try VK app, then generic share
+    LaunchedEffect(uiState.onboardingManualText) {
+        val text = uiState.onboardingManualText ?: return@LaunchedEffect
+        // Try VK native app first
+        try {
+            val vkIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vk://im")).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(vkIntent)
+        } catch (_: Exception) {
+            // VK app not installed — open browser
+            try {
+                val vkWeb = Intent(Intent.ACTION_VIEW, Uri.parse("https://vk.com/im")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(vkWeb)
+            } catch (_: Exception) {}
+        }
+        // Also open share sheet so user can paste the copied text anywhere
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-        context.startActivity(Intent.createChooser(shareIntent, "Отправить клиенту").apply {
+        context.startActivity(Intent.createChooser(shareIntent, "Отправить сообщение").apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
+        viewModel.dismissOnboarding()
     }
 
     Scaffold(
@@ -262,155 +291,94 @@ fun QuickActionScreen(
 
     // Onboarding dialog: shown after first session for a new client
     uiState.onboardingInfo?.let { info ->
-        LaunchedEffect(info.clientId) { viewModel.loadOnboardingOptions(info.clientId) }
         OnboardingDialog(
             info = info,
             isBusy = uiState.isOnboardingBusy,
-            options = uiState.onboardingOptions,
-            result = uiState.onboardingResult,
-            onSubmit = { channel, notify, docId -> viewModel.submitOnboarding(info.clientId, channel, notify, docId) },
-            onShare = shareText,
+            onInviteTelegram = { viewModel.generateOnboardingInvite(info.clientId, "telegram") },
+            onInviteMax = { viewModel.generateOnboardingInvite(info.clientId, "max") },
+            onManualMessage = { viewModel.sendOnboardingManualMessage(info.clientId, info.sessionId) },
             onDismiss = { viewModel.dismissOnboarding(); onDone() },
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OnboardingDialog(
     info: OnboardingInfo,
     isBusy: Boolean,
-    options: OnboardingOptions?,
-    result: OnboardingResult?,
-    onSubmit: (channel: String, sendNotification: Boolean, documentId: String?) -> Unit,
-    onShare: (String) -> Unit,
+    onInviteTelegram: () -> Unit,
+    onInviteMax: () -> Unit,
+    onManualMessage: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var channel by remember { mutableStateOf("telegram") }
-    var sendNotification by remember { mutableStateOf(true) }
-    var documentId by remember { mutableStateOf<String?>(null) }
-    var docExpanded by remember { mutableStateOf(false) }
-
-    LaunchedEffect(options) {
-        options?.let {
-            channel = if (it.hasMax && !it.hasTelegram) "max" else "telegram"
-            sendNotification = it.hasSession
-        }
-    }
-
-    val channelLabel = if (channel == "telegram") "Telegram" else "MAX"
-    val connected = if (channel == "telegram") options?.hasTelegram == true else options?.hasMax == true
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (result?.status == "sent") "Отправлено" else "Сообщение клиенту", fontWeight = FontWeight.Bold) },
+        title = { Text("Связаться с клиентом", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                when {
-                    options == null && result == null -> Text("Загрузка…", style = MaterialTheme.typography.bodyMedium)
-
-                    result?.status == "sent" -> Text(
-                        "Клиент ${info.clientName} получил сообщение в $channelLabel.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-
-                    result?.status == "pending" -> {
-                        Text(
-                            "$channelLabel не даёт боту написать первым. Отправьте приглашение — сообщение придёт автоматически, как только клиент откроет бота. Или напишите ему сейчас сами.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        result?.inviteLink?.let { link ->
-                            Button(
-                                onClick = { onShare("Здравствуйте! Для записи и уведомлений откройте ссылку: $link") },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                            ) { Icon(Icons.Outlined.Send, null); Text("  Отправить приглашение") }
-                        }
-                        result?.readyText?.let { text ->
-                            OutlinedButton(
-                                onClick = { onShare(text) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                            ) { Text("Открыть чат и написать сейчас") }
-                        }
-                    }
-
-                    options != null -> {
-                        // Messenger selector
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            listOf("telegram" to "Telegram", "max" to "MAX").forEach { (key, label) ->
-                                val sel = channel == key
-                                val on = if (key == "telegram") options.hasTelegram else options.hasMax
-                                if (sel) {
-                                    Button(onClick = { channel = key }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                                        Text(label + if (on) " ●" else "")
-                                    }
-                                } else {
-                                    OutlinedButton(onClick = { channel = key }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                                        Text(label + if (on) " ●" else "")
-                                    }
-                                }
-                            }
-                        }
-                        Text(
-                            if (connected) "$channelLabel подключён — придёт сразу." else "Клиент ещё не в $channelLabel.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        // Notification checkbox
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = sendNotification && options.hasSession, enabled = options.hasSession, onCheckedChange = { sendNotification = it })
-                            Text(
-                                if (options.hasSession) "Уведомление о первой записи" else "Уведомление (запланируйте сессию)",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-
-                        // Document checkbox + selector
-                        if (options.documents.isNotEmpty()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = documentId != null,
-                                    onCheckedChange = { documentId = if (it) options.documents.first().id else null },
-                                )
-                                Text("Документ", style = MaterialTheme.typography.bodyMedium)
-                            }
-                            if (documentId != null && options.documents.size > 1) {
-                                ExposedDropdownMenuBox(expanded = docExpanded, onExpandedChange = { docExpanded = it }) {
-                                    OutlinedTextField(
-                                        value = options.documents.firstOrNull { it.id == documentId }?.title ?: "",
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        modifier = Modifier.menuAnchor().fillMaxWidth(),
-                                        label = { Text("Какой документ") },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = docExpanded) },
-                                        shape = RoundedCornerShape(12.dp),
-                                    )
-                                    ExposedDropdownMenu(expanded = docExpanded, onDismissRequest = { docExpanded = false }) {
-                                        options.documents.forEach { d ->
-                                            DropdownMenuItem(text = { Text(d.title) }, onClick = { documentId = d.id; docExpanded = false })
-                                        }
-                                    }
-                                }
-                            }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Клиент ${info.clientName} добавлен. Отправьте ему приглашение в бота — после этого он будет получать уведомления о сессиях.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isBusy, onClick = onInviteTelegram),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column {
+                            Text("Пригласить в Telegram", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("Ссылка для подключения бота", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isBusy, onClick = onInviteMax),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Link, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                        Column {
+                            Text("Пригласить в MAX", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("Ссылка для MAX мессенджера", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !isBusy, onClick = onManualMessage),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.PersonAdd, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                        Column {
+                            Text("Написать первым", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("ВКонтакте или другой мессенджер", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                if (isBusy) {
+                    Text("Подготавливаю…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         },
-        confirmButton = {
-            if (result == null && options != null) {
-                Button(
-                    enabled = !isBusy && ((sendNotification && options.hasSession) || documentId != null),
-                    onClick = { onSubmit(channel, sendNotification && options.hasSession, documentId) },
-                ) { Text(if (isBusy) "…" else if (connected) "Отправить" else "Подготовить") }
-            } else if (result != null) {
-                Button(onClick = onDismiss) { Text("Готово") }
-            }
-        },
-        dismissButton = { if (result?.status != "sent") TextButton(onClick = onDismiss) { Text("Пропустить") } },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Пропустить") } },
     )
 }
 

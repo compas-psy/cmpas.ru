@@ -167,9 +167,7 @@ export default function ClientsPage() {
             await deleteClient(selectedClient.id);
             toast.success('Клиент удалён'); setShowDeleteConfirm(false); setDeleteConfirmName('');
             setSelectedClient(null); fetchClients();
-        } catch (e) {
-            toast.error(e instanceof Error ? `Ошибка при удалении: ${e.message}` : 'Ошибка при удалении');
-        }
+        } catch { toast.error('Ошибка при удалении'); }
     };
 
     const saveNotes = async (sessionId: string, notes: string) => {
@@ -921,230 +919,178 @@ function QSection({ title, children }: { title: string; children: React.ReactNod
 }
 
 // ======================== CLIENT ONBOARDING MODAL ========================
-// Shown when a psychologist adds a new client + their first session.
-// Lets the psychologist pick a priority messenger (Telegram / MAX) and tick
-// what to send (booking notification + a document). If the client is already
-// connected → sends instantly via bot. If not → queues for auto-delivery on
-// connect AND offers a native share / invite link for an immediate first touch.
-type OnbOptions = {
-    clientName: string; phone: string | null;
-    hasTelegram: boolean; hasMax: boolean;
-    documents: { id: string; title: string }[]; hasSession: boolean;
-};
-
+// Shown when psychologist adds a new client + their first session.
+// Offers: invite to Telegram/MAX, or compose manual message for VK.
 function ClientOnboardingModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
-    const [step, setStep] = useState<'loading' | 'compose' | 'sent' | 'pending'>('loading');
-    const [opts, setOpts] = useState<OnbOptions | null>(null);
-    const [channel, setChannel] = useState<'telegram' | 'max'>('telegram');
-    const [sendNotification, setSendNotification] = useState(true);
-    const [documentId, setDocumentId] = useState<string>('');
+    const [step, setStep] = useState<'loading' | 'main' | 'invite' | 'message'>('loading');
+    const [status, setStatus] = useState<{ clientName: string; phone: string | null; hasTelegram: boolean; hasMax: boolean } | null>(null);
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [inviteChannel, setInviteChannel] = useState<'telegram' | 'max'>('telegram');
+    const [manualText, setManualText] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [copied, setCopied] = useState<string | null>(null);
-    const [result, setResult] = useState<{ inviteLink?: string; readyText?: string } | null>(null);
 
     useEffect(() => {
         (async () => {
             try {
-                const { getOnboardingOptions } = await import('../actions/client-onboarding');
-                const o = await getOnboardingOptions(clientId);
-                setOpts(o);
-                setChannel(o.hasMax && !o.hasTelegram ? 'max' : 'telegram');
-                setSendNotification(o.hasSession);
-                setStep('compose');
-            } catch { onClose(); }
+                const { getClientMessengerStatus } = await import('../actions/client-onboarding');
+                const s = await getClientMessengerStatus(clientId);
+                setStatus(s);
+                setStep('main');
+            } catch { setStep('main'); }
         })();
-    }, [clientId, onClose]);
+    }, [clientId]);
 
-    const copy = async (text: string, key: string) => {
-        try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
-        setCopied(key); setTimeout(() => setCopied(null), 2000);
-        toast.success('Скопировано');
-    };
-
-    // Native first touch: on mobile opens the system share sheet (pick the
-    // messenger + the exact chat); on desktop falls back to clipboard.
-    const nativeSend = async (text: string) => {
-        const nav = navigator as Navigator & { share?: (d: { text: string }) => Promise<void> };
-        if (nav.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
-            try { await nav.share({ text }); return; } catch { /* cancelled */ }
-        }
-        await copy(text, 'native');
-        toast.info('Текст скопирован — вставьте в чат с клиентом');
-    };
-
-    const handleSend = async () => {
-        if (!opts) return;
+    const handleInvite = async (channel: 'telegram' | 'max') => {
         setBusy(true);
         try {
-            const { sendClientOnboarding } = await import('../actions/client-onboarding');
-            const res = await sendClientOnboarding(clientId, {
-                channel,
-                sendNotification: sendNotification && opts.hasSession,
-                documentId: documentId || null,
-            });
-            if (res.status === 'sent') {
-                setStep('sent');
-            } else {
-                setResult({ inviteLink: res.inviteLink, readyText: res.readyText });
-                setStep('pending');
-            }
-        } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Не удалось отправить');
-        }
+            const { generateClientInviteLink } = await import('../actions/client-onboarding');
+            const res = await generateClientInviteLink(clientId, channel);
+            setInviteLink(res.inviteLink);
+            setInviteChannel(channel);
+            setStep('invite');
+        } catch { toast.error('Не удалось создать ссылку'); }
         setBusy(false);
     };
 
-    const channelLabel = channel === 'telegram' ? 'Telegram' : 'MAX';
-    const connected = channel === 'telegram' ? opts?.hasTelegram : opts?.hasMax;
+    const handleManualWrite = async () => {
+        setBusy(true);
+        try {
+            const { buildNewClientWelcomeText } = await import('../actions/client-onboarding');
+            const res = await buildNewClientWelcomeText(clientId);
+            setManualText(res.text);
+            setStep('message');
+        } catch { toast.error('Не удалось подготовить сообщение'); }
+        setBusy(false);
+    };
+
+    const copyText = async (text: string) => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success('Скопировано');
+    };
+
+    // Copy text + open VK messages (client's VK ID unknown, opens general inbox)
+    const openVK = async (text: string) => {
+        try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+        toast.success('Текст скопирован — вставьте клиенту в ВКонтакте');
+        window.open('https://vk.com/im', '_blank');
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm">
-            <div className="bg-card rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-floating border border-border animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 overflow-hidden">
-                {/* Grabber (mobile) */}
-                <div className="sm:hidden flex justify-center pt-2.5 pb-1"><div className="w-9 h-1 rounded-full bg-muted-foreground/25" /></div>
-
+            <div className="bg-card rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md shadow-floating border border-border animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 pt-3 pb-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                             <MessageCircle className="w-5 h-5 text-primary" />
                         </div>
-                        <div className="min-w-0">
-                            <h2 className="font-bold text-foreground text-[15px] leading-tight truncate">Сообщение клиенту</h2>
-                            {opts && <p className="text-xs text-muted-foreground truncate">{opts.clientName}</p>}
+                        <div>
+                            <h2 className="font-bold text-foreground text-base">Связаться с клиентом</h2>
+                            {status && <p className="text-xs text-muted-foreground">{status.clientName}</p>}
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 -mr-1 hover:bg-muted rounded-xl transition-colors shrink-0"><X className="w-4 h-4" /></button>
+                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors"><X className="w-4 h-4" /></button>
                 </div>
 
-                <div className="px-5 pb-5 space-y-4">
+                <div className="px-6 py-5 space-y-3">
                     {step === 'loading' && (
-                        <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+                        <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
                     )}
 
-                    {step === 'compose' && opts && (
+                    {step === 'main' && status && (
                         <>
-                            {/* Messenger selector */}
-                            <div>
-                                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Мессенджер</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {([
-                                        { key: 'telegram' as const, label: 'Telegram', on: opts.hasTelegram },
-                                        { key: 'max' as const, label: 'MAX', on: opts.hasMax },
-                                    ]).map(m => (
-                                        <button key={m.key} onClick={() => setChannel(m.key)}
-                                            className={`relative flex items-center justify-center gap-2 py-3 rounded-2xl border-2 text-sm font-bold transition-all active:scale-[0.98] ${channel === m.key ? 'border-primary bg-primary/5 text-foreground' : 'border-border bg-background text-muted-foreground'}`}>
-                                            {m.label}
-                                            {m.on && <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-green-500" title="Подключён" />}
-                                        </button>
-                                    ))}
+                            {status.hasTelegram || status.hasMax ? (
+                                <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl p-3 text-xs text-green-700 dark:text-green-400 font-medium">
+                                    {status.hasTelegram ? 'Telegram подключён' : 'MAX подключён'} — можно отправить уведомление прямо из карточки клиента.
                                 </div>
-                                <p className="text-[11px] text-muted-foreground mt-1.5">
-                                    {connected
-                                        ? `${channelLabel} подключён — сообщение придёт сразу.`
-                                        : `Клиент ещё не в ${channelLabel}. Покажем, как отправить.`}
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Клиент ещё не подключил бота. Отправьте ему пригласительную ссылку или напишите первым.
                                 </p>
+                            )}
+
+                            <div className="space-y-2 pt-1">
+                                <button
+                                    onClick={() => handleInvite('telegram')}
+                                    disabled={busy}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 border border-[#229ED9]/30 rounded-xl text-sm font-semibold text-[#0088cc] transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                                    Пригласить в Telegram
+                                </button>
+
+                                <button
+                                    onClick={() => handleInvite('max')}
+                                    disabled={busy}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-xl text-sm font-semibold text-primary transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    <MessageCircle className="w-5 h-5 shrink-0" />
+                                    Пригласить в MAX
+                                </button>
+
+                                <button
+                                    onClick={handleManualWrite}
+                                    disabled={busy}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-muted hover:bg-muted/70 rounded-xl text-sm font-semibold text-foreground transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    <Send className="w-4 h-4 shrink-0" />
+                                    Написать первым в ВКонтакте
+                                </button>
                             </div>
-
-                            {/* What to send */}
-                            <div>
-                                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Что отправить</p>
-                                <div className="space-y-2">
-                                    <button
-                                        onClick={() => opts.hasSession && setSendNotification(v => !v)}
-                                        disabled={!opts.hasSession}
-                                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${!opts.hasSession ? 'border-border bg-muted/40 opacity-60' : sendNotification ? 'border-primary bg-primary/5' : 'border-border bg-background active:scale-[0.99]'}`}>
-                                        <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${sendNotification && opts.hasSession ? 'bg-primary text-primary-foreground' : 'border-2 border-muted-foreground/40'}`}>
-                                            {sendNotification && opts.hasSession && <CheckCircle2 className="w-4 h-4" />}
-                                        </span>
-                                        <div className="min-w-0">
-                                            <div className="text-sm font-semibold text-foreground">Уведомление о записи</div>
-                                            <div className="text-[11px] text-muted-foreground">{opts.hasSession ? 'Дата, время и формат первой сессии' : 'Сначала запланируйте сессию'}</div>
-                                        </div>
-                                    </button>
-
-                                    <button
-                                        onClick={() => opts.documents.length && setDocumentId(id => id ? '' : opts.documents[0].id)}
-                                        disabled={!opts.documents.length}
-                                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${!opts.documents.length ? 'border-border bg-muted/40 opacity-60' : documentId ? 'border-primary bg-primary/5' : 'border-border bg-background active:scale-[0.99]'}`}>
-                                        <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${documentId ? 'bg-primary text-primary-foreground' : 'border-2 border-muted-foreground/40'}`}>
-                                            {documentId && <CheckCircle2 className="w-4 h-4" />}
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-sm font-semibold text-foreground">Документ</div>
-                                            <div className="text-[11px] text-muted-foreground">{opts.documents.length ? 'Согласие, договор или памятка' : 'Нет активных документов'}</div>
-                                        </div>
-                                    </button>
-
-                                    {documentId && opts.documents.length > 1 && (
-                                        <select value={documentId} onChange={e => setDocumentId(e.target.value)}
-                                            className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring/50">
-                                            {opts.documents.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
-                                        </select>
-                                    )}
-                                </div>
-                            </div>
-
-                            <button onClick={handleSend} disabled={busy || (!sendNotification && !documentId)}
-                                className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground rounded-2xl text-sm font-bold shadow-card transition-all active:scale-[0.98] disabled:opacity-40">
-                                {busy ? 'Отправляю…' : connected ? <><Send className="w-4 h-4" /> Отправить в {channelLabel}</> : <><Send className="w-4 h-4" /> Подготовить отправку</>}
-                            </button>
                         </>
                     )}
 
-                    {step === 'sent' && (
-                        <div className="text-center py-6">
-                            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle2 className="w-8 h-8 text-green-600" />
+                    {step === 'invite' && inviteLink && (
+                        <>
+                            <p className="text-sm text-muted-foreground">
+                                Отправьте клиенту эту ссылку удобным способом. Когда он нажмёт на неё и запустит бота — его аккаунт автоматически привяжется к карточке.
+                            </p>
+                            <div className="bg-muted/50 border border-border rounded-xl p-3 font-mono text-xs break-all select-all text-foreground">
+                                {inviteLink}
                             </div>
-                            <h3 className="font-bold text-foreground text-base mb-1">Отправлено в {channelLabel}</h3>
-                            <p className="text-sm text-muted-foreground">Клиент получил сообщение в мессенджере.</p>
-                            <button onClick={onClose} className="mt-5 w-full py-3 bg-primary text-primary-foreground rounded-2xl text-sm font-bold active:scale-[0.98]">Готово</button>
-                        </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => copyText(inviteLink)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    {copied ? 'Скопировано' : 'Скопировать'}
+                                </button>
+                                <button onClick={() => openVK(`Для уведомлений о сессиях откройте ссылку: ${inviteLink}`)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#0077FF]/10 text-[#0077FF] border border-[#0077FF]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    ВКонтакте
+                                </button>
+                            </div>
+                            <button onClick={() => setStep('main')} className="w-full text-xs text-muted-foreground hover:text-foreground py-1">← Назад</button>
+                        </>
                     )}
 
-                    {step === 'pending' && result && (
-                        <div className="space-y-4">
-                            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl p-3 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                                {channelLabel} не даёт боту написать первым. Отправьте приглашение — и сообщение придёт клиенту <b>автоматически</b>, как только он откроет бота. Либо напишите ему сейчас сами.
+                    {step === 'message' && manualText && (
+                        <>
+                            <p className="text-sm text-muted-foreground">Готовый текст — скопируйте и отправьте клиенту:</p>
+                            <textarea readOnly value={manualText} rows={6}
+                                className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring/50 font-mono" />
+                            <div className="flex gap-2">
+                                <button onClick={() => copyText(manualText)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    {copied ? 'Скопировано' : 'Скопировать'}
+                                </button>
+                                <button onClick={() => openVK(manualText)}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#0077FF]/10 text-[#0077FF] border border-[#0077FF]/30 rounded-xl text-sm font-bold transition-all active:scale-[0.98]">
+                                    ВКонтакте
+                                </button>
                             </div>
-
-                            {/* Recommended: invite */}
-                            {result.inviteLink && (
-                                <div className="space-y-2">
-                                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Пригласить · рекомендуем</p>
-                                    <div className="bg-muted/50 border border-border rounded-xl p-2.5 font-mono text-[11px] break-all select-all text-foreground">{result.inviteLink}</div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => copy(result.inviteLink!, 'invite')}
-                                            className="flex items-center justify-center gap-2 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold active:scale-[0.98]">
-                                            {copied === 'invite' ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}{copied === 'invite' ? 'Скопировано' : 'Скопировать'}
-                                        </button>
-                                        <button onClick={() => nativeSend(`Здравствуйте! Для записи и уведомлений откройте ссылку: ${result.inviteLink}`)}
-                                            className="flex items-center justify-center gap-2 py-2.5 bg-secondary text-secondary-foreground rounded-xl text-sm font-bold active:scale-[0.98]">
-                                            <Send className="w-4 h-4" /> Поделиться
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Or write now */}
-                            {result.readyText && (
-                                <div className="space-y-2">
-                                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Написать сейчас</p>
-                                    <button onClick={() => nativeSend(result.readyText!)}
-                                        className="w-full flex items-center justify-center gap-2 py-3 bg-[#229ED9]/10 text-[#0088cc] border border-[#229ED9]/30 rounded-xl text-sm font-bold active:scale-[0.98]">
-                                        <Send className="w-4 h-4" /> Открыть чат и отправить
-                                    </button>
-                                    <button onClick={() => copy(result.readyText!, 'text')}
-                                        className="w-full flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground hover:text-foreground">
-                                        {copied === 'text' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copied === 'text' ? 'Текст скопирован' : 'Скопировать текст'}
-                                    </button>
-                                </div>
-                            )}
-
-                            <button onClick={onClose} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground font-medium">Закрыть</button>
-                        </div>
+                            <button onClick={() => setStep('main')} className="w-full text-xs text-muted-foreground hover:text-foreground py-1">← Назад</button>
+                        </>
                     )}
+                </div>
+
+                <div className="px-6 pb-5">
+                    <button onClick={onClose} className="w-full py-3 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors">
+                        Пропустить
+                    </button>
                 </div>
             </div>
         </div>
