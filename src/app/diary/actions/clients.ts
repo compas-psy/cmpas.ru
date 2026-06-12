@@ -68,6 +68,11 @@ export async function createClient(data: {
             dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
             age: data.age || null,
             gender: data.gender || null,
+            // UI uses nextSessionDate only to auto-select the most relevant client
+            // when no card is selected. For a just-created client we want the new card
+            // to stay selected until the psychologist creates the first session,
+            // instead of jumping to the client with the latest old session.
+            nextSessionDate: new Date('9999-12-31T00:00:00.000Z'),
         },
     });
     revalidatePath('/diary');
