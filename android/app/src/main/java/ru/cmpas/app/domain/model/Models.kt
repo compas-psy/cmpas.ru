@@ -275,7 +275,7 @@ data class FreeTimesResponse(
 )
 
 // ═══════════════════════════════════════════
-// Scheduled messages
+// Scheduled messages / reminders
 // ═══════════════════════════════════════════
 
 @Serializable
@@ -288,6 +288,22 @@ data class ScheduledMessage(
     val sendAt: String,
     val status: String,
     val readyText: String? = null,
+)
+
+@Serializable
+enum class ReminderStatus {
+    SCHEDULED, SENT, READ, FAILED
+}
+
+@Serializable
+data class SessionReminder(
+    val id: String,
+    val whenLabel: String,
+    val atLabel: String,
+    val channel: String,
+    val status: ReminderStatus,
+    val withPayment: Boolean,
+    val text: String,
 )
 
 // ═══════════════════════════════════════════
