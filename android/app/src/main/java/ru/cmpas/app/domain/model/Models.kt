@@ -307,6 +307,24 @@ data class SessionReminder(
 )
 
 // ═══════════════════════════════════════════
+// Session reminders (client-facing, auto-sent)
+// ═══════════════════════════════════════════
+
+@Serializable
+enum class ReminderStatus { SCHEDULED, SENT, READ, FAILED }
+
+@Serializable
+data class SessionReminder(
+    val id: String,
+    val whenLabel: String,   // "За 24 часа"
+    val atLabel: String,     // "Завтра · 09:00"
+    val channel: String,     // "telegram" | "max"
+    val status: ReminderStatus,
+    val withPayment: Boolean,// показывать чип «QR оплаты»
+    val text: String,
+)
+
+// ═══════════════════════════════════════════
 // Dashboard with booking link
 // ═══════════════════════════════════════════
 
