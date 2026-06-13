@@ -111,10 +111,11 @@ export function setupBot() {
             try {
                 const invite = await db.clientInviteToken.findUnique({
                     where: { token },
-                    include: { client: true },
                 });
-                if (invite && !invite.usedAt && invite.expiresAt > new Date()) {
-                    const client = invite.client;
+                const client = invite
+                    ? await db.diaryClient.findUnique({ where: { id: invite.clientId } })
+                    : null;
+                if (invite && client && !invite.usedAt && invite.expiresAt > new Date()) {
                     // Link Telegram to this DiaryClient
                     await db.diaryClient.update({
                         where: { id: client.id },
@@ -141,7 +142,7 @@ export function setupBot() {
                         });
                         for (const m of queued) {
                             try {
-                                await ctx.telegram.sendMessage(tgId, m.text);
+                                await ctx.telegram.sendMessage(tgId, m.text, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
                                 await db.scheduledClientMessage.update({
                                     where: { id: m.id },
                                     data: { status: 'sent', sentAt: new Date() },

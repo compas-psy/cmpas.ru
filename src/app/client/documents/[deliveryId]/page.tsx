@@ -22,33 +22,42 @@ export default async function ClientDocumentPage({ params, searchParams }: { par
         notFound();
     }
 
+    const openedText = delivery.openedAt
+        ? new Date(delivery.openedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : null;
+
     return (
-        <main className="min-h-screen bg-[#f7f5ef] px-4 py-6 text-[#1f2a24] sm:py-10">
-            <div className="mx-auto max-w-3xl rounded-[28px] border border-[#ded7c8] bg-white p-5 shadow-sm sm:p-8">
-                <div className="mb-6 border-b border-[#ebe5d8] pb-5">
-                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#1a4d3a]">КОМПАС · документ специалиста</p>
-                    <h1 className="break-words text-2xl font-bold leading-tight tracking-tight sm:text-3xl">{delivery.documentTitle}</h1>
-                    <div className="mt-4 grid gap-2 rounded-2xl bg-[#faf8f5] p-4 text-sm leading-6 text-[#5d665f]">
-                        <p>Клиент: <b className="text-[#1f2a24]">{delivery.clientName}</b></p>
-                        <p>Специалист: <b className="text-[#1f2a24]">{delivery.psychologistName || 'специалист'}</b></p>
-                        <p>Версия: <b className="text-[#1f2a24]">{delivery.documentVersion}</b></p>
-                    </div>
+        <main className="min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
+            <div className="mx-auto max-w-2xl rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8">
+                <div className="mb-6 border-b border-[#e6dfd1] pb-5">
+                    <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-[#1a4d3a]">КОМПАС · документ специалиста</p>
+                    <h1 className="text-2xl font-bold leading-tight tracking-tight">{delivery.documentTitle}</h1>
+                    <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-[#5d665f]">
+                        <dt className="text-[#8a8f88]">Специалист</dt>
+                        <dd className="font-semibold text-[#1f2a24]">{delivery.psychologistName || 'специалист'}</dd>
+                        <dt className="text-[#8a8f88]">Клиент</dt>
+                        <dd className="font-semibold text-[#1f2a24]">{delivery.clientName}</dd>
+                        <dt className="text-[#8a8f88]">Версия</dt>
+                        <dd className="font-semibold text-[#1f2a24]">{delivery.documentVersion}</dd>
+                    </dl>
                 </div>
 
                 {delivery.documentContent ? (
-                    <section className="mb-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm leading-7">
-                        {delivery.documentContent}
-                    </section>
+                    <article className="mb-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-[15px] leading-7 text-[#2b332d]">{delivery.documentContent}</article>
                 ) : delivery.fileUrl ? (
-                    <a href={openFileUrl(delivery.fileUrl)} target="_blank" rel="noreferrer" className="mb-6 block rounded-2xl border border-[#d7eadf] bg-[#f1fbf5] p-5 text-sm font-semibold leading-6 text-[#1a4d3a] underline underline-offset-4">
-                        Открыть файл документа{delivery.fileName ? `: ${delivery.fileName}` : ''}
+                    <a href={openFileUrl(delivery.fileUrl)} target="_blank" rel="noreferrer" className="mb-6 flex items-center gap-3 rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm font-semibold text-[#1a4d3a] transition-colors hover:bg-[#f1ede4]">
+                        📄 Открыть файл документа{delivery.fileName ? `: ${delivery.fileName}` : ''}
                     </a>
                 ) : (
                     <section className="mb-6 rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm leading-6">Текст документа недоступен. Обратитесь к специалисту.</section>
                 )}
 
                 <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-sm leading-6 text-green-800">
-                    <b>Документ принят.</b><br />Факт открытия и принятия условий зафиксирован у специалиста.
+                    <p className="font-semibold">✓ Согласие зафиксировано</p>
+                    <p className="mt-1 text-green-700">
+                        Открыв этот документ, вы подтвердили ознакомление и согласие с его условиями.
+                        {openedText ? <> Дата: <b>{openedText}</b>.</> : null}
+                    </p>
                 </div>
             </div>
         </main>

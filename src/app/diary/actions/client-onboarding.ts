@@ -122,11 +122,13 @@ export async function sendClientOnboarding(
         documentLinks = [{ title: delivery.title, link: delivery.link }];
     }
 
-    let text: string;
+    // Two renderings: HTML for bot delivery, plain text for manual share.
+    let htmlText: string;
+    let plainText: string;
     if (session) {
         const onlineLink = session.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
         const paymentText = await getPaymentInstruction(psychologistId, session.id, clientId);
-        text = buildSessionClientMessage({
+        const base = {
             clientName: client.name,
             psychologistName: psyName,
             date: session.date,
@@ -136,21 +138,33 @@ export async function sendClientOnboarding(
             documentLinks,
             paymentText,
             bookingLink,
-        });
+        };
+        htmlText = buildSessionClientMessage({ ...base, mode: 'html' });
+        plainText = buildSessionClientMessage({ ...base, mode: 'plain' });
     } else {
-        const lines = [`${client.name}, здравствуйте.`, '', `На связи ${psyName}.`];
+        const firstName = client.name.trim().split(/\s+/)[0] || client.name;
+        const lines = [`${firstName}, здравствуйте!`, '', `На связи специалист ${psyName}.`];
         if (documentLinks.length) {
-            lines.push('Документы для ознакомления:', ...documentLinks.map(d => `— ${d.title}: ${d.link}`));
+            lines.push('', 'Записываясь на консультацию, вы соглашаетесь с условиями договора:');
+            lines.push(...documentLinks.map(d => `<a href="${d.link}">${d.title}</a>`));
         }
-        lines.push(`Ссылка для управления записями: ${bookingLink}`);
-        text = lines.filter(Boolean).join('\n');
+        lines.push('', `Управлять записями можно <a href="${bookingLink}">здесь</a>.`);
+        htmlText = lines.join('\n');
+        // Plain: strip anchors back to "label: url"
+        const plainLines = [`${firstName}, здравствуйте!`, '', `На связи специалист ${psyName}.`];
+        if (documentLinks.length) {
+            plainLines.push('', 'Записываясь на консультацию, вы соглашаетесь с условиями договора:');
+            plainLines.push(...documentLinks.map(d => `${d.title}: ${d.link}`));
+        }
+        plainLines.push('', `Управлять записями можно здесь: ${bookingLink}`);
+        plainText = plainLines.join('\n');
     }
 
     const chatId = opts.channel === 'telegram' ? client.telegramChatId : (client as any).maxChatId as string | null;
 
     if (chatId) {
-        if (opts.channel === 'telegram') await sendTelegramMessage(chatId, text);
-        else await sendMaxMessage(chatId, text);
+        if (opts.channel === 'telegram') await sendTelegramMessage(chatId, htmlText, { parse_mode: 'HTML', disable_web_page_preview: true });
+        else await sendMaxMessage(chatId, plainText);
         return { status: 'sent' as const, channel: opts.channel };
     }
 
@@ -163,13 +177,14 @@ export async function sendClientOnboarding(
 
     // sendAt far in the future so the cron won't mark it failed before the
     // client connects; the bot connect handler delivers it instantly.
+    // Store the HTML rendering — the bot delivers it with parse_mode=HTML.
     await db.scheduledClientMessage.create({
         data: {
             psychologistId,
             clientId,
             sessionId: session?.id ?? null,
             channel: opts.channel,
-            text,
+            text: htmlText,
             sendAt: expiresAt,
             status: 'pending',
         },
@@ -179,7 +194,8 @@ export async function sendClientOnboarding(
         status: 'pending' as const,
         channel: opts.channel,
         inviteLink: buildInviteLink(opts.channel, token),
-        readyText: text,
+        // Plain text for manual share (pasted into a chat, no HTML parsing).
+        readyText: plainText,
         phone: client.phone ?? null,
     };
 }
