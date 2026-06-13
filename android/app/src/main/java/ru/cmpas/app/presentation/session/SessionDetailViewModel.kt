@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.data.api.UpdateSessionRequest
+import ru.cmpas.app.domain.model.ReminderStatus
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.domain.model.SessionReminder
 import ru.cmpas.app.domain.model.SessionStatus
 import javax.inject.Inject
 
@@ -27,7 +30,29 @@ class SessionDetailViewModel @Inject constructor(
             try {
                 val response = api.getSession(sessionId)
                 if (response.isSuccessful) {
-                    _uiState.update { it.copy(isLoading = false, session = response.body()) }
+                    val session = response.body()
+                    if (session == null) {
+                        _uiState.update { it.copy(isLoading = false, error = "Сессия не найдена") }
+                        return@launch
+                    }
+
+                    val client = runCatching {
+                        val clientResponse = api.getClient(session.clientId)
+                        if (clientResponse.isSuccessful) clientResponse.body() else null
+                    }.getOrNull()
+                    val bound = client?.hasMessenger == true
+                    val channel = client?.messengerChannel ?: "telegram"
+                    val reminders = buildReminders(session, bound).map { it.copy(channel = channel) }
+
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            session = session,
+                            reminders = reminders,
+                            hasMessenger = bound,
+                            messengerChannel = client?.messengerChannel,
+                        )
+                    }
                 } else {
                     _uiState.update { it.copy(isLoading = false, error = "Сессия не найдена") }
                 }
@@ -58,8 +83,17 @@ class SessionDetailViewModel @Inject constructor(
             _uiState.update { it.copy(isActionLoading = true, actionError = null) }
             try {
                 val r = api.updateSession(sessionId, UpdateSessionRequest(status = SessionStatus.COMPLETED))
-                if (r.isSuccessful) _uiState.update { it.copy(isActionLoading = false, session = r.body()) }
-                else _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                if (r.isSuccessful) {
+                    _uiState.update {
+                        it.copy(
+                            isActionLoading = false,
+                            session = r.body(),
+                            reminders = emptyList(),
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
             }
@@ -72,9 +106,41 @@ class SessionDetailViewModel @Inject constructor(
             try {
                 val r = api.cancelSession(sessionId)
                 if (r.isSuccessful) {
-                    _uiState.update { it.copy(isActionLoading = false, cancelled = true) }
+                    _uiState.update { it.copy(isActionLoading = false, cancelled = true, reminders = emptyList()) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка отмены") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+            }
+        }
+    }
+
+    fun resendReminder(sessionId: String, reminderId: String) {
+        val session = _uiState.value.session ?: return
+        val reminder = _uiState.value.reminders.firstOrNull { it.id == reminderId } ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, actionError = null) }
+            try {
+                val response = api.sendMessage(
+                    id = session.clientId,
+                    body = SendMessageRequest(
+                        type = "reminder",
+                        text = reminder.text,
+                        sessionId = sessionId,
+                    ),
+                )
+                if (response.isSuccessful) {
+                    _uiState.update { state ->
+                        state.copy(
+                            isActionLoading = false,
+                            reminders = state.reminders.map {
+                                if (it.id == reminderId) it.copy(status = ReminderStatus.SENT) else it
+                            },
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isActionLoading = false, actionError = "Не удалось отправить напоминание") }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
@@ -105,7 +171,20 @@ class SessionDetailViewModel @Inject constructor(
             try {
                 val r = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
                 if (r.isSuccessful) {
-                    _uiState.update { it.copy(isActionLoading = false, session = r.body(), showRescheduleDialog = false) }
+                    val updatedSession = r.body()
+                    _uiState.update { state ->
+                        val refreshedReminders = updatedSession?.let {
+                            buildReminders(it, state.hasMessenger).map { reminder ->
+                                reminder.copy(channel = state.messengerChannel ?: "telegram")
+                            }
+                        } ?: emptyList()
+                        state.copy(
+                            isActionLoading = false,
+                            session = updatedSession,
+                            reminders = refreshedReminders,
+                            showRescheduleDialog = false,
+                        )
+                    }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Время уже занято") }
                 }
@@ -139,4 +218,7 @@ data class SessionDetailUiState(
     val isLoadingFreeTimes: Boolean = false,
     val freeTimes: List<String> = emptyList(),
     val freeTimesError: String? = null,
+    val reminders: List<SessionReminder> = emptyList(),
+    val hasMessenger: Boolean = false,
+    val messengerChannel: String? = null,
 )
