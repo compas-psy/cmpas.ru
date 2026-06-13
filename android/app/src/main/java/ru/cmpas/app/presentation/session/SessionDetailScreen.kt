@@ -23,8 +23,6 @@ import ru.cmpas.app.presentation.theme.*
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +38,8 @@ fun SessionDetailScreen(
     val uriHandler = LocalUriHandler.current
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
 
-    // Navigate back after cancel
     LaunchedEffect(uiState.cancelled) { if (uiState.cancelled) onBack() }
 
-    // Reschedule dialog
     if (uiState.showRescheduleDialog) {
         RescheduleDialog(
             uiState = uiState,
@@ -53,12 +49,8 @@ fun SessionDetailScreen(
         )
     }
 
-    // Action error snackbar
     uiState.actionError?.let { err ->
-        LaunchedEffect(err) {
-            // Just clear after a moment; in a real app use SnackbarHostState
-            viewModel.clearActionError()
-        }
+        LaunchedEffect(err) { viewModel.clearActionError() }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -100,7 +92,6 @@ fun SessionDetailScreen(
                     contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 132.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    // Time card
                     item {
                         Card(
                             Modifier.fillMaxWidth(),
@@ -149,11 +140,9 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Action buttons for upcoming/pending sessions
                     if (isUpcoming && session.status != SessionStatus.CANCELLED) {
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // Confirm if pending
                                 if (isPending) {
                                     Button(
                                         onClick = { viewModel.confirm(sessionId) },
@@ -171,7 +160,6 @@ fun SessionDetailScreen(
                                         }
                                     }
                                 }
-                                // Reschedule + Cancel
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(
                                         onClick = { viewModel.openRescheduleDialog() },
@@ -199,7 +187,6 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Error message
                     uiState.actionError?.let { err ->
                         item {
                             Card(
@@ -212,7 +199,6 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Quick actions row (open video link, prepare, client card)
                     if (isUpcoming) {
                         item {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -225,7 +211,6 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Post-session actions
                     if (!session.notes.isNullOrBlank() || isPast || (isUpcoming && session.status == SessionStatus.CONFIRMED)) {
                         item {
                             Card(
@@ -245,7 +230,6 @@ fun SessionDetailScreen(
                         }
                     }
 
-                    // Notes preview
                     if (!session.notes.isNullOrBlank()) {
                         item {
                             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -265,6 +249,23 @@ fun SessionDetailScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if (isUpcoming && session.status != SessionStatus.CANCELLED && uiState.reminders.isNotEmpty()) {
+                        item {
+                            RemindersCard(
+                                reminders = uiState.reminders,
+                                bound = uiState.hasMessenger,
+                                onResend = { reminder ->
+                                    if (uiState.hasMessenger) {
+                                        viewModel.resendReminder(session.id, reminder.id)
+                                    } else {
+                                        onQuickAction("message")
+                                    }
+                                },
+                                onManual = { onQuickAction("message") },
+                            )
                         }
                     }
                 }
@@ -296,7 +297,6 @@ private fun RescheduleDialog(
         title = { Text("Перенести сессию") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Date input
                 OutlinedTextField(
                     value = selectedDate,
                     onValueChange = {
@@ -309,7 +309,6 @@ private fun RescheduleDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // Free times
                 if (uiState.isLoadingFreeTimes) {
                     CircularProgressIndicator(Modifier.size(24.dp).align(Alignment.CenterHorizontally))
                 } else if (uiState.freeTimes.isNotEmpty()) {
