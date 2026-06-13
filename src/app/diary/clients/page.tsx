@@ -60,6 +60,7 @@ export default function ClientsPage() {
     const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', gender: '' });
     const [questionnaireForm, setQuestionnaireForm] = useState<QuestionnaireData>({});
     const notesTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const suppressAutoSelect = useRef(false);
     const [isMobile, setIsMobile] = useState(false);
 
     // Onboarding state: after psychologist adds a new client + first session
@@ -79,7 +80,7 @@ export default function ClientsPage() {
             const data = await getClients(search || undefined, statusFilter);
             setClients(data as unknown as Client[]);
             // Auto-select client with most recent session (desktop only, first load)
-            if (!selectedClient && !search && data.length > 0 && !isMobile) {
+            if (!suppressAutoSelect.current && !selectedClient && !search && data.length > 0 && !isMobile) {
                 const withDates = (data as any[]).filter(c => c.nextSessionDate);
                 const sorted = withDates.sort((a, b) => new Date(b.nextSessionDate).getTime() - new Date(a.nextSessionDate).getTime());
                 const autoId = sorted.length > 0 ? sorted[0].id : data[0].id;
@@ -126,9 +127,13 @@ export default function ClientsPage() {
             // Track this client for onboarding — triggers after first session is saved
             setPendingOnboardingClientId(created.id);
             setShowNewClient(false); setNewClient({ name: '', phone: '', email: '', gender: '' });
+            // Suppress auto-select so fetchClients() doesn't redirect to another
+            // client — we want to land on the newly created one.
+            suppressAutoSelect.current = true;
             await fetchClients();
             // Auto-select the new client so the user can add a session immediately
-            fetchClientDetail(created.id);
+            await fetchClientDetail(created.id);
+            suppressAutoSelect.current = false;
         } catch { toast.error('Ошибка при создании клиента'); }
     };
 
