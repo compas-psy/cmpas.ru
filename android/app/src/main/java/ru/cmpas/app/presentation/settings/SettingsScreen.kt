@@ -18,23 +18,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
-import ru.cmpas.app.presentation.util.VideoLinkAction
-import ru.cmpas.app.presentation.util.VideoLinkPreferences
 
 @Composable
 fun SettingsScreen(onLogout: () -> Unit = {}) {
-    val context = LocalContext.current
     var dayBefore by rememberSaveable { mutableStateOf(true) }
     var oneHourBefore by rememberSaveable { mutableStateOf(true) }
     var paymentReminder by rememberSaveable { mutableStateOf(false) }
     var consentReminder by rememberSaveable { mutableStateOf(false) }
-    var videoAction by remember { mutableStateOf(VideoLinkPreferences.get(context)) }
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
     var copied by rememberSaveable { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
@@ -76,31 +71,6 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
                     Kpi(Icons.Outlined.Groups, "24", "клиента", Forest700, Modifier.weight(1f))
                     Kpi(Icons.Outlined.EventAvailable, "312", "сессий", Blue, Modifier.weight(1f))
                     Kpi(Icons.Outlined.StarOutline, "4,9", "оценка", CompasAccent, Modifier.weight(1f))
-                }
-            }
-
-            item { SectionTitle("Онлайн-сессии") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Sage100), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Videocam, null, Modifier.size(20.dp), tint = Forest700)
-                        }
-                        Spacer(Modifier.width(11.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Кнопка «Подключиться»", style = tBody, color = CompasFg)
-                            Text("Что делать со ссылкой ВКС в Android", style = tBody2, color = CompasMutedFg)
-                        }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    CompasSegmented(
-                        options = listOf("Открывать ВКС", "Копировать ссылку"),
-                        selectedIndex = if (videoAction == VideoLinkAction.OPEN_APP) 0 else 1,
-                        onSelect = { index ->
-                            videoAction = if (index == 0) VideoLinkAction.OPEN_APP else VideoLinkAction.COPY_LINK
-                            VideoLinkPreferences.set(context, videoAction)
-                        },
-                    )
                 }
             }
 
