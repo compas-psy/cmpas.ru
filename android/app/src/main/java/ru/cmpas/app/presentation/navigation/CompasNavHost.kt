@@ -71,7 +71,10 @@ fun CompasNavHost(
                 )
             }
             composable(Screen.Clients.route) {
-                ClientsScreen(onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) })
+                ClientsScreen(
+                    onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
+                    onAddClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
+                )
             }
             composable(Screen.Notes.route) {
                 NotesScreen(onSessionNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute(it)) })
