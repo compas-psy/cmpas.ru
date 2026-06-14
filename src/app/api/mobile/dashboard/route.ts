@@ -3,10 +3,6 @@ import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { clientBookingLink } from '@/lib/client-workflow';
 
-/**
- * GET /api/mobile/dashboard
- * Returns today's sessions, next session, week stats, attention items, and booking link.
- */
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
@@ -15,8 +11,9 @@ export async function GET(req: NextRequest) {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
         const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7);
+        const twoDaysAhead = new Date(); twoDaysAhead.setDate(twoDaysAhead.getDate() + 2);
 
-        const [todaySessions, weekSessions, user] = await Promise.all([
+        const [todaySessions, weekSessions, user, recentSessions, homeworkEvents] = await Promise.all([
             db.diarySession.findMany({
                 where: {
                     psychologistId: auth.userId,
@@ -32,10 +29,38 @@ export async function GET(req: NextRequest) {
             }),
             db.user.findUnique({
                 where: { id: auth.userId },
-                select: { name: true, psychologistSettings: { select: { fullName: true } } },
+                select: {
+                    name: true,
+                    psychologistSettings: { select: { fullName: true, onlineSessionLink: true } },
+                },
+            }),
+            db.diarySession.findMany({
+                where: {
+                    psychologistId: auth.userId,
+                    updatedAt: { gte: weekAgo },
+                    OR: [
+                        { status: 'cancelled' },
+                        { status: 'confirmed' },
+                        { status: 'pending', date: { gte: new Date(), lte: twoDaysAhead } },
+                    ],
+                },
+                include: { client: { select: { id: true, name: true } } },
+                orderBy: { updatedAt: 'desc' },
+                take: 20,
+            }),
+            db.homework.findMany({
+                where: {
+                    psychologistId: auth.userId,
+                    updatedAt: { gte: weekAgo },
+                    OR: [{ status: 'completed' }, { clientFeedback: { not: null } }],
+                },
+                include: { client: { select: { id: true, name: true } } },
+                orderBy: { updatedAt: 'desc' },
+                take: 10,
             }),
         ]);
 
+        const onlineLink = user?.psychologistSettings?.onlineSessionLink || null;
         const now = new Date();
         const formattedSessions = todaySessions.map(s => ({
             id: s.id,
@@ -46,8 +71,9 @@ export async function GET(req: NextRequest) {
             endTime: s.endTime || '',
             status: (s.status || 'PENDING').toUpperCase(),
             format: s.format === 'in_person' || s.format === 'offline' ? 'IN_PERSON' : 'ONLINE',
-            videoLink: null,
-            notes: null,
+            type: s.type === 'couple' ? 'COUPLE' : s.type === 'family' ? 'FAMILY' : 'INDIVIDUAL',
+            videoLink: s.format === 'in_person' || s.format === 'offline' ? null : onlineLink,
+            notes: typeof s.notes === 'string' ? s.notes : null,
         }));
 
         const nextSession = todaySessions.find(s => {
@@ -57,9 +83,7 @@ export async function GET(req: NextRequest) {
             return d > now;
         });
 
-        // Attention items
         const attentionItems: Array<{ type: string; count: number; label: string }> = [];
-
         const [sessionsWithoutNotes, clientsWithoutConsent] = await Promise.all([
             db.diarySession.count({
                 where: {
@@ -73,17 +97,85 @@ export async function GET(req: NextRequest) {
                 where: { psychologistId: auth.userId, consentDate: null, status: 'active' },
             }),
         ]);
+        if (sessionsWithoutNotes > 0) attentionItems.push({ type: 'sessions_without_notes', count: sessionsWithoutNotes, label: 'Сессии без заметок' });
+        if (clientsWithoutConsent > 0) attentionItems.push({ type: 'clients_without_consent', count: clientsWithoutConsent, label: 'Клиенты без согласия' });
 
-        if (sessionsWithoutNotes > 0) {
-            attentionItems.push({ type: 'sessions_without_notes', count: sessionsWithoutNotes, label: 'Сессии без заметок' });
+        const notifications: Array<Record<string, unknown>> = [];
+        for (const session of recentSessions) {
+            const date = session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+            const type = session.status === 'cancelled' ? 'session_cancelled'
+                : session.status === 'confirmed' ? 'session_confirmed'
+                    : 'session_pending';
+            const title = session.status === 'cancelled' ? 'Сессия отменена'
+                : session.status === 'confirmed' ? 'Сессия подтверждена'
+                    : 'Ожидается подтверждение';
+            notifications.push({
+                id: `session-${session.id}-${session.status}`,
+                type,
+                title,
+                subtitle: `${session.client?.name || 'Клиент'} · ${date}, ${session.time}`,
+                createdAt: session.updatedAt.toISOString(),
+                sessionId: session.id,
+                clientId: session.client?.id || null,
+                unread: true,
+            });
         }
-        if (clientsWithoutConsent > 0) {
-            attentionItems.push({ type: 'clients_without_consent', count: clientsWithoutConsent, label: 'Клиенты без согласия' });
+        for (const homework of homeworkEvents) {
+            notifications.push({
+                id: `homework-${homework.id}`,
+                type: 'homework_received',
+                title: 'Домашнее задание от клиента',
+                subtitle: `${homework.client.name} · ${homework.title}`,
+                createdAt: homework.updatedAt.toISOString(),
+                sessionId: homework.sessionId,
+                clientId: homework.client.id,
+                unread: true,
+            });
         }
+
+        try {
+            const documentEvents = await db.$queryRaw<Array<{
+                id: string;
+                status: string;
+                documentTitle: string;
+                openedAt: Date | null;
+                acknowledgedAt: Date | null;
+                updatedAt: Date;
+                clientId: string;
+                clientName: string;
+                sessionId: string | null;
+            }>>`
+                SELECT d.id, d.status, d."documentTitle", d."openedAt", d."acknowledgedAt", d."updatedAt",
+                       d."clientId", d."sessionId", c.name as "clientName"
+                FROM "ClientDocumentDelivery" d
+                JOIN "DiaryClient" c ON c.id = d."clientId"
+                WHERE d."psychologistId" = ${auth.userId}
+                  AND d."updatedAt" >= ${weekAgo}
+                  AND (d."openedAt" IS NOT NULL OR d."acknowledgedAt" IS NOT NULL)
+                ORDER BY d."updatedAt" DESC
+                LIMIT 20
+            `;
+            for (const doc of documentEvents) {
+                const acknowledged = !!doc.acknowledgedAt;
+                notifications.push({
+                    id: `document-${doc.id}-${doc.status}`,
+                    type: acknowledged ? 'document_acknowledged' : 'document_opened',
+                    title: acknowledged ? 'Документ подтверждён' : 'Документ открыт',
+                    subtitle: `${doc.clientName} · ${doc.documentTitle}`,
+                    createdAt: (doc.acknowledgedAt || doc.openedAt || doc.updatedAt).toISOString(),
+                    sessionId: doc.sessionId,
+                    clientId: doc.clientId,
+                    unread: true,
+                });
+            }
+        } catch (error) {
+            console.warn('[mobile/dashboard] document events unavailable', error);
+        }
+
+        notifications.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
         const bookingLink = clientBookingLink(auth.userId, '');
         const baseBookingLink = bookingLink.replace(/\/c\/[^?]+/, '');
-
         const clientIds = new Set(weekSessions.map(s => s.clientId).filter(Boolean));
 
         return NextResponse.json({
@@ -96,6 +188,7 @@ export async function GET(req: NextRequest) {
             },
             userName: user?.psychologistSettings?.fullName || user?.name || null,
             attentionItems,
+            notifications: notifications.slice(0, 30),
             bookingLink: baseBookingLink,
         });
     } catch (error) {
