@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getPublicChannelInvite } from '@/lib/channel-binding';
+import { getPublicChannelInvite, buildSmartChannelLink } from '@/lib/channel-binding';
 import { ConnectClient } from './ConnectClient';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,9 @@ export default async function ConnectPage({ params }: { params: Promise<{ token:
     return (
         <ConnectClient
             channel={invite.channel}
-            directLink={invite.directLink}
+            smartLink={buildSmartChannelLink(token)}
+            telegramLink={invite.directLinks.telegram}
+            maxLink={invite.directLinks.max}
             clientName={invite.clientName}
             psychologistName={invite.psychologistName}
         />
