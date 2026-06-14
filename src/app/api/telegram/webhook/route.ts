@@ -12,14 +12,25 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     });
 }
 
-async function handleClientInvite(body: any) {
+function extractClientInviteToken(body: any): string | null {
     const text = body.message?.text as string | undefined;
-    if (!text?.startsWith('/start c_')) return false;
+    if (!text) return null;
 
-    const rawToken = text.split(' ')[1]?.slice(2);
+    // Telegram may send either `/start c_<token>` or
+    // `/start@CompasProBot c_<token>` depending on the client/chat context.
+    // The previous strict startsWith check missed the second valid form and
+    // allowed the legacy bot handler to process the hashed token incorrectly.
+    const match = text.trim().match(/^\/start(?:@[A-Za-z0-9_]+)?\s+c_([A-Za-z0-9_-]+)$/i);
+    return match?.[1] || null;
+}
+
+async function handleClientInvite(body: any) {
+    const rawToken = extractClientInviteToken(body);
+    if (!rawToken) return false;
+
     const userId = body.message?.from?.id?.toString();
     const chatId = body.message?.chat?.id?.toString();
-    if (!rawToken || !userId || !chatId || !bot) return false;
+    if (!userId || !chatId || !bot) return false;
 
     try {
         const client = await consumeClientChannelInvite({
@@ -58,11 +69,14 @@ async function handleClientInvite(body: any) {
         }
     } catch (error) {
         const code = error instanceof Error ? error.message : '';
+        console.error('[TG Webhook] Client invite failed:', code || error);
         const message = code === 'INVITE_ALREADY_USED'
             ? 'Эта ссылка уже использована. Попросите специалиста отправить новую.'
             : code === 'INVITE_EXPIRED'
                 ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
-                : 'Не удалось подключить уведомления. Попросите специалиста отправить новую ссылку.';
+                : code === 'INVITE_CHANNEL_MISMATCH'
+                    ? 'Эта ссылка предназначена для другого мессенджера. Попросите специалиста отправить ссылку для Telegram.'
+                    : 'Не удалось подключить уведомления. Попросите специалиста отправить новую ссылку.';
         await bot.telegram.sendMessage(chatId, message);
     }
 
