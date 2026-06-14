@@ -1,5 +1,7 @@
 package ru.cmpas.app.presentation.comms
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -34,11 +36,13 @@ data class DocumentTemplate(
     val requiresAck: Boolean,
 )
 
+/** Набор документов из android/SPEC/02-screens.md §0. */
 val DOC_TEMPLATES = listOf(
-    DocumentTemplate("consent", "Информированное согласие", "Подписание до первой сессии", true),
-    DocumentTemplate("pd", "Согласие на обработку ПДн", "Фиксация версии и времени принятия", true),
-    DocumentTemplate("rules", "Правила работы и отмены", "Условия переноса и отмены встречи", false),
-    DocumentTemplate("homework", "Материал после сессии", "Файл или памятка для клиента", false),
+    DocumentTemplate("consent-152", "Согласие 152-ФЗ · v2.1", "Согласие на обработку персональных данных", true),
+    DocumentTemplate("privacy", "Политика конфиденциальности · v1.4", "Ознакомление с правилами обработки данных", true),
+    DocumentTemplate("contract", "Договор · v1.0", "Условия работы, оплаты и отмены", true),
+    DocumentTemplate("emotion-diary", "Дневник эмоций", "Материал для самостоятельной работы", false),
+    DocumentTemplate("grounding-54321", "Заземление 5-4-3-2-1", "Короткая памятка для стабилизации", false),
 )
 
 @Composable
@@ -50,6 +54,7 @@ fun SendMessageSheet(
     initialText: String = "",
     onSend: (String) -> Unit = {},
 ) {
+    val context = LocalContext.current
     var text by remember(initialText) { mutableStateOf(initialText) }
     var sent by remember { mutableStateOf<Boolean?>(null) }
 
@@ -83,7 +88,7 @@ fun SendMessageSheet(
             Spacer(Modifier.height(6.dp))
             InfoBanner(
                 icon = Icons.Outlined.WarningAmber,
-                text = "Бот не может написать первым. Подготовим текст, чтобы вы отправили его в привычном мессенджере.",
+                text = "Бот не может написать первым. Подготовим текст и откроем системное меню отправки.",
                 background = GoldSoft,
                 foreground = Color(0xFF8B6914),
             )
@@ -91,13 +96,18 @@ fun SendMessageSheet(
         Spacer(Modifier.height(16.dp))
         PrimaryButton(
             text = if (bound) "Отправить" else "Подготовить",
-            icon = if (bound) Icons.Outlined.Send else Icons.Outlined.AttachFile,
+            icon = if (bound) Icons.Outlined.Send else Icons.Outlined.Share,
             enabled = text.isNotBlank(),
             onClick = {
                 val ready = text.trim()
                 if (ready.isNotBlank()) {
-                    if (bound) onSend(ready)
-                    sent = bound
+                    if (bound) {
+                        onSend(ready)
+                        sent = true
+                    } else {
+                        shareText(context, "Сообщение для $clientName", ready)
+                        sent = false
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -114,6 +124,7 @@ fun InviteSheet(
     onClose: () -> Unit,
     onInvite: (String) -> Unit = {},
 ) {
+    val context = LocalContext.current
     var selected by remember { mutableIntStateOf(0) }
     var sent by remember { mutableStateOf(false) }
     val channel = if (selected == 0) "telegram" else "max"
@@ -153,9 +164,14 @@ fun InviteSheet(
         Spacer(Modifier.height(16.dp))
         PrimaryButton(
             text = "Отправить приглашение",
-            icon = Icons.Outlined.Send,
+            icon = Icons.Outlined.Share,
             onClick = {
                 onInvite(channel)
+                shareText(
+                    context = context,
+                    subject = "Приглашение в КОМПАС",
+                    text = "Здравствуйте! Чтобы получать подтверждения и напоминания о встречах, откройте ссылку: https://$link",
+                )
                 sent = true
             },
             modifier = Modifier.fillMaxWidth(),
@@ -174,11 +190,12 @@ fun SendDocumentSheet(
     initiallySelectedId: String? = null,
     onSend: (DocumentTemplate) -> Unit = {},
 ) {
+    val context = LocalContext.current
     var selectedId by remember(initiallySelectedId) {
         mutableStateOf(initiallySelectedId ?: DOC_TEMPLATES.first().id)
     }
     var sent by remember { mutableStateOf<Boolean?>(null) }
-    val selected = DOC_TEMPLATES.first { it.id == selectedId }
+    val selected = DOC_TEMPLATES.firstOrNull { it.id == selectedId } ?: DOC_TEMPLATES.first()
 
     CompasBottomSheet(onClose = onClose) {
         if (sent != null) {
@@ -211,7 +228,7 @@ fun SendDocumentSheet(
             Spacer(Modifier.height(8.dp))
             InfoBanner(
                 icon = Icons.Outlined.WarningAmber,
-                text = "Клиент ещё не привязал мессенджер. Подготовим ссылку для ручной отправки.",
+                text = "Клиент ещё не привязал мессенджер. Откроем системное меню, чтобы вы отправили документ вручную.",
                 background = GoldSoft,
                 foreground = Color(0xFF8B6914),
             )
@@ -219,10 +236,19 @@ fun SendDocumentSheet(
         Spacer(Modifier.height(16.dp))
         PrimaryButton(
             text = if (bound) "Отправить" else "Подготовить",
-            icon = if (bound) Icons.Outlined.Send else Icons.Outlined.AttachFile,
+            icon = if (bound) Icons.Outlined.Send else Icons.Outlined.Share,
             onClick = {
-                if (bound) onSend(selected)
-                sent = bound
+                if (bound) {
+                    onSend(selected)
+                    sent = true
+                } else {
+                    shareText(
+                        context = context,
+                        subject = selected.title,
+                        text = buildDocumentShareText(selected),
+                    )
+                    sent = false
+                }
             },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -246,7 +272,7 @@ fun SentState(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                if (delivered) Icons.Outlined.CheckCircle else Icons.Outlined.AttachFile,
+                if (delivered) Icons.Outlined.CheckCircle else Icons.Outlined.Share,
                 null,
                 Modifier.size(34.dp),
                 tint = if (delivered) Success else CompasAccent,
@@ -256,8 +282,8 @@ fun SentState(
         Text(if (delivered) "Отправлено" else "Готово к отправке", style = tSection, color = CompasFg)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (delivered) "Сообщение передано в привязанный мессенджер."
-            else "Материал подготовлен для отправки клиенту вручную.",
+            if (delivered) "Материал передан в привязанный мессенджер."
+            else "Системное меню отправки открыто — выберите нужный мессенджер.",
             style = tBody2,
         )
         Spacer(Modifier.height(20.dp))
@@ -317,5 +343,24 @@ private fun InfoBanner(
         Icon(icon, null, Modifier.size(19.dp), tint = foreground)
         Spacer(Modifier.width(9.dp))
         Text(text, style = tBody2, color = foreground, modifier = Modifier.weight(1f))
+    }
+}
+
+private fun buildDocumentShareText(document: DocumentTemplate): String = buildString {
+    append("Здравствуйте! Направляю документ «")
+    append(document.title)
+    append("». Откройте его по ссылке: https://cmpas.ru/d/")
+    append(document.id)
+    if (document.requiresAck) append(". После ознакомления подтвердите принятие в КОМПАС.")
+}
+
+private fun shareText(context: Context, subject: String, text: String) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(sendIntent, "Отправить через"))
     }
 }
