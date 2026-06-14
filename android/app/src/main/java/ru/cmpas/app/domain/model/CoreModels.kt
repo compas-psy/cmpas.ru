@@ -1,6 +1,8 @@
 package ru.cmpas.app.domain.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 @Serializable
 data class User(
@@ -18,13 +20,15 @@ enum class UserRole { PSYCHOLOGIST, CLIENT }
 @Serializable
 data class Session(
     val id: String,
-    val clientId: String,
-    val clientName: String,
+    val clientId: String = "",
+    val clientName: String = "",
     val date: String,
-    val startTime: String,
-    val endTime: String,
-    val status: SessionStatus,
-    val format: SessionFormat,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("time")
+    val startTime: String = "00:00",
+    val endTime: String = "",
+    val status: SessionStatus = SessionStatus.PENDING,
+    val format: SessionFormat = SessionFormat.ONLINE,
     val type: SessionType = SessionType.INDIVIDUAL,
     val videoLink: String? = null,
     val notes: String? = null,
