@@ -68,6 +68,14 @@ android {
     }
 }
 
+// Models.kt and SessionReminderFactory.kt contain legacy declarations that are
+// duplicated by the focused model files and SessionDetailViewModel respectively.
+// Excluding those two sources removes the pre-existing redeclaration errors.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    exclude("**/Models.kt")
+    exclude("**/SessionReminderFactory.kt")
+}
+
 dependencies {
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
