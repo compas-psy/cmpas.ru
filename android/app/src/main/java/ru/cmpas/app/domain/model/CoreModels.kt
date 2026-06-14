@@ -12,6 +12,7 @@ data class User(
     val role: UserRole = UserRole.PSYCHOLOGIST,
     val avatarUrl: String? = null,
     val telegramId: String? = null,
+    val onlineSessionLink: String? = null,
 )
 
 @Serializable
