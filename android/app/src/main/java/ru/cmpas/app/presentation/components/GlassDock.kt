@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.theme.*
@@ -43,21 +44,35 @@ fun GlassDock(
         modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        // A bounded, full-width container makes the four labels adaptive on
+        // narrow phones instead of relying on a fragile wrap-content row.
+        Box(
+            Modifier.fillMaxWidth().widthIn(max = 420.dp),
+            contentAlignment = Alignment.Center,
+        ) {
             Row(
                 Modifier
+                    .fillMaxWidth()
                     .glassDock(30.dp)
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                tabs.getOrNull(0)?.let { DockBtn(it, it.key == activeKey) { onTab(it) } }
-                tabs.getOrNull(1)?.let { DockBtn(it, it.key == activeKey) { onTab(it) } }
-                Spacer(Modifier.width(62.dp))   // gap under the FAB
-                tabs.getOrNull(2)?.let { DockBtn(it, it.key == activeKey) { onTab(it) } }
-                tabs.getOrNull(3)?.let { DockBtn(it, it.key == activeKey) { onTab(it) } }
+                tabs.getOrNull(0)?.let { tab ->
+                    DockBtn(tab, tab.key == activeKey, Modifier.weight(1f)) { onTab(tab) }
+                }
+                tabs.getOrNull(1)?.let { tab ->
+                    DockBtn(tab, tab.key == activeKey, Modifier.weight(1f)) { onTab(tab) }
+                }
+                Spacer(Modifier.width(62.dp))
+                tabs.getOrNull(2)?.let { tab ->
+                    DockBtn(tab, tab.key == activeKey, Modifier.weight(1f)) { onTab(tab) }
+                }
+                tabs.getOrNull(3)?.let { tab ->
+                    DockBtn(tab, tab.key == activeKey, Modifier.weight(1f)) { onTab(tab) }
+                }
             }
             Box(Modifier.align(Alignment.Center).offset(y = (-8).dp)) {
                 CenterFab(onFab)
@@ -67,35 +82,49 @@ fun GlassDock(
 }
 
 @Composable
-private fun DockBtn(tab: DockTab, active: Boolean, onClick: () -> Unit) {
+private fun DockBtn(
+    tab: DockTab,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val tint = if (active) Forest800 else CompasMutedFg
     Box(
-        Modifier
-            .width(58.dp)
-            .height(48.dp)
+        modifier
+            .height(54.dp)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Box(
+                modifier = Modifier.height(32.dp).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
                 if (active) {
                     Box(
                         Modifier
-                            .size(width = 36.dp, height = 34.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(width = 38.dp, height = 30.dp)
+                            .clip(RoundedCornerShape(13.dp))
                             .background(Forest700.copy(alpha = 0.12f)),
                     )
                 }
                 Icon(tab.icon, tab.label, Modifier.size(22.dp), tint = tint)
             }
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
-                tab.label,
-                fontSize = 10.5.sp,
+                text = tab.label,
+                fontFamily = GeistFontFamily,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
                 color = tint,
                 maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
             )
         }
     }
