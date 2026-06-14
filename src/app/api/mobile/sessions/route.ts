@@ -6,6 +6,18 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 
+function toMobileType(value: unknown) {
+    if (value === 'couple') return 'COUPLE';
+    if (value === 'family') return 'FAMILY';
+    return 'INDIVIDUAL';
+}
+
+function toDatabaseType(value: unknown) {
+    if (value === 'COUPLE') return 'couple';
+    if (value === 'FAMILY') return 'family';
+    return 'individual';
+}
+
 export function formatSession(s: any) {
     return {
         id: s.id,
@@ -16,14 +28,12 @@ export function formatSession(s: any) {
         endTime: s.endTime || '',
         status: (s.status || 'PENDING').toUpperCase(),
         format: s.format === 'in_person' || s.format === 'offline' ? 'IN_PERSON' : 'ONLINE',
+        type: toMobileType(s.type),
         videoLink: s.videoLink ?? null,
         notes: typeof s.notes === 'string' ? s.notes : null,
     };
 }
 
-/**
- * GET /api/mobile/sessions?from=YYYY-MM-DD&to=YYYY-MM-DD&status=pending
- */
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
@@ -56,16 +66,12 @@ export async function GET(req: NextRequest) {
     }
 }
 
-/**
- * POST /api/mobile/sessions
- * Creates a confirmed session with conflict check, calendar sync, and client notice.
- */
 export async function POST(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { clientId, date, startTime, endTime, format, duration: durationReq } = await req.json();
+        const { clientId, date, startTime, endTime, format, type, duration: durationReq } = await req.json();
 
         if (!clientId || !date || !startTime) {
             return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
@@ -80,7 +86,6 @@ export async function POST(req: NextRequest) {
         const dayStart = new Date(sessionDate); dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(sessionDate); dayEnd.setHours(23, 59, 59, 999);
 
-        // Conflict check
         const existing = await db.diarySession.findMany({
             where: { psychologistId: auth.userId, date: { gte: dayStart, lte: dayEnd }, status: { not: 'cancelled' } },
         });
@@ -103,14 +108,13 @@ export async function POST(req: NextRequest) {
                 time: startTime,
                 endTime: computedEnd,
                 duration,
-                type: 'individual',
+                type: toDatabaseType(type),
                 format: format === 'IN_PERSON' ? 'in_person' : 'online',
                 status: 'confirmed',
             },
             include: { client: true },
         });
 
-        // Update client stats
         const sessionsCount = await db.diarySession.count({ where: { clientId } });
         const nextSess = await db.diarySession.findFirst({
             where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } },
@@ -121,10 +125,8 @@ export async function POST(req: NextRequest) {
             data: { totalSessions: sessionsCount, nextSessionDate: nextSess?.date || null },
         });
 
-        // Calendar sync (fire-and-forget)
         autoSyncSessionToCalendars(auth.userId, session as any).catch(console.error);
 
-        // Send client notice
         let noticeStatus = 'none';
         try {
             const psych = await db.user.findUnique({

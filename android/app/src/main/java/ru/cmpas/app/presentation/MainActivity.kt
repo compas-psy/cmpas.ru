@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.runBlocking
 import ru.cmpas.app.data.datastore.UserPreferences
@@ -22,13 +23,16 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
+        // Draw the application background behind the transparent status bar.
+        // Individual screens still consume system insets in CompasNavHost, so
+        // controls never overlap the clock or status icons.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         // Handle deep link auth callback
         handleAuthDeepLink(intent)
 
         val isLoggedIn = runBlocking { userPreferences.isLoggedIn() }
 
-        // Do not enable edge-to-edge for now: the app uses a light native status bar
-        // and screen content must never overlap system bars on Android devices.
         setContent {
             CompasTheme {
                 CompasNavHost(isLoggedIn = isLoggedIn)

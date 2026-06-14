@@ -2,423 +2,234 @@ package ru.cmpas.app.presentation.calendar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     onSessionClick: (String) -> Unit = {},
     onClientClick: (String) -> Unit = {},
+    onAddSession: () -> Unit = {},
     viewModel: CalendarViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedSessionId by remember { mutableStateOf<String?>(null) }
-    val selectedSession = uiState.sessions.find { it.id == selectedSessionId }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 100.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Календарь", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    uiState.selectedDate.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.FilterList, "Фильтр", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        CompasSegmentedControl(
-            items = listOf("День", "Неделя", "Месяц", "Список"),
-            selectedIndex = uiState.viewMode.ordinal,
-            onSelect = { viewModel.setViewMode(CalendarViewMode.entries[it]) },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
-
-        when (uiState.viewMode) {
-            CalendarViewMode.DAY -> DayView(uiState, viewModel, onSelect = { selectedSessionId = it })
-            CalendarViewMode.WEEK -> WeekView(uiState, viewModel, onSelect = { selectedSessionId = it })
-            CalendarViewMode.MONTH -> MonthView(uiState, viewModel, onSelect = { selectedSessionId = it })
-            CalendarViewMode.LIST -> ListView(uiState, onSelect = { selectedSessionId = it })
-        }
+    val sel = uiState.selectedDate
+    val daySessions = remember(uiState.sessions, sel) {
+        uiState.sessions.filter { it.date == sel.toString() }.sortedBy { it.startTime }
     }
 
-    selectedSession?.let { session ->
-        SessionBottomSheet(
-            session = session,
-            onDismiss = { selectedSessionId = null },
-            onOpenClient = { onClientClick(session.clientId) },
-            onOpenSession = { onSessionClick(session.id) },
-        )
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Eyebrow("Расписание")
+                        Spacer(Modifier.height(4.dp))
+                        Text("Календарь", style = tHero, color = CompasFg)
+                    }
+                    IconButtonGlass(Icons.Outlined.Tune, "Фильтр", onClick = { /* TODO filters */ })
+                }
+            }
+
+            item {
+                CompasSegmented(
+                    options = listOf("День", "Неделя", "Месяц", "Список"),
+                    selectedIndex = uiState.viewMode.ordinal,
+                    onSelect = { viewModel.setViewMode(CalendarViewMode.entries[it]) },
+                )
+            }
+
+            if (uiState.viewMode == CalendarViewMode.MONTH) {
+                item {
+                    MonthGrid(
+                        selected = sel,
+                        sessions = uiState.sessions,
+                        onPrev = { viewModel.selectDate(sel.minusMonths(1).withDayOfMonth(1)) },
+                        onNext = { viewModel.selectDate(sel.plusMonths(1).withDayOfMonth(1)) },
+                        onPick = { viewModel.selectDate(it) },
+                    )
+                }
+            }
+
+            item {
+                val title = if (sel == LocalDate.now()) "Сегодня"
+                else sel.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru")))
+                SectionTitle("$title · ${daySessions.size} ${sessionsWord(daySessions.size)}", actionLabel = "Записать", onAction = onAddSession)
+            }
+
+            val agenda = if (uiState.viewMode == CalendarViewMode.LIST) uiState.sessions.sortedWith(compareBy({ it.date }, { it.startTime })) else daySessions
+            if (agenda.isEmpty()) {
+                item { GlassCard(padding = 18.dp) { Text("Нет записей на этот день", style = tBody2) } }
+            } else {
+                items(agenda, key = { it.id }) { s -> AgendaRow(s, onClick = { onSessionClick(s.id) }) }
+            }
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MonthGrid(
+    selected: LocalDate,
+    sessions: List<Session>,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onPick: (LocalDate) -> Unit,
+) {
+    val ym = YearMonth.from(selected)
+    val firstDow = ym.atDay(1).dayOfWeek.value // 1=Mon..7=Sun
+    val daysInMonth = ym.lengthOfMonth()
+    val cells = buildList<Int?> {
+        repeat(firstDow - 1) { add(null) }
+        for (d in 1..daysInMonth) add(d)
+        while (size % 7 != 0) add(null)
+    }
+    val busy = remember(sessions) { sessions.groupingBy { it.date }.eachCount() }
+    val today = LocalDate.now()
+
+    GlassCard(strong = true, padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                ym.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))).replaceFirstChar { it.uppercase() },
+                style = tSection, color = CompasFg, modifier = Modifier.weight(1f),
+            )
+            RoundChev(Icons.Outlined.ChevronLeft, onPrev)
+            Spacer(Modifier.width(8.dp))
+            RoundChev(Icons.Outlined.ChevronRight, onNext)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth()) {
+            listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEachIndexed { i, d ->
+                Text(
+                    d, Modifier.weight(1f), color = if (i >= 5) CompasAccent else CompasMutedFg,
+                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                    style = androidx.compose.ui.text.TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        cells.chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth()) {
+                week.forEach { day ->
+                    if (day == null) {
+                        Box(Modifier.weight(1f).aspectRatio(1f))
+                    } else {
+                        val date = ym.atDay(day)
+                        val isSel = date == selected
+                        val isToday = date == today
+                        val count = busy[date.toString()] ?: 0
+                        Box(
+                            Modifier.weight(1f).aspectRatio(1f).padding(2.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .then(if (isSel) Modifier.background(Brush.linearGradient(listOf(Forest700, Forest900))) else Modifier)
+                                .clickable { onPick(date) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    "$day",
+                                    color = when { isSel -> Color.White; isToday -> Forest700; else -> CompasFg },
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isSel || isToday) FontWeight.Bold else FontWeight.Medium,
+                                )
+                                if (count > 0) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        repeat(minOf(count, 3)) {
+                                            Box(Modifier.size(4.dp).clip(CircleShape).background(if (isSel) Color.White.copy(alpha = 0.85f) else CompasAccent))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoundChev(icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier.pressScale(interaction).size(34.dp).glass(radius = 999.dp)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, Modifier.size(18.dp), tint = Forest800)
+    }
+}
+
+@Composable
+private fun AgendaRow(s: Session, onClick: () -> Unit) {
+    GlassCard(padding = 12.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor(s.status.name)))
+            Spacer(Modifier.width(10.dp))
+            Text(s.startTime, style = tBody.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = CompasFg)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(s.clientName, color = CompasFg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
+            }
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
+        }
+    }
+}
+
+private fun statusColor(status: String): Color = when (status.lowercase()) {
+    "confirmed" -> Success
+    "pending" -> CompasAccent
+    "cancelled", "no_show" -> Red
+    else -> CompasMutedFg
+}
+
+private fun sessionsWord(n: Int): String = when {
+    n % 10 == 1 && n % 100 != 11 -> "сессия"
+    n % 10 in 2..4 && (n % 100 < 10 || n % 100 >= 20) -> "сессии"
+    else -> "сессий"
+}
+
+/** Compatibility wrapper — ClientDetailScreen imports this from the calendar package. */
 @Composable
 fun CompasSegmentedControl(
     items: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-    ) {
-        Row(modifier = Modifier.padding(3.dp)) {
-            items.forEachIndexed { index, label ->
-                val isSelected = index == selectedIndex
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    onClick = { onSelect(index) },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.surface else
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
-                    shadowElevation = if (isSelected) 2.dp else 0.dp,
-                ) {
-                    Text(
-                        label,
-                        modifier = Modifier.padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DayView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSelect: (String) -> Unit) {
-    HorizontalDateStrip(uiState.selectedDate, uiState.sessions, { viewModel.selectDate(it) }, Modifier.padding(vertical = 8.dp))
-    val daySessions = uiState.sessions.filter { it.date == uiState.selectedDate.toString() }.sortedBy { it.startTime }
-    SessionList(daySessions, uiState.isLoading, onSelect)
-}
-
-@Composable
-private fun WeekView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSelect: (String) -> Unit) {
-    val weekStart = uiState.selectedDate.with(DayOfWeek.MONDAY)
-    val weekDays = (0L..6L).map { weekStart.plusDays(it) }
-    val weekSessions = uiState.sessions.filter {
-        val d = try { LocalDate.parse(it.date) } catch (_: Exception) { null }
-        d != null && !d.isBefore(weekDays.first()) && !d.isAfter(weekDays.last())
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
-    ) {
-        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WeekStat("${weekSessions.size}", "сессий")
-            val free = weekDays.count { d -> weekSessions.none { it.date == d.toString() } }
-            WeekStat("$free", "свободных дней")
-        }
-    }
-
-    HorizontalDateStrip(uiState.selectedDate, uiState.sessions, { viewModel.selectDate(it) }, Modifier.padding(vertical = 4.dp))
-
-    val daySessions = uiState.sessions.filter { it.date == uiState.selectedDate.toString() }.sortedBy { it.startTime }
-    SessionList(daySessions, uiState.isLoading, onSelect)
-}
-
-@Composable
-private fun WeekStat(value: String, label: String) {
-    Column {
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun MonthView(uiState: CalendarUiState, viewModel: CalendarViewModel, onSelect: (String) -> Unit) {
-    val ym = YearMonth.of(uiState.selectedDate.year, uiState.selectedDate.month)
-    val firstDay = ym.atDay(1)
-    val daysInMonth = ym.lengthOfMonth()
-    val startOffset = (firstDay.dayOfWeek.value - 1)
-    val today = LocalDate.now()
-
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-        listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс").forEach {
-            Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-
-    val cells = startOffset + daysInMonth
-    val rows = (cells + 6) / 7
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        for (row in 0 until rows) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                for (col in 0..6) {
-                    val idx = row * 7 + col - startOffset
-                    if (idx in 0 until daysInMonth) {
-                        val date = ym.atDay(idx + 1)
-                        val isSelected = date == uiState.selectedDate
-                        val isToday = date == today
-                        val count = uiState.sessions.count { it.date == date.toString() }
-                        MonthDayCell(date.dayOfMonth, isSelected, isToday, count, Modifier.weight(1f)) {
-                            viewModel.selectDate(date)
-                        }
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-
-    Spacer(Modifier.height(8.dp))
-    val daySessions = uiState.sessions.filter { it.date == uiState.selectedDate.toString() }.sortedBy { it.startTime }
-    SessionList(daySessions, uiState.isLoading, onSelect)
-}
-
-@Composable
-private fun MonthDayCell(day: Int, isSelected: Boolean, isToday: Boolean, sessionCount: Int, modifier: Modifier, onClick: () -> Unit) {
-    Column(
-        modifier = modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp)
-                .then(if (isSelected) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary)
-                    else if (isToday) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer)
-                    else Modifier),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("$day", style = MaterialTheme.typography.bodySmall,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                    else if (isToday) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface,
-                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal)
-        }
-        if (sessionCount > 0) {
-            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                repeat(minOf(sessionCount, 3)) {
-                    Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ListView(uiState: CalendarUiState, onSelect: (String) -> Unit) {
-    val today = LocalDate.now()
-    val tomorrow = today.plusDays(1)
-    val weekEnd = today.with(DayOfWeek.SUNDAY)
-    val nextWeekEnd = weekEnd.plusDays(7)
-
-    val groups = linkedMapOf(
-        "Сегодня" to mutableListOf<Session>(),
-        "Завтра" to mutableListOf(),
-        "Эта неделя" to mutableListOf(),
-        "Следующая неделя" to mutableListOf(),
-        "Позже" to mutableListOf(),
-    )
-    uiState.sessions.sortedBy { it.date + it.startTime }.forEach { s ->
-        val d = try { LocalDate.parse(s.date) } catch (_: Exception) { null } ?: return@forEach
-        when {
-            d == today -> groups["Сегодня"]!!.add(s)
-            d == tomorrow -> groups["Завтра"]!!.add(s)
-            !d.isAfter(weekEnd) -> groups["Эта неделя"]!!.add(s)
-            !d.isAfter(nextWeekEnd) -> groups["Следующая неделя"]!!.add(s)
-            else -> groups["Позже"]!!.add(s)
-        }
-    }
-
-    LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        groups.filter { it.value.isNotEmpty() }.forEach { (label, sessions) ->
-            item { SectionHeader(title = label, modifier = Modifier.padding(vertical = 4.dp)) }
-            items(sessions, key = { it.id }) { session ->
-                CalendarSessionRow(session, isCurrentSession(session)) { onSelect(session.id) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SessionList(sessions: List<Session>, isLoading: Boolean, onSelect: (String) -> Unit) {
-    if (isLoading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
-    } else if (sessions.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(12.dp))
-                Text("Нет сессий", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    } else {
-        LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(sessions, key = { it.id }) { s -> CalendarSessionRow(s, isCurrentSession(s)) { onSelect(s.id) } }
-        }
-    }
-}
-
-@Composable
-fun HorizontalDateStrip(selectedDate: LocalDate, sessions: List<Session>, onDateSelect: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
-    val weekStart = selectedDate.minusDays(selectedDate.dayOfWeek.value.toLong() - 1)
-    val days = (0L..6L).map { weekStart.plusDays(it) }
-    val today = LocalDate.now()
-    LazyRow(modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        items(days) { date ->
-            val isSelected = date == selectedDate; val isToday = date == today
-            val count = sessions.count { it.date == date.toString() }
-            Column(
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onDateSelect(date) }
-                    .then(if (isSelected) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp)) else Modifier)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale("ru")).uppercase(), style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Box(Modifier.size(36.dp).then(if (isToday && !isSelected) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary) else Modifier), contentAlignment = Alignment.Center) {
-                    Text("${date.dayOfMonth}", style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = when { isToday && !isSelected -> MaterialTheme.colorScheme.onPrimary; isSelected -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurface })
-                }
-                if (count > 0) { Spacer(Modifier.height(4.dp)); Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) { repeat(minOf(count, 4)) { Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) } } }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalendarSessionRow(session: Session, isCurrentTime: Boolean, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isCurrentTime) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface),
-        border = if (isCurrentTime) CardDefaults.outlinedCardBorder() else null) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(when (session.status) {
-                SessionStatus.CONFIRMED -> MaterialTheme.colorScheme.primary; SessionStatus.PENDING -> CompasOrange
-                SessionStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant; else -> MaterialTheme.colorScheme.error }))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("${session.startTime} – ${session.endTime}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(session.clientName, style = MaterialTheme.typography.bodyMedium)
-                Row {
-                    if (session.isRecurring) { Icon(Icons.Outlined.Replay, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(4.dp))
-                        Text("регулярная · ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Text(if (session.format == SessionFormat.ONLINE) "онлайн" else "офлайн", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            if (session.occurrenceIndex != null && session.seriesTotal != null) SeriesBadge(session.occurrenceIndex, session.seriesTotal)
-            Spacer(Modifier.width(4.dp)); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SessionBottomSheet(session: Session, onDismiss: () -> Unit, onOpenClient: () -> Unit, onOpenSession: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
-    ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), containerColor = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AvatarCircle(name = session.clientName, size = 48.dp); Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(session.clientName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("${session.startTime} – ${session.endTime} · ${getMinutesBetween(session.startTime, session.endTime)} мин",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (session.occurrenceIndex == 1 || (session.occurrenceIndex == null && !session.isRecurring)) StatusBadge("Первая встреча", BadgeFirstMeetBg, BadgeFirstMeetText)
-            }
-            Spacer(Modifier.height(12.dp))
-            Row { Text("${if (session.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн"}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (session.paymentStatus == PaymentStatus.UNPAID) { Text(" · ", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("Не оплачено", color = CompasDestructive) } }
-            Spacer(Modifier.height(16.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BottomSheetAction(Icons.Outlined.Person, "Карточка", Modifier.weight(1f)) { onOpenClient(); onDismiss() }
-                BottomSheetAction(Icons.Outlined.Videocam, "Встреча", Modifier.weight(1f)) {
-                    session.videoLink?.takeIf { it.isNotBlank() }?.let { uriHandler.openUri(it) } ?: onOpenSession()
-                    onDismiss()
-                }
-                BottomSheetAction(Icons.Outlined.SwapHoriz, "Перенести", Modifier.weight(1f)) { onOpenSession(); onDismiss() }
-                BottomSheetAction(Icons.Outlined.CreditCard, "Оплата", Modifier.weight(1f)) { onOpenSession(); onDismiss() }
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Text("Что дальше", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                NextStepRow(Icons.Outlined.Replay, "Занять тот же слот через неделю") { onOpenSession(); onDismiss() }
-                if (!session.isRecurring) NextStepRow(Icons.Outlined.Lock, "Закрепить регулярный слот") { onOpenSession(); onDismiss() }
-                if (session.isRecurring) NextStepRow(Icons.Outlined.SkipNext, "Пропустить неделю") { onOpenSession(); onDismiss() }
-                if (session.seriesId != null || session.seriesTotal != null) NextStepRow(Icons.Outlined.TrendingUp, "Продлить серию") { onOpenSession(); onDismiss() }
-            }
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NextStepRow(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(12.dp))
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
-}
-
-@Composable
-private fun BottomSheetAction(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, maxLines = 2)
-    }
-}
-
-private fun isCurrentSession(session: Session): Boolean {
-    return try { val now = java.time.LocalTime.now(); val s = session.startTime.split(":"); val e = session.endTime.split(":")
-        val start = java.time.LocalTime.of(s[0].toInt(), s[1].toInt()); val end = java.time.LocalTime.of(e[0].toInt(), e[1].toInt())
-        session.date == LocalDate.now().toString() && !now.isBefore(start) && !now.isAfter(end) } catch (_: Exception) { false }
-}
-
-private fun getMinutesBetween(start: String, end: String): Int {
-    return try { val sp = start.split(":"); val ep = end.split(":"); (ep[0].toInt() * 60 + ep[1].toInt()) - (sp[0].toInt() * 60 + sp[1].toInt()) } catch (_: Exception) { 50 }
-}
+) = CompasSegmented(items, selectedIndex, onSelect, modifier)

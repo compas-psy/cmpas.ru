@@ -1,8 +1,9 @@
 package ru.cmpas.app.presentation.clients
 
-import android.content.Intent
-import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,274 +14,318 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.presentation.comms.DocumentSendResult
+import ru.cmpas.app.presentation.comms.InviteSheet
+import ru.cmpas.app.presentation.comms.SendDocumentSheet
+import ru.cmpas.app.presentation.comms.SendMessageSheet
+import ru.cmpas.app.presentation.comms.asDocumentTemplate
 import ru.cmpas.app.presentation.components.*
-import ru.cmpas.app.presentation.calendar.CompasSegmentedControl
 import ru.cmpas.app.presentation.theme.*
-import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+enum class ClientSheet { MESSAGE, INVITE, DOCUMENT }
+
 @Composable
 fun ClientDetailScreen(
     clientId: String,
     onBack: () -> Unit,
     onSessionClick: (String) -> Unit = {},
     onScheduleClick: () -> Unit = {},
-    onNoteClick: () -> Unit = {},
+    onNoteClick: (String) -> Unit = {},
     onQuickAction: (String) -> Unit = {},
     viewModel: ClientDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var tabIndex by remember { mutableStateOf(0) }
-    var showClientMenu by remember { mutableStateOf(false) }
-    var showMessageDialog by remember { mutableStateOf(false) }
-    val context = LocalContext.current
+    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var sheet by remember { mutableStateOf<ClientSheet?>(null) }
+    var preferredDocumentId by remember { mutableStateOf<String?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+
     LaunchedEffect(clientId) { viewModel.loadClient(clientId) }
 
-    // Handle manual message result: open share sheet
-    LaunchedEffect(uiState.messageResult) {
-        val r = uiState.messageResult
-        if (r is MessageResult.Manual) {
-            val text = r.readyText
-            val phone = r.phone
-            // Try WhatsApp first if phone available, then generic share
-            if (phone != null) {
-                val normalized = phone.replace("[^+\\d]".toRegex(), "")
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$normalized?text=${Uri.encode(text)}"))
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
-                    viewModel.clearMessageResult()
-                    return@LaunchedEffect
-                } catch (_: Exception) {}
-            }
-            // Fallback: generic share
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(Intent.createChooser(intent, "Отправить сообщение").apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            })
-            viewModel.clearMessageResult()
-        }
+    val client = uiState.client
+    val detail = uiState.clientDetail
+    val sessions = uiState.sessions.sortedByDescending { "${it.date}T${it.startTime}" }
+    val upcoming = sessions.filter { it.isFutureOrToday() }.minByOrNull { "${it.date}T${it.startTime}" }
+    val history = sessions.filterNot { it.isFutureOrToday() }.take(12)
+    val bound = detail?.hasMessenger == true
+    val channel = detail?.messengerChannel ?: when {
+        !detail?.telegramId.isNullOrBlank() -> "telegram"
+        !detail?.maxId.isNullOrBlank() -> "max"
+        else -> null
     }
 
-    // Handle invite link: copy + share
-    LaunchedEffect(uiState.inviteLink) {
-        val link = uiState.inviteLink ?: return@LaunchedEffect
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, "Для получения уведомлений откройте ссылку: $link")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(Intent.createChooser(intent, "Отправить приглашение").apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-        viewModel.clearInviteLink()
-    }
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
 
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
-            Spacer(Modifier.width(4.dp))
-            uiState.client?.let { client ->
-                AvatarCircle(name = client.name, size = 38.dp)
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        client.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        clientSubtitle(client),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+        Column(Modifier.fillMaxSize()) {
+            ClientHeader(
+                title = client?.name?.substringBefore(' ') ?: "Клиент",
+                onBack = onBack,
+                showMenu = showMenu,
+                onMore = { showMenu = true },
+                onDismissMenu = { showMenu = false },
+                onEdit = { showMenu = false; onQuickAction("edit-client") },
+                onArchive = { showMenu = false; onQuickAction("archive-client") },
+                onDelete = { showMenu = false; onQuickAction("delete-client") },
+            )
+
+            when {
+                uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Forest700)
                 }
-                ClientStatusBadge(client.status)
-            } ?: Spacer(Modifier.weight(1f))
-            Box {
-                IconButton(onClick = { showClientMenu = true }) { Icon(Icons.Outlined.MoreVert, "Ещё") }
-                DropdownMenu(expanded = showClientMenu, onDismissRequest = { showClientMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Запланировать сессию") },
-                        leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null) },
-                        onClick = { showClientMenu = false; onScheduleClick() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Добавить заметку") },
-                        leadingIcon = { Icon(Icons.Outlined.EditNote, null) },
-                        onClick = { showClientMenu = false; onNoteClick() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Пауза в работе") },
-                        leadingIcon = { Icon(Icons.Outlined.PauseCircle, null) },
-                        onClick = { showClientMenu = false; onQuickAction("block-time") },
-                    )
-                }
-            }
-        }
-
-        when {
-            uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-            uiState.client != null -> {
-                val client = uiState.client!!
-
-                // Messenger status indicator + write button
-                val detail = uiState.clientDetail
-                if (detail != null) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (detail.hasMessenger) {
-                            val icon = if (detail.messengerChannel == "telegram") Icons.Outlined.Send else Icons.Outlined.Message
-                            Icon(icon, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                if (detail.messengerChannel == "telegram") "Telegram ✓" else "MAX ✓",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        } else {
-                            Icon(Icons.Outlined.NotificationsOff, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.width(4.dp))
-                            Text("Не в боте", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        if (detail.hasMessenger) {
-                            TextButton(
-                                onClick = { showMessageDialog = true },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            ) {
-                                Icon(Icons.Outlined.Send, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Написать", style = MaterialTheme.typography.labelSmall)
-                            }
-                        } else {
-                            TextButton(
-                                onClick = { viewModel.generateInviteLink(clientId) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                enabled = !uiState.isGeneratingInvite,
-                            ) {
-                                if (uiState.isGeneratingInvite) {
-                                    CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
-                                } else {
-                                    Icon(Icons.Outlined.Link, null, Modifier.size(14.dp))
-                                }
-                                Spacer(Modifier.width(4.dp))
-                                Text("Пригласить в бот", style = MaterialTheme.typography.labelSmall)
-                            }
+                client == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    GlassCard(Modifier.padding(20.dp), padding = 20.dp) {
+                        Icon(Icons.Outlined.ErrorOutline, null, Modifier.size(28.dp), tint = CompasDestructive)
+                        Spacer(Modifier.height(10.dp))
+                        Text("Карточка не открылась", style = tSection, color = CompasFg)
+                        Spacer(Modifier.height(5.dp))
+                        Text(uiState.error ?: "Обновите данные и попробуйте снова", style = tBody2)
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GhostButton("Назад", onBack, Modifier.weight(1f), Icons.AutoMirrored.Outlined.ArrowBack)
+                            PrimaryButton("Повторить", { viewModel.loadClient(clientId) }, Modifier.weight(1f), Icons.Outlined.Refresh)
                         }
                     }
                 }
-
-                CompasSegmentedControl(
-                    items = listOf("Обзор", "Записи", "Заметки", "Документы"),
-                    selectedIndex = tabIndex,
-                    onSelect = { tabIndex = it },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-
-                // Send message dialog
-                if (showMessageDialog) {
-                    SendMessageDialog(
-                        onSend = { text ->
-                            viewModel.sendMessage(clientId, "custom", text = text)
-                            showMessageDialog = false
-                        },
-                        onDismiss = { showMessageDialog = false },
-                        isSending = uiState.isSendingMessage,
-                    )
-                }
-
-                // Sent result toast
-                val msgResult = uiState.messageResult
-                if (msgResult is MessageResult.Sent) {
-                    LaunchedEffect(msgResult) { viewModel.clearMessageResult() }
-                } else if (msgResult is MessageResult.Error) {
-                    LaunchedEffect(msgResult) { viewModel.clearMessageResult() }
-                }
-
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp),
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 142.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    item { ClientHero(client, sessions) }
+                    item {
+                        MessengerCard(
+                            client = client,
+                            detail = detail,
+                            bound = bound,
+                            channel = channel,
+                            onClick = { sheet = if (bound) ClientSheet.MESSAGE else ClientSheet.INVITE },
+                        )
+                    }
+                    item {
+                        CompasSegmented(
+                            options = listOf("Обзор", "Записи", "Заметки", "Документы"),
+                            selectedIndex = tabIndex,
+                            onSelect = { tabIndex = it },
+                        )
+                    }
+
                     when (tabIndex) {
                         0 -> {
-                            item { RhythmCard(client) }
-                            item {
-                                ClientPrimaryActions(
-                                    onScheduleClick = onScheduleClick,
-                                    onChangeSlotClick = onScheduleClick,
-                                    onExtendSeriesClick = { onQuickAction("repeat-slot") },
-                                    onPauseClick = { onQuickAction("block-time") },
-                                )
-                            }
-                            item { ClientStatusOverview() }
-                            item { ClientNextSession(client, uiState.sessions.firstOrNull(), onSessionClick) }
-                            item { ClientTherapyOverview(client, onNoteClick) }
-                        }
-                        1 -> {
-                            item { SectionHeader(title = "Записи") }
-                            if (uiState.sessions.isEmpty()) {
-                                item { EmptyClientBlock("Записей пока нет", "Запланируйте первую сессию с клиентом.", Icons.Outlined.CalendarMonth) }
-                            } else {
-                                items(uiState.sessions, key = { it.id }) { session ->
-                                    ClientSessionRow(session = session, onClick = { onSessionClick(session.id) })
+                            item { StatusRow(detail, upcoming) }
+                            if (detail?.consentDate.isNullOrBlank()) {
+                                item {
+                                    ConsentBanner {
+                                        preferredDocumentId = uiState.documents.firstOrNull {
+                                            it.title.contains("соглас", ignoreCase = true)
+                                        }?.id
+                                        sheet = ClientSheet.DOCUMENT
+                                    }
                                 }
                             }
+                            item { FocusCard(client.notes) }
+                            item { Eyebrow("Следующая запись") }
+                            item {
+                                if (upcoming != null) SessionCard(upcoming) { onSessionClick(upcoming.id) }
+                                else EmptyCard("Следующая встреча пока не назначена", Icons.Outlined.CalendarMonth)
+                            }
+                        }
+                        1 -> {
+                            item { Eyebrow("Предстоящие") }
+                            val future = sessions.filter { it.isFutureOrToday() }.sortedBy { "${it.date}T${it.startTime}" }
+                            if (future.isEmpty()) item { EmptyCard("Нет предстоящих записей", Icons.Outlined.EventAvailable) }
+                            else items(future, key = { it.id }) { session -> SessionCard(session) { onSessionClick(session.id) } }
+                            item { Eyebrow("История") }
+                            if (history.isEmpty()) item { EmptyCard("История встреч пока пуста", Icons.Outlined.History) }
+                            else items(history, key = { it.id }) { session -> SessionCard(session) { onSessionClick(session.id) } }
                         }
                         2 -> {
-                            item { SectionHeader(title = "Заметки") }
-                            item { EmptyClientBlock("Заметок пока нет", "После сессии можно быстро добавить заметку по блокам или голосом.", Icons.Outlined.EditNote) }
+                            item { Eyebrow("Приватные заметки") }
+                            val notes = sessions.filter { !it.notes.isNullOrBlank() }
+                            if (notes.isEmpty()) item {
+                                EmptyCard("После сохранения заметки появятся здесь", Icons.Outlined.EditNote)
+                            } else items(notes, key = { it.id }) { session ->
+                                NoteCard(session) { onNoteClick(session.id) }
+                            }
                             item {
-                                Button(
-                                    onClick = onNoteClick,
-                                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                ) { Text("Добавить заметку") }
+                                GhostButton(
+                                    text = "Добавить заметку",
+                                    icon = Icons.Outlined.Add,
+                                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                         }
                         3 -> {
-                            item { SectionHeader(title = "Документы") }
-                            item { DocumentStatusCard("Информированное согласие", "Получено", true) }
-                            item { DocumentStatusCard("Политика конфиденциальности", "Подписано", true) }
-                            item { DocumentStatusCard("Договор / правила отмены", "Не добавлено", false) }
+                            item { Eyebrow("Документы специалиста") }
+                            when {
+                                uiState.isLoadingDocuments -> item {
+                                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = Forest700)
+                                    }
+                                }
+                                uiState.documents.isEmpty() -> item {
+                                    GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
+                                        Icon(Icons.Outlined.FolderOff, null, Modifier.size(30.dp), tint = CompasMutedFg)
+                                        Spacer(Modifier.height(10.dp))
+                                        Text("Нет активных документов", style = tSection, color = CompasFg)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            uiState.documentsError ?: "Добавьте документы в web-сервисе — здесь показывается только актуальный активный список.",
+                                            style = tBody2,
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        GhostButton("Обновить", { viewModel.loadDocuments(clientId) }, Modifier.fillMaxWidth(), Icons.Outlined.Refresh)
+                                    }
+                                }
+                                else -> {
+                                    items(uiState.documents, key = { it.id }) { document ->
+                                        DocumentRow(document.title) {
+                                            preferredDocumentId = document.id
+                                            sheet = ClientSheet.DOCUMENT
+                                        }
+                                    }
+                                    item {
+                                        PrimaryButton(
+                                            text = "Отправить документ",
+                                            icon = Icons.Outlined.Send,
+                                            onClick = { preferredDocumentId = null; sheet = ClientSheet.DOCUMENT },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-            uiState.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(uiState.error!!, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedButton(onClick = onBack) { Text("Назад") }
+        }
+
+        if (client != null) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(CompasBg.copy(alpha = 0.94f)).navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                PrimaryButton(
+                    text = "Добавить запись",
+                    icon = Icons.Outlined.CalendarMonth,
+                    onClick = onScheduleClick,
+                    modifier = Modifier.weight(1f),
+                )
+                GhostButton(
+                    text = null,
+                    icon = Icons.Outlined.EditNote,
+                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
+                    modifier = Modifier.width(54.dp),
+                )
+            }
+        }
+
+        when (sheet) {
+            ClientSheet.MESSAGE -> if (client != null) SendMessageSheet(
+                clientName = client.name,
+                channel = channel,
+                bound = bound,
+                onClose = { sheet = null },
+                onSend = { viewModel.sendMessage(clientId, "custom", text = it) },
+            )
+            ClientSheet.INVITE -> if (client != null) InviteSheet(
+                clientId = clientId,
+                clientName = client.name,
+                onClose = { sheet = null },
+                onInvite = { viewModel.generateInviteLink(clientId, it) },
+            )
+            ClientSheet.DOCUMENT -> if (client != null) SendDocumentSheet(
+                clientName = client.name,
+                channel = channel,
+                bound = bound,
+                documents = uiState.documents.map { it.asDocumentTemplate() },
+                isLoading = uiState.isLoadingDocuments,
+                isSending = uiState.isSendingDocument,
+                error = uiState.documentsError,
+                initiallySelectedId = preferredDocumentId,
+                onClose = { sheet = null },
+                onRetry = { viewModel.loadDocuments(clientId) },
+                onSendWithResult = { document, callback ->
+                    viewModel.sendDocument(clientId, channel ?: "telegram", document.id) { result, error ->
+                        callback(
+                            when {
+                                error != null -> DocumentSendResult(error = error)
+                                result?.status == "sent" -> DocumentSendResult(delivered = true)
+                                result?.readyText != null -> DocumentSendResult(shareText = result.readyText)
+                                else -> DocumentSendResult(error = "Не удалось подготовить документ")
+                            },
+                        )
+                    }
+                },
+            )
+            null -> Unit
+        }
+    }
+}
+
+@Composable
+private fun ClientHeader(
+    title: String,
+    onBack: () -> Unit,
+    showMenu: Boolean,
+    onMore: () -> Unit,
+    onDismissMenu: () -> Unit,
+    onEdit: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButtonGlass(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", onClick = onBack)
+        Text(title, style = tSection, color = CompasFg, modifier = Modifier.weight(1f).padding(horizontal = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box {
+            IconButtonGlass(Icons.Outlined.MoreHoriz, "Меню", onClick = onMore)
+            DropdownMenu(expanded = showMenu, onDismissRequest = onDismissMenu) {
+                DropdownMenuItem(text = { Text("Изменить") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = onEdit)
+                DropdownMenuItem(text = { Text("Архивировать") }, leadingIcon = { Icon(Icons.Outlined.Archive, null) }, onClick = onArchive)
+                DropdownMenuItem(text = { Text("Удалить", color = CompasDestructive) }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null, tint = CompasDestructive) }, onClick = onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClientHero(client: Client, sessions: List<Session>) {
+    GlassTintCard(Modifier.fillMaxWidth(), padding = 18.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(client.name, 62.dp, ring = true)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(client.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (client.status) { ClientStatus.ACTIVE -> "Активный"; ClientStatus.PAUSED -> "Пауза"; ClientStatus.ARCHIVED -> "Архив" },
+                        style = tMeta,
+                        color = Color.White,
+                        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = .15f))
+                            .border(1.dp, Color.White.copy(alpha = .22f), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                    Text(clientSince(sessions, client.lastSessionDate), style = tMeta, color = Color.White.copy(alpha = .72f))
                 }
             }
         }
@@ -288,283 +333,150 @@ fun ClientDetailScreen(
 }
 
 @Composable
-private fun RhythmCard(client: Client) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(1.dp),
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Star, null, Modifier.size(18.dp), tint = CompasAccent)
-                Spacer(Modifier.width(8.dp))
-                Text("Ритм работы", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.height(14.dp))
-            RhythmInfoLine(Icons.Outlined.Schedule, "Регулярный слот", anchoredSlotLabel(client))
-            RhythmInfoLine(Icons.Outlined.Videocam, "Формат", formatLabel(client.anchorFormat))
-            RhythmInfoLine(Icons.Outlined.TrendingUp, "Серия", seriesLabel(client))
-            RhythmInfoLine(Icons.Outlined.EventAvailable, "Следующая", client.nextSessionDate ?: "Не назначена")
-            if (client.anchorWeekday != null) {
-                Spacer(Modifier.height(10.dp))
-                StatusBadge("Слот закреплён", Sage100, Forest600)
-            }
-        }
-    }
-}
-
-@Composable
-private fun RhythmInfoLine(icon: ImageVector, label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-private fun ClientPrimaryActions(
-    onScheduleClick: () -> Unit,
-    onChangeSlotClick: () -> Unit,
-    onExtendSeriesClick: () -> Unit,
-    onPauseClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Быстрые действия", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            ClientActionRow(Icons.Outlined.Replay, "Занять след. неделю", "Создать запись в том же слоте", onScheduleClick)
-            ClientActionRow(Icons.Outlined.Edit, "Изменить слот", "Перенести регулярное время клиента", onChangeSlotClick)
-            ClientActionRow(Icons.Outlined.TrendingUp, "Продлить серию", "Добавить продолжение работы", onExtendSeriesClick)
-            ClientActionRow(Icons.Outlined.PauseCircle, "Пауза", "Временно остановить регулярные встречи", onPauseClick)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ClientActionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+private fun MessengerCard(client: Client, detail: ClientDetail?, bound: Boolean, channel: String?, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape),
+                Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(
+                    if (channel == "max") MaxSoft else if (channel == "telegram") TgSoft else CompasMuted,
+                ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, null, Modifier.size(21.dp), tint = MaterialTheme.colorScheme.primary)
+                Icon(if (channel == "max") Icons.Outlined.Forum else Icons.Outlined.Send, null, Modifier.size(19.dp), tint = if (channel == "max") Max else if (channel == "telegram") Tg else CompasMutedFg)
             }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f)) {
+                Text(when (channel) { "telegram" -> "Telegram"; "max" -> "MAX"; else -> "Мессенджер не привязан" }, style = tBody, color = CompasFg)
+                Text(if (bound) "Канал подключён" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            GhostButton(if (bound) "Написать" else "Пригласить", onClick, Modifier.widthIn(min = 112.dp), if (bound) Icons.Outlined.Send else Icons.Outlined.Link)
         }
     }
 }
 
 @Composable
-private fun ClientStatusOverview() {
+private fun StatusRow(detail: ClientDetail?, session: Session?) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusIndicator(Icons.Outlined.CheckCircle, "Согласие", "Получено", BadgePaidText, Modifier.weight(1f))
-        StatusIndicator(Icons.Outlined.CreditCard, "Оплаты", "В порядке", BadgePaidText, Modifier.weight(1f))
-        StatusIndicator(Icons.Outlined.Assignment, "Д/з", "1 задание", CompasOrange, Modifier.weight(1f))
+        StatusMini(Icons.Outlined.VerifiedUser, "Согласие", if (!detail?.consentDate.isNullOrBlank()) "Получено" else "Нужно", if (!detail?.consentDate.isNullOrBlank()) Success else Orange, Modifier.weight(1f))
+        StatusMini(Icons.Outlined.CurrencyRuble, "Оплата", if (session?.paymentStatus == PaymentStatus.UNPAID) "Ожидает" else "В порядке", if (session?.paymentStatus == PaymentStatus.UNPAID) Orange else Success, Modifier.weight(1f))
+        StatusMini(Icons.Outlined.Assignment, "Д/з", if (session?.homeworkStatus == HomeworkStatus.MISSING) "Нет" else "В порядке", if (session?.homeworkStatus == HomeworkStatus.MISSING) Orange else Forest600, Modifier.weight(1f))
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ClientNextSession(client: Client, session: Session?, onSessionClick: (String) -> Unit) {
-    SectionHeader(title = "Следующая сессия")
-    Card(
-        onClick = { session?.let { onSessionClick(it.id) } },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+private fun StatusMini(icon: ImageVector, label: String, value: String, accent: Color, modifier: Modifier = Modifier) {
+    GlassCard(modifier, padding = 11.dp) {
+        Icon(icon, null, Modifier.size(17.dp), tint = accent)
+        Spacer(Modifier.height(7.dp))
+        Text(label, style = tMeta, color = CompasMutedFg, maxLines = 1)
+        Text(value, style = tMeta, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun ConsentBanner(onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(OrangeSoft)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(13.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(client.nextSessionDate ?: session?.date ?: "Не назначена", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    session?.let { "${it.startTime}–${it.endTime} · ${if (it.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн"}" } ?: "Запланируйте следующую встречу",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+        Icon(Icons.Outlined.WarningAmber, null, Modifier.size(20.dp), tint = Orange)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Нужно согласие клиента", style = tBody, color = CompasFg)
+            Text("Выберите актуальный документ специалиста", style = tMeta, color = CompasMutedFg)
         }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(19.dp), tint = Orange)
     }
 }
 
 @Composable
-private fun ClientTherapyOverview(client: Client, onNoteClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Psychology, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
-                Text("Фокус работы", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                client.notes ?: "Здесь будет краткий запрос, цели терапии и важные договорённости по клиенту.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onNoteClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-                Text("Добавить заметку")
-            }
+private fun FocusCard(notes: String?) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Flag, null, Modifier.size(19.dp), tint = CompasAccent)
+            Spacer(Modifier.width(8.dp))
+            Text("Фокус работы", style = tSection, color = CompasFg)
         }
+        Spacer(Modifier.height(8.dp))
+        Text(notes?.takeIf { it.isNotBlank() } ?: "Фокус работы пока не зафиксирован.", style = tBody2)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ClientSessionRow(session: Session, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SessionCard(session: Session, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(4.dp).height(46.dp).clip(RoundedCornerShape(999.dp)).background(if (session.status == SessionStatus.CONFIRMED) Success else CompasAccent))
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(session.date, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text("${session.startTime}–${session.endTime} · ${if (session.format == SessionFormat.ONLINE) "Онлайн" else "Очно"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(formatSessionDate(session.date), style = tBody, color = CompasFg)
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${session.startTime}–${session.endTime}", style = tMeta, color = CompasMutedFg)
+                    Spacer(Modifier.width(8.dp))
+                    FmtChip(if (session.format == SessionFormat.ONLINE) "video" else "offline")
+                }
             }
-            if (session.occurrenceIndex != null && session.seriesTotal != null) SeriesBadge(session.occurrenceIndex, session.seriesTotal)
-            Spacer(Modifier.width(6.dp))
-            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            StatusPill(session.status)
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
         }
     }
 }
 
 @Composable
-private fun DocumentStatusCard(title: String, status: String, isOk: Boolean) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (isOk) Icons.Outlined.CheckCircle else Icons.Outlined.Description, null, Modifier.size(22.dp), tint = if (isOk) BadgePaidText else MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(12.dp))
+private fun NoteCard(session: Session, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
+        Text(formatSessionDate(session.date), style = tMeta, color = CompasMutedFg)
+        Spacer(Modifier.height(8.dp))
+        Text(session.notes.orEmpty(), style = tBody2, maxLines = 4, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun DocumentRow(title: String, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(Sage100), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Description, null, Modifier.size(19.dp), tint = Forest700)
+            }
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(title, style = tBody, color = CompasFg)
+                Text("Активный документ", style = tMeta, color = Success)
             }
+            Icon(Icons.Outlined.Send, null, Modifier.size(18.dp), tint = Forest700)
         }
     }
 }
 
 @Composable
-private fun EmptyClientBlock(title: String, subtitle: String, icon: ImageVector) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(10.dp))
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun EmptyCard(text: String, icon: ImageVector) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 18.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(22.dp), tint = CompasMutedFg)
+            Spacer(Modifier.width(10.dp))
+            Text(text, style = tBody2)
         }
     }
 }
 
-@Composable
-private fun StatusIndicator(icon: ImageVector, label: String, value: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.Start) {
-            Icon(icon, null, Modifier.size(18.dp), tint = color)
-            Spacer(Modifier.height(6.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
-            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
+private fun Session.isFutureOrToday(): Boolean {
+    val moment = runCatching { LocalDateTime.parse("${date}T$startTime") }.getOrNull()
+    return moment?.isAfter(LocalDateTime.now().minusMinutes(1))
+        ?: runCatching { LocalDate.parse(date) >= LocalDate.now() }.getOrDefault(false)
 }
 
-private fun clientSubtitle(client: Client): String {
-    return buildList {
-        client.phone?.takeIf { it.isNotBlank() }?.let { add(it) }
-        client.email?.takeIf { it.isNotBlank() }?.let { add(it) }
-        if (isEmpty()) add("${client.sessionsCount} сессий")
-    }.joinToString(" · ")
+private fun clientSince(sessions: List<Session>, fallback: String?): String {
+    val first = sessions.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.minOrNull()
+        ?: fallback?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    if (first == null) return "новый клиент"
+    val month = first.month.getDisplayName(TextStyle.SHORT, Locale("ru")).trimEnd('.')
+    return "с $month ${first.year}"
 }
 
-private fun anchoredSlotLabel(client: Client): String {
-    val weekday = client.anchorWeekday
-    val time = client.anchorTime
-    return if (weekday != null && time != null) {
-        val day = DayOfWeek.of(weekday).getDisplayName(TextStyle.SHORT, Locale("ru")).replaceFirstChar { it.uppercase() }
-        "$day $time"
-    } else "Не закреплён"
-}
-
-private fun formatLabel(format: SessionFormat?): String = when (format) {
-    SessionFormat.ONLINE -> "Онлайн"
-    SessionFormat.IN_PERSON -> "Офлайн"
-    null -> "—"
-}
-
-private fun seriesLabel(client: Client): String {
-    return if (client.packageTotal != null && client.packageCompleted != null) "${client.packageCompleted} из ${client.packageTotal}" else "Не задана"
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SendMessageDialog(
-    onSend: (String) -> Unit,
-    onDismiss: () -> Unit,
-    isSending: Boolean = false,
-) {
-    var text by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Написать клиенту") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text("Сообщение") },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                placeholder = { Text("Привет! Напоминаю о встрече…") },
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { if (text.isNotBlank()) onSend(text.trim()) },
-                enabled = text.isNotBlank() && !isSending,
-            ) {
-                if (isSending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text("Отправить")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-    )
+private fun formatSessionDate(raw: String): String {
+    val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return raw
+    return date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru")))
 }

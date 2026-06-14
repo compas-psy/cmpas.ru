@@ -1,21 +1,30 @@
 package ru.cmpas.app.presentation.notes
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.NoteAdd
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.Session
-import ru.cmpas.app.presentation.components.AvatarCircle
-import ru.cmpas.app.presentation.components.SectionHeader
+import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun NotesScreen(
@@ -24,61 +33,39 @@ fun NotesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 80.dp),
-    ) {
-        // ─── Header ───
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Заметки",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    "Записи по сессиям",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
         when {
-            uiState.isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
+            uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Forest700)
             }
-            uiState.recentSessions.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Outlined.EditNote, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(12.dp))
-                        Text("Нет заметок", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Заметки появятся после завершения сессий", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> LazyColumn(
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Column {
+                        Eyebrow("Практика")
+                        Spacer(Modifier.height(3.dp))
+                        Text("Заметки", style = tHero, color = CompasFg)
+                        Text("Записи после сессий и подготовка к следующим встречам", style = tBody2, color = CompasMutedFg)
                     }
                 }
-            }
-            else -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+
+                if (uiState.recentSessions.isEmpty()) {
                     item {
-                        SectionHeader(title = "Последние сессии")
+                        GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 24.dp) {
+                            Icon(Icons.Outlined.EditNote, null, Modifier.size(38.dp), tint = Forest700)
+                            Spacer(Modifier.height(12.dp))
+                            Text("Заметок пока нет", style = tSection, color = CompasFg)
+                            Spacer(Modifier.height(4.dp))
+                            Text("Откройте завершённую сессию и зафиксируйте главное — кратко, по блокам или голосом.", style = tBody2, color = CompasMutedFg)
+                        }
                     }
+                } else {
+                    item { SectionTitle("Последние сессии") }
                     items(uiState.recentSessions, key = { it.id }) { session ->
-                        NoteSessionCard(
-                            session = session,
-                            onClick = { onSessionNoteClick(session.id) },
-                        )
+                        NoteSessionCard(session) { onSessionNoteClick(session.id) }
                     }
                 }
             }
@@ -87,56 +74,38 @@ fun NotesScreen(
 }
 
 @Composable
-private fun NoteSessionCard(
-    session: Session,
-    onClick: () -> Unit,
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AvatarCircle(name = session.clientName, size = 40.dp)
+private fun NoteSessionCard(session: Session, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(session.clientName, 46.dp)
             Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    session.clientName,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    "${session.date} · ${session.startTime}–${session.endTime}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column(Modifier.weight(1f)) {
+                Text(session.clientName, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text("${prettyDate(session.date)} · ${session.startTime}–${session.endTime}", style = tMeta, color = CompasMutedFg)
                 if (session.occurrenceIndex != null) {
-                    Text(
-                        "${session.occurrenceIndex}-я сессия",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text("Сессия ${session.occurrenceIndex}${session.seriesTotal?.let { " из $it" }.orEmpty()}", style = tMeta, color = CompasAccent)
                 }
             }
             if (session.notes.isNullOrBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Text(
-                        "Добавить",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                GhostButton("Добавить", onClick, Modifier.width(108.dp), Icons.Outlined.NoteAdd)
             } else {
-                Icon(Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                Column(horizontalAlignment = Alignment.End) {
+                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(21.dp), tint = Success)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Есть заметка", style = tMeta, color = Success)
+                }
             }
         }
+        if (!session.notes.isNullOrBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(session.notes!!.lineSequence().filter { it.isNotBlank() }.take(2).joinToString(" "), style = tBody2, color = CompasMutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
+}
+
+private fun prettyDate(raw: String): String {
+    val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return raw
+    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale("ru")))
 }

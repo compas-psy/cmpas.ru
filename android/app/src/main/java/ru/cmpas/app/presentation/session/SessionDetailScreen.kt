@@ -1,5 +1,10 @@
 package ru.cmpas.app.presentation.session
 
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,23 +15,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SessionDetailScreen(
     sessionId: String,
@@ -37,263 +46,343 @@ fun SessionDetailScreen(
     viewModel: SessionDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showCancelConfirm by remember { mutableStateOf(false) }
+    var showMessage by remember { mutableStateOf(false) }
+    var messageText by remember { mutableStateOf("") }
 
-    // Navigate back after cancel
+    LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
     LaunchedEffect(uiState.cancelled) { if (uiState.cancelled) onBack() }
 
-    // Reschedule dialog
     if (uiState.showRescheduleDialog) {
         RescheduleDialog(
             uiState = uiState,
-            onDateSelected = { viewModel.loadFreeTimes(it) },
+            onDateSelected = viewModel::loadFreeTimes,
             onConfirm = { date, time -> viewModel.reschedule(sessionId, date, time) },
-            onDismiss = { viewModel.closeRescheduleDialog() },
+            onDismiss = viewModel::closeRescheduleDialog,
         )
     }
 
-    // Action error snackbar
-    uiState.actionError?.let { err ->
-        LaunchedEffect(err) {
-            // Just clear after a moment; in a real app use SnackbarHostState
-            viewModel.clearActionError()
-        }
+    if (showCancelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            icon = { Icon(Icons.Outlined.WarningAmber, null, tint = CompasDestructive) },
+            title = { Text("Отменить сессию?") },
+            text = { Text("Запись будет отменена. Клиенту потребуется отправить уведомление об изменении.") },
+            confirmButton = {
+                TextButton(onClick = { showCancelConfirm = false; viewModel.cancel(sessionId) }) {
+                    Text("Отменить сессию", color = CompasDestructive)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showCancelConfirm = false }) { Text("Оставить") } },
+        )
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
-            if (uiState.session != null) {
-                Spacer(Modifier.width(4.dp))
-                AvatarCircle(name = uiState.session!!.clientName, size = 36.dp)
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(uiState.session!!.clientName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    val fmt = if (uiState.session!!.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн"
-                    val statusLabel = when (uiState.session!!.status) {
-                        SessionStatus.CONFIRMED -> "Подтверждена"
-                        SessionStatus.PENDING -> "Ожидает подтверждения"
-                        SessionStatus.COMPLETED -> "Завершена"
-                        SessionStatus.CANCELLED -> "Отменена"
-                        SessionStatus.NO_SHOW -> "Не явился"
-                    }
-                    Text("$fmt · $statusLabel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val session = uiState.session
+    val clientDetail = uiState.clientDetail
+    val bound = clientDetail?.hasMessenger == true
+    val channel = clientDetail?.messengerChannel ?: if (!clientDetail?.telegramId.isNullOrBlank()) "telegram" else null
+
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
+
+        Column(Modifier.fillMaxSize()) {
+            SessionPushHeader(
+                onBack = onBack,
+                onMore = { showMenu = true },
+                showMenu = showMenu,
+                onDismissMenu = { showMenu = false },
+                onReschedule = { showMenu = false; viewModel.openRescheduleDialog() },
+                onCancel = { showMenu = false; showCancelConfirm = true },
+            )
+
+            when {
+                uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Forest700)
                 }
-            }
-        }
-
-        when {
-            uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-            uiState.session != null -> {
-                val session = uiState.session!!
-                val isUpcoming = isSessionUpcoming(session)
-                val isPast = isSessionPast(session)
-                val isPending = session.status == SessionStatus.PENDING
-
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 132.dp),
+                session != null -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 194.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    // Time card
                     item {
-                        Card(
-                            Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(1.dp),
-                        ) {
-                            Column(Modifier.padding(20.dp)) {
-                                if (session.occurrenceIndex != null) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("${session.occurrenceIndex}-я сессия", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                        Spacer(Modifier.width(8.dp))
-                                        if (session.seriesTotal != null) SeriesBadge(session.occurrenceIndex, session.seriesTotal)
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${session.startTime}–${session.endTime}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.weight(1f))
-                                    AvatarCircle(name = session.clientName, size = 56.dp)
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(if (session.format == SessionFormat.ONLINE) Icons.Outlined.Videocam else Icons.Outlined.LocationOn, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(if (session.format == SessionFormat.ONLINE) "Онлайн" else "Офлайн · Кабинет", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                val mins = getMinutesUntilSession(session)
-                                if (mins != null && mins > 0) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Outlined.Schedule, null, Modifier.size(16.dp), tint = CompasAccent)
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("через $mins мин", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = CompasAccent)
-                                    }
-                                }
-                            }
-                        }
+                        SessionHero(
+                            session = session,
+                            clientDetail = clientDetail,
+                            onClient = { onClientClick(session.clientId) },
+                            onConfirm = if (session.status == SessionStatus.PENDING) ({ viewModel.confirm(session.id) }) else null,
+                        )
                     }
-
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PaymentBadge(session.paymentStatus)
-                            ConsentBadge(session.consentStatus)
-                            HomeworkBadge(session.homeworkStatus)
-                        }
+                        SectionTitle(
+                            title = "Заметки сессии",
+                            actionLabel = "Открыть",
+                            onAction = { onNoteClick(session.id) },
+                        )
                     }
-
-                    // Action buttons for upcoming/pending sessions
-                    if (isUpcoming && session.status != SessionStatus.CANCELLED) {
-                        item {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // Confirm if pending
-                                if (isPending) {
-                                    Button(
-                                        onClick = { viewModel.confirm(sessionId) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        enabled = !uiState.isActionLoading,
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        shape = RoundedCornerShape(14.dp),
-                                    ) {
-                                        if (uiState.isActionLoading) {
-                                            CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                                        } else {
-                                            Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("Подтвердить встречу")
-                                        }
-                                    }
-                                }
-                                // Reschedule + Cancel
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(
-                                        onClick = { viewModel.openRescheduleDialog() },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = !uiState.isActionLoading,
-                                        shape = RoundedCornerShape(14.dp),
-                                    ) {
-                                        Icon(Icons.Outlined.SwapHoriz, null, Modifier.size(16.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Перенести")
-                                    }
-                                    OutlinedButton(
-                                        onClick = { viewModel.cancel(sessionId) },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = !uiState.isActionLoading,
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    ) {
-                                        Icon(Icons.Outlined.Cancel, null, Modifier.size(16.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Отменить")
-                                    }
-                                }
-                            }
-                        }
+                    item {
+                        SessionNotesPreview(
+                            text = session.notes ?: session.previousNotesSummary
+                                ?: "Зафиксируйте ключевой запрос, динамику и следующий шаг после встречи.",
+                            onClick = { onNoteClick(session.id) },
+                        )
                     }
-
-                    // Error message
-                    uiState.actionError?.let { err ->
+                    if (uiState.reminders.isNotEmpty() && session.status != SessionStatus.CANCELLED) {
                         item {
-                            Card(
-                                Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Text(err, Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-
-                    // Quick actions row (open video link, prepare, client card)
-                    if (isUpcoming) {
-                        item {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (session.format == SessionFormat.ONLINE && !session.videoLink.isNullOrBlank()) {
-                                    SessionAction(Icons.Outlined.Videocam, "Открыть\nссылку", Modifier.weight(1f)) { uriHandler.openUri(session.videoLink!!) }
-                                }
-                                SessionAction(Icons.Outlined.Description, "Подгото-\nвиться", Modifier.weight(1f)) { onNoteClick(session.id) }
-                                SessionAction(Icons.Outlined.Person, "Карточка\nклиента", Modifier.weight(1f)) { onClientClick(session.clientId) }
-                            }
-                        }
-                    }
-
-                    // Post-session actions
-                    if (!session.notes.isNullOrBlank() || isPast || (isUpcoming && session.status == SessionStatus.CONFIRMED)) {
-                        item {
-                            Card(
-                                Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (isPast) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface),
-                            ) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Text(if (isPast) "Завершите сессию" else "После сессии", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = if (isPast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                                    Spacer(Modifier.height(12.dp))
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        SmartActionChip("Завершить", Icons.Outlined.CheckCircle, { viewModel.complete(session.id) }, Modifier.fillMaxWidth())
-                                        SmartActionChip("Написать заметку", Icons.Outlined.EditNote, { onNoteClick(session.id) }, Modifier.fillMaxWidth())
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Notes preview
-                    if (!session.notes.isNullOrBlank()) {
-                        item {
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Outlined.Psychology, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("Заметки", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(session.notes!!, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Spacer(Modifier.height(12.dp))
-                                    OutlinedButton(onClick = { onNoteClick(session.id) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-                                        Icon(Icons.Outlined.EditNote, null, Modifier.size(16.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Редактировать заметку")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Reminders — collapsed by default, only for upcoming sessions
-                    if (isUpcoming && session.status != SessionStatus.CANCELLED && uiState.reminders.isNotEmpty()) {
-                        item {
-                            val bound = true // TODO: wire to client.hasMessenger when API provides it
                             RemindersCard(
                                 reminders = uiState.reminders,
                                 bound = bound,
-                                onResend = { viewModel.resendReminder(session.id, it.id) },
-                                onManual = { onQuickAction("message") },
+                                onResend = {
+                                    messageText = it.text
+                                    showMessage = true
+                                },
+                                onManual = {
+                                    messageText = it.text
+                                    showMessage = true
+                                },
                             )
                         }
                     }
+                    uiState.actionError?.let { error ->
+                        item {
+                            GlassCard(modifier = Modifier.fillMaxWidth(), padding = 13.dp) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.ErrorOutline, null, Modifier.size(19.dp), tint = CompasDestructive)
+                                    Spacer(Modifier.width(9.dp))
+                                    Text(error, style = tBody2, color = CompasDestructive)
+                                }
+                            }
+                        }
+                    }
+                }
+                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    GlassCard(padding = 20.dp) {
+                        Text(uiState.error ?: "Не удалось загрузить сессию", style = tBody2)
+                        Spacer(Modifier.height(12.dp))
+                        GhostButton("Назад", onBack, modifier = Modifier.fillMaxWidth(), icon = Icons.AutoMirrored.Outlined.ArrowBack)
+                    }
                 }
             }
-            uiState.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(uiState.error!!)
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedButton(onClick = onBack) { Text("Назад") }
+        }
+
+        if (session != null) {
+            Column(
+                Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(CompasBg.copy(alpha = 0.94f))
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton(
+                        text = "Подключиться",
+                        icon = Icons.Outlined.Videocam,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val link = session.videoLink
+                            if (!link.isNullOrBlank()) runCatching { uriHandler.openUri(link) }
+                            else Toast.makeText(context, "Ссылка на встречу ещё не добавлена", Toast.LENGTH_SHORT).show()
+                        },
+                    )
+                    GhostButton(
+                        text = null,
+                        icon = Icons.Outlined.Send,
+                        modifier = Modifier.width(54.dp),
+                        onClick = { messageText = ""; showMessage = true },
+                    )
+                    GhostButton(
+                        text = null,
+                        icon = Icons.Outlined.EditNote,
+                        modifier = Modifier.width(54.dp),
+                        onClick = { onNoteClick(session.id) },
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton(
+                        text = "Перенести",
+                        icon = Icons.Outlined.Schedule,
+                        modifier = Modifier.weight(1f),
+                        onClick = viewModel::openRescheduleDialog,
+                    )
+                    GhostButton(
+                        text = "Отменить",
+                        icon = Icons.Outlined.Close,
+                        danger = true,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showCancelConfirm = true },
+                    )
+                }
+            }
+        }
+
+        if (showMessage && session != null) {
+            SendMessageSheet(
+                clientName = session.clientName,
+                channel = channel,
+                bound = bound,
+                initialText = messageText,
+                onClose = { showMessage = false },
+                onSend = { viewModel.sendMessage(session.clientId, session.id, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionPushHeader(
+    onBack: () -> Unit,
+    onMore: () -> Unit,
+    showMenu: Boolean,
+    onDismissMenu: () -> Unit,
+    onReschedule: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButtonGlass(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", onClick = onBack)
+        Text("Сессия", style = tSection, color = CompasFg, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+        Box {
+            IconButtonGlass(Icons.Outlined.MoreHoriz, "Меню", onClick = onMore)
+            DropdownMenu(expanded = showMenu, onDismissRequest = onDismissMenu) {
+                DropdownMenuItem(text = { Text("Перенести") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null) }, onClick = onReschedule)
+                DropdownMenuItem(
+                    text = { Text("Отменить", color = CompasDestructive) },
+                    leadingIcon = { Icon(Icons.Outlined.Close, null, tint = CompasDestructive) },
+                    onClick = onCancel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionHero(
+    session: Session,
+    clientDetail: ClientDetail?,
+    onClient: () -> Unit,
+    onConfirm: (() -> Unit)?,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Eyebrow(formatLongDate(session.date))
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(session.startTime, style = tKpi.copy(fontSize = 38.sp, lineHeight = 40.sp), color = CompasFg)
+                    Spacer(Modifier.width(8.dp))
+                    Text("${session.durationMinutes()} мин", style = tMeta, color = CompasMutedFg, modifier = Modifier.padding(bottom = 5.dp))
+                }
+            }
+            StatusPill(session.status)
+        }
+        Spacer(Modifier.height(14.dp))
+        ClientTile(
+            session = session,
+            since = clientDetail?.lastSessionDate,
+            onClick = onClient,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            InfoChip(
+                icon = if (session.format == SessionFormat.ONLINE) Icons.Outlined.Videocam else Icons.Outlined.LocationOn,
+                label = "Формат",
+                value = if (session.format == SessionFormat.ONLINE) "Видео" else "Очно",
+                modifier = Modifier.weight(1f),
+            )
+            InfoChip(
+                icon = Icons.Outlined.CurrencyRuble,
+                label = "Оплата",
+                value = when (session.paymentStatus) {
+                    PaymentStatus.PAID -> "Оплачено"
+                    PaymentStatus.UNPAID -> "Ожидает"
+                    PaymentStatus.PARTIAL -> "Частично"
+                    PaymentStatus.NOT_REQUIRED -> "Не требуется"
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (onConfirm != null) {
+            Spacer(Modifier.height(10.dp))
+            GhostButton("Подтвердить встречу", onConfirm, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.CheckCircle)
+        }
+    }
+}
+
+@Composable
+private fun ClientTile(session: Session, since: String?, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(Sage50)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(session.clientName, 46.dp)
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(session.clientName, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                buildString {
+                    append(if (session.occurrenceIndex != null) "${session.occurrenceIndex}-я сессия" else "Клиент")
+                    if (!since.isNullOrBlank()) append(" · с ${formatShortDate(since)}")
+                },
+                style = tMeta,
+                color = CompasMutedFg,
+            )
+        }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = CompasMutedFg)
+    }
+}
+
+@Composable
+private fun InfoChip(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.clip(RoundedCornerShape(14.dp)).background(Sage50).padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(18.dp), tint = Forest600)
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(label, style = tMeta, color = CompasMutedFg)
+            Text(value, style = tMeta, color = CompasFg, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun SessionNotesPreview(text: String, onClick: () -> Unit) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
+        Row(Modifier.fillMaxWidth()) {
+            Box(Modifier.width(4.dp).heightIn(min = 72.dp).clip(RoundedCornerShape(999.dp)).background(CompasAccent))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(text, style = tBody2, maxLines = 5, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NoteTag("#тревога")
+                    NoteTag("#схема-терапия")
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun NoteTag(text: String) {
+    Text(
+        text,
+        style = tMeta,
+        color = Color(0xFF8B6914),
+        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(GoldSoft).padding(horizontal = 9.dp, vertical = 4.dp),
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RescheduleDialog(
     uiState: SessionDetailUiState,
@@ -301,106 +390,66 @@ private fun RescheduleDialog(
     onConfirm: (String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var selectedDate by remember { mutableStateOf("") }
-    var selectedTime by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Перенести сессию") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Date input
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
-                    value = selectedDate,
+                    value = date,
                     onValueChange = {
-                        selectedDate = it
+                        date = it
                         if (it.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) onDateSelected(it)
                     },
-                    label = { Text("Дата (ГГГГ-ММ-ДД)") },
-                    placeholder = { Text(LocalDate.now().plusDays(7).toString()) },
-                    singleLine = true,
+                    label = { Text("Дата, ГГГГ-ММ-ДД") },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                 )
-
-                // Free times
-                if (uiState.isLoadingFreeTimes) {
-                    CircularProgressIndicator(Modifier.size(24.dp).align(Alignment.CenterHorizontally))
-                } else if (uiState.freeTimes.isNotEmpty()) {
-                    Text("Доступное время:", style = MaterialTheme.typography.labelMedium)
+                if (uiState.isLoadingFreeTimes) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (uiState.freeTimes.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        uiState.freeTimes.forEach { time ->
-                            FilterChip(
-                                selected = selectedTime == time,
-                                onClick = { selectedTime = time },
-                                label = { Text(time) },
-                            )
+                        uiState.freeTimes.forEach { slot ->
+                            FilterChip(selected = time == slot, onClick = { time = slot }, label = { Text(slot) })
                         }
                     }
-                } else if (uiState.freeTimesError != null) {
-                    Text(uiState.freeTimesError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                } else if (selectedDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
-                    Text("Нет доступных слотов", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    OutlinedTextField(
+                        value = time,
+                        onValueChange = { time = it },
+                        label = { Text("Время, ЧЧ:ММ") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
                 }
+                uiState.freeTimesError?.let { Text(it, style = tMeta, color = CompasDestructive) }
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onConfirm(selectedDate, selectedTime) },
-                enabled = selectedDate.isNotBlank() && selectedTime.isNotBlank() && !uiState.isActionLoading,
-            ) {
-                if (uiState.isActionLoading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text("Перенести")
-            }
+            TextButton(
+                enabled = date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && time.matches(Regex("\\d{2}:\\d{2}")),
+                onClick = { onConfirm(date, time) },
+            ) { Text("Перенести") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
-        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SessionAction(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = modifier.height(76.dp),
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = ButtonDefaults.outlinedButtonBorder(enabled = true),
-    ) {
-        Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(4.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 14.sp), maxLines = 2, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
+private fun Session.durationMinutes(): Long {
+    val start = runCatching { LocalTime.parse(startTime) }.getOrNull()
+    val end = runCatching { LocalTime.parse(endTime) }.getOrNull()
+    return if (start != null && end != null) java.time.Duration.between(start, end).toMinutes().coerceAtLeast(0) else 50
 }
 
-private fun isSessionUpcoming(s: Session): Boolean {
-    return try {
-        val td = LocalDate.now(); val sd = LocalDate.parse(s.date)
-        if (sd != td) sd.isAfter(td) else {
-            val p = s.startTime.split(":"); LocalTime.now().isBefore(LocalTime.of(p[0].toInt(), p[1].toInt()))
-        }
-    } catch (_: Exception) { true }
+private fun formatLongDate(raw: String): String {
+    val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return raw
+    val weekday = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("ru"))
+    return "$weekday, ${date.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru")))}"
 }
 
-private fun isSessionPast(s: Session): Boolean {
-    return try {
-        val td = LocalDate.now(); val sd = LocalDate.parse(s.date)
-        if (sd != td) sd.isBefore(td) else {
-            val p = s.endTime.split(":"); LocalTime.now().isAfter(LocalTime.of(p[0].toInt(), p[1].toInt()))
-        }
-    } catch (_: Exception) { false }
-}
-
-private fun getMinutesUntilSession(s: Session): Long? {
-    return try {
-        if (LocalDate.parse(s.date) != LocalDate.now()) null
-        else {
-            val p = s.startTime.split(":")
-            val d = Duration.between(LocalTime.now(), LocalTime.of(p[0].toInt(), p[1].toInt()))
-            if (d.toMinutes() > 0) d.toMinutes() else null
-        }
-    } catch (_: Exception) { null }
+private fun formatShortDate(raw: String): String {
+    val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return raw
+    return date.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale("ru"))).trimEnd('.')
 }

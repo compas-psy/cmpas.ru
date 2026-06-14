@@ -30,14 +30,14 @@ sealed class Screen(val route: String) {
     data object MyBookings : Screen("my-bookings")
 }
 
+// Dock = 4 tabs + central FAB (SPEC). Notes is reached from client/session cards.
 enum class BottomNavItem(
     val screen: Screen,
     val label: String,
     val icon: ImageVector,
 ) {
-    TODAY(Screen.Dashboard, "Сегодня", Icons.Outlined.CalendarToday),
+    TODAY(Screen.Dashboard, "Сегодня", Icons.Outlined.Home),
     CALENDAR(Screen.Calendar, "Календарь", Icons.Outlined.CalendarMonth),
-    CLIENTS(Screen.Clients, "Клиенты", Icons.Outlined.People),
-    NOTES(Screen.Notes, "Заметки", Icons.Outlined.EditNote),
-    MORE(Screen.Settings, "Ещё", Icons.Outlined.MoreHoriz),
+    CLIENTS(Screen.Clients, "Клиенты", Icons.Outlined.Groups),
+    PROFILE(Screen.Settings, "Профиль", Icons.Outlined.Person),
 }
