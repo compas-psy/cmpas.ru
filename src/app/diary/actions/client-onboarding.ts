@@ -7,6 +7,9 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
 
+const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
+const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
+
 async function getPsychologistId() {
     const session = await auth();
     if (!session?.user?.id) throw new Error('Unauthorized');
@@ -160,6 +163,32 @@ export async function sendClientOnboarding(
         },
     });
 
+    let preparedInTelegram = false;
+    if (opts.channel === 'telegram' && psych?.telegramChatId) {
+        const callbackUrl = `${APP_URL}/api/channel-binding/telegram-login?token=${encodeURIComponent(invite.rawToken)}`;
+        const firstName = client.name.trim().split(/\s+/)[0] || client.name;
+        await sendTelegramMessage(
+            psych.telegramChatId,
+            `${firstName}, подключите уведомления о записях.\n\nКОМПАС будет присылать только подтверждения, напоминания, переносы и отмены встреч.`,
+            {
+                parse_mode: 'HTML',
+                disable_web_page_preview: true,
+                reply_markup: {
+                    inline_keyboard: [[{
+                        text: 'Подключить уведомления',
+                        login_url: {
+                            url: callbackUrl,
+                            forward_text: 'Подключить уведомления',
+                            bot_username: TELEGRAM_BOT_USERNAME,
+                            request_write_access: true,
+                        },
+                    }]],
+                },
+            },
+        );
+        preparedInTelegram = true;
+    }
+
     return {
         status: 'pending' as const,
         channel: opts.channel,
@@ -169,6 +198,7 @@ export async function sendClientOnboarding(
         readyText: plainText,
         phone: client.phone ?? null,
         expiresAt: invite.expiresAt.toISOString(),
+        preparedInTelegram,
     };
 }
 
