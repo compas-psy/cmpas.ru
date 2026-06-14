@@ -5,12 +5,14 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientStatus
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import javax.inject.Inject
 
 @HiltViewModel
@@ -18,28 +20,35 @@ class ClientsViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(ClientsUiState())
     val uiState = _uiState.asStateFlow()
 
-    init { loadClients() }
-
-    fun loadClients() {
+    init {
+        loadClients()
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            PracticeRefreshBus.changes.collectLatest { loadClients(false) }
+        }
+    }
+
+    fun refresh() = loadClients(false)
+
+    fun loadClients(showLoader: Boolean = true) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = showLoader && it.allClients.isEmpty(), isRefreshing = !showLoader) }
             val localClients = localStore.getClients()
             try {
                 val response = api.getClients()
                 val remoteClients = if (response.isSuccessful) response.body().orEmpty() else emptyList()
-                remoteClients.forEach { localStore.upsertClient(it) }
+                remoteClients.forEach(localStore::upsertClient)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         allClients = mergeClients(remoteClients, localStore.getClients()),
                     )
                 }
             } catch (_: Exception) {
-                _uiState.update { it.copy(isLoading = false, allClients = localClients) }
+                _uiState.update { it.copy(isLoading = false, isRefreshing = false, allClients = localClients) }
             }
             applyFilters()
         }
@@ -71,13 +80,13 @@ class ClientsViewModel @Inject constructor(
         }
     }
 
-    private fun mergeClients(remote: List<Client>, local: List<Client>): List<Client> {
-        return (remote + local).distinctBy { it.id }.sortedBy { it.name.lowercase() }
-    }
+    private fun mergeClients(remote: List<Client>, local: List<Client>): List<Client> =
+        (remote + local).distinctBy { it.id }.sortedBy { it.name.lowercase() }
 }
 
 data class ClientsUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val searchQuery: String = "",
     val statusFilter: ClientStatus? = null,
     val allClients: List<Client> = emptyList(),

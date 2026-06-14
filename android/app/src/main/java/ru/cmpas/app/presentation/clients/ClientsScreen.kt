@@ -1,211 +1,187 @@
 package ru.cmpas.app.presentation.clients
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.domain.model.Client
+import ru.cmpas.app.domain.model.ClientStatus
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
-import java.time.DayOfWeek
-import java.time.format.TextStyle
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
 fun ClientsScreen(
     onClientClick: (String) -> Unit = {},
+    onAddClient: () -> Unit = {},
     viewModel: ClientsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val segments = listOf("Активные", "Все", "Архив")
+    val selIndex = when (uiState.statusFilter) {
+        ClientStatus.ACTIVE -> 0
+        ClientStatus.ARCHIVED -> 2
+        else -> 1
+    }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 80.dp), // dock space
-    ) {
-        // ─── Header ───
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Клиенты",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    "${uiState.filteredClients.size} ${clientsWord(uiState.filteredClients.size)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Search, "Поиск", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Tune, "Фильтр", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        // ─── Status Filter Chips ───
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val statuses = listOf(
-                ClientStatus.ACTIVE to "Активные",
-                ClientStatus.PAUSED to "Пауза",
-                ClientStatus.ARCHIVED to "Архив",
-            )
-            statuses.forEach { (status, label) ->
-                val count = uiState.allClients.count { it.status == status }
-                val isSelected = uiState.statusFilter == status
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { viewModel.setStatusFilter(if (isSelected) null else status) },
-                    label = {
-                        Text("$label $count", style = MaterialTheme.typography.labelMedium)
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.primary,
-                    ),
-                )
-            }
-        }
-
-        // ─── Search ───
-        OutlinedTextField(
-            value = uiState.searchQuery,
-            onValueChange = viewModel::onSearchChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            placeholder = { Text("Поиск по имени или заметкам...") },
-            leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-        )
-
-        // ─── Client List ───
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(uiState.filteredClients, key = { it.id }) { client ->
-                SmartClientRow(client = client, onClick = { onClientClick(client.id) })
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Eyebrow("База · ${uiState.allClients.size} ${peopleWord(uiState.allClients.size)}")
+                        Spacer(Modifier.height(4.dp))
+                        Text("Клиенты", style = tHero, color = CompasFg)
+                    }
+                    IconButtonGlass(Icons.Outlined.Add, "Добавить", onClick = onAddClient)
+                }
+            }
+
+            // Search
+            item {
+                Row(
+                    Modifier.fillMaxWidth().height(46.dp).glass(radius = 15.dp).padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = CompasMutedFg)
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (uiState.searchQuery.isEmpty()) {
+                            Text("Поиск по имени", style = tBody, color = CompasMutedFg)
+                        }
+                        BasicTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = viewModel::onSearchChange,
+                            singleLine = true,
+                            textStyle = tBody.copy(color = CompasFg),
+                            cursorBrush = SolidColor(Forest700),
+                        )
+                    }
+                }
+            }
+
+            // Segment
+            item {
+                CompasSegmented(segments, selIndex, onSelect = { i ->
+                    viewModel.setStatusFilter(
+                        when (i) {
+                            0 -> ClientStatus.ACTIVE
+                            2 -> ClientStatus.ARCHIVED
+                            else -> null
+                        },
+                    )
+                })
+            }
+
+            if (uiState.isLoading && uiState.filteredClients.isEmpty()) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            } else if (uiState.filteredClients.isEmpty()) {
+                item {
+                    GlassCard(padding = 18.dp) { Text("Никого не найдено", style = tBody2) }
+                }
+            } else {
+                items(uiState.filteredClients, key = { it.id }) { c ->
+                    ClientRow(c, onClick = { onClientClick(c.id) })
+                }
             }
         }
     }
 }
-
-// ═══════════════════════════════════════════
-// Smart Client Row — matches mockup
-// ═══════════════════════════════════════════
 
 @Composable
-private fun SmartClientRow(client: Client, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Avatar
-            AvatarCircle(name = client.name, size = 44.dp)
+private fun ClientRow(c: Client, onClick: () -> Unit) {
+    GlassCard(padding = 12.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(c.name, 46.dp)
             Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    client.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                // Next session
-                if (client.nextSessionDate != null) {
-                    Text(
-                        "Следующая сессия",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "${client.nextSessionDate}${client.nextSessionTime?.let { " · $it" } ?: ""}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Text(
-                        "${client.sessionsCount} сессий${client.lastSessionDate?.let { " · Посл. $it" } ?: ""}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(c.name, color = CompasFg, fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(8.dp))
+                    TagPill("${c.sessionsCount} ${sessionsWord(c.sessionsCount)}")
+                }
+                Spacer(Modifier.height(4.dp))
+                val next = nextLabel(c)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.CalendarToday, null, Modifier.size(13.dp), tint = if (next.soon) Forest700 else CompasMutedFg)
+                    Spacer(Modifier.width(5.dp))
+                    Text(next.text, style = tMeta, color = if (next.soon) Forest700 else CompasMutedFg, maxLines = 1)
                 }
             }
-
-            // Right side: status + cadence
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                ClientStatusBadge(client.status)
-
-                // Cadence label
-                if (client.cadenceType != CadenceType.NONE && client.anchorWeekday != null && client.anchorTime != null) {
-                    val dayName = DayOfWeek.of(client.anchorWeekday!!)
-                        .getDisplayName(TextStyle.SHORT, Locale("ru")).lowercase()
-                    StatusBadge(
-                        "каждый $dayName ${client.anchorTime}",
-                        Sage100,
-                        Forest600,
-                    )
-                }
-
-                // Package progress
-                if (client.packageTotal != null && client.packageCompleted != null) {
-                    Text(
-                        "${client.packageCompleted} из ${client.packageTotal}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            Spacer(Modifier.width(8.dp))
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
         }
     }
 }
 
-private fun clientsWord(count: Int): String {
-    val mod10 = count % 10
-    val mod100 = count % 100
-    return when {
-        mod100 in 11..14 -> "клиентов"
-        mod10 == 1 -> "клиент"
-        mod10 in 2..4 -> "клиента"
-        else -> "клиентов"
+@Composable
+private fun TagPill(text: String) {
+    Box(
+        Modifier.clip(RoundedCornerShape(999.dp)).background(Sage100).padding(horizontal = 9.dp, vertical = 3.dp),
+    ) {
+        Text(text, color = Forest600, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
+}
+
+private data class NextLabel(val text: String, val soon: Boolean)
+
+private fun nextLabel(c: Client): NextLabel {
+    val d = c.nextSessionDate ?: return NextLabel("Нет ближайших записей", false)
+    val pretty = try {
+        val date = LocalDate.parse(d)
+        val today = LocalDate.now()
+        val day = when (date) {
+            today -> "Сегодня"
+            today.plusDays(1) -> "Завтра"
+            else -> date.format(DateTimeFormatter.ofPattern("d MMM", Locale("ru")))
+        }
+        val time = c.nextSessionTime?.let { " · $it" } ?: ""
+        "$day$time" to (date == today)
+    } catch (_: Exception) {
+        (d + (c.nextSessionTime?.let { " · $it" } ?: "")) to false
+    }
+    return NextLabel(pretty.first, pretty.second)
+}
+
+private fun peopleWord(n: Int): String = when {
+    n % 10 == 1 && n % 100 != 11 -> "человек"
+    else -> "человек"
+}
+
+private fun sessionsWord(n: Int): String = when {
+    n % 10 == 1 && n % 100 != 11 -> "сессия"
+    n % 10 in 2..4 && (n % 100 < 10 || n % 100 >= 20) -> "сессии"
+    else -> "сессий"
 }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
+import ru.cmpas.app.domain.model.Session
 import javax.inject.Inject
 
 @HiltViewModel
@@ -23,14 +24,17 @@ class PostSessionNoteViewModel @Inject constructor(
     fun loadNote(sessionId: String) {
         viewModelScope.launch {
             val localText = localStore.getLatestNote(sessionId)?.text
-            if (!localText.isNullOrBlank()) {
-                _uiState.update { it.copy(savedText = localText) }
-                return@launch
-            }
+            var session: Session? = null
             runCatching {
                 val response = api.getSessions()
-                val remoteText = response.body()?.firstOrNull { it.id == sessionId }?.notes
-                if (!remoteText.isNullOrBlank()) _uiState.update { it.copy(savedText = remoteText) }
+                session = response.body()?.firstOrNull { it.id == sessionId }
+            }
+            _uiState.update {
+                it.copy(
+                    session = session,
+                    savedText = localText?.takeIf(String::isNotBlank)
+                        ?: session?.notes?.takeIf(String::isNotBlank),
+                )
             }
         }
     }
@@ -44,11 +48,23 @@ class PostSessionNoteViewModel @Inject constructor(
                     if (response.isSuccessful) response.body()?.let { localStore.upsertSession(it) }
                 }
                 localStore.saveNote(sessionId = sessionId, text = text)
-                _uiState.update { it.copy(isSaving = false, savedText = text) }
+                _uiState.update { state ->
+                    state.copy(
+                        isSaving = false,
+                        savedText = text,
+                        session = state.session?.copy(notes = text),
+                    )
+                }
                 onFinished(true, "Заметка сохранена")
             } catch (_: Exception) {
                 localStore.saveNote(sessionId = sessionId, text = text)
-                _uiState.update { it.copy(isSaving = false, savedText = text) }
+                _uiState.update { state ->
+                    state.copy(
+                        isSaving = false,
+                        savedText = text,
+                        session = state.session?.copy(notes = text),
+                    )
+                }
                 onFinished(true, "Заметка сохранена локально")
             }
         }
@@ -58,4 +74,5 @@ class PostSessionNoteViewModel @Inject constructor(
 data class PostSessionNoteUiState(
     val isSaving: Boolean = false,
     val savedText: String? = null,
+    val session: Session? = null,
 )

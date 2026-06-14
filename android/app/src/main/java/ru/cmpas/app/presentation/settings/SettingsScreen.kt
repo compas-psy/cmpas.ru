@@ -1,142 +1,235 @@
 package ru.cmpas.app.presentation.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
+import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    onLogout: () -> Unit = {},
-) {
-    var detail by remember { mutableStateOf<SettingsDetail?>(null) }
+fun SettingsScreen(onLogout: () -> Unit = {}) {
+    var dayBefore by rememberSaveable { mutableStateOf(true) }
+    var twoHoursBefore by rememberSaveable { mutableStateOf(true) }
+    var paymentReminder by rememberSaveable { mutableStateOf(true) }
+    var consentReminder by rememberSaveable { mutableStateOf(false) }
+    var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
+    var copied by rememberSaveable { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    val paymentLink = "cmpas.ru/pay/ilya-martynov"
 
-    if (detail != null) {
-        SettingsDetailScreen(detail = detail!!, onBack = { detail = null })
-        return
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Ещё") },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
-    ) { innerPadding ->
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 136.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 128.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(modifier = Modifier.size(52.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                            Box(contentAlignment = Alignment.Center) { Text("ИМ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                Column {
+                    Eyebrow("Аккаунт")
+                    Spacer(Modifier.height(3.dp))
+                    Text("Профиль", style = tHero, color = CompasFg)
+                }
+            }
+
+            item {
+                GlassTintCard(Modifier.fillMaxWidth(), padding = 18.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Avatar("Илья Мартынов", 66.dp, ring = true)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Илья Мартынов", style = tSection, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(3.dp))
+                            Text("Психолог · схема-терапия", style = tBody2, color = Color.White.copy(alpha = .76f))
+                            Spacer(Modifier.height(8.dp))
+                            ProfilePill("Профиль заполнен на 86%")
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Илья Мартынов", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text("Психолог · профиль", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        IconButtonGlass(Icons.Outlined.Edit, "Редактировать") { activeSheet = ProfileSheet.PROFILE }
                     }
                 }
             }
 
             item {
-                SettingsGroup("Практика") {
-                    SettingsItem(Icons.Outlined.Schedule, "Расписание", "Рабочие часы и правила записи") { detail = SettingsDetail.SCHEDULE }
-                    SettingsItem(Icons.Outlined.Link, "Ссылка для записи", "Скопировать и настроить самозапись") { detail = SettingsDetail.BOOKING_LINK }
-                    SettingsItem(Icons.Outlined.Notifications, "Уведомления", "Напоминания о сессиях") { detail = SettingsDetail.NOTIFICATIONS }
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Kpi(Icons.Outlined.Groups, "24", "клиента", Forest700, Modifier.weight(1f))
+                    Kpi(Icons.Outlined.EventAvailable, "312", "сессий", Blue, Modifier.weight(1f))
+                    Kpi(Icons.Outlined.StarOutline, "4,9", "оценка", CompasAccent, Modifier.weight(1f))
+                }
+            }
+
+            item { SectionTitle("Автонапоминания") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    ReminderSwitch("За 24 часа", "Подтвердить встречу и показать оплату", dayBefore) { dayBefore = it }
+                    ThinDivider()
+                    ReminderSwitch("За 2 часа", "Короткое напоминание перед сессией", twoHoursBefore) { twoHoursBefore = it }
+                    ThinDivider()
+                    ReminderSwitch("Об оплате", "Если сессия ещё не оплачена", paymentReminder) { paymentReminder = it }
+                    ThinDivider()
+                    ReminderSwitch("О документах", "Если согласие не получено", consentReminder) { consentReminder = it }
+                }
+            }
+
+            item { SectionTitle("Оплата") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        QrBox()
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Ссылка на оплату", style = tBody, color = CompasFg)
+                            Spacer(Modifier.height(4.dp))
+                            Text(paymentLink, style = tBody2, color = Forest700, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(10.dp))
+                            GhostButton(
+                                text = if (copied) "Скопировано" else "Скопировать",
+                                icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                                onClick = {
+                                    clipboard.setText(AnnotatedString("https://$paymentLink"))
+                                    copied = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
+
+            item { SectionTitle("Мессенджеры и данные") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    ConnectionRow("Telegram", "Подключён · @CompasProBot", Tg, true) { activeSheet = ProfileSheet.TELEGRAM }
+                    ThinDivider()
+                    ConnectionRow("MAX", "Не подключён", Max, false) { activeSheet = ProfileSheet.MAX }
+                }
+            }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    SettingRow(Icons.Outlined.Link, "Ссылка для записи", "cmpas.ru/book/ilya-martynov") { activeSheet = ProfileSheet.BOOKING }
+                    ThinDivider()
+                    SettingRow(Icons.Outlined.Description, "Документы", "Согласия и шаблоны") { activeSheet = ProfileSheet.DOCUMENTS }
+                    ThinDivider()
+                    SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Экспорт, доступ и удаление") { activeSheet = ProfileSheet.DATA }
+                    ThinDivider()
+                    SettingRow(Icons.Outlined.HelpOutline, "Помощь и поддержка", "Версия 1.0.5") { activeSheet = ProfileSheet.HELP }
                 }
             }
 
             item {
-                SettingsGroup("Аккаунт") {
-                    SettingsItem(Icons.Outlined.CreditCard, "Тариф и оплата", "Текущий тариф и история") { detail = SettingsDetail.BILLING }
-                    SettingsItem(Icons.Outlined.Description, "Документы", "Согласия, политика и договор") { detail = SettingsDetail.DOCUMENTS }
-                    SettingsItem(Icons.Outlined.Info, "О приложении", "Версия и поддержка") { detail = SettingsDetail.ABOUT }
-                }
+                GhostButton(
+                    text = "Выйти из аккаунта",
+                    icon = Icons.Outlined.Logout,
+                    danger = true,
+                    onClick = onLogout,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
+        }
 
-            item { TextButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text("Выйти", color = MaterialTheme.colorScheme.error) } }
+        activeSheet?.let { sheet ->
+            ProfileInfoSheet(sheet, onClose = { activeSheet = null })
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsDetailScreen(detail: SettingsDetail, onBack: () -> Unit) {
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    var notificationsEnabled by remember { mutableStateOf(true) }
-    var sessionReminder by remember { mutableStateOf(true) }
-    var paymentReminder by remember { mutableStateOf(false) }
+private fun ProfilePill(text: String) {
+    Box(Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = .14f)).padding(horizontal = 10.dp, vertical = 5.dp)) {
+        Text(text, style = tMeta, color = Color.White)
+    }
+}
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(detail.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(detail.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+@Composable
+private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = tBody, color = CompasFg)
+            Text(subtitle, style = tBody2, color = CompasMutedFg)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Forest700,
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = CompasBorder,
+                uncheckedBorderColor = CompasBorder,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun ConnectionRow(name: String, status: String, accent: Color, bound: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier.fillMaxWidth().clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(horizontal = 12.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(accent.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Send, null, Modifier.size(19.dp), tint = accent)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(name, style = tBody, color = CompasFg)
+            Text(status, style = tBody2, color = if (bound) Forest600 else CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(19.dp), tint = CompasMutedFg)
+    }
+}
+
+@Composable
+private fun SettingRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier.fillMaxWidth().clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(horizontal = 12.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(21.dp), tint = Forest700)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = tBody, color = CompasFg)
+            Text(subtitle, style = tBody2, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(19.dp), tint = CompasMutedFg)
+    }
+}
+
+@Composable
+private fun ThinDivider() {
+    HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
+}
+
+@Composable
+private fun QrBox() {
+    val cells = remember { List(121) { i -> val x = i % 11; val y = i / 11; x < 3 && y < 3 || x > 7 && y < 3 || x < 3 && y > 7 || ((x * 5 + y * 3 + i) % 7 < 3) } }
+    Box(Modifier.size(104.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(9.dp)) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            repeat(11) { y ->
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    repeat(11) { x ->
+                        Box(Modifier.weight(1f).fillMaxHeight().background(if (cells[y * 11 + x]) Forest900 else Color.Transparent))
                     }
-                },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when (detail) {
-                SettingsDetail.SCHEDULE -> {
-                    item { InfoCard(Icons.Outlined.Schedule, "Рабочее расписание", "Пн–Пт · 10:00–20:00\nСуббота · по договорённости") }
-                    item { SettingsSwitchRow("Разрешить самозапись", "Клиенты смогут выбирать свободные окна", true) }
-                    item { SettingsSwitchRow("Буфер между сессиями", "Автоматически держать 10 минут паузы", true) }
-                    item { ActionButton("Настроить рабочие часы") { scope.launch { snackbar.showSnackbar("Настройки расписания будут подключены к API") } } }
-                }
-                SettingsDetail.BOOKING_LINK -> {
-                    item { InfoCard(Icons.Outlined.Link, "Ваша ссылка", "cmpas.ru/book/ilya-martynov") }
-                    item { ActionButton("Скопировать ссылку") { scope.launch { snackbar.showSnackbar("Ссылка скопирована") } } }
-                    item { ActionButton("Открыть предпросмотр") { scope.launch { snackbar.showSnackbar("Предпросмотр будет подключён позже") } } }
-                }
-                SettingsDetail.NOTIFICATIONS -> {
-                    item { SwitchItem("Уведомления", "Включить системные напоминания", notificationsEnabled) { notificationsEnabled = it } }
-                    item { SwitchItem("Перед сессией", "За 30 минут до встречи", sessionReminder) { sessionReminder = it } }
-                    item { SwitchItem("Оплаты", "Напоминать о неоплаченных сессиях", paymentReminder) { paymentReminder = it } }
-                }
-                SettingsDetail.BILLING -> {
-                    item { InfoCard(Icons.Outlined.CreditCard, "Тариф", "Free · 0 ₽ / месяц\nДо 7 клиентов и базовый календарь") }
-                    item { ActionButton("Посмотреть тарифы") { scope.launch { snackbar.showSnackbar("Тарифы будут подключены позже") } } }
-                }
-                SettingsDetail.DOCUMENTS -> {
-                    item { DocumentRow("Согласие на обработку персональных данных", true) }
-                    item { DocumentRow("Согласие на рекламные сообщения", true) }
-                    item { DocumentRow("Политика конфиденциальности", true) }
-                    item { DocumentRow("Пользовательское соглашение", true) }
-                }
-                SettingsDetail.ABOUT -> {
-                    item { InfoCard(Icons.Outlined.Info, "КОМПАС Android", "Версия 1.0\nРабочее пространство психолога") }
-                    item { ActionButton("Написать в поддержку") { scope.launch { snackbar.showSnackbar("Поддержка будет подключена позже") } } }
                 }
             }
         }
@@ -144,84 +237,23 @@ private fun SettingsDetailScreen(detail: SettingsDetail, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
-    Column {
-        Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)) { Column { content() } }
+private fun ProfileInfoSheet(sheet: ProfileSheet, onClose: () -> Unit) {
+    val (title, subtitle, body) = when (sheet) {
+        ProfileSheet.PROFILE -> Triple("Профессиональный профиль", "Данные, которые видит клиент", "Имя, специализация и описание практики будут редактироваться в следующем шаге настройки профиля.")
+        ProfileSheet.TELEGRAM -> Triple("Telegram", "Канал подключён", "Бот может отправлять клиентам сервисные сообщения после того, как клиент открыл его и подтвердил связь.")
+        ProfileSheet.MAX -> Triple("MAX", "Подключение канала", "После подключения клиенты смогут получать уведомления в MAX. До этого приложение подготовит текст для ручной отправки.")
+        ProfileSheet.BOOKING -> Triple("Ссылка для записи", "Самозапись клиентов", "По ссылке клиент увидит свободные окна, выберет формат встречи и подтвердит необходимые документы.")
+        ProfileSheet.DOCUMENTS -> Triple("Документы", "Шаблоны и версии", "Здесь будут храниться информированное согласие, правила работы и история отправленных версий.")
+        ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
+        ProfileSheet.HELP -> Triple("Помощь и поддержка", "КОМПАС Android 1.0.5", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+    }
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead(title, subtitle)
+        Spacer(Modifier.height(16.dp))
+        GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) { Text(body, style = tBody2, color = CompasMutedFg) }
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton("Готово", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Check)
     }
 }
 
-@Composable
-private fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-    }
-}
-
-@Composable
-private fun InfoCard(icon: ImageVector, title: String, text: String) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-            Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(4.dp))
-                Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwitchItem(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
-        }
-    }
-}
-
-@Composable
-private fun SettingsSwitchRow(title: String, subtitle: String, initial: Boolean) {
-    var checked by remember { mutableStateOf(initial) }
-    SwitchItem(title, subtitle, checked) { checked = it }
-}
-
-@Composable
-private fun DocumentRow(title: String, ready: Boolean) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (ready) Icons.Outlined.CheckCircle else Icons.Outlined.Description, null, tint = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(if (ready) "Готово" else "Не заполнено", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActionButton(text: String, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(text) }
-}
-
-private enum class SettingsDetail(val title: String, val subtitle: String) {
-    SCHEDULE("Расписание", "Рабочие часы и правила"),
-    BOOKING_LINK("Ссылка для записи", "Самозапись клиентов"),
-    NOTIFICATIONS("Уведомления", "Напоминания и статусы"),
-    BILLING("Тариф и оплата", "Текущий тариф"),
-    DOCUMENTS("Документы", "Согласия и правила"),
-    ABOUT("О приложении", "Версия и поддержка"),
-}
+private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, DOCUMENTS, DATA, HELP }

@@ -38,3 +38,7 @@ gh_deploy_key
 gh_deploy_key.pub
 
 /src/generated/prisma
+
+# Generated during Android builds from the pinned official Vercel Geist release
+/android/app/src/main/res/font/geist_*.ttf
+/android/app/src/main/res/font/*.tmp

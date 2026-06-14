@@ -43,7 +43,6 @@ interface CompasApi {
     @DELETE("sessions/{id}")
     suspend fun cancelSession(@Path("id") id: String): Response<Unit>
 
-    // Free times for reschedule
     @GET("sessions/free-times")
     suspend fun getFreeTimes(
         @Query("date") date: String,
@@ -68,21 +67,18 @@ interface CompasApi {
         @Body body: UpdateClientRequest,
     ): Response<Client>
 
-    // Send message to client
     @POST("clients/{id}/message")
     suspend fun sendMessage(
         @Path("id") id: String,
         @Body body: SendMessageRequest,
     ): Response<SendMessageResponse>
 
-    // Generate invite link for client to connect Telegram/MAX
     @POST("clients/{id}/invite")
     suspend fun createInviteLink(
         @Path("id") id: String,
         @Body body: InviteRequest,
     ): Response<InviteResponse>
 
-    // New-client onboarding: options + send (notification + document)
     @GET("clients/{id}/onboarding")
     suspend fun getOnboardingOptions(
         @Path("id") id: String,
@@ -129,7 +125,6 @@ interface CompasApi {
     suspend fun unregisterFcmToken(): Response<Unit>
 }
 
-// ── Request bodies ──
 @kotlinx.serialization.Serializable
 data class MagicLinkRequest(val email: String)
 
@@ -149,6 +144,7 @@ data class CreateSessionRequest(
     val startTime: String,
     val endTime: String? = null,
     val format: SessionFormat = SessionFormat.ONLINE,
+    val type: SessionType = SessionType.INDIVIDUAL,
     val duration: Int? = null,
 )
 
@@ -165,6 +161,7 @@ data class CreateClientRequest(
     val name: String,
     val email: String? = null,
     val phone: String? = null,
+    val gender: String? = null,
 )
 
 @kotlinx.serialization.Serializable
@@ -180,7 +177,7 @@ data class FcmTokenRequest(val token: String)
 
 @kotlinx.serialization.Serializable
 data class SendMessageRequest(
-    val type: String, // "custom" | "reminder"
+    val type: String,
     val text: String? = null,
     val sessionId: String? = null,
 )

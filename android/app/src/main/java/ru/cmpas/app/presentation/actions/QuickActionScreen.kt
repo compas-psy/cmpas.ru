@@ -1,85 +1,46 @@
 package ru.cmpas.app.presentation.actions
 
 import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CreditCard
-import androidx.compose.material.icons.outlined.EventBusy
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.PersonAdd
-import androidx.compose.material.icons.outlined.Replay
-import androidx.compose.material.icons.outlined.Save
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Send
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SelectableDates
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
-import ru.cmpas.app.domain.model.Client
-import ru.cmpas.app.domain.model.OnboardingOptions
-import ru.cmpas.app.domain.model.OnboardingResult
-import ru.cmpas.app.domain.model.TimeSlot
+import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.theme.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuickActionScreen(
     type: String,
@@ -87,150 +48,355 @@ fun QuickActionScreen(
     onDone: () -> Unit,
     viewModel: QuickActionViewModel = hiltViewModel(),
 ) {
-    val config = quickActionConfig(type)
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    var primary by remember { mutableStateOf("") }
-    var secondary by remember { mutableStateOf("") }
-    var selectedClient by remember { mutableStateOf<Client?>(null) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
-    var useCustomTime by remember { mutableStateOf(false) }
-    var comment by remember { mutableStateOf("") }
+    var clientName by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var genderIndex by rememberSaveable { mutableIntStateOf(-1) }
+
+    var selectedClientId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedClient = uiState.clients.firstOrNull { it.id == selectedClientId }
+    var selectedDateText by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedDate = selectedDateText?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    var selectedTimeText by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedTime = selectedTimeText?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+    var sessionTypeIndex by rememberSaveable { mutableIntStateOf(0) }
+    var formatIndex by rememberSaveable { mutableIntStateOf(0) }
+    var customTime by rememberSaveable { mutableStateOf(false) }
+    var comment by rememberSaveable { mutableStateOf("") }
+
+    var genericPrimary by rememberSaveable { mutableStateOf("") }
+    var genericSecondary by rememberSaveable { mutableStateOf("") }
+
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var showSlotPicker by remember { mutableStateOf(false) }
+    var clientMenuOpen by remember { mutableStateOf(false) }
 
-    val isoDate = selectedDate?.toString()
-    val timeText = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm"))
-
-    LaunchedEffect(isoDate, type) {
-        if (type == "new-session" && !isoDate.isNullOrBlank()) viewModel.loadAvailableSlots(isoDate)
+    LaunchedEffect(selectedDateText, type, customTime) {
+        if (type == "new-session" && !customTime) viewModel.loadAvailableSlots(selectedDateText)
     }
 
-    // Native first touch: open the system share sheet so the psychologist can
-    // pick the messenger + the exact chat with this client and send right away.
-    val shareText: (String) -> Unit = { text ->
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            this.type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(Intent.createChooser(shareIntent, "Отправить клиенту").apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
+    fun showMessage(message: String) {
+        scope.launch { snackbarHostState.showSnackbar(message) }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(config.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(config.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
-        bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) { Text("Отмена") }
-                    Button(
-                        enabled = !uiState.isSaving,
-                        onClick = {
-                            viewModel.saveAction(type, primary, secondary, selectedClient, isoDate, timeText, comment) { success, message ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(message)
-                                    if (success) onDone()
+    val title = when (type) {
+        "new-session" -> "Добавить запись"
+        "new-client" -> "Добавить клиента"
+        else -> quickActionTitle(type)
+    }
+    val subtitle = when (type) {
+        "new-session" -> "Новая встреча в расписании"
+        "new-client" -> "Новая карточка клиента"
+        else -> "Быстрое действие"
+    }
+
+    val canSave = when (type) {
+        "new-client" -> clientName.isNotBlank()
+        "new-session" -> selectedClient != null && selectedDate != null && selectedTime != null
+        else -> genericPrimary.isNotBlank()
+    }
+
+    Box(Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
+
+        Column(Modifier.fillMaxSize()) {
+            QuickActionHeader(title = title, subtitle = subtitle, onBack = onBack)
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 116.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when (type) {
+                    "new-session" -> {
+                        item {
+                            IntroCard(
+                                icon = Icons.Outlined.CalendarMonth,
+                                title = "Добавить запись",
+                                text = "Выберите клиента, тип и формат встречи. Затем используйте свободный слот или укажите другое время.",
+                            )
+                        }
+                        item { Eyebrow("Клиент") }
+                        item {
+                            ClientPicker(
+                                clients = uiState.clients,
+                                selected = selectedClient,
+                                isLoading = uiState.isLoadingClients,
+                                expanded = clientMenuOpen,
+                                onExpandedChange = { clientMenuOpen = it },
+                                onSelect = {
+                                    selectedClientId = it.id
+                                    clientMenuOpen = false
+                                },
+                            )
+                        }
+                        item { Eyebrow("Тип встречи") }
+                        item {
+                            CompasSegmented(
+                                options = listOf("Индивид.", "Парная", "Семейная"),
+                                selectedIndex = sessionTypeIndex,
+                                onSelect = { sessionTypeIndex = it },
+                            )
+                        }
+                        item { Eyebrow("Формат") }
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                FormatChoice(
+                                    icon = Icons.Outlined.Videocam,
+                                    title = "Онлайн",
+                                    subtitle = "По видеосвязи",
+                                    selected = formatIndex == 0,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { formatIndex = 0 },
+                                )
+                                FormatChoice(
+                                    icon = Icons.Outlined.LocationOn,
+                                    title = "В кабинете",
+                                    subtitle = "Очная встреча",
+                                    selected = formatIndex == 1,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { formatIndex = 1 },
+                                )
+                            }
+                        }
+                        item { Eyebrow("Когда") }
+                        item {
+                            CompasSegmented(
+                                options = listOf("Свободный слот", "Другое время"),
+                                selectedIndex = if (customTime) 1 else 0,
+                                onSelect = {
+                                    customTime = it == 1
+                                    selectedTimeText = null
+                                },
+                            )
+                        }
+                        item {
+                            SelectorCard(
+                                icon = Icons.Outlined.CalendarMonth,
+                                label = "Дата",
+                                value = selectedDate?.let(::prettyDate) ?: "Выбрать дату",
+                                onClick = { showDatePicker = true },
+                            )
+                        }
+                        if (!customTime && selectedDate != null) {
+                            item {
+                                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 15.dp) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Доступное время", style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
+                                        if (uiState.isLoadingSlots) {
+                                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Forest700)
+                                        } else {
+                                            Text("${uiState.availableSlots.size} слотов", style = tMeta, color = CompasMutedFg)
+                                        }
+                                    }
+                                    Spacer(Modifier.height(12.dp))
+                                    when {
+                                        uiState.isLoadingSlots -> Text("Проверяем расписание…", style = tBody2)
+                                        uiState.availableSlots.isEmpty() -> {
+                                            Text("Свободных слотов нет. Выберите другое время.", style = tBody2)
+                                            Spacer(Modifier.height(10.dp))
+                                            GhostButton(
+                                                text = "Выбрать другое время",
+                                                icon = Icons.Outlined.EditCalendar,
+                                                onClick = { customTime = true },
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                        else -> FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            uiState.availableSlots.forEach { slot ->
+                                                TimeChoice(
+                                                    text = slot.startTime,
+                                                    selected = selectedTimeText == slot.startTime,
+                                                    onClick = { selectedTimeText = slot.startTime },
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        },
-                        modifier = Modifier.weight(1.4f),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Icon(Icons.Outlined.Save, contentDescription = null)
-                        Text(if (uiState.isSaving) "Сохраняю…" else config.button)
+                        }
+                        if (customTime) {
+                            item {
+                                SelectorCard(
+                                    icon = Icons.Outlined.Schedule,
+                                    label = "Время",
+                                    value = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Выбрать время",
+                                    onClick = { showTimePicker = true },
+                                )
+                            }
+                        }
+                        item {
+                            GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+                                OutlinedTextField(
+                                    value = comment,
+                                    onValueChange = { comment = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Комментарий") },
+                                    placeholder = { Text("Необязательно") },
+                                    minLines = 3,
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = glassTextFieldColors(),
+                                )
+                            }
+                        }
+                    }
+
+                    "new-client" -> {
+                        item {
+                            IntroCard(
+                                icon = Icons.Outlined.PersonAdd,
+                                title = "Новый клиент",
+                                text = "Создайте карточку с теми же базовыми данными, что используются в web-сервисе.",
+                            )
+                        }
+                        item {
+                            GlassInput(
+                                label = "Имя *",
+                                placeholder = "ФИО",
+                                value = clientName,
+                                onValueChange = { clientName = it },
+                                keyboardType = KeyboardType.Text,
+                            )
+                        }
+                        item {
+                            GlassInput(
+                                label = "Телефон",
+                                placeholder = "+7 (___) ___-__-__",
+                                value = phone,
+                                onValueChange = { phone = it },
+                                keyboardType = KeyboardType.Phone,
+                            )
+                        }
+                        item {
+                            GlassInput(
+                                label = "Email",
+                                placeholder = "email@example.com",
+                                value = email,
+                                onValueChange = { email = it },
+                                keyboardType = KeyboardType.Email,
+                            )
+                        }
+                        item { Eyebrow("Пол") }
+                        item {
+                            CompasSegmented(
+                                options = listOf("Мужской", "Женский"),
+                                selectedIndex = genderIndex,
+                                onSelect = { genderIndex = it },
+                            )
+                        }
+                    }
+
+                    else -> {
+                        item {
+                            IntroCard(
+                                icon = genericIcon(type),
+                                title = title,
+                                text = "Заполните данные — изменение сразу синхронизируется с рабочими экранами.",
+                            )
+                        }
+                        item {
+                            GlassInput(
+                                label = "Название",
+                                placeholder = "Введите значение",
+                                value = genericPrimary,
+                                onValueChange = { genericPrimary = it },
+                                keyboardType = KeyboardType.Text,
+                            )
+                        }
+                        item {
+                            GlassInput(
+                                label = "Дополнительно",
+                                placeholder = "Необязательно",
+                                value = genericSecondary,
+                                onValueChange = { genericSecondary = it },
+                                keyboardType = KeyboardType.Text,
+                            )
+                        }
                     }
                 }
             }
-        },
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(config.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text(config.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(config.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            if (config.needsExistingClient) {
-                ClientSelector(uiState.clients, uiState.isLoadingClients, selectedClient) { selectedClient = it }
-            } else {
-                OutlinedTextField(value = primary, onValueChange = { primary = it }, modifier = Modifier.fillMaxWidth(), label = { Text(config.primaryLabel) }, singleLine = true, shape = RoundedCornerShape(18.dp))
-            }
-
-            if (config.showSecondaryField) {
-                OutlinedTextField(value = secondary, onValueChange = { secondary = it }, modifier = Modifier.fillMaxWidth(), label = { Text(config.secondaryLabel ?: "Дополнительно") }, singleLine = true, shape = RoundedCornerShape(18.dp))
-            }
-
-            if (config.showSlotMode) SlotModeSelector(useCustomTime) { useCustomTime = it }
-
-            if (config.needsDateTime) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PickerField(
-                        label = "Дата",
-                        value = selectedDate?.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) ?: "Выбрать дату",
-                        modifier = Modifier.weight(1f),
-                        onClick = { showDatePicker = true },
-                    )
-                    PickerField(
-                        label = if (config.showSlotMode && !useCustomTime) "Слот" else "Время",
-                        value = timeText ?: if (config.showSlotMode && !useCustomTime) "Выбрать слот" else "Выбрать время",
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            if (config.showSlotMode && !useCustomTime) {
-                                if (selectedDate == null) showDatePicker = true else showSlotPicker = true
-                            } else showTimePicker = true
-                        },
-                    )
-                }
-                if (config.showSlotMode && !useCustomTime && selectedDate != null) {
-                    Text(
-                        text = if (uiState.isLoadingSlots) "Ищу свободные слоты…" else "Свободных слотов: ${uiState.availableSlots.size}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            OutlinedTextField(value = comment, onValueChange = { comment = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Комментарий") }, minLines = 3, shape = RoundedCornerShape(18.dp))
-            Spacer(Modifier.height(96.dp))
         }
+
+        Row(
+            Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(CompasBg.copy(alpha = 0.96f))
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            GhostButton("Отмена", onBack, Modifier.weight(0.8f), Icons.Outlined.Close)
+            PrimaryButton(
+                text = when (type) {
+                    "new-session" -> if (uiState.isSaving) "Добавляем…" else "Добавить запись"
+                    "new-client" -> if (uiState.isSaving) "Добавляем…" else "Добавить"
+                    else -> if (uiState.isSaving) "Сохраняем…" else "Сохранить"
+                },
+                icon = if (uiState.isSaving) null else Icons.Outlined.Check,
+                enabled = canSave && !uiState.isSaving,
+                modifier = Modifier.weight(1.35f),
+                onClick = {
+                    when (type) {
+                        "new-client" -> viewModel.createClient(
+                            name = clientName,
+                            phone = phone,
+                            email = email,
+                            gender = when (genderIndex) { 0 -> "male"; 1 -> "female"; else -> null },
+                        ) { success, message ->
+                            if (success) onDone() else showMessage(message)
+                        }
+                        "new-session" -> viewModel.createSession(
+                            client = selectedClient,
+                            date = selectedDateText,
+                            time = selectedTimeText,
+                            type = SessionType.entries[sessionTypeIndex],
+                            format = if (formatIndex == 0) SessionFormat.ONLINE else SessionFormat.IN_PERSON,
+                            comment = comment,
+                        ) { success, message, hasOnboarding ->
+                            if (!success) showMessage(message)
+                            else if (!hasOnboarding) onDone()
+                        }
+                        else -> viewModel.saveGenericAction(
+                            type = type,
+                            primary = genericPrimary,
+                            secondary = genericSecondary,
+                            selectedClient = selectedClient,
+                            date = selectedDateText,
+                            time = selectedTimeText,
+                            comment = comment,
+                        ) { success, message -> if (success) onDone() else showMessage(message) }
+                    }
+                },
+            )
+        }
+
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
     }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(selectableDates = object : SelectableDates { override fun isSelectableDate(utcTimeMillis: Long): Boolean = true })
+        val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStart
+            },
+        )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        selectedDate = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-                        selectedTime = null
+                        selectedDateText = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                        selectedTimeText = null
                     }
                     showDatePicker = false
                 }) { Text("Выбрать") }
@@ -239,28 +405,23 @@ fun QuickActionScreen(
         ) { DatePicker(state = datePickerState) }
     }
 
-    if (showSlotPicker) {
-        SlotPickerDialog(
-            slots = uiState.availableSlots,
-            isLoading = uiState.isLoadingSlots,
-            onDismiss = { showSlotPicker = false },
-            onSelect = { slot -> selectedTime = LocalTime.parse(slot.startTime, DateTimeFormatter.ofPattern("HH:mm")); showSlotPicker = false },
-        )
-    }
-
     if (showTimePicker) {
         val initial = selectedTime ?: LocalTime.of(14, 0)
-        val timePickerState = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = true)
+        val picker = rememberTimePickerState(initial.hour, initial.minute, true)
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("Выберите время") },
-            text = { TimePicker(state = timePickerState) },
-            confirmButton = { TextButton(onClick = { selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute); showTimePicker = false }) { Text("Выбрать") } },
+            title = { Text("Другое время", style = tSection) },
+            text = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TimePicker(picker) } },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedTimeText = LocalTime.of(picker.hour, picker.minute).format(DateTimeFormatter.ofPattern("HH:mm"))
+                    showTimePicker = false
+                }) { Text("Выбрать") }
+            },
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Отмена") } },
         )
     }
 
-    // Onboarding dialog: shown after first session for a new client
     uiState.onboardingInfo?.let { info ->
         LaunchedEffect(info.clientId) { viewModel.loadOnboardingOptions(info.clientId) }
         OnboardingDialog(
@@ -268,12 +429,181 @@ fun QuickActionScreen(
             isBusy = uiState.isOnboardingBusy,
             options = uiState.onboardingOptions,
             result = uiState.onboardingResult,
-            onSubmit = { channel, notify, docId -> viewModel.submitOnboarding(info.clientId, channel, notify, docId) },
-            onShare = shareText,
-            onDismiss = { viewModel.dismissOnboarding(); onDone() },
+            onSubmit = { channel, notify, documentId -> viewModel.submitOnboarding(info.clientId, channel, notify, documentId) },
+            onShare = { text ->
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    this.type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Отправить клиенту"))
+            },
+            onDismiss = {
+                viewModel.dismissOnboarding()
+                onDone()
+            },
         )
     }
 }
+
+@Composable
+private fun QuickActionHeader(title: String, subtitle: String, onBack: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButtonGlass(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", onClick = onBack)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = tSection, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = tBody2, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun IntroCard(icon: ImageVector, title: String, text: String) {
+    GlassTintCard(Modifier.fillMaxWidth(), padding = 18.dp) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, Modifier.size(22.dp), tint = Color.White)
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(title, style = tSection, color = Color.White)
+        Spacer(Modifier.height(5.dp))
+        Text(text, style = tBody2, color = Color.White.copy(alpha = .78f))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClientPicker(
+    clients: List<Client>,
+    selected: Client?,
+    isLoading: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelect: (Client) -> Unit,
+) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpandedChange) {
+        GlassCard(Modifier.menuAnchor().fillMaxWidth(), padding = 4.dp) {
+            OutlinedTextField(
+                value = selected?.name ?: if (isLoading) "Загружаем клиентов…" else "Выбрать клиента",
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Outlined.PersonOutline, null, tint = Forest700) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                shape = RoundedCornerShape(16.dp),
+                colors = glassTextFieldColors(),
+            )
+        }
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+            if (clients.isEmpty()) {
+                DropdownMenuItem(text = { Text("Клиенты не найдены") }, onClick = { onExpandedChange(false) })
+            } else clients.forEach { client ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(client.name, style = tBody, color = CompasFg)
+                            Text(clientContext(client), style = tMeta, color = CompasMutedFg)
+                        }
+                    },
+                    leadingIcon = { Avatar(client.name, 34.dp) },
+                    onClick = { onSelect(client) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormatChoice(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Column(
+        modifier
+            .pressScale(interaction)
+            .clip(RoundedCornerShape(20.dp))
+            .then(if (selected) Modifier.background(Sage100).border(1.5.dp, Forest700, RoundedCornerShape(20.dp)) else Modifier.glass(radius = 20.dp))
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(14.dp),
+    ) {
+        Icon(icon, null, Modifier.size(23.dp), tint = if (selected) Forest700 else CompasMutedFg)
+        Spacer(Modifier.height(10.dp))
+        Text(title, style = tBody, color = CompasFg, maxLines = 1)
+        Text(subtitle, style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun SelectorCard(icon: ImageVector, label: String, value: String, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Sage100), contentAlignment = Alignment.Center) {
+                Icon(icon, null, Modifier.size(21.dp), tint = Forest700)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(label, style = tMeta, color = CompasMutedFg)
+                Text(value, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = CompasMutedFg)
+        }
+    }
+}
+
+@Composable
+private fun TimeChoice(text: String, selected: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(13.dp))
+            .then(if (selected) Modifier.background(Forest700) else Modifier.background(Sage50).border(1.dp, CompasBorder, RoundedCornerShape(13.dp)))
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 15.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = tBody, color = if (selected) Color.White else CompasFg)
+    }
+}
+
+@Composable
+private fun GlassInput(
+    label: String,
+    placeholder: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType,
+) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(label) },
+            placeholder = { Text(placeholder) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            shape = RoundedCornerShape(16.dp),
+            colors = glassTextFieldColors(),
+        )
+    }
+}
+
+@Composable
+private fun glassTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    focusedBorderColor = Forest700,
+    unfocusedBorderColor = Color.Transparent,
+    focusedLabelColor = Forest700,
+    unfocusedLabelColor = CompasMutedFg,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -282,14 +612,13 @@ private fun OnboardingDialog(
     isBusy: Boolean,
     options: OnboardingOptions?,
     result: OnboardingResult?,
-    onSubmit: (channel: String, sendNotification: Boolean, documentId: String?) -> Unit,
+    onSubmit: (String, Boolean, String?) -> Unit,
     onShare: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var channel by remember { mutableStateOf("telegram") }
-    var sendNotification by remember { mutableStateOf(true) }
-    var documentId by remember { mutableStateOf<String?>(null) }
-    var docExpanded by remember { mutableStateOf(false) }
+    var channel by rememberSaveable { mutableStateOf("telegram") }
+    var sendNotification by rememberSaveable { mutableStateOf(true) }
+    var documentId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(options) {
         options?.let {
@@ -298,102 +627,27 @@ private fun OnboardingDialog(
         }
     }
 
-    val channelLabel = if (channel == "telegram") "Telegram" else "MAX"
     val connected = if (channel == "telegram") options?.hasTelegram == true else options?.hasMax == true
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (result?.status == "sent") "Отправлено" else "Сообщение клиенту", fontWeight = FontWeight.Bold) },
+        title = { Text(if (result?.status == "sent") "Отправлено" else "Что отправить клиенту?", style = tSection) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(info.clientName, style = tBody, color = CompasFg)
                 when {
-                    options == null && result == null -> Text("Загрузка…", style = MaterialTheme.typography.bodyMedium)
-
-                    result?.status == "sent" -> Text(
-                        "Клиент ${info.clientName} получил сообщение в $channelLabel.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-
+                    options == null && result == null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = Forest700)
+                    result?.status == "sent" -> Text("Материалы отправлены в ${if (channel == "telegram") "Telegram" else "MAX"}.", style = tBody2)
                     result?.status == "pending" -> {
-                        Text(
-                            "$channelLabel не даёт боту написать первым. Отправьте приглашение — сообщение придёт автоматически, как только клиент откроет бота. Или напишите ему сейчас сами.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        result?.inviteLink?.let { link ->
-                            Button(
-                                onClick = { onShare("Здравствуйте! Для записи и уведомлений откройте ссылку: $link") },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                            ) { Icon(Icons.Outlined.Send, null); Text("  Отправить приглашение") }
-                        }
-                        result?.readyText?.let { text ->
-                            OutlinedButton(
-                                onClick = { onShare(text) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                            ) { Text("Открыть чат и написать сейчас") }
-                        }
+                        Text("Клиент ещё не подключил бота. Откройте системное меню и отправьте подготовленное сообщение вручную.", style = tBody2)
+                        result.readyText?.let { text -> PrimaryButton("Отправить вручную", { onShare(text) }, Modifier.fillMaxWidth(), Icons.Outlined.Share) }
                     }
-
                     options != null -> {
-                        // Messenger selector
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            listOf("telegram" to "Telegram", "max" to "MAX").forEach { (key, label) ->
-                                val sel = channel == key
-                                val on = if (key == "telegram") options.hasTelegram else options.hasMax
-                                if (sel) {
-                                    Button(onClick = { channel = key }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                                        Text(label + if (on) " ●" else "")
-                                    }
-                                } else {
-                                    OutlinedButton(onClick = { channel = key }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                                        Text(label + if (on) " ●" else "")
-                                    }
-                                }
-                            }
-                        }
-                        Text(
-                            if (connected) "$channelLabel подключён — придёт сразу." else "Клиент ещё не в $channelLabel.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        // Notification checkbox
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = sendNotification && options.hasSession, enabled = options.hasSession, onCheckedChange = { sendNotification = it })
-                            Text(
-                                if (options.hasSession) "Уведомление о первой записи" else "Уведомление (запланируйте сессию)",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-
-                        // Document checkbox + selector
-                        if (options.documents.isNotEmpty()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = documentId != null,
-                                    onCheckedChange = { documentId = if (it) options.documents.first().id else null },
-                                )
-                                Text("Документ", style = MaterialTheme.typography.bodyMedium)
-                            }
-                            if (documentId != null && options.documents.size > 1) {
-                                ExposedDropdownMenuBox(expanded = docExpanded, onExpandedChange = { docExpanded = it }) {
-                                    OutlinedTextField(
-                                        value = options.documents.firstOrNull { it.id == documentId }?.title ?: "",
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        modifier = Modifier.menuAnchor().fillMaxWidth(),
-                                        label = { Text("Какой документ") },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = docExpanded) },
-                                        shape = RoundedCornerShape(12.dp),
-                                    )
-                                    ExposedDropdownMenu(expanded = docExpanded, onDismissRequest = { docExpanded = false }) {
-                                        options.documents.forEach { d ->
-                                            DropdownMenuItem(text = { Text(d.title) }, onClick = { documentId = d.id; docExpanded = false })
-                                        }
-                                    }
-                                }
+                        CompasSegmented(listOf("Telegram", "MAX"), if (channel == "telegram") 0 else 1) { channel = if (it == 0) "telegram" else "max" }
+                        Text(if (connected) "Канал подключён — сообщение придёт сразу." else "Канал не подключён — подготовим ручную отправку.", style = tMeta, color = CompasMutedFg)
+                        ToggleRow("Уведомление о записи", sendNotification && options.hasSession, options.hasSession) { sendNotification = it }
+                        options.documents.forEach { document ->
+                            ToggleRow(document.title, documentId == document.id, true) {
+                                documentId = if (it) document.id else null
                             }
                         }
                     }
@@ -401,111 +655,56 @@ private fun OnboardingDialog(
             }
         },
         confirmButton = {
-            if (result == null && options != null) {
-                Button(
-                    enabled = !isBusy && ((sendNotification && options.hasSession) || documentId != null),
+            when {
+                result != null -> TextButton(onClick = onDismiss) { Text("Готово") }
+                options != null -> Button(
                     onClick = { onSubmit(channel, sendNotification && options.hasSession, documentId) },
-                ) { Text(if (isBusy) "…" else if (connected) "Отправить" else "Подготовить") }
-            } else if (result != null) {
-                Button(onClick = onDismiss) { Text("Готово") }
+                    enabled = !isBusy && ((sendNotification && options.hasSession) || documentId != null),
+                ) { Text(if (isBusy) "Отправляем…" else if (connected) "Отправить" else "Подготовить") }
             }
         },
-        dismissButton = { if (result?.status != "sent") TextButton(onClick = onDismiss) { Text("Пропустить") } },
+        dismissButton = { if (result == null) TextButton(onClick = onDismiss) { Text("Пропустить") } },
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ClientSelector(clients: List<Client>, isLoading: Boolean, selectedClient: Client?, onSelect: (Client) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = selectedClient?.name ?: if (isLoading) "Загружаю клиентов…" else "Выбрать клиента",
-            onValueChange = {},
-            readOnly = true,
-            modifier = Modifier.menuAnchor().fillMaxWidth(),
-            label = { Text("Клиент") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            shape = RoundedCornerShape(18.dp),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            if (clients.isEmpty()) DropdownMenuItem(text = { Text("Клиенты не найдены") }, onClick = { expanded = false })
-            else clients.forEach { client -> DropdownMenuItem(text = { Text(client.name) }, onClick = { onSelect(client); expanded = false }) }
-        }
-    }
-}
-
-@Composable
-private fun SlotModeSelector(useCustomTime: Boolean, onModeChange: (Boolean) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AssistChip(onClick = { onModeChange(false) }, label = { Text("Свободный слот") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null) })
-        AssistChip(onClick = { onModeChange(true) }, label = { Text("Кастомное время") }, leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null) })
-    }
-}
-
-@Composable
-private fun PickerField(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = modifier.height(58.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = ButtonDefaults.outlinedButtonBorder(enabled = true),
+private fun ToggleRow(title: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Sage50).clickable(enabled = enabled) { onChange(!checked) }.padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            }
-            Icon(Icons.Outlined.CalendarMonth, null, tint = MaterialTheme.colorScheme.primary)
-        }
+        Checkbox(checked = checked, enabled = enabled, onCheckedChange = onChange)
+        Text(title, style = tBody, color = if (enabled) CompasFg else CompasMutedFg, modifier = Modifier.weight(1f))
     }
 }
 
-@Composable
-private fun SlotPickerDialog(slots: List<TimeSlot>, isLoading: Boolean, onDismiss: () -> Unit, onSelect: (TimeSlot) -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Свободный слот") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                when {
-                    isLoading -> Text("Загружаю свободные слоты…")
-                    slots.isEmpty() -> Text("Свободных слотов на эту дату нет. Можно выбрать кастомное время.")
-                    else -> slots.take(12).forEach { slot ->
-                        Surface(modifier = Modifier.fillMaxWidth().clickable { onSelect(slot) }, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)) {
-                            Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.Schedule, null, tint = MaterialTheme.colorScheme.primary)
-                                Text("${slot.startTime}–${slot.endTime}", modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
-    )
+private fun prettyDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("d MMMM, EEE", Locale("ru")))
+    .replaceFirstChar { it.titlecase(Locale("ru")) }
+
+private fun clientContext(client: Client): String = when {
+    client.nextSessionDate != null -> "Ближайшая запись · ${client.nextSessionDate}${client.nextSessionTime?.let { " · $it" }.orEmpty()}"
+    client.lastSessionDate != null -> "Последняя встреча · ${client.lastSessionDate}"
+    else -> "Без записей"
 }
 
-private data class QuickActionConfig(
-    val title: String,
-    val subtitle: String,
-    val description: String,
-    val primaryLabel: String,
-    val secondaryLabel: String? = null,
-    val showSecondaryField: Boolean = true,
-    val button: String,
-    val icon: ImageVector,
-    val needsExistingClient: Boolean = false,
-    val needsDateTime: Boolean = true,
-    val showSlotMode: Boolean = false,
-)
+private fun quickActionTitle(type: String) = when (type) {
+    "block-time" -> "Добавить блокировку"
+    "booking-link" -> "Ссылка для записи"
+    "payment" -> "Отметить оплату"
+    "repeat-slot" -> "Повторить слот"
+    "edit-client" -> "Изменить клиента"
+    "archive-client" -> "Архивировать клиента"
+    "delete-client" -> "Удалить клиента"
+    else -> "Быстрое действие"
+}
 
-private fun quickActionConfig(type: String): QuickActionConfig = when (type) {
-    "new-client" -> QuickActionConfig("Добавить клиента", "Новая карточка", "Создайте карточку клиента, чтобы планировать сессии, вести заметки и документы.", "Имя клиента", "Телефон или email", true, "Добавить", Icons.Outlined.PersonAdd, needsDateTime = false)
-    "new-session" -> QuickActionConfig("Новая запись", "Сессия в расписании", "Сначала выберите клиента и дату. Затем выберите один из свободных слотов психолога или перейдите в кастомное время.", "Клиент", "Формат: онлайн / офлайн", true, "Записать", Icons.Outlined.CalendarMonth, needsExistingClient = true, showSlotMode = true)
-    "block-time" -> QuickActionConfig("Добавить блокировку", "Закрыть окно в расписании", "Выберите дату и время блокировки через пикеры. Блокировка нужна для личного времени, перерыва, отпуска или внешней встречи.", "Название блокировки", "Тип: перерыв / отпуск / личное", true, "Заблокировать", Icons.Outlined.EventBusy)
-    "booking-link" -> QuickActionConfig("Ссылка записи", "Для клиента", "Выберите клиента из списка и подготовьте ссылку самозаписи для отправки в мессенджере.", "Клиент", "Комментарий к ссылке", true, "Подготовить", Icons.Outlined.Link, needsExistingClient = true, needsDateTime = false)
-    "payment" -> QuickActionConfig("Отметить оплату", "По ближайшей сессии", "Выберите клиента и укажите сумму. Позже действие будет связано с серверным статусом оплаты.", "Клиент", "Сумма", true, "Отметить", Icons.Outlined.CreditCard, needsExistingClient = true, needsDateTime = false)
-    "repeat-slot" -> QuickActionConfig("Повторить слот", "Следующая неделя", "Выберите клиента из списка, дату, время и количество повторов для регулярной работы.", "Клиент", "Количество повторов", true, "Повторить", Icons.Outlined.Replay, needsExistingClient = true)
-    else -> QuickActionConfig("Быстрое действие", "КОМПАС", "Заполните основные поля.", "Название", showSecondaryField = false, button = "Сохранить", icon = Icons.Outlined.CalendarMonth)
+private fun genericIcon(type: String): ImageVector = when (type) {
+    "block-time" -> Icons.Outlined.EventBusy
+    "booking-link" -> Icons.Outlined.Link
+    "payment" -> Icons.Outlined.Payments
+    "repeat-slot" -> Icons.Outlined.Replay
+    "edit-client" -> Icons.Outlined.Edit
+    "archive-client" -> Icons.Outlined.Archive
+    "delete-client" -> Icons.Outlined.DeleteOutline
+    else -> Icons.Outlined.Bolt
 }
