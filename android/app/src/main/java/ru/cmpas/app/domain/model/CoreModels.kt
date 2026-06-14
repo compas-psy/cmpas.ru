@@ -25,6 +25,7 @@ data class Session(
     val endTime: String,
     val status: SessionStatus,
     val format: SessionFormat,
+    val type: SessionType = SessionType.INDIVIDUAL,
     val videoLink: String? = null,
     val notes: String? = null,
     val seriesId: String? = null,
@@ -44,6 +45,9 @@ enum class SessionStatus { PENDING, CONFIRMED, COMPLETED, CANCELLED, NO_SHOW }
 
 @Serializable
 enum class SessionFormat { ONLINE, IN_PERSON }
+
+@Serializable
+enum class SessionType { INDIVIDUAL, COUPLE, FAMILY }
 
 @Serializable
 enum class PaymentStatus { PAID, UNPAID, PARTIAL, NOT_REQUIRED }

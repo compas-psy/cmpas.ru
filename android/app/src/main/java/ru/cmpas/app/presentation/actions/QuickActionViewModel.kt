@@ -17,12 +17,13 @@ import ru.cmpas.app.domain.model.OnboardingOptions
 import ru.cmpas.app.domain.model.OnboardingResult
 import ru.cmpas.app.domain.model.OnboardingSendRequest
 import ru.cmpas.app.domain.model.SessionFormat
+import ru.cmpas.app.domain.model.SessionType
 import ru.cmpas.app.domain.model.TimeSlot
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
-/** Info passed to the onboarding bottom sheet after a new client's first session is created. */
 data class OnboardingInfo(
     val clientId: String,
     val clientName: String,
@@ -48,8 +49,13 @@ class QuickActionViewModel @Inject constructor(
             try {
                 val response = api.getClients()
                 val remoteClients = if (response.isSuccessful) response.body().orEmpty() else emptyList()
-                remoteClients.forEach { localStore.upsertClient(it) }
-                _uiState.update { it.copy(isLoadingClients = false, clients = mergeClients(remoteClients, localStore.getClients())) }
+                remoteClients.forEach(localStore::upsertClient)
+                _uiState.update {
+                    it.copy(
+                        isLoadingClients = false,
+                        clients = mergeClients(remoteClients, localStore.getClients()),
+                    )
+                }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isLoadingClients = false, clients = localClients) }
             }
@@ -71,14 +77,67 @@ class QuickActionViewModel @Inject constructor(
                         TimeSlot(date, start, addMinutes(start, 50), available = true)
                     }
                 } else emptyList()
-                _uiState.update { it.copy(isLoadingSlots = false, availableSlots = if (slots.isNotEmpty()) slots else fallback) }
+                _uiState.update {
+                    it.copy(
+                        isLoadingSlots = false,
+                        availableSlots = if (slots.isNotEmpty()) slots else fallback,
+                    )
+                }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isLoadingSlots = false, availableSlots = fallback) }
             }
         }
     }
 
-    fun saveAction(
+    fun createClient(
+        name: String,
+        phone: String,
+        email: String,
+        gender: String?,
+        onFinished: (Boolean, String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            runCatching { saveClient(name, phone, email, gender) }
+                .onSuccess { message ->
+                    _uiState.update { it.copy(isSaving = false) }
+                    PracticeRefreshBus.notifyChanged()
+                    loadClients()
+                    onFinished(true, message)
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isSaving = false) }
+                    onFinished(false, error.message ?: "Не удалось добавить клиента")
+                }
+        }
+    }
+
+    fun createSession(
+        client: Client?,
+        date: String?,
+        time: String?,
+        type: SessionType,
+        format: SessionFormat,
+        comment: String,
+        onFinished: (Boolean, String, Boolean) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            runCatching { saveSession(client, date, time, type, format, comment) }
+                .onSuccess { message ->
+                    _uiState.update { it.copy(isSaving = false) }
+                    PracticeRefreshBus.notifyChanged()
+                    loadClients()
+                    onFinished(true, message, _uiState.value.onboardingInfo != null)
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isSaving = false) }
+                    onFinished(false, error.message ?: "Не удалось добавить запись", false)
+                }
+        }
+    }
+
+    fun saveGenericAction(
         type: String,
         primary: String,
         secondary: String,
@@ -90,34 +149,36 @@ class QuickActionViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
-            try {
-                val message = when (type) {
-                    "new-client" -> saveClient(primary, secondary, comment)
-                    "new-session" -> saveSession(selectedClient, date, time, secondary, comment)
+            runCatching {
+                when (type) {
                     "block-time" -> saveBlock(primary, secondary, date, time, comment)
                     "repeat-slot" -> saveRepeatedSlot(selectedClient, date, time, secondary, comment)
-                    "payment" -> "Оплата отмечена локально. Серверный статус оплаты будет подключён после API."
-                    "booking-link" -> "Ссылка записи подготовлена для ${selectedClient?.name ?: "клиента"}."
-                    else -> "Сохранено локально."
+                    "payment" -> "Оплата отмечена"
+                    "booking-link" -> "Ссылка записи подготовлена для ${selectedClient?.name ?: "клиента"}"
+                    else -> "Сохранено"
                 }
+            }.onSuccess { message ->
                 _uiState.update { it.copy(isSaving = false) }
+                PracticeRefreshBus.notifyChanged()
                 onFinished(true, message)
-                loadClients()
-            } catch (e: Exception) {
+            }.onFailure { error ->
                 _uiState.update { it.copy(isSaving = false) }
-                onFinished(false, e.message ?: "Не удалось сохранить")
+                onFinished(false, error.message ?: "Не удалось сохранить")
             }
         }
     }
-
-    // ── Onboarding (after first session created for a new client) ──
 
     fun loadOnboardingOptions(clientId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isOnboardingBusy = true) }
             try {
-                val r = api.getOnboardingOptions(clientId)
-                _uiState.update { it.copy(isOnboardingBusy = false, onboardingOptions = if (r.isSuccessful) r.body() else null) }
+                val response = api.getOnboardingOptions(clientId)
+                _uiState.update {
+                    it.copy(
+                        isOnboardingBusy = false,
+                        onboardingOptions = if (response.isSuccessful) response.body() else null,
+                    )
+                }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isOnboardingBusy = false) }
             }
@@ -128,8 +189,13 @@ class QuickActionViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isOnboardingBusy = true) }
             try {
-                val r = api.sendOnboarding(clientId, OnboardingSendRequest(channel, sendNotification, documentId))
-                _uiState.update { it.copy(isOnboardingBusy = false, onboardingResult = if (r.isSuccessful) r.body() else null) }
+                val response = api.sendOnboarding(clientId, OnboardingSendRequest(channel, sendNotification, documentId))
+                _uiState.update {
+                    it.copy(
+                        isOnboardingBusy = false,
+                        onboardingResult = if (response.isSuccessful) response.body() else null,
+                    )
+                }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isOnboardingBusy = false) }
             }
@@ -140,50 +206,88 @@ class QuickActionViewModel @Inject constructor(
         it.copy(onboardingInfo = null, onboardingOptions = null, onboardingResult = null)
     }
 
-    fun consumeOnboardingShare() = _uiState.update { it.copy(onboardingResult = it.onboardingResult?.copy(readyText = null, inviteLink = null)) }
-
-    // ── Private helpers ──
-
-    private suspend fun saveClient(name: String, contact: String, notes: String): String {
+    private suspend fun saveClient(name: String, phone: String, email: String, gender: String?): String {
         require(name.isNotBlank()) { "Укажите имя клиента" }
-        val phone = contact.takeIf { it.isNotBlank() && !it.contains("@") }
-        val email = contact.takeIf { it.contains("@") }
+        require(email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            "Проверьте адрес электронной почты"
+        }
+
         return try {
-            val response = api.createClient(CreateClientRequest(name = name, email = email, phone = phone))
+            val response = api.createClient(
+                CreateClientRequest(
+                    name = name.trim(),
+                    email = email.trim().ifBlank { null },
+                    phone = phone.trim().ifBlank { null },
+                    gender = gender,
+                ),
+            )
             val client = if (response.isSuccessful) response.body() else null
-            if (client != null) { localStore.upsertClient(client.copy(notes = notes.ifBlank { client.notes })); "Клиент создан и сохранён" }
-            else { localStore.createClient(name, phone, email, notes); "Клиент сохранён локально" }
-        } catch (_: Exception) { localStore.createClient(name, phone, email, notes); "Клиент сохранён локально" }
+            if (client != null) {
+                localStore.upsertClient(client)
+                "Клиент добавлен"
+            } else {
+                localStore.createClient(name.trim(), phone, email, gender, null)
+                "Клиент сохранён на устройстве"
+            }
+        } catch (_: Exception) {
+            localStore.createClient(name.trim(), phone, email, gender, null)
+            "Клиент сохранён на устройстве"
+        }
     }
 
-    private suspend fun saveSession(client: Client?, date: String?, time: String?, formatRaw: String, comment: String): String {
+    private suspend fun saveSession(
+        client: Client?,
+        date: String?,
+        time: String?,
+        type: SessionType,
+        format: SessionFormat,
+        comment: String,
+    ): String {
         require(client != null) { "Выберите клиента" }
         require(!date.isNullOrBlank()) { "Выберите дату" }
-        require(!time.isNullOrBlank()) { "Выберите свободный слот или время" }
-        val format = if (formatRaw.lowercase().contains("оф") || formatRaw.lowercase().contains("кабин")) SessionFormat.IN_PERSON else SessionFormat.ONLINE
+        require(!time.isNullOrBlank()) { "Выберите свободный слот или другое время" }
         val endTime = addMinutes(time, 50)
-        return try {
-            val response = if (!client.id.startsWith("local-")) api.createSession(CreateSessionRequest(client.id, date, time, endTime, format)) else null
-            val session = if (response?.isSuccessful == true) response.body() else null
-            if (session != null) {
-                localStore.upsertSession(session)
-                // Trigger onboarding if this client has no messenger linked
-                if (client.telegramId == null && client.sessionsCount == 0) {
-                    _uiState.update {
-                        it.copy(onboardingInfo = OnboardingInfo(
-                            clientId = client.id,
-                            clientName = client.name,
-                            phone = client.phone,
-                            sessionId = session.id,
-                        ))
-                    }
-                }
-                "Запись создана"
-            } else {
-                localStore.createSession(client, date, time, endTime, format, comment)
-                "Запись сохранена локально"
+
+        if (client.id.startsWith("local-")) {
+            localStore.createSession(client, date, time, endTime, format, type, comment)
+            return "Запись добавлена на устройстве"
+        }
+
+        val response = api.createSession(
+            CreateSessionRequest(
+                clientId = client.id,
+                date = date,
+                startTime = time,
+                endTime = endTime,
+                format = format,
+                type = type,
+                duration = 50,
+            ),
+        )
+        if (!response.isSuccessful) {
+            val message = when (response.code()) {
+                409 -> "Это время уже занято. Выберите другой слот"
+                400 -> "Проверьте клиента, дату и время"
+                else -> "Не удалось добавить запись (${response.code()})"
             }
-        } catch (_: Exception) { localStore.createSession(client, date, time, endTime, format, comment); "Запись сохранена локально" }
+            throw IllegalStateException(message)
+        }
+
+        val session = response.body() ?: throw IllegalStateException("Сервис не вернул созданную запись")
+        localStore.upsertSession(session)
+        if (client.telegramId.isNullOrBlank() && client.maxId.isNullOrBlank() && client.sessionsCount == 0) {
+            _uiState.update {
+                it.copy(
+                    onboardingInfo = OnboardingInfo(
+                        clientId = client.id,
+                        clientName = client.name,
+                        phone = client.phone,
+                        sessionId = session.id,
+                    ),
+                )
+            }
+        }
+        return "Запись добавлена"
     }
 
     private fun saveBlock(title: String, type: String, date: String?, time: String?, comment: String): String {
@@ -194,7 +298,8 @@ class QuickActionViewModel @Inject constructor(
     }
 
     private fun buildLocalSlots(date: String): List<TimeSlot> {
-        val busy = localStore.getSessions(date, date).map { it.startTime }.toSet() + blockStore.getBlocks(date, date).map { it.startTime }.toSet()
+        val busy = localStore.getSessions(date, date).map { it.startTime }.toSet() +
+            blockStore.getBlocks(date, date).map { it.startTime }.toSet()
         return generateSequence(LocalTime.of(9, 0)) { it.plusHours(1) }
             .takeWhile { it <= LocalTime.of(20, 0) }
             .map { start -> start.format(DateTimeFormatter.ofPattern("HH:mm")) }
@@ -203,14 +308,21 @@ class QuickActionViewModel @Inject constructor(
             .toList()
     }
 
-    private suspend fun saveRepeatedSlot(client: Client?, date: String?, time: String?, countRaw: String, comment: String): String {
+    private fun saveRepeatedSlot(client: Client?, date: String?, time: String?, countRaw: String, comment: String): String {
         require(client != null) { "Выберите клиента" }
         require(!date.isNullOrBlank()) { "Выберите дату" }
         require(!time.isNullOrBlank()) { "Выберите время" }
         val count = countRaw.toIntOrNull()?.coerceIn(1, 24) ?: 1
         repeat(count) { index ->
             val nextDate = java.time.LocalDate.parse(date).plusWeeks(index.toLong()).toString()
-            localStore.createSession(client, nextDate, time, addMinutes(time, 50), SessionFormat.ONLINE, comment)
+            localStore.createSession(
+                client = client,
+                date = nextDate,
+                startTime = time,
+                endTime = addMinutes(time, 50),
+                format = SessionFormat.ONLINE,
+                notes = comment,
+            )
         }
         return if (count == 1) "Слот повторён" else "Создана серия: $count встреч"
     }
@@ -220,7 +332,8 @@ class QuickActionViewModel @Inject constructor(
         return parsed.plusMinutes(minutes).format(DateTimeFormatter.ofPattern("HH:mm"))
     }
 
-    private fun mergeClients(remote: List<Client>, local: List<Client>): List<Client> = (remote + local).distinctBy { it.id }.sortedBy { it.name.lowercase() }
+    private fun mergeClients(remote: List<Client>, local: List<Client>): List<Client> =
+        (remote + local).distinctBy { it.id }.sortedBy { it.name.lowercase() }
 }
 
 data class QuickActionUiState(
@@ -229,7 +342,6 @@ data class QuickActionUiState(
     val clients: List<Client> = emptyList(),
     val isLoadingSlots: Boolean = false,
     val availableSlots: List<TimeSlot> = emptyList(),
-    // Onboarding state
     val onboardingInfo: OnboardingInfo? = null,
     val isOnboardingBusy: Boolean = false,
     val onboardingOptions: OnboardingOptions? = null,
