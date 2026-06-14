@@ -8,6 +8,9 @@
     - [ ] Footer
 
 # In Progress
-- [ ] Project Initialization (Docs & Config)
+- [ ] Production smoke test for Telegram and MAX bot credentials
 
 # Done
+- [x] Unified client channel binding for Web Desktop, Web Mobile and Android
+- [x] Secure one-time Telegram/MAX invitations
+- [x] Native Android and mobile web sharing
