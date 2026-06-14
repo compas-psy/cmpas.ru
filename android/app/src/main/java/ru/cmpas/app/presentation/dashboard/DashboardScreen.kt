@@ -31,6 +31,7 @@ import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
+import ru.cmpas.app.presentation.util.PersonName
 import java.time.Duration
 import java.time.LocalTime
 
@@ -65,8 +66,8 @@ fun DashboardScreen(
                     Column(Modifier.weight(1f)) {
                         Eyebrow(uiState.todayFormatted)
                         Spacer(Modifier.height(4.dp))
-                        val name = uiState.userName?.takeIf { it.isNotBlank() }?.trim()?.split(" ")?.firstOrNull()
-                        Text("Добрый день, ${name ?: "коллега"}", style = tHero, color = CompasFg)
+                        val firstName = PersonName.firstName(uiState.userName)
+                        Text("Добрый день, ${firstName ?: "коллега"}", style = tHero, color = CompasFg)
                     }
                     IconButtonGlass(
                         icon = if (uiState.attentionItems.isNotEmpty()) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsNone,
