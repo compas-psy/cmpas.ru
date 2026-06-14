@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased] - 2026-06-14
+### Added
+- Unified client messenger connection for web and Android.
+- One-time invite links for Telegram and MAX.
+- Responsive client connection pages.
+
 ## [2.0.1] - 2026-01-05
 ### Fixed
 - Fixed label naming in OrderForm (WhatsApp/Max options).
