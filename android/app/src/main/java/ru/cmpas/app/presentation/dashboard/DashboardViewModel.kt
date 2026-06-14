@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.domain.model.AttentionItem
+import ru.cmpas.app.domain.model.PracticeNotification
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalDate
@@ -21,7 +22,6 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val api: CompasApi,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -29,9 +29,7 @@ class DashboardViewModel @Inject constructor(
         loadDashboard()
         loadProfile()
         viewModelScope.launch {
-            PracticeRefreshBus.changes.collectLatest {
-                loadDashboard(showLoader = false)
-            }
+            PracticeRefreshBus.changes.collectLatest { loadDashboard(showLoader = false) }
         }
     }
 
@@ -53,6 +51,7 @@ class DashboardViewModel @Inject constructor(
                                 weekSessionsCount = data.weekStats.sessionsCount,
                                 newClientsCount = data.weekStats.newClients,
                                 attentionItems = data.attentionItems,
+                                notifications = data.notifications,
                                 userName = data.userName ?: it.userName,
                                 bookingLink = data.bookingLink,
                                 isDataLoaded = true,
@@ -60,22 +59,10 @@ class DashboardViewModel @Inject constructor(
                         }
                     } ?: _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
                 } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            error = "Ошибка ${response.code()}: ${response.message()}",
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, error = "Ошибка ${response.code()}: ${response.message()}") }
                 }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        error = e.localizedMessage ?: "Ошибка подключения",
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, isRefreshing = false, error = e.localizedMessage ?: "Ошибка подключения") }
             }
         }
     }
@@ -84,10 +71,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val response = api.getProfile()
-                if (response.isSuccessful) {
-                    val user = response.body()
-                    _uiState.update { it.copy(userName = user?.name) }
-                }
+                if (response.isSuccessful) _uiState.update { it.copy(userName = response.body()?.name) }
             } catch (_: Exception) {}
         }
     }
@@ -102,6 +86,7 @@ data class DashboardUiState(
     val newClientsCount: Int = 0,
     val userName: String? = null,
     val attentionItems: List<AttentionItem> = emptyList(),
+    val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
     val error: String? = null,
     val isDataLoaded: Boolean = false,
