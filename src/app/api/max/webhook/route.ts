@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { handleMaxUpdate, sendMaxMessage } from '@/lib/max-bot';
+import { handleMaxUpdate, sendMaxMessage, type MaxUpdate } from '@/lib/max-bot';
 import { db } from '@/lib/db';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
 
-async function handleClientInvite(update: any) {
+type MaxWebhookUpdate = MaxUpdate & {
+    payload?: string;
+    start_payload?: string;
+};
+
+async function handleClientInvite(update: MaxWebhookUpdate) {
     if (update.update_type !== 'bot_started') return false;
     const payload = update.payload || update.start_payload;
     if (typeof payload !== 'string' || !payload.startsWith('c_')) return false;
@@ -63,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const update = await request.json();
+        const update = await request.json() as MaxWebhookUpdate;
         if (!(await handleClientInvite(update))) {
             await handleMaxUpdate(update);
         }
