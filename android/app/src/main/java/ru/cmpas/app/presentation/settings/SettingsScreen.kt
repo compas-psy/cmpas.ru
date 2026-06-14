@@ -18,19 +18,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
+import ru.cmpas.app.presentation.util.VideoLinkAction
+import ru.cmpas.app.presentation.util.VideoLinkPreferences
 
 @Composable
 fun SettingsScreen(onLogout: () -> Unit = {}) {
+    val context = LocalContext.current
     var dayBefore by rememberSaveable { mutableStateOf(true) }
-    var twoHoursBefore by rememberSaveable { mutableStateOf(true) }
-    var paymentReminder by rememberSaveable { mutableStateOf(true) }
+    var oneHourBefore by rememberSaveable { mutableStateOf(true) }
+    var paymentReminder by rememberSaveable { mutableStateOf(false) }
     var consentReminder by rememberSaveable { mutableStateOf(false) }
+    var videoAction by remember { mutableStateOf(VideoLinkPreferences.get(context)) }
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
     var copied by rememberSaveable { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
@@ -75,16 +79,41 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
                 }
             }
 
+            item { SectionTitle("Онлайн-сессии") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Sage100), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.Videocam, null, Modifier.size(20.dp), tint = Forest700)
+                        }
+                        Spacer(Modifier.width(11.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Кнопка «Подключиться»", style = tBody, color = CompasFg)
+                            Text("Что делать со ссылкой ВКС в Android", style = tBody2, color = CompasMutedFg)
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    CompasSegmented(
+                        options = listOf("Открывать ВКС", "Копировать ссылку"),
+                        selectedIndex = if (videoAction == VideoLinkAction.OPEN_APP) 0 else 1,
+                        onSelect = { index ->
+                            videoAction = if (index == 0) VideoLinkAction.OPEN_APP else VideoLinkAction.COPY_LINK
+                            VideoLinkPreferences.set(context, videoAction)
+                        },
+                    )
+                }
+            }
+
             item { SectionTitle("Автонапоминания") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    ReminderSwitch("За 24 часа", "Подтвердить встречу и показать оплату", dayBefore) { dayBefore = it }
+                    ReminderSwitch("За 24 часа", "Клиент подтверждает встречу в боте", dayBefore) { dayBefore = it }
                     ThinDivider()
-                    ReminderSwitch("За 2 часа", "Короткое напоминание перед сессией", twoHoursBefore) { twoHoursBefore = it }
+                    ReminderSwitch("За 1 час", "Короткое напоминание перед сессией", oneHourBefore) { oneHourBefore = it }
                     ThinDivider()
-                    ReminderSwitch("Об оплате", "Если сессия ещё не оплачена", paymentReminder) { paymentReminder = it }
+                    ReminderSwitch("Об оплате", "Показывать только после подключения оплаты", paymentReminder) { paymentReminder = it }
                     ThinDivider()
-                    ReminderSwitch("О документах", "Если согласие не получено", consentReminder) { consentReminder = it }
+                    ReminderSwitch("О документах", "Если обязательный документ не открыт", consentReminder) { consentReminder = it }
                 }
             }
 
@@ -144,9 +173,7 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
             }
         }
 
-        activeSheet?.let { sheet ->
-            ProfileInfoSheet(sheet, onClose = { activeSheet = null })
-        }
+        activeSheet?.let { sheet -> ProfileInfoSheet(sheet, onClose = { activeSheet = null }) }
     }
 }
 
@@ -243,8 +270,8 @@ private fun ProfileInfoSheet(sheet: ProfileSheet, onClose: () -> Unit) {
         ProfileSheet.TELEGRAM -> Triple("Telegram", "Канал подключён", "Бот может отправлять клиентам сервисные сообщения после того, как клиент открыл его и подтвердил связь.")
         ProfileSheet.MAX -> Triple("MAX", "Подключение канала", "После подключения клиенты смогут получать уведомления в MAX. До этого приложение подготовит текст для ручной отправки.")
         ProfileSheet.BOOKING -> Triple("Ссылка для записи", "Самозапись клиентов", "По ссылке клиент увидит свободные окна, выберет формат встречи и подтвердит необходимые документы.")
-        ProfileSheet.DOCUMENTS -> Triple("Документы", "Шаблоны и версии", "Здесь будут храниться информированное согласие, правила работы и история отправленных версий.")
-        ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
+        ProfileSheet.DOCUMENTS -> Triple("Документы", "Шаблоны и версии", "Здесь хранятся информированное согласие, правила работы и история отправленных версий.")
+        ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление доступны в одном разделе.")
         ProfileSheet.HELP -> Triple("Помощь и поддержка", "КОМПАС Android 1.0.5", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
     }
     CompasBottomSheet(onClose = onClose) {
