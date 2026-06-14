@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -15,16 +16,17 @@ import androidx.navigation.navArgument
 import ru.cmpas.app.presentation.actions.NewActionSheet
 import ru.cmpas.app.presentation.actions.QuickActionScreen
 import ru.cmpas.app.presentation.auth.LoginScreen
-import ru.cmpas.app.presentation.dashboard.DashboardScreen
 import ru.cmpas.app.presentation.calendar.CalendarScreen
-import ru.cmpas.app.presentation.clients.ClientsScreen
 import ru.cmpas.app.presentation.clients.ClientDetailScreen
+import ru.cmpas.app.presentation.clients.ClientsScreen
+import ru.cmpas.app.presentation.clients.ClientsViewModel
+import ru.cmpas.app.presentation.components.DockTab
+import ru.cmpas.app.presentation.components.GlassDock
+import ru.cmpas.app.presentation.dashboard.DashboardScreen
 import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
-import ru.cmpas.app.presentation.components.DockTab
-import ru.cmpas.app.presentation.components.GlassDock
 
 @Composable
 fun CompasNavHost(
@@ -42,9 +44,7 @@ fun CompasNavHost(
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
+            modifier = Modifier.fillMaxSize().statusBarsPadding(),
             enterTransition = { fadeIn() + slideInHorizontally { it / 4 } },
             exitTransition = { fadeOut() + slideOutHorizontally { -it / 4 } },
             popEnterTransition = { fadeIn() + slideInHorizontally { -it / 4 } },
@@ -121,16 +121,14 @@ fun CompasNavHost(
                     onBack = { navController.popBackStack() },
                     onSessionClick = { id -> navController.navigate(Screen.SessionDetail.createRoute(id)) },
                     onScheduleClick = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
-                    onNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute("client-$clientId")) },
+                    onNoteClick = { sessionId -> navController.navigate(Screen.PostSessionNote.createRoute(sessionId)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
                 )
             }
         }
 
         if (showDock) {
-            val tabs = remember {
-                BottomNavItem.entries.map { DockTab(it.screen.route, it.label, it.icon) }
-            }
+            val tabs = remember { BottomNavItem.entries.map { DockTab(it.screen.route, it.label, it.icon) } }
             GlassDock(
                 tabs = tabs,
                 activeKey = currentRoute ?: Screen.Dashboard.route,
@@ -146,12 +144,23 @@ fun CompasNavHost(
         }
 
         if (showActionSheet) {
+            val clientsViewModel: ClientsViewModel = hiltViewModel()
+            val clientsState by clientsViewModel.uiState.collectAsState()
             NewActionSheet(
+                clients = clientsState.allClients,
                 onClose = { showActionSheet = false },
-                onNewSession = { showActionSheet = false; navController.navigate(Screen.QuickAction.createRoute("new-session")) },
-                onNewClient = { showActionSheet = false; navController.navigate(Screen.QuickAction.createRoute("new-client")) },
-                onMessage = { showActionSheet = false; navController.navigateTopLevel(Screen.Clients) },
-                onDocument = { showActionSheet = false; navController.navigateTopLevel(Screen.Clients) },
+                onNewSession = {
+                    showActionSheet = false
+                    navController.navigate(Screen.QuickAction.createRoute("new-session"))
+                },
+                onNewClient = {
+                    showActionSheet = false
+                    navController.navigate(Screen.QuickAction.createRoute("new-client"))
+                },
+                onClient = { id ->
+                    showActionSheet = false
+                    navController.navigate(Screen.ClientDetail.createRoute(id))
+                },
             )
         }
     }

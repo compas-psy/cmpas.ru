@@ -8,17 +8,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.data.api.UpdateSessionRequest
+import ru.cmpas.app.domain.model.ClientDetail
 import ru.cmpas.app.domain.model.ReminderStatus
 import ru.cmpas.app.domain.model.Session
-import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionReminder
 import ru.cmpas.app.domain.model.SessionStatus
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.format.TextStyle
-import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -36,11 +32,22 @@ class SessionDetailViewModel @Inject constructor(
                 val response = api.getSession(sessionId)
                 if (response.isSuccessful) {
                     val session = response.body()
-                    // TODO: получать привязку к боту из карточки клиента (hasMessenger).
-                    // Пока считаем большинство клиентов привязанными.
-                    val bound = true
-                    val reminders = session?.let { buildReminders(it, bound) } ?: emptyList()
-                    _uiState.update { it.copy(isLoading = false, session = session, reminders = reminders) }
+                    val clientDetail = session?.let { current ->
+                        runCatching {
+                            val clientResponse = api.getClient(current.clientId)
+                            if (clientResponse.isSuccessful) clientResponse.body() else null
+                        }.getOrNull()
+                    }
+                    val bound = clientDetail?.hasMessenger == true
+                    val reminders = session?.let { buildReminders(it, bound) }.orEmpty()
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            session = session,
+                            clientDetail = clientDetail,
+                            reminders = reminders,
+                        )
+                    }
                 } else {
                     _uiState.update { it.copy(isLoading = false, error = "Сессия не найдена") }
                 }
@@ -50,9 +57,19 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
-    /** Повторная отправка напоминания. TODO: подключить к API, когда появится эндпоинт. */
+    fun sendMessage(clientId: String, sessionId: String, text: String) {
+        viewModelScope.launch {
+            runCatching {
+                api.sendMessage(
+                    clientId,
+                    SendMessageRequest(type = "custom", text = text, sessionId = sessionId),
+                )
+            }
+        }
+    }
+
+    /** TODO API: заменить локальное состояние на endpoint повторной отправки. */
     fun resendReminder(sessionId: String, reminderId: String) {
-        // Заглушка: помечаем напоминание как отправленное локально.
         _uiState.update { state ->
             state.copy(reminders = state.reminders.map {
                 if (it.id == reminderId) it.copy(status = ReminderStatus.SENT) else it
@@ -112,7 +129,7 @@ class SessionDetailViewModel @Inject constructor(
                 val sessionId = _uiState.value.session?.id
                 val r = api.getFreeTimes(date = date, sessionId = sessionId)
                 if (r.isSuccessful) {
-                    _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimes = r.body()?.times ?: emptyList()) }
+                    _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimes = r.body()?.times.orEmpty()) }
                 } else {
                     _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimesError = "Нет доступных слотов") }
                 }
@@ -128,7 +145,13 @@ class SessionDetailViewModel @Inject constructor(
             try {
                 val r = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
                 if (r.isSuccessful) {
-                    _uiState.update { it.copy(isActionLoading = false, session = r.body(), showRescheduleDialog = false) }
+                    _uiState.update {
+                        it.copy(
+                            isActionLoading = false,
+                            session = r.body(),
+                            showRescheduleDialog = false,
+                        )
+                    }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Время уже занято") }
                 }
@@ -141,12 +164,12 @@ class SessionDetailViewModel @Inject constructor(
     fun openRescheduleDialog() = _uiState.update { it.copy(showRescheduleDialog = true, freeTimes = emptyList()) }
     fun closeRescheduleDialog() = _uiState.update { it.copy(showRescheduleDialog = false) }
     fun clearActionError() = _uiState.update { it.copy(actionError = null) }
+
     fun updateStatus(sessionId: String, status: String) {
         when (status.uppercase()) {
             "CONFIRMED" -> confirm(sessionId)
             "COMPLETED" -> complete(sessionId)
             "CANCELLED" -> cancel(sessionId)
-            else -> {}
         }
     }
 }
@@ -154,6 +177,7 @@ class SessionDetailViewModel @Inject constructor(
 data class SessionDetailUiState(
     val isLoading: Boolean = false,
     val session: Session? = null,
+    val clientDetail: ClientDetail? = null,
     val error: String? = null,
     val isActionLoading: Boolean = false,
     val actionError: String? = null,
@@ -164,4 +188,3 @@ data class SessionDetailUiState(
     val freeTimesError: String? = null,
     val reminders: List<SessionReminder> = emptyList(),
 )
-// buildReminders(...) lives in SessionReminderFactory.kt (canonical).
