@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.navigation
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,8 @@ import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
+import ru.cmpas.app.presentation.theme.Ambient
+import ru.cmpas.app.presentation.theme.CompasBg
 
 @Composable
 fun CompasNavHost(
@@ -40,7 +43,12 @@ fun CompasNavHost(
     val showDock = isLoggedIn && currentRoute in mainRoutes
     var showActionSheet by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // This root surface extends beneath the transparent status bar. Content
+    // remains inset by statusBarsPadding(), while the visual background no
+    // longer breaks at the system tray boundary.
+    Box(modifier = Modifier.fillMaxSize().background(CompasBg)) {
+        Ambient()
+
         NavHost(
             navController = navController,
             startDestination = startDestination,
