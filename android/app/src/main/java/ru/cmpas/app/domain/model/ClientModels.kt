@@ -67,6 +67,7 @@ data class DashboardDataV2(
     val weekStats: WeekStats,
     val userName: String? = null,
     val attentionItems: List<AttentionItem> = emptyList(),
+    val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
 )
 
@@ -83,6 +84,18 @@ data class AttentionItem(
     val count: Int,
     val label: String,
     val icon: String? = null,
+)
+
+@Serializable
+data class PracticeNotification(
+    val id: String,
+    val type: String,
+    val title: String,
+    val subtitle: String? = null,
+    val createdAt: String? = null,
+    val sessionId: String? = null,
+    val clientId: String? = null,
+    val unread: Boolean = true,
 )
 
 @Serializable
