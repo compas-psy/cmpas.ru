@@ -38,7 +38,7 @@ data class DocumentTemplate(
 
 /** Набор документов из android/SPEC/02-screens.md §0. */
 val DOC_TEMPLATES = listOf(
-    DocumentTemplate("consent-152", "Согласие 152-ФЗ · v2.1", "Согласие на обработку персональных данных", true),
+    DocumentTemplate("consent", "Согласие 152-ФЗ · v2.1", "Согласие на обработку персональных данных", true),
     DocumentTemplate("privacy", "Политика конфиденциальности · v1.4", "Ознакомление с правилами обработки данных", true),
     DocumentTemplate("contract", "Договор · v1.0", "Условия работы, оплаты и отмены", true),
     DocumentTemplate("emotion-diary", "Дневник эмоций", "Материал для самостоятельной работы", false),
