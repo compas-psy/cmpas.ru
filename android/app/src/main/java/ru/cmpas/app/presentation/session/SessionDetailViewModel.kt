@@ -15,13 +15,13 @@ import ru.cmpas.app.domain.model.ReminderStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionReminder
 import ru.cmpas.app.domain.model.SessionStatus
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import javax.inject.Inject
 
 @HiltViewModel
 class SessionDetailViewModel @Inject constructor(
     private val api: CompasApi,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(SessionDetailUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -60,15 +60,11 @@ class SessionDetailViewModel @Inject constructor(
     fun sendMessage(clientId: String, sessionId: String, text: String) {
         viewModelScope.launch {
             runCatching {
-                api.sendMessage(
-                    clientId,
-                    SendMessageRequest(type = "custom", text = text, sessionId = sessionId),
-                )
+                api.sendMessage(clientId, SendMessageRequest(type = "custom", text = text, sessionId = sessionId))
             }
         }
     }
 
-    /** TODO API: заменить локальное состояние на endpoint повторной отправки. */
     fun resendReminder(sessionId: String, reminderId: String) {
         _uiState.update { state ->
             state.copy(reminders = state.reminders.map {
@@ -81,9 +77,10 @@ class SessionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true, actionError = null) }
             try {
-                val r = api.updateSession(sessionId, UpdateSessionRequest(status = SessionStatus.CONFIRMED))
-                if (r.isSuccessful) {
-                    _uiState.update { it.copy(isActionLoading = false, session = r.body()) }
+                val response = api.updateSession(sessionId, UpdateSessionRequest(status = SessionStatus.CONFIRMED))
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
+                    PracticeRefreshBus.notifyChanged()
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка подтверждения") }
                 }
@@ -97,9 +94,13 @@ class SessionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true, actionError = null) }
             try {
-                val r = api.updateSession(sessionId, UpdateSessionRequest(status = SessionStatus.COMPLETED))
-                if (r.isSuccessful) _uiState.update { it.copy(isActionLoading = false, session = r.body()) }
-                else _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                val response = api.updateSession(sessionId, UpdateSessionRequest(status = SessionStatus.COMPLETED))
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
+                    PracticeRefreshBus.notifyChanged()
+                } else {
+                    _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
             }
@@ -110,9 +111,10 @@ class SessionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true, actionError = null) }
             try {
-                val r = api.cancelSession(sessionId)
-                if (r.isSuccessful) {
+                val response = api.cancelSession(sessionId)
+                if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, cancelled = true) }
+                    PracticeRefreshBus.notifyChanged()
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка отмены") }
                 }
@@ -124,12 +126,12 @@ class SessionDetailViewModel @Inject constructor(
 
     fun loadFreeTimes(date: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingFreeTimes = true, freeTimesError = null) }
+            _uiState.update { it.copy(isLoadingFreeTimes = true, freeTimesError = null, freeTimes = emptyList()) }
             try {
                 val sessionId = _uiState.value.session?.id
-                val r = api.getFreeTimes(date = date, sessionId = sessionId)
-                if (r.isSuccessful) {
-                    _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimes = r.body()?.times.orEmpty()) }
+                val response = api.getFreeTimes(date = date, sessionId = sessionId)
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimes = response.body()?.times.orEmpty()) }
                 } else {
                     _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimesError = "Нет доступных слотов") }
                 }
@@ -143,15 +145,11 @@ class SessionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true, actionError = null) }
             try {
-                val r = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
-                if (r.isSuccessful) {
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            session = r.body(),
-                            showRescheduleDialog = false,
-                        )
-                    }
+                val response = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(isActionLoading = false, showRescheduleDialog = false) }
+                    PracticeRefreshBus.notifyChanged()
+                    loadSession(sessionId)
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Время уже занято") }
                 }
@@ -161,7 +159,7 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
-    fun openRescheduleDialog() = _uiState.update { it.copy(showRescheduleDialog = true, freeTimes = emptyList()) }
+    fun openRescheduleDialog() = _uiState.update { it.copy(showRescheduleDialog = true, freeTimes = emptyList(), freeTimesError = null) }
     fun closeRescheduleDialog() = _uiState.update { it.copy(showRescheduleDialog = false) }
     fun clearActionError() = _uiState.update { it.copy(actionError = null) }
 
