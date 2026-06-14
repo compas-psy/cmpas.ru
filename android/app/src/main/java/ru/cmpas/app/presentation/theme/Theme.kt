@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.theme
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -54,15 +55,23 @@ private val CompasLightColorScheme = lightColorScheme(
 fun CompasTheme(
     content: @Composable () -> Unit,
 ) {
-    // Always use light theme to match the website
     val colorScheme = CompasLightColorScheme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = CompasBackground.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = CompasBg.toArgb()
+
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = true
+            insetsController.isAppearanceLightNavigationBars = true
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isStatusBarContrastEnforced = false
+                window.isNavigationBarContrastEnforced = false
+            }
         }
     }
 
