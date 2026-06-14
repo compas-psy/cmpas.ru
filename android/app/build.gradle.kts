@@ -68,6 +68,54 @@ android {
     }
 }
 
+// Geist is SIL OFL-licensed and sourced from Vercel's official repository.
+// Pinning the release keeps APK typography reproducible while avoiding binary
+// font files in git. The resources are generated before Android merges res/.
+val geistVersion = "v1.7.2"
+val geistFontDir = layout.projectDirectory.dir("src/main/res/font")
+val geistFonts = mapOf(
+    "geist_regular.ttf" to "Geist-Regular.ttf",
+    "geist_medium.ttf" to "Geist-Medium.ttf",
+    "geist_semibold.ttf" to "Geist-SemiBold.ttf",
+    "geist_bold.ttf" to "Geist-Bold.ttf",
+    "geist_extrabold.ttf" to "Geist-ExtraBold.ttf",
+)
+
+val prepareGeistFonts by tasks.registering {
+    group = "build setup"
+    description = "Download pinned Geist font resources from the official Vercel repository"
+
+    val generatedFonts = geistFonts.keys.map { geistFontDir.file(it).asFile }
+    outputs.files(generatedFonts)
+
+    doLast {
+        val fontDir = geistFontDir.asFile.apply { mkdirs() }
+        geistFonts.forEach { (localName, upstreamName) ->
+            val target = fontDir.resolve(localName)
+            if (!target.exists() || target.length() < 50_000L) {
+                val temp = fontDir.resolve("$localName.tmp")
+                val source = "https://raw.githubusercontent.com/vercel/geist-font/$geistVersion/fonts/Geist/ttf/$upstreamName"
+
+                java.net.URI(source).toURL().openStream().buffered().use { input ->
+                    temp.outputStream().buffered().use { output -> input.copyTo(output) }
+                }
+                require(temp.length() > 50_000L) {
+                    "Downloaded Geist font is invalid: $upstreamName"
+                }
+                java.nio.file.Files.move(
+                    temp.toPath(),
+                    target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == "preBuild") dependsOn(prepareGeistFonts)
+}
+
 dependencies {
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
