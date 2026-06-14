@@ -68,6 +68,7 @@ fun CompasNavHost(
                 CalendarScreen(
                     onSessionClick = { navController.navigate(Screen.SessionDetail.createRoute(it)) },
                     onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
+                    onAddSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
                 )
             }
             composable(Screen.Clients.route) {
