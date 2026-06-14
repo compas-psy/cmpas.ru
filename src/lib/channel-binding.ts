@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 
 export type ClientChannel = 'telegram' | 'max';
+export type ChannelInvitePreference = ClientChannel | 'auto';
 
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
@@ -16,14 +17,12 @@ function normalizeRawToken(token: string) {
     return token.startsWith('c_') ? token.slice(2) : token;
 }
 
-export function buildDirectChannelLink(channel: ClientChannel, rawToken: string) {
+export function buildDirectChannelLink(channel: ClientChannel, rawToken: string): string | null {
     const payload = `c_${rawToken}`;
     if (channel === 'telegram') {
         return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
     }
-    if (!MAX_BOT_USERNAME) {
-        return `${APP_URL}/connect/${encodeURIComponent(rawToken)}`;
-    }
+    if (!MAX_BOT_USERNAME) return null;
     return `https://max.ru/${MAX_BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
 }
 
@@ -47,7 +46,7 @@ export function buildChannelShareText(params: {
 export async function createClientChannelInvite(params: {
     psychologistId: string;
     clientId: string;
-    channel: ClientChannel;
+    channel: ChannelInvitePreference;
     ttlMs?: number;
 }) {
     const client = await db.diaryClient.findFirst({
@@ -75,6 +74,8 @@ export async function createClientChannelInvite(params: {
     });
     const psychologistName = psychologist?.psychologistSettings?.fullName || psychologist?.name || null;
     const smartLink = buildSmartChannelLink(rawToken);
+    const telegramLink = buildDirectChannelLink('telegram', rawToken);
+    const maxLink = buildDirectChannelLink('max', rawToken);
 
     await db.auditLog.create({
         data: {
@@ -92,7 +93,10 @@ export async function createClientChannelInvite(params: {
         clientName: client.name,
         phone: client.phone,
         smartLink,
-        directLink: buildDirectChannelLink(params.channel, rawToken),
+        directLink: params.channel === 'auto'
+            ? smartLink
+            : (params.channel === 'telegram' ? telegramLink : maxLink) || smartLink,
+        directLinks: { telegram: telegramLink, max: maxLink },
         shareText: buildChannelShareText({ clientName: client.name, psychologistName, smartLink }),
     };
 }
@@ -120,12 +124,16 @@ export async function getPublicChannelInvite(rawToken: string) {
     ]);
     if (!client) return null;
 
-    const channel = invite.channel as ClientChannel;
+    const channel = invite.channel as ChannelInvitePreference;
+    const normalized = normalizeRawToken(rawToken);
     return {
         clientName: client.name,
         psychologistName: psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист',
         channel,
-        directLink: buildDirectChannelLink(channel, normalizeRawToken(rawToken)),
+        directLinks: {
+            telegram: buildDirectChannelLink('telegram', normalized),
+            max: buildDirectChannelLink('max', normalized),
+        },
         expiresAt: invite.expiresAt,
     };
 }
@@ -139,7 +147,7 @@ export async function consumeClientChannelInvite(params: {
 }) {
     const invite = await findInvite(params.token);
     if (!invite) throw new Error('INVITE_NOT_FOUND');
-    if (invite.channel !== params.channel) throw new Error('INVITE_CHANNEL_MISMATCH');
+    if (invite.channel !== 'auto' && invite.channel !== params.channel) throw new Error('INVITE_CHANNEL_MISMATCH');
     if (invite.usedAt) throw new Error('INVITE_ALREADY_USED');
     if (invite.expiresAt <= new Date()) throw new Error('INVITE_EXPIRED');
 
@@ -149,6 +157,7 @@ export async function consumeClientChannelInvite(params: {
         const fresh = await tx.clientInviteToken.findUnique({ where: { id: invite.id } });
         if (!fresh || fresh.usedAt) throw new Error('INVITE_ALREADY_USED');
         if (fresh.expiresAt <= new Date()) throw new Error('INVITE_EXPIRED');
+        if (fresh.channel !== 'auto' && fresh.channel !== params.channel) throw new Error('INVITE_CHANNEL_MISMATCH');
 
         const client = await tx.diaryClient.update({
             where: { id: fresh.clientId },
@@ -159,6 +168,10 @@ export async function consumeClientChannelInvite(params: {
         });
 
         if (params.channel === 'telegram') {
+            await tx.telegramClient.updateMany({
+                where: { diaryClientId: client.id, NOT: { telegramUserId: params.providerUserId } },
+                data: { diaryClientId: null },
+            });
             const existing = await tx.telegramClient.findUnique({ where: { telegramUserId: params.providerUserId } });
             await tx.telegramClient.upsert({
                 where: { telegramUserId: params.providerUserId },
