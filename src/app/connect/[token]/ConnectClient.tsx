@@ -4,31 +4,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, MessageCircle, ShieldCheck } from 'lucide-react';
 
 export function ConnectClient(props: {
-    channel: 'telegram' | 'max';
-    directLink: string;
+    channel: 'telegram' | 'max' | 'auto';
+    smartLink: string;
+    telegramLink: string | null;
+    maxLink: string | null;
     clientName: string;
     psychologistName: string;
 }) {
     const [copied, setCopied] = useState(false);
     const [autoOpened, setAutoOpened] = useState(false);
     const firstName = useMemo(() => props.clientName.trim().split(/\s+/)[0] || 'Клиент', [props.clientName]);
-    const channelName = props.channel === 'telegram' ? 'Telegram' : 'MAX';
+    const selectedLink = props.channel === 'telegram' ? props.telegramLink : props.channel === 'max' ? props.maxLink : null;
+    const channelName = props.channel === 'telegram' ? 'Telegram' : props.channel === 'max' ? 'MAX' : null;
 
     useEffect(() => {
         const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-        if (!mobile) return;
+        if (!mobile || !selectedLink) return;
         const timer = window.setTimeout(() => {
             setAutoOpened(true);
-            window.location.assign(props.directLink);
+            window.location.assign(selectedLink);
         }, 350);
         return () => window.clearTimeout(timer);
-    }, [props.directLink]);
+    }, [selectedLink]);
 
     async function copyLink() {
-        await navigator.clipboard.writeText(props.directLink);
+        await navigator.clipboard.writeText(props.smartLink);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1800);
     }
+
+    const buttonClass = 'w-full min-h-14 rounded-2xl font-semibold flex items-center justify-center gap-2 px-5 active:scale-[0.99] transition-transform';
 
     return (
         <main className="min-h-dvh bg-[#F5F3EE] text-[#183D33] flex items-center justify-center p-4 sm:p-8">
@@ -41,24 +46,36 @@ export function ConnectClient(props: {
 
                     <p className="text-sm text-[#6C7B75] mb-2">{firstName}, всё почти готово</p>
                     <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
-                        Подключите уведомления в {channelName}
+                        {channelName ? `Подключите уведомления в ${channelName}` : 'Куда присылать уведомления?'}
                     </h1>
                     <p className="mt-4 text-[15px] leading-6 text-[#53645D]">
                         КОМПАС будет присылать только подтверждения, напоминания, переносы и отмены встреч со специалистом {props.psychologistName}.
                     </p>
 
-                    <a
-                        href={props.directLink}
-                        className="mt-7 w-full min-h-14 rounded-2xl bg-[#2F6B5A] text-white font-semibold flex items-center justify-center gap-2 px-5 active:scale-[0.99] transition-transform"
-                    >
-                        Открыть {channelName}
-                        <ExternalLink className="w-4 h-4" />
-                    </a>
+                    <div className="mt-7 space-y-3">
+                        {(props.channel === 'auto' || props.channel === 'telegram') && props.telegramLink && (
+                            <a href={props.telegramLink} className={`${buttonClass} bg-[#2F6B5A] text-white`}>
+                                Подключить Telegram
+                                <ExternalLink className="w-4 h-4" />
+                            </a>
+                        )}
+                        {(props.channel === 'auto' || props.channel === 'max') && props.maxLink && (
+                            <a href={props.maxLink} className={`${buttonClass} bg-[#F3F6F4] text-[#234E42] border border-[#CDDAD4]`}>
+                                Подключить MAX
+                                <ExternalLink className="w-4 h-4" />
+                            </a>
+                        )}
+                        {props.channel === 'max' && !props.maxLink && (
+                            <div className="rounded-2xl border border-[#E6D8B7] bg-[#FFF9E9] p-4 text-sm text-[#6B5A2D]">
+                                Подключение MAX временно недоступно. Попросите специалиста выбрать Telegram или повторить позже.
+                            </div>
+                        )}
+                    </div>
 
                     <button
                         type="button"
                         onClick={copyLink}
-                        className="mt-3 w-full min-h-12 rounded-2xl border border-[#D6E0DB] bg-[#F8FAF9] font-medium flex items-center justify-center gap-2 px-5"
+                        className="mt-3 w-full min-h-12 rounded-2xl border border-[#D6E0DB] bg-white font-medium flex items-center justify-center gap-2 px-5"
                     >
                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                         {copied ? 'Ссылка скопирована' : 'Скопировать ссылку'}
