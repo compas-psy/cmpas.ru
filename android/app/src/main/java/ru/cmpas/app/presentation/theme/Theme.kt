@@ -13,30 +13,30 @@ import androidx.core.view.WindowCompat
 // ALWAYS light theme — matching cmpas.ru
 // ═══════════════════════════════════════════
 private val CompasLightColorScheme = lightColorScheme(
-    primary = Forest800,                    // #1D4735
+    primary = Forest700,                    // #1A4D3A
     onPrimary = Color.White,
-    primaryContainer = Sage150,             // #E7F0EA
-    onPrimaryContainer = Forest900,         // #143D2F
+    primaryContainer = Sage100,             // #E9EFE6
+    onPrimaryContainer = Forest900,         // #123829
 
-    secondary = Forest600,                  // #2F6A52
+    secondary = Forest600,                  // #2D7A5E
     onSecondary = Color.White,
-    secondaryContainer = Sage100,           // #EEF4EF
+    secondaryContainer = Sage100,
     onSecondaryContainer = Forest900,
 
-    tertiary = CompasAccent,                // #CC9E50
+    tertiary = CompasAccent,                // #C9A961
     onTertiary = Color.White,
     tertiaryContainer = CompasAccentLight,
     onTertiaryContainer = Color(0xFF3D2E0F),
 
-    background = CompasBackground,          // #F7F8F4
-    onBackground = CompasForeground,        // #142018
-    surface = CompasCard,                   // #FFFFFF
-    onSurface = CompasForeground,
-    surfaceVariant = Sage50,                // #F6FAF6
-    onSurfaceVariant = CompasMutedForeground, // #5F6C64
+    background = CompasBg,                   // #FAF8F5
+    onBackground = CompasFg,                 // #16271D
+    surface = CompasCard,                    // #FFFFFF
+    onSurface = CompasFg,
+    surfaceVariant = Sage50,                 // #F2F5EE
+    onSurfaceVariant = CompasMutedFg,        // #5B6B61
 
-    outline = CompasBorder,                 // #E4E9E3
-    outlineVariant = Sage200,
+    outline = CompasBorder,                  // #E7E3D9
+    outlineVariant = CompasBorder,
 
     error = CompasDestructive,              // #E35D4F
     onError = Color.White,
