@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientStatus
+import ru.cmpas.app.presentation.comms.DocumentTemplate
 import ru.cmpas.app.presentation.comms.SendDocumentSheet
 import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.components.*
@@ -49,7 +50,13 @@ fun NewActionSheet(
                 onClose = onClose,
                 onSend = { viewModel.sendMessage(client.id, it) },
             )
-            QuickClientMode.DOCUMENT -> SendDocumentSheet(client.name, channel, bound, onClose)
+            QuickClientMode.DOCUMENT -> SendDocumentSheet(
+                clientName = client.name,
+                channel = channel,
+                bound = bound,
+                onClose = onClose,
+                onSend = { document -> viewModel.sendMessage(client.id, documentMessage(document)) },
+            )
             QuickClientMode.OPEN -> Unit
         }
         if (mode != QuickClientMode.OPEN) return
@@ -94,7 +101,10 @@ fun NewActionSheet(
 
         if (mode != QuickClientMode.OPEN) {
             Spacer(Modifier.height(4.dp))
-            GhostButton("Назад", { mode = QuickClientMode.OPEN }, Modifier.fillMaxWidth(), Icons.Outlined.ArrowBack)
+            GhostButton("Назад", {
+                selectedClient = null
+                mode = QuickClientMode.OPEN
+            }, Modifier.fillMaxWidth(), Icons.Outlined.ArrowBack)
         }
     }
 }
@@ -136,6 +146,14 @@ private fun QuickClientRow(client: Client, onClick: () -> Unit) {
             ChannelChip(if (bound) "telegram" else null, bound)
         }
     }
+}
+
+private fun documentMessage(document: DocumentTemplate): String = buildString {
+    append("Здравствуйте! Направляю документ «")
+    append(document.title)
+    append("»: https://cmpas.ru/d/")
+    append(document.id)
+    if (document.requiresAck) append(". Пожалуйста, ознакомьтесь и подтвердите принятие в КОМПАС.")
 }
 
 private enum class QuickClientMode { OPEN, MESSAGE, DOCUMENT }
