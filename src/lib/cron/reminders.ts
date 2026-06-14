@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { clientActionToken, clientBookingLink, publicBaseUrl } from '@/lib/client-workflow';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
@@ -26,12 +27,14 @@ async function sendNotification(
     }
 }
 
-function sessionActions(sessionId: string, pending: boolean) {
-    const rows: Array<Array<{ text: string; callback_data: string }>> = [];
-    if (pending) rows.push([{ text: '✅ Подтвердить', callback_data: `confirm_session_${sessionId}` }]);
+function sessionActions(session: { id: string; psychologistId: string; clientId: string }, pending: boolean) {
+    const token = clientActionToken(session.psychologistId, session.clientId);
+    const actionUrl = (action: string) => `${publicBaseUrl()}/api/client/session-action?s=${session.id}&a=${action}&t=${token}`;
+    const rows: Array<Array<{ text: string; url: string }>> = [];
+    if (pending) rows.push([{ text: '✅ Подтвердить', url: actionUrl('confirm') }]);
     rows.push([
-        { text: '🔄 Перенести', callback_data: `reschedule_session_${sessionId}` },
-        { text: '❌ Отменить', callback_data: `cancel_session_${sessionId}` },
+        { text: '🔄 Перенести', url: clientBookingLink(session.psychologistId, session.clientId) },
+        { text: '❌ Отменить', url: actionUrl('cancel') },
     ]);
     return { reply_markup: { inline_keyboard: rows } };
 }
@@ -78,7 +81,7 @@ export async function processReminders() {
                     telegramTarget,
                     maxId,
                     message,
-                    sessionActions(session.id, session.status === 'pending'),
+                    sessionActions(session, session.status === 'pending'),
                 );
             }
 
@@ -133,7 +136,7 @@ export async function processReminders() {
                     telegramTarget,
                     maxId,
                     message,
-                    sessionActions(session.id, session.status === 'pending'),
+                    sessionActions(session, session.status === 'pending'),
                 );
             }
 
