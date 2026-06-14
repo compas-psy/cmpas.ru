@@ -116,6 +116,14 @@ tasks.configureEach {
     if (name == "preBuild") dependsOn(prepareGeistFonts)
 }
 
+// main split the monolithic Models.kt into focused model files (Core/Client/Note/
+// Workflow). The legacy Models.kt is kept on disk but excluded from compilation to
+// avoid redeclaration. We DO compile SessionReminderFactory.kt: our redesigned
+// SessionDetailViewModel relies on its buildReminders() and no longer defines it.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    exclude("**/Models.kt")
+}
+
 dependencies {
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)

@@ -6,7 +6,6 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 
-// Lazy-init proxy agent
 let _proxyAgent: any = null;
 function getProxyAgent() {
     if (!TELEGRAM_PROXY) return undefined;
@@ -19,19 +18,25 @@ function getProxyAgent() {
     return _proxyAgent;
 }
 
-// Опции для кнопок
 export type SendMessageOptions = {
     parse_mode?: string;
     disable_web_page_preview?: boolean;
     reply_markup?: {
-        inline_keyboard: { text: string, callback_data?: string, url?: string, web_app?: { url: string } }[][];
+        inline_keyboard: {
+            text: string;
+            callback_data?: string;
+            url?: string;
+            web_app?: { url: string };
+            login_url?: {
+                url: string;
+                forward_text?: string;
+                bot_username?: string;
+                request_write_access?: boolean;
+            };
+        }[][];
     };
 };
 
-/**
- * Отправляет сообщение указанному пользователю Telegram (chatId).
- * Таймаут 10 секунд для предотвращения зависания.
- */
 export async function sendTelegramMessage(chatId: string, text: string, options?: SendMessageOptions) {
     if (!TELEGRAM_BOT_TOKEN) {
         console.warn('[Telegram] Отсутствует TELEGRAM_BOT_TOKEN, отправка пропущена.');
@@ -47,9 +52,8 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
             chat_id: chatId,
             text,
             parse_mode: 'HTML',
-            ...options
+            ...options,
         };
-
         const fetchOpts: any = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -57,28 +61,20 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
             signal: controller.signal,
         };
 
-        // Use proxy agent if configured (for Russia/restricted networks)
         const agent = getProxyAgent();
         if (agent) {
-            // Node.js fetch doesn't support agent directly,
-            // use undici dispatcher or node-fetch. Fallback to default fetch.
             try {
                 const nodeFetch = require('node-fetch');
                 const res = await nodeFetch(url, { ...fetchOpts, agent });
-                if (!res.ok) {
-                    console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
-                }
+                if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
                 return;
             } catch (e: any) {
                 if (e.name === 'AbortError') throw e;
-                // If node-fetch not available, fall through to default fetch
             }
         }
 
         const res = await fetch(url, fetchOpts);
-        if (!res.ok) {
-            console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
-        }
+        if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
     } catch (error: any) {
         if (error.name === 'AbortError') {
             console.error('[Telegram] Таймаут при отправке сообщения в chatId:', chatId);

@@ -62,7 +62,6 @@ class ClientDetailViewModel @Inject constructor(
         }
     }
 
-    /** Send arbitrary text or a reminder template to the client. */
     fun sendMessage(clientId: String, type: String, text: String? = null, sessionId: String? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSendingMessage = true, messageResult = null) }
@@ -88,8 +87,11 @@ class ClientDetailViewModel @Inject constructor(
         }
     }
 
-    /** Generate invite link for the client to connect Telegram/MAX. */
-    fun generateInviteLink(clientId: String, channel: String = "telegram") {
+    /**
+     * Generates one smart invite. On the landing page the client chooses Telegram
+     * or MAX, while Android uses the native Sharesheet to select the conversation.
+     */
+    fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
             _uiState.update { it.copy(isGeneratingInvite = true) }
             try {
