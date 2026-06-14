@@ -1,6 +1,11 @@
 package ru.cmpas.app.domain.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 data class SendMessageResponse(
@@ -13,10 +18,19 @@ data class SendMessageResponse(
 @Serializable
 data class InviteResponse(
     val inviteLink: String,
+    val directLink: String? = null,
+    val directLinks: InviteDirectLinks? = null,
+    val shareText: String? = null,
     val channel: String,
     val expiresAt: String,
     val clientName: String,
     val phone: String? = null,
+)
+
+@Serializable
+data class InviteDirectLinks(
+    val telegram: String? = null,
+    val max: String? = null,
 )
 
 @Serializable
@@ -70,8 +84,16 @@ data class CreateBlockResponse(
 @Serializable
 data class FreeTimesResponse(
     val date: String,
-    val times: List<String>,
-)
+    val times: List<JsonElement> = emptyList(),
+) {
+    fun values(): List<String> = times.mapNotNull { item ->
+        when (item) {
+            is JsonPrimitive -> item.contentOrNull
+            is JsonObject -> item["time"]?.jsonPrimitive?.contentOrNull
+            else -> null
+        }
+    }.filter { it.matches(Regex("\\d{2}:\\d{2}")) }.distinct()
+}
 
 @Serializable
 data class ScheduledMessage(
