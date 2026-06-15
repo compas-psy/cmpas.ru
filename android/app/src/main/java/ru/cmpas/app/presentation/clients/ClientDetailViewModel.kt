@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
@@ -12,103 +13,130 @@ import ru.cmpas.app.data.api.InviteRequest
 import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientDetail
-import ru.cmpas.app.domain.model.ClientStatus
+import ru.cmpas.app.domain.model.OnboardingDoc
+import ru.cmpas.app.domain.model.OnboardingResult
+import ru.cmpas.app.domain.model.OnboardingSendRequest
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import javax.inject.Inject
 
 @HiltViewModel
 class ClientDetailViewModel @Inject constructor(
     private val api: CompasApi,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(ClientDetailUiState())
     val uiState = _uiState.asStateFlow()
+    private var loadedClientId: String? = null
 
-    fun loadClient(clientId: String) {
+    init {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            PracticeRefreshBus.changes.collectLatest {
+                loadedClientId?.let { loadClient(it, false) }
+            }
+        }
+    }
+
+    fun loadClient(clientId: String, showLoader: Boolean = true) {
+        loadedClientId = clientId
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = showLoader && it.client == null, error = null) }
             try {
-                val clientResponse = api.getClient(clientId)
-                val sessionsResponse = api.getSessions()
-                if (clientResponse.isSuccessful) {
-                    val detail = clientResponse.body()
-                    val allSessions = sessionsResponse.body() ?: emptyList()
-                    val clientSessions = allSessions.filter { it.clientId == clientId }
+                val response = api.getClient(clientId)
+                if (!response.isSuccessful) {
+                    _uiState.update { it.copy(isLoading = false, error = "Клиент не найден") }
+                    return@launch
+                }
+                val detail = response.body()
+                val remoteSessions = runCatching { api.getSessions() }.getOrNull()
+                    ?.takeIf { it.isSuccessful }?.body().orEmpty()
+                    .filter { it.clientId == clientId }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        client = detail?.toClient(),
+                        clientDetail = detail,
+                        sessions = remoteSessions.ifEmpty { detail?.recentSessions.orEmpty() },
+                    )
+                }
+                loadDocuments(clientId)
+            } catch (error: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = error.localizedMessage ?: "Не удалось загрузить клиента") }
+            }
+        }
+    }
+
+    fun loadDocuments(clientId: String? = loadedClientId) {
+        val id = clientId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingDocuments = true, documentsError = null) }
+            runCatching { api.getOnboardingOptions(id) }
+                .onSuccess { response ->
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            client = detail?.let { d ->
-                                Client(
-                                    id = d.id,
-                                    name = d.name,
-                                    email = d.email,
-                                    phone = d.phone,
-                                    telegramId = d.telegramId,
-                                    sessionsCount = d.sessionsCount,
-                                    lastSessionDate = d.lastSessionDate,
-                                    status = d.status,
-                                )
-                            },
-                            clientDetail = detail,
-                            sessions = clientSessions,
+                            isLoadingDocuments = false,
+                            documents = if (response.isSuccessful) response.body()?.documents.orEmpty() else emptyList(),
+                            documentsError = if (response.isSuccessful) null else "Не удалось загрузить документы",
                         )
                     }
-                } else {
-                    _uiState.update { it.copy(isLoading = false, error = "Клиент не найден") }
                 }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage) }
-            }
+                .onFailure {
+                    _uiState.update { it.copy(isLoadingDocuments = false, documents = emptyList(), documentsError = "Документы временно недоступны") }
+                }
+        }
+    }
+
+    fun sendDocument(clientId: String, channel: String, documentId: String, callback: (OnboardingResult?, String?) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSendingDocument = true) }
+            val response = runCatching {
+                api.sendOnboarding(clientId, OnboardingSendRequest(channel, false, documentId))
+            }.getOrNull()
+            _uiState.update { it.copy(isSendingDocument = false) }
+            if (response?.isSuccessful == true) callback(response.body(), null)
+            else callback(null, "Не удалось отправить документ")
         }
     }
 
     fun sendMessage(clientId: String, type: String, text: String? = null, sessionId: String? = null) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSendingMessage = true, messageResult = null) }
-            try {
-                val r = api.sendMessage(clientId, SendMessageRequest(type = type, text = text, sessionId = sessionId))
-                if (r.isSuccessful) {
-                    val body = r.body()
-                    _uiState.update {
-                        it.copy(
-                            isSendingMessage = false,
-                            messageResult = if (body?.status == "manual")
-                                MessageResult.Manual(body.readyText ?: "", body.phone)
-                            else
-                                MessageResult.Sent(body?.status ?: ""),
-                        )
-                    }
-                } else {
-                    _uiState.update { it.copy(isSendingMessage = false, messageResult = MessageResult.Error("Ошибка отправки")) }
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isSendingMessage = false, messageResult = MessageResult.Error(e.localizedMessage ?: "Ошибка")) }
+            val response = runCatching {
+                api.sendMessage(clientId, SendMessageRequest(type, text, sessionId))
+            }.getOrNull()
+            val body = response?.body()
+            _uiState.update {
+                it.copy(
+                    messageResult = when {
+                        response?.isSuccessful != true -> MessageResult.Error("Ошибка отправки")
+                        body?.status == "manual" -> MessageResult.Manual(body.readyText.orEmpty(), body.phone)
+                        else -> MessageResult.Sent(body?.status.orEmpty())
+                    },
+                )
             }
         }
     }
 
-    /**
-     * Generates one smart invite. On the landing page the client chooses Telegram
-     * or MAX, while Android uses the native Sharesheet to select the conversation.
-     */
     fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
-            _uiState.update { it.copy(isGeneratingInvite = true) }
-            try {
-                val r = api.createInviteLink(clientId, InviteRequest(channel = channel))
-                if (r.isSuccessful) {
-                    _uiState.update { it.copy(isGeneratingInvite = false, inviteLink = r.body()?.inviteLink) }
-                } else {
-                    _uiState.update { it.copy(isGeneratingInvite = false) }
-                }
-            } catch (_: Exception) {
-                _uiState.update { it.copy(isGeneratingInvite = false) }
-            }
+            val response = runCatching { api.createInviteLink(clientId, InviteRequest(channel)) }.getOrNull()
+            _uiState.update { it.copy(inviteLink = response?.takeIf { result -> result.isSuccessful }?.body()?.inviteLink) }
         }
     }
 
     fun clearMessageResult() = _uiState.update { it.copy(messageResult = null) }
     fun clearInviteLink() = _uiState.update { it.copy(inviteLink = null) }
+
+    private fun ClientDetail.toClient() = Client(
+        id = id,
+        name = name,
+        email = email,
+        phone = phone,
+        gender = gender,
+        telegramId = telegramId,
+        maxId = maxId,
+        sessionsCount = sessionsCount,
+        lastSessionDate = lastSessionDate,
+        status = status,
+    )
 }
 
 sealed class MessageResult {
@@ -122,9 +150,11 @@ data class ClientDetailUiState(
     val client: Client? = null,
     val clientDetail: ClientDetail? = null,
     val sessions: List<Session> = emptyList(),
+    val documents: List<OnboardingDoc> = emptyList(),
+    val isLoadingDocuments: Boolean = false,
+    val isSendingDocument: Boolean = false,
+    val documentsError: String? = null,
     val error: String? = null,
-    val isSendingMessage: Boolean = false,
     val messageResult: MessageResult? = null,
-    val isGeneratingInvite: Boolean = false,
     val inviteLink: String? = null,
 )

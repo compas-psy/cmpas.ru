@@ -21,56 +21,72 @@ export async function GET(req: NextRequest) {
                     ],
                 }),
             },
-            include: {
-                _count: { select: { sessions: true } },
-                sessions: {
-                    orderBy: { date: 'desc' },
-                    take: 1,
-                    select: { date: true },
-                },
-            },
+            include: { _count: { select: { sessions: true } } },
             orderBy: { name: 'asc' },
         });
 
         const now = new Date();
-        const upcomingSessions = await db.diarySession.findMany({
-            where: {
-                psychologistId: auth.userId,
-                date: { gte: now },
-                status: { not: 'cancelled' },
-            },
-            select: { clientId: true, date: true, time: true },
-            orderBy: { date: 'asc' },
-        });
+        const [upcomingSessions, recentSessions] = await Promise.all([
+            db.diarySession.findMany({
+                where: {
+                    psychologistId: auth.userId,
+                    date: { gte: now },
+                    status: { not: 'cancelled' },
+                },
+                select: { clientId: true, date: true, time: true },
+                orderBy: [{ date: 'asc' }, { time: 'asc' }],
+            }),
+            db.diarySession.findMany({
+                where: {
+                    psychologistId: auth.userId,
+                    date: { lt: now },
+                    status: { not: 'cancelled' },
+                },
+                select: { clientId: true, date: true, time: true },
+                orderBy: [{ date: 'desc' }, { time: 'desc' }],
+            }),
+        ]);
 
         const nextSessionMap = new Map<string, { date: string; time: string }>();
-        for (const s of upcomingSessions) {
-            if (s.clientId && !nextSessionMap.has(s.clientId)) {
-                nextSessionMap.set(s.clientId, {
-                    date: s.date.toISOString().split('T')[0],
-                    time: s.time || '',
+        for (const session of upcomingSessions) {
+            if (session.clientId && !nextSessionMap.has(session.clientId)) {
+                nextSessionMap.set(session.clientId, {
+                    date: session.date.toISOString().split('T')[0],
+                    time: session.time || '',
                 });
             }
         }
 
-        const formatted = clients.map(c => {
-            const nextSess = nextSessionMap.get(c.id);
-            return {
-                id: c.id,
-                name: c.name,
-                email: c.email || null,
-                phone: c.phone || null,
-                telegramId: c.telegramChatId || null,
-                sessionsCount: c._count.sessions,
-                lastSessionDate: c.sessions[0]?.date?.toISOString().split('T')[0] || null,
-                notes: null,
-                status: (c.status || 'active').toUpperCase(),
-                nextSessionDate: nextSess?.date || null,
-                nextSessionTime: nextSess?.time || null,
-            };
-        });
+        const lastSessionMap = new Map<string, { date: string; time: string }>();
+        for (const session of recentSessions) {
+            if (session.clientId && !lastSessionMap.has(session.clientId)) {
+                lastSessionMap.set(session.clientId, {
+                    date: session.date.toISOString().split('T')[0],
+                    time: session.time || '',
+                });
+            }
+        }
 
-        return NextResponse.json(formatted);
+        return NextResponse.json(clients.map(client => {
+            const next = nextSessionMap.get(client.id);
+            const last = lastSessionMap.get(client.id);
+            return {
+                id: client.id,
+                name: client.name,
+                email: client.email || null,
+                phone: client.phone || null,
+                gender: client.gender || null,
+                telegramId: client.telegramChatId || null,
+                maxId: client.maxChatId || null,
+                sessionsCount: client._count.sessions,
+                lastSessionDate: last?.date || null,
+                lastSessionTime: last?.time || null,
+                notes: null,
+                status: (client.status || 'active').toUpperCase(),
+                nextSessionDate: next?.date || null,
+                nextSessionTime: next?.time || null,
+            };
+        }));
     } catch (error) {
         console.error('[mobile/clients]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
@@ -82,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { name, email, phone } = await req.json();
+        const { name, email, phone, gender } = await req.json();
 
         if (!name || typeof name !== 'string') {
             return NextResponse.json({ error: 'Name required' }, { status: 400 });
@@ -102,6 +118,7 @@ export async function POST(req: NextRequest) {
                     ...(existing.status === 'archived' ? { status: 'active' } : {}),
                     ...(!existing.email && email ? { email } : {}),
                     ...(!existing.phone && normalizedPhone ? { phone: normalizedPhone } : {}),
+                    ...(!existing.gender && gender ? { gender } : {}),
                 },
             })
             : await db.diaryClient.create({
@@ -110,6 +127,7 @@ export async function POST(req: NextRequest) {
                     name: name.trim(),
                     email: email || null,
                     phone: normalizedPhone,
+                    gender: gender || null,
                 },
             });
 
@@ -120,6 +138,9 @@ export async function POST(req: NextRequest) {
             name: client.name,
             email: client.email,
             phone: client.phone,
+            gender: client.gender,
+            telegramId: client.telegramChatId || null,
+            maxId: client.maxChatId || null,
             sessionsCount,
             lastSessionDate: null,
             status: (client.status || 'active').toUpperCase(),

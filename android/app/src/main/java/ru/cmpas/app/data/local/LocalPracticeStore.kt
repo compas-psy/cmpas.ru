@@ -14,6 +14,7 @@ import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
+import ru.cmpas.app.domain.model.SessionType
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,12 +26,13 @@ class LocalPracticeStore @Inject constructor(
     private val prefs = context.getSharedPreferences("compas_local_practice", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun createClient(name: String, phone: String?, email: String?, notes: String?): Client {
+    fun createClient(name: String, phone: String?, email: String?, gender: String?, notes: String?): Client {
         val client = Client(
             id = "local-client-${System.currentTimeMillis()}",
             name = name.ifBlank { "Новый клиент" },
             email = email?.ifBlank { null },
             phone = phone?.ifBlank { null },
+            gender = gender?.ifBlank { null },
             notes = notes?.ifBlank { null },
             status = ClientStatus.ACTIVE,
         )
@@ -47,7 +49,15 @@ class LocalPracticeStore @Inject constructor(
         return runCatching { json.decodeFromString<List<Client>>(raw) }.getOrDefault(emptyList())
     }
 
-    fun createSession(client: Client, date: String, startTime: String, endTime: String, format: SessionFormat, notes: String?): Session {
+    fun createSession(
+        client: Client,
+        date: String,
+        startTime: String,
+        endTime: String,
+        format: SessionFormat,
+        type: SessionType = SessionType.INDIVIDUAL,
+        notes: String?,
+    ): Session {
         val session = Session(
             id = "local-session-${System.currentTimeMillis()}",
             clientId = client.id,
@@ -57,6 +67,7 @@ class LocalPracticeStore @Inject constructor(
             endTime = endTime,
             status = SessionStatus.CONFIRMED,
             format = format,
+            type = type,
             notes = notes?.ifBlank { null },
             paymentStatus = PaymentStatus.UNPAID,
             consentStatus = ConsentStatus.OK,

@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.domain.model.AttentionItem
+import ru.cmpas.app.domain.model.PracticeNotification
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -19,18 +22,22 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val api: CompasApi,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
         loadDashboard()
         loadProfile()
+        viewModelScope.launch {
+            PracticeRefreshBus.changes.collectLatest { loadDashboard(showLoader = false) }
+        }
     }
 
-    fun loadDashboard() {
+    fun refresh() = loadDashboard(showLoader = false)
+
+    fun loadDashboard(showLoader: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = showLoader && !it.isDataLoaded, isRefreshing = !showLoader, error = null) }
             try {
                 val response = api.getDashboard()
                 if (response.isSuccessful) {
@@ -38,32 +45,24 @@ class DashboardViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
+                                isRefreshing = false,
                                 todaySessions = data.todaySessions,
                                 nextSession = data.nextSession,
                                 weekSessionsCount = data.weekStats.sessionsCount,
                                 newClientsCount = data.weekStats.newClients,
                                 attentionItems = data.attentionItems,
+                                notifications = data.notifications,
                                 userName = data.userName ?: it.userName,
                                 bookingLink = data.bookingLink,
                                 isDataLoaded = true,
                             )
                         }
-                    }
+                    } ?: _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
                 } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = "Ошибка ${response.code()}: ${response.message()}",
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, error = "Ошибка ${response.code()}: ${response.message()}") }
                 }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = e.localizedMessage ?: "Ошибка подключения",
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, isRefreshing = false, error = e.localizedMessage ?: "Ошибка подключения") }
             }
         }
     }
@@ -72,10 +71,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val response = api.getProfile()
-                if (response.isSuccessful) {
-                    val user = response.body()
-                    _uiState.update { it.copy(userName = user?.name) }
-                }
+                if (response.isSuccessful) _uiState.update { it.copy(userName = response.body()?.name) }
             } catch (_: Exception) {}
         }
     }
@@ -83,12 +79,14 @@ class DashboardViewModel @Inject constructor(
 
 data class DashboardUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val todaySessions: List<Session> = emptyList(),
     val nextSession: Session? = null,
     val weekSessionsCount: Int = 0,
     val newClientsCount: Int = 0,
     val userName: String? = null,
     val attentionItems: List<AttentionItem> = emptyList(),
+    val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
     val error: String? = null,
     val isDataLoaded: Boolean = false,

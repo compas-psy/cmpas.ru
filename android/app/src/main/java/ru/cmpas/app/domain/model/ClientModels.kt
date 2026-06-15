@@ -8,9 +8,12 @@ data class Client(
     val name: String,
     val email: String? = null,
     val phone: String? = null,
+    val gender: String? = null,
     val telegramId: String? = null,
+    val maxId: String? = null,
     val sessionsCount: Int = 0,
     val lastSessionDate: String? = null,
+    val lastSessionTime: String? = null,
     val notes: String? = null,
     val status: ClientStatus = ClientStatus.ACTIVE,
     val nextSessionDate: String? = null,
@@ -36,6 +39,7 @@ data class ClientDetail(
     val name: String,
     val email: String? = null,
     val phone: String? = null,
+    val gender: String? = null,
     val telegramId: String? = null,
     val maxId: String? = null,
     val sessionsCount: Int = 0,
@@ -63,6 +67,7 @@ data class DashboardDataV2(
     val weekStats: WeekStats,
     val userName: String? = null,
     val attentionItems: List<AttentionItem> = emptyList(),
+    val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
 )
 
@@ -79,6 +84,18 @@ data class AttentionItem(
     val count: Int,
     val label: String,
     val icon: String? = null,
+)
+
+@Serializable
+data class PracticeNotification(
+    val id: String,
+    val type: String,
+    val title: String,
+    val subtitle: String? = null,
+    val createdAt: String? = null,
+    val sessionId: String? = null,
+    val clientId: String? = null,
+    val unread: Boolean = true,
 )
 
 @Serializable

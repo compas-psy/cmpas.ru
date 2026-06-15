@@ -38,3 +38,6 @@ gh_deploy_key
 gh_deploy_key.pub
 
 /src/generated/prisma
+
+# Geist font: temp files only; the .ttf binaries are committed under res/font/
+/android/app/src/main/res/font/*.tmp

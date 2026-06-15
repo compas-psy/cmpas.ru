@@ -16,8 +16,8 @@ android {
         applicationId = "ru.cmpas.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 7
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -68,12 +68,13 @@ android {
     }
 }
 
-// Models.kt and SessionReminderFactory.kt contain legacy declarations that are
-// duplicated by the focused model files and SessionDetailViewModel respectively.
-// Excluding those two sources removes the pre-existing redeclaration errors.
+// main split the monolithic Models.kt into focused model files (Core/Client/Note/
+// Workflow). The legacy Models.kt is kept on disk but excluded from compilation to
+// avoid redeclaration. We DO compile SessionReminderFactory.kt: our redesigned
+// SessionDetailViewModel relies on its buildReminders() and no longer defines it.
+// Geist .ttf binaries are committed under src/main/res/font/ (no build-time fetch).
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     exclude("**/Models.kt")
-    exclude("**/SessionReminderFactory.kt")
 }
 
 dependencies {
