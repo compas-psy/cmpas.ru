@@ -15,6 +15,7 @@ import ru.cmpas.app.domain.model.ReminderStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionReminder
 import ru.cmpas.app.domain.model.SessionStatus
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import javax.inject.Inject
 
 @HiltViewModel
