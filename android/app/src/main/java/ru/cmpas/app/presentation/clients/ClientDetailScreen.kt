@@ -294,6 +294,7 @@ private fun MessengerStatusRow(
                 modifier = Modifier.widthIn(min = 112.dp),
             )
         }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(19.dp), tint = Orange)
     }
 }
 
@@ -348,6 +349,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.overviewItems(
                 style = tBody2,
             )
         }
+        Spacer(Modifier.height(8.dp))
+        Text(notes?.takeIf { it.isNotBlank() } ?: "Фокус работы пока не зафиксирован.", style = tBody2)
     }
     item { Eyebrow("Следующая сессия") }
     item {

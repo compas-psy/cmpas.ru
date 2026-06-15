@@ -147,6 +147,8 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
         activeSheet?.let { sheet ->
             ProfileInfoSheet(sheet, onClose = { activeSheet = null })
         }
+
+        activeSheet?.let { sheet -> ProfileInfoSheet(sheet, onClose = { activeSheet = null }) }
     }
 }
 

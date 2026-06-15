@@ -33,7 +33,10 @@ import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
 import ru.cmpas.app.presentation.util.PersonName
 import java.time.Duration
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -252,3 +255,8 @@ private fun untilLabel(start: String): String? = try {
         else -> "через $m мин"
     }
 } catch (_: Exception) { null }
+
+private fun formatNotificationTime(raw: String): String {
+    val value = runCatching { LocalDateTime.parse(raw.replace("Z", "")) }.getOrNull() ?: return ""
+    return value.format(DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale("ru")))
+}

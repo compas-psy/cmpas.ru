@@ -6,7 +6,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -31,6 +30,7 @@ import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -369,6 +369,166 @@ private fun SessionNotesPreview(text: String, onClick: () -> Unit) {
                 }
             }
         }
+
+        if (uiState.showRescheduleDialog && session != null) {
+            RescheduleSheet(
+                uiState = uiState,
+                currentDate = session.date,
+                currentTime = session.startTime,
+                onDateSelected = viewModel::loadFreeTimes,
+                onConfirm = { date, time -> viewModel.reschedule(session.id, date, time) },
+                onDismiss = viewModel::closeRescheduleDialog,
+            )
+        }
+
+        if (showCancelSheet && session != null) {
+            CancelSessionSheet(
+                clientName = session.clientName,
+                date = session.date,
+                time = session.startTime,
+                isLoading = uiState.isActionLoading,
+                onDismiss = { showCancelSheet = false },
+                onConfirm = {
+                    showCancelSheet = false
+                    viewModel.cancel(session.id)
+                },
+            )
+        }
+
+        if (showMessage && session != null) {
+            SendMessageSheet(
+                clientName = session.clientName,
+                channel = channel,
+                bound = bound,
+                initialText = messageText,
+                onClose = { showMessage = false },
+                onSend = { viewModel.sendMessage(session.clientId, session.id, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionPushHeader(
+    onBack: () -> Unit,
+    onMore: () -> Unit,
+    showMenu: Boolean,
+    onDismissMenu: () -> Unit,
+    onReschedule: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButtonGlass(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", onClick = onBack)
+        Text("Сессия", style = tSection, color = CompasFg, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+        Box {
+            IconButtonGlass(Icons.Outlined.MoreHoriz, "Меню", onClick = onMore)
+            DropdownMenu(expanded = showMenu, onDismissRequest = onDismissMenu) {
+                DropdownMenuItem(text = { Text("Перенести") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null) }, onClick = onReschedule)
+                DropdownMenuItem(
+                    text = { Text("Отменить", color = CompasDestructive) },
+                    leadingIcon = { Icon(Icons.Outlined.Close, null, tint = CompasDestructive) },
+                    onClick = onCancel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionHero(
+    session: Session,
+    clientDetail: ClientDetail?,
+    onClient: () -> Unit,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Eyebrow(formatLongDate(session.date))
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(session.startTime.take(5), style = tKpi.copy(fontSize = 38.sp, lineHeight = 40.sp), color = CompasFg)
+                    Spacer(Modifier.width(8.dp))
+                    Text("${session.durationMinutes()} мин", style = tMeta, color = CompasMutedFg, modifier = Modifier.padding(bottom = 5.dp))
+                }
+            }
+            StatusPill(session.status)
+        }
+        Spacer(Modifier.height(14.dp))
+        ClientTile(session = session, since = clientDetail?.lastSessionDate, onClick = onClient)
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            InfoChip(
+                icon = if (session.format == SessionFormat.ONLINE) Icons.Outlined.Videocam else Icons.Outlined.LocationOn,
+                label = "Формат",
+                value = if (session.format == SessionFormat.ONLINE) "Онлайн" else "В кабинете",
+                modifier = Modifier.weight(1f),
+            )
+            InfoChip(
+                icon = confirmationIcon(session.status),
+                label = "Подтверждение",
+                value = confirmationLabel(session.status),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (session.status == SessionStatus.PENDING) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(GoldSoft).padding(11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Schedule, null, Modifier.size(18.dp), tint = CompasAccent)
+                Spacer(Modifier.width(8.dp))
+                Text("Ожидаем ответа клиента на напоминание", style = tMeta, color = Color(0xFF8B6914))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClientTile(session: Session, since: String?, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(Sage50)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(session.clientName, 46.dp)
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(session.clientName, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                buildString {
+                    append(if (session.occurrenceIndex != null) "${session.occurrenceIndex}-я сессия" else "Клиент")
+                    if (!since.isNullOrBlank()) append(" · с ${formatShortDate(since)}")
+                },
+                style = tMeta,
+                color = CompasMutedFg,
+            )
+        }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = CompasMutedFg)
+    }
+}
+
+@Composable
+private fun InfoChip(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier.clip(RoundedCornerShape(14.dp)).background(Sage50).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(18.dp), tint = Forest600)
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(label, style = tMeta, color = CompasMutedFg)
+            Text(value, style = tMeta, color = CompasFg, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun SessionNotesPreview(text: String, onClick: (() -> Unit)?) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
+        Row(Modifier.fillMaxWidth()) {
+            Box(Modifier.width(4.dp).heightIn(min = 72.dp).clip(RoundedCornerShape(999.dp)).background(CompasAccent))
+            Spacer(Modifier.width(12.dp))
+            Text(text, style = tBody2, maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        }
     }
 }
 
@@ -384,8 +544,10 @@ private fun NoteTag(text: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RescheduleDialog(
+private fun RescheduleSheet(
     uiState: SessionDetailUiState,
+    currentDate: String,
+    currentTime: String,
     onDateSelected: (String) -> Unit,
     onConfirm: (String, String) -> Unit,
     onDismiss: () -> Unit,

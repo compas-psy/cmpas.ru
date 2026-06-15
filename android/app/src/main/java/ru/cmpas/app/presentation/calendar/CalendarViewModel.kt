@@ -5,12 +5,14 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.data.local.LocalScheduleBlockStore
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -26,7 +28,12 @@ class CalendarViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CalendarUiState())
     val uiState = _uiState.asStateFlow()
 
-    init { loadSessions() }
+    init {
+        loadSessions()
+        viewModelScope.launch {
+            PracticeRefreshBus.changes.collectLatest { loadSessions(showLoader = false) }
+        }
+    }
 
     fun selectDate(date: LocalDate) {
         _uiState.update { it.copy(selectedDate = date) }
@@ -38,19 +45,22 @@ class CalendarViewModel @Inject constructor(
         loadSessions()
     }
 
-    fun loadSessions() {
+    fun refresh() = loadSessions(showLoader = false)
+
+    fun loadSessions(showLoader: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = showLoader && it.sessions.isEmpty(), isRefreshing = !showLoader) }
             val range = currentRange(_uiState.value)
             val localSessions = localStore.getSessions(from = range.first, to = range.second)
             val localBlocks = blockStore.getBlocks(from = range.first, to = range.second)
             try {
                 val response = api.getSessions(from = range.first, to = range.second)
                 val remoteSessions = if (response.isSuccessful) response.body().orEmpty() else emptyList()
-                remoteSessions.forEach { localStore.upsertSession(it) }
+                remoteSessions.forEach(localStore::upsertSession)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         sessions = mergeSessions(remoteSessions, localStore.getSessions(range.first, range.second), localBlocks),
                     )
                 }
@@ -58,6 +68,7 @@ class CalendarViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         sessions = mergeSessions(emptyList(), localSessions, localBlocks),
                     )
                 }
@@ -93,6 +104,7 @@ class CalendarViewModel @Inject constructor(
 
 data class CalendarUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val selectedDate: LocalDate = LocalDate.now(),
     val viewMode: CalendarViewMode = CalendarViewMode.DAY,
     val sessions: List<Session> = emptyList(),
