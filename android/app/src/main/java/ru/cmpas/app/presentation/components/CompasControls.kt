@@ -21,10 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.theme.*
 
-// ═══════════════════════════════════════════
-// Buttons & segmented control — SPEC/01 §8.
-// ═══════════════════════════════════════════
-
 @Composable
 fun PrimaryButton(
     text: String,
@@ -54,7 +50,6 @@ fun PrimaryButton(
     }
 }
 
-/** Glass "ghost" button. Pass [text] = null + a sized [modifier] for an icon-only square. */
 @Composable
 fun GhostButton(
     text: String?,
@@ -63,7 +58,7 @@ fun GhostButton(
     icon: ImageVector? = null,
     danger: Boolean = false,
 ) {
-    val fg = if (danger) CompasDestructive else Forest800
+    val foreground = if (danger) CompasDestructive else Forest800
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
@@ -75,15 +70,14 @@ fun GhostButton(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = fg)
+        if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = foreground)
         if (text != null) {
             if (icon != null) Spacer(Modifier.width(8.dp))
-            Text(text, color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(text, color = foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
 
-/** Glass segmented control. Active segment = forest gradient. */
 @Composable
 fun CompasSegmented(
     options: List<String>,
@@ -91,17 +85,35 @@ fun CompasSegmented(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    SegmentedContent(options, selectedIndex, onSelect, modifier)
+}
+
+/** Compatibility overload for concise trailing-lambda calls. */
+@Composable
+fun CompasSegmented(
+    options: List<String>,
+    selectedIndex: Int,
+    modifier: Modifier = Modifier,
+    onSelection: (Int) -> Unit,
+) {
+    SegmentedContent(options, selectedIndex, onSelection, modifier)
+}
+
+@Composable
+private fun SegmentedContent(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier,
+) {
     Row(
-        modifier
-            .fillMaxWidth()
-            .glass(radius = 15.dp)
-            .padding(4.dp),
+        modifier.fillMaxWidth().glass(radius = 15.dp).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        options.forEachIndexed { i, label ->
-            val active = i == selectedIndex
+        options.forEachIndexed { index, label ->
+            val active = index == selectedIndex
             val interaction = remember { MutableInteractionSource() }
-            val seg = Modifier
+            val segmentModifier = Modifier
                 .weight(1f)
                 .height(38.dp)
                 .clip(RoundedCornerShape(11.dp))
@@ -109,8 +121,8 @@ fun CompasSegmented(
                     if (active) Modifier.background(Brush.linearGradient(listOf(Forest700, Forest800)))
                     else Modifier,
                 )
-                .clickable(interactionSource = interaction, indication = null) { onSelect(i) }
-            Box(seg, contentAlignment = Alignment.Center) {
+                .clickable(interactionSource = interaction, indication = null) { onSelect(index) }
+            Box(segmentModifier, contentAlignment = Alignment.Center) {
                 Text(
                     label,
                     color = if (active) Color.White else CompasMutedFg,

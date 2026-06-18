@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.presentation.comms.DocumentSendResult
 import ru.cmpas.app.presentation.comms.InviteSheet
 import ru.cmpas.app.presentation.comms.SendDocumentSheet
 import ru.cmpas.app.presentation.comms.SendMessageSheet
+import ru.cmpas.app.presentation.comms.asDocumentTemplate
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
 import java.time.LocalDate
@@ -52,7 +54,7 @@ fun ClientDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     var sheet by remember { mutableStateOf<ClientSheet?>(null) }
-    var consentDocument by remember { mutableStateOf(false) }
+    var preferredDocumentId by remember { mutableStateOf<String?>(null) }
     var showMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(clientId) { viewModel.loadClient(clientId) }
@@ -60,23 +62,27 @@ fun ClientDetailScreen(
     val client = uiState.client
     val detail = uiState.clientDetail
     val sessions = uiState.sessions.sortedByDescending { "${it.date}T${it.startTime}" }
-    val upcoming = sessions.filter { it.isFutureOrToday() }.sortedBy { "${it.date}T${it.startTime}" }.firstOrNull()
-    val history = sessions.filterNot { it.isFutureOrToday() }.take(8)
+    val upcoming = sessions.filter { it.isFutureOrToday() }.minByOrNull { "${it.date}T${it.startTime}" }
+    val history = sessions.filterNot { it.isFutureOrToday() }.take(12)
     val bound = detail?.hasMessenger == true
-    val channel = detail?.messengerChannel ?: if (!detail?.telegramId.isNullOrBlank()) "telegram" else null
+    val channel = detail?.messengerChannel ?: when {
+        !detail?.telegramId.isNullOrBlank() -> "telegram"
+        !detail?.maxId.isNullOrBlank() -> "max"
+        else -> null
+    }
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
 
         Column(Modifier.fillMaxSize()) {
-            ClientPushHeader(
+            ClientHeader(
                 title = client?.name?.substringBefore(' ') ?: "Клиент",
                 onBack = onBack,
-                onMore = { showMenu = true },
                 showMenu = showMenu,
+                onMore = { showMenu = true },
                 onDismissMenu = { showMenu = false },
-                onArchive = { showMenu = false; onQuickAction("archive-client") },
                 onEdit = { showMenu = false; onQuickAction("edit-client") },
+                onArchive = { showMenu = false; onQuickAction("archive-client") },
                 onDelete = { showMenu = false; onQuickAction("delete-client") },
             )
 
@@ -84,14 +90,28 @@ fun ClientDetailScreen(
                 uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Forest700)
                 }
-                client != null -> LazyColumn(
+                client == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    GlassCard(Modifier.padding(20.dp), padding = 20.dp) {
+                        Icon(Icons.Outlined.ErrorOutline, null, Modifier.size(28.dp), tint = CompasDestructive)
+                        Spacer(Modifier.height(10.dp))
+                        Text("Карточка не открылась", style = tSection, color = CompasFg)
+                        Spacer(Modifier.height(5.dp))
+                        Text(uiState.error ?: "Обновите данные и попробуйте снова", style = tBody2)
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GhostButton("Назад", onBack, Modifier.weight(1f), Icons.AutoMirrored.Outlined.ArrowBack)
+                            PrimaryButton("Повторить", { viewModel.loadClient(clientId) }, Modifier.weight(1f), Icons.Outlined.Refresh)
+                        }
+                    }
+                }
+                else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 142.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    item { ClientHero(client = client, sessions = sessions) }
+                    item { ClientHero(client, sessions) }
                     item {
-                        MessengerStatusRow(
+                        MessengerCard(
                             client = client,
                             detail = detail,
                             bound = bound,
@@ -108,26 +128,91 @@ fun ClientDetailScreen(
                     }
 
                     when (tabIndex) {
-                        0 -> overviewItems(
-                            client = client,
-                            detail = detail,
-                            upcoming = upcoming,
-                            onConsent = { consentDocument = true; sheet = ClientSheet.DOCUMENT },
-                            onSession = onSessionClick,
-                        )
-                        1 -> sessionItems(upcoming = upcoming, history = history, onSession = onSessionClick)
-                        2 -> noteItems(client = client, sessions = sessions, onNote = onNoteClick)
-                        3 -> documentItems(
-                            consentOk = !detail?.consentDate.isNullOrBlank(),
-                            onSend = { consentDocument = false; sheet = ClientSheet.DOCUMENT },
-                        )
-                    }
-                }
-                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    GlassCard(padding = 20.dp) {
-                        Text(uiState.error ?: "Не удалось загрузить клиента", style = tBody, color = CompasMutedFg)
-                        Spacer(Modifier.height(12.dp))
-                        GhostButton("Назад", onBack, modifier = Modifier.fillMaxWidth(), icon = Icons.AutoMirrored.Outlined.ArrowBack)
+                        0 -> {
+                            item { StatusRow(detail, upcoming) }
+                            if (detail?.consentDate.isNullOrBlank()) {
+                                item {
+                                    ConsentBanner {
+                                        preferredDocumentId = uiState.documents.firstOrNull {
+                                            it.title.contains("соглас", ignoreCase = true)
+                                        }?.id
+                                        sheet = ClientSheet.DOCUMENT
+                                    }
+                                }
+                            }
+                            item { FocusCard(client.notes) }
+                            item { Eyebrow("Следующая запись") }
+                            item {
+                                if (upcoming != null) SessionCard(upcoming) { onSessionClick(upcoming.id) }
+                                else EmptyCard("Следующая встреча пока не назначена", Icons.Outlined.CalendarMonth)
+                            }
+                        }
+                        1 -> {
+                            item { Eyebrow("Предстоящие") }
+                            val future = sessions.filter { it.isFutureOrToday() }.sortedBy { "${it.date}T${it.startTime}" }
+                            if (future.isEmpty()) item { EmptyCard("Нет предстоящих записей", Icons.Outlined.EventAvailable) }
+                            else items(future, key = { it.id }) { session -> SessionCard(session) { onSessionClick(session.id) } }
+                            item { Eyebrow("История") }
+                            if (history.isEmpty()) item { EmptyCard("История встреч пока пуста", Icons.Outlined.History) }
+                            else items(history, key = { it.id }) { session -> SessionCard(session) { onSessionClick(session.id) } }
+                        }
+                        2 -> {
+                            item { Eyebrow("Приватные заметки") }
+                            val notes = sessions.filter { !it.notes.isNullOrBlank() }
+                            if (notes.isEmpty()) item {
+                                EmptyCard("После сохранения заметки появятся здесь", Icons.Outlined.EditNote)
+                            } else items(notes, key = { it.id }) { session ->
+                                NoteCard(session) { onNoteClick(session.id) }
+                            }
+                            item {
+                                GhostButton(
+                                    text = "Добавить заметку",
+                                    icon = Icons.Outlined.Add,
+                                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                        3 -> {
+                            item { Eyebrow("Документы специалиста") }
+                            when {
+                                uiState.isLoadingDocuments -> item {
+                                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = Forest700)
+                                    }
+                                }
+                                uiState.documents.isEmpty() -> item {
+                                    GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
+                                        Icon(Icons.Outlined.FolderOff, null, Modifier.size(30.dp), tint = CompasMutedFg)
+                                        Spacer(Modifier.height(10.dp))
+                                        Text("Нет активных документов", style = tSection, color = CompasFg)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            uiState.documentsError ?: "Добавьте документы в web-сервисе — здесь показывается только актуальный активный список.",
+                                            style = tBody2,
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        GhostButton("Обновить", { viewModel.loadDocuments(clientId) }, Modifier.fillMaxWidth(), Icons.Outlined.Refresh)
+                                    }
+                                }
+                                else -> {
+                                    items(uiState.documents, key = { it.id }) { document ->
+                                        DocumentRow(document.title) {
+                                            preferredDocumentId = document.id
+                                            sheet = ClientSheet.DOCUMENT
+                                        }
+                                    }
+                                    item {
+                                        PrimaryButton(
+                                            text = "Отправить документ",
+                                            icon = Icons.Outlined.Send,
+                                            onClick = { preferredDocumentId = null; sheet = ClientSheet.DOCUMENT },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -135,15 +220,13 @@ fun ClientDetailScreen(
 
         if (client != null) {
             Row(
-                Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(CompasBg.copy(alpha = 0.92f))
-                    .navigationBarsPadding()
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(CompasBg.copy(alpha = 0.94f)).navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 PrimaryButton(
-                    text = "Записать сессию",
+                    text = "Добавить запись",
                     icon = Icons.Outlined.CalendarMonth,
                     onClick = onScheduleClick,
                     modifier = Modifier.weight(1f),
@@ -151,7 +234,7 @@ fun ClientDetailScreen(
                 GhostButton(
                     text = null,
                     icon = Icons.Outlined.EditNote,
-                    onClick = { onNoteClick(upcoming?.id ?: "client-$clientId") },
+                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
                     modifier = Modifier.width(54.dp),
                 )
             }
@@ -175,9 +258,25 @@ fun ClientDetailScreen(
                 clientName = client.name,
                 channel = channel,
                 bound = bound,
-                initiallySelectedId = if (consentDocument) "consent" else null,
+                documents = uiState.documents.map { it.asDocumentTemplate() },
+                isLoading = uiState.isLoadingDocuments,
+                isSending = uiState.isSendingDocument,
+                error = uiState.documentsError,
+                initiallySelectedId = preferredDocumentId,
                 onClose = { sheet = null },
-                onSend = { /* TODO API: отправка документа */ },
+                onRetry = { viewModel.loadDocuments(clientId) },
+                onSendWithResult = { document, callback ->
+                    viewModel.sendDocument(clientId, channel ?: "telegram", document.id) { result, error ->
+                        callback(
+                            when {
+                                error != null -> DocumentSendResult(error = error)
+                                result?.status == "sent" -> DocumentSendResult(delivered = true)
+                                result?.readyText != null -> DocumentSendResult(shareText = result.readyText)
+                                else -> DocumentSendResult(error = "Не удалось подготовить документ")
+                            },
+                        )
+                    }
+                },
             )
             null -> Unit
         }
@@ -185,29 +284,19 @@ fun ClientDetailScreen(
 }
 
 @Composable
-private fun ClientPushHeader(
+private fun ClientHeader(
     title: String,
     onBack: () -> Unit,
-    onMore: () -> Unit,
     showMenu: Boolean,
+    onMore: () -> Unit,
     onDismissMenu: () -> Unit,
-    onArchive: () -> Unit,
     onEdit: () -> Unit,
+    onArchive: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButtonGlass(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", onClick = onBack)
-        Text(
-            title,
-            style = tSection,
-            color = CompasFg,
-            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Text(title, style = tSection, color = CompasFg, modifier = Modifier.weight(1f).padding(horizontal = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Box {
             IconButtonGlass(Icons.Outlined.MoreHoriz, "Меню", onClick = onMore)
             DropdownMenu(expanded = showMenu, onDismissRequest = onDismissMenu) {
@@ -221,28 +310,22 @@ private fun ClientPushHeader(
 
 @Composable
 private fun ClientHero(client: Client, sessions: List<Session>) {
-    GlassTintCard(modifier = Modifier.fillMaxWidth(), padding = 18.dp) {
+    GlassTintCard(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name = client.name, size = 62.dp, ring = true)
+            Avatar(client.name, 62.dp, ring = true)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(client.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        when (client.status) {
-                            ClientStatus.ACTIVE -> "Активный"
-                            ClientStatus.PAUSED -> "Пауза"
-                            ClientStatus.ARCHIVED -> "Архив"
-                        },
+                        when (client.status) { ClientStatus.ACTIVE -> "Активный"; ClientStatus.PAUSED -> "Пауза"; ClientStatus.ARCHIVED -> "Архив" },
                         style = tMeta,
                         color = Color.White,
-                        modifier = Modifier.clip(RoundedCornerShape(999.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(999.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = .15f))
+                            .border(1.dp, Color.White.copy(alpha = .22f), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
                     )
-                    Text(clientSince(sessions, client.lastSessionDate), style = tMeta, color = Color.White.copy(alpha = 0.72f))
+                    Text(clientSince(sessions, client.lastSessionDate), style = tMeta, color = Color.White.copy(alpha = .72f))
                 }
             }
         }
@@ -250,174 +333,39 @@ private fun ClientHero(client: Client, sessions: List<Session>) {
 }
 
 @Composable
-private fun MessengerStatusRow(
-    client: Client,
-    detail: ClientDetail?,
-    bound: Boolean,
-    channel: String?,
-    onClick: () -> Unit,
-) {
-    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 14.dp) {
+private fun MessengerCard(client: Client, detail: ClientDetail?, bound: Boolean, channel: String?, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
-                    .background(if (channel == "max") MaxSoft else if (channel == "telegram") TgSoft else CompasMuted),
+                Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(
+                    if (channel == "max") MaxSoft else if (channel == "telegram") TgSoft else CompasMuted,
+                ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    if (channel == "max") Icons.Outlined.Forum else Icons.Outlined.Send,
-                    null,
-                    Modifier.size(19.dp),
-                    tint = if (channel == "max") Max else if (channel == "telegram") Tg else CompasMutedFg,
-                )
+                Icon(if (channel == "max") Icons.Outlined.Forum else Icons.Outlined.Send, null, Modifier.size(19.dp), tint = if (channel == "max") Max else if (channel == "telegram") Tg else CompasMutedFg)
             }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    when (channel) { "telegram" -> "Telegram"; "max" -> "MAX"; else -> "Мессенджер не привязан" },
-                    style = tBody,
-                    color = CompasFg,
-                )
-                Text(
-                    if (bound) detail?.telegramId?.let { "@$it" } ?: "Канал подключён"
-                    else client.phone ?: "Приглашение ещё не открыто",
-                    style = tMeta,
-                    color = CompasMutedFg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text(when (channel) { "telegram" -> "Telegram"; "max" -> "MAX"; else -> "Мессенджер не привязан" }, style = tBody, color = CompasFg)
+                Text(if (bound) "Канал подключён" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            GhostButton(
-                text = if (bound) "Написать" else "Пригласить",
-                icon = if (bound) Icons.Outlined.Send else Icons.Outlined.Link,
-                onClick = onClick,
-                modifier = Modifier.widthIn(min = 112.dp),
-            )
-        }
-        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(19.dp), tint = Orange)
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.overviewItems(
-    client: Client,
-    detail: ClientDetail?,
-    upcoming: Session?,
-    onConsent: () -> Unit,
-    onSession: (String) -> Unit,
-) {
-    item {
-        val payment = upcoming?.paymentStatus
-        val homework = upcoming?.homeworkStatus
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatusMini(
-                icon = Icons.Outlined.VerifiedUser,
-                label = "Согласие",
-                value = if (!detail?.consentDate.isNullOrBlank()) "Получено" else "Нужно",
-                accent = if (!detail?.consentDate.isNullOrBlank()) Success else Orange,
-                modifier = Modifier.weight(1f),
-            )
-            StatusMini(
-                icon = Icons.Outlined.CurrencyRuble,
-                label = "Оплаты",
-                value = when (payment) { PaymentStatus.PAID -> "Оплачено"; PaymentStatus.UNPAID -> "Ожидает"; else -> "В порядке" },
-                accent = if (payment == PaymentStatus.UNPAID) Orange else Success,
-                modifier = Modifier.weight(1f),
-            )
-            StatusMini(
-                icon = Icons.Outlined.Assignment,
-                label = "Д·з",
-                value = when (homework) { HomeworkStatus.DONE -> "Готово"; HomeworkStatus.MISSING -> "Нет"; HomeworkStatus.PARTIAL -> "Частично"; else -> "Не задано" },
-                accent = if (homework == HomeworkStatus.MISSING) Orange else Forest600,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-    if (detail?.consentDate.isNullOrBlank()) {
-        item { ConsentBanner(onClick = onConsent) }
-    }
-    item {
-        GlassCard(modifier = Modifier.fillMaxWidth(), padding = 16.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Flag, null, Modifier.size(19.dp), tint = CompasAccent)
-                Spacer(Modifier.width(8.dp))
-                Text("Фокус работы", style = tSection, color = CompasFg)
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                client.notes?.takeIf { it.isNotBlank() }
-                    ?: "Фокус работы пока не зафиксирован. Его можно добавить в заметке после сессии.",
-                style = tBody2,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(notes?.takeIf { it.isNotBlank() } ?: "Фокус работы пока не зафиксирован.", style = tBody2)
-    }
-    item { Eyebrow("Следующая сессия") }
-    item {
-        if (upcoming != null) SessionMini(upcoming, onClick = { onSession(upcoming.id) })
-        else EmptyGlass("Следующая встреча пока не назначена", Icons.Outlined.CalendarMonth)
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.sessionItems(
-    upcoming: Session?,
-    history: List<Session>,
-    onSession: (String) -> Unit,
-) {
-    item { Eyebrow("Предстоящие") }
-    item {
-        if (upcoming != null) SessionMini(upcoming, onClick = { onSession(upcoming.id) })
-        else EmptyGlass("Нет предстоящих записей", Icons.Outlined.EventAvailable)
-    }
-    item { Eyebrow("История") }
-    if (history.isEmpty()) item { EmptyGlass("История сессий пока пуста", Icons.Outlined.History) }
-    else items(history, key = { it.id }) { session -> SessionMini(session, onClick = { onSession(session.id) }) }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.noteItems(
-    client: Client,
-    sessions: List<Session>,
-    onNote: (String) -> Unit,
-) {
-    item { Eyebrow("Приватные заметки") }
-    val withNotes = sessions.filter { !it.notes.isNullOrBlank() }.take(2)
-    if (withNotes.isEmpty()) {
-        item {
-            NotePreview(
-                date = client.lastSessionDate ?: "Последняя сессия",
-                text = "Здесь появятся ваши приватные заметки о динамике и следующем шаге.",
-                onClick = { onNote(sessions.firstOrNull()?.id ?: "client-${client.id}") },
-            )
-        }
-    } else {
-        items(withNotes, key = { it.id }) { session ->
-            NotePreview(session.date, session.notes.orEmpty(), onClick = { onNote(session.id) })
-        }
-    }
-    item {
-        DashedAction("Добавить заметку", Icons.Outlined.Add) {
-            onNote(sessions.firstOrNull()?.id ?: "client-${client.id}")
+            GhostButton(if (bound) "Написать" else "Пригласить", onClick, Modifier.widthIn(min = 112.dp), if (bound) Icons.Outlined.Send else Icons.Outlined.Link)
         }
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.documentItems(
-    consentOk: Boolean,
-    onSend: () -> Unit,
-) {
-    item { Eyebrow("Документы клиента") }
-    item { DocRow("Информированное согласие", if (consentOk) "Подписано" else "Не отправлено", if (consentOk) Success else Orange, Icons.Outlined.VerifiedUser) }
-    item { DocRow("Согласие на обработку ПДн", if (consentOk) "Открыто" else "Ожидает", if (consentOk) Blue else Orange, Icons.Outlined.Shield) }
-    item { DocRow("Правила работы и отмены", "Доставлено", Success, Icons.Outlined.MenuBook) }
-    item { DocRow("Материал после сессии", "Не отправлялся", CompasMutedFg, Icons.Outlined.Description) }
-    item {
-        PrimaryButton("Отправить документ", onSend, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Send)
+@Composable
+private fun StatusRow(detail: ClientDetail?, session: Session?) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatusMini(Icons.Outlined.VerifiedUser, "Согласие", if (!detail?.consentDate.isNullOrBlank()) "Получено" else "Нужно", if (!detail?.consentDate.isNullOrBlank()) Success else Orange, Modifier.weight(1f))
+        StatusMini(Icons.Outlined.CurrencyRuble, "Оплата", if (session?.paymentStatus == PaymentStatus.UNPAID) "Ожидает" else "В порядке", if (session?.paymentStatus == PaymentStatus.UNPAID) Orange else Success, Modifier.weight(1f))
+        StatusMini(Icons.Outlined.Assignment, "Д/з", if (session?.homeworkStatus == HomeworkStatus.MISSING) "Нет" else "В порядке", if (session?.homeworkStatus == HomeworkStatus.MISSING) Orange else Forest600, Modifier.weight(1f))
     }
 }
 
 @Composable
 private fun StatusMini(icon: ImageVector, label: String, value: String, accent: Color, modifier: Modifier = Modifier) {
-    GlassCard(modifier = modifier, padding = 11.dp) {
+    GlassCard(modifier, padding = 11.dp) {
         Icon(icon, null, Modifier.size(17.dp), tint = accent)
         Spacer(Modifier.height(7.dp))
         Text(label, style = tMeta, color = CompasMutedFg, maxLines = 1)
@@ -430,28 +378,37 @@ private fun ConsentBanner(onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(OrangeSoft)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(13.dp),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Outlined.WarningAmber, null, Modifier.size(20.dp), tint = Orange)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("Нужно согласие клиента", style = tBody, color = CompasFg)
-            Text("Отправьте документ и зафиксируйте подтверждение", style = tMeta, color = CompasMutedFg)
+            Text("Выберите актуальный документ специалиста", style = tMeta, color = CompasMutedFg)
         }
         Icon(Icons.Outlined.ChevronRight, null, Modifier.size(19.dp), tint = Orange)
     }
 }
 
 @Composable
-private fun SessionMini(session: Session, onClick: () -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 14.dp, onClick = onClick) {
+private fun FocusCard(notes: String?) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.width(4.dp).height(46.dp).clip(RoundedCornerShape(999.dp))
-                    .background(if (session.status == SessionStatus.CONFIRMED) Success else CompasAccent),
-            )
+            Icon(Icons.Outlined.Flag, null, Modifier.size(19.dp), tint = CompasAccent)
+            Spacer(Modifier.width(8.dp))
+            Text("Фокус работы", style = tSection, color = CompasFg)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(notes?.takeIf { it.isNotBlank() } ?: "Фокус работы пока не зафиксирован.", style = tBody2)
+    }
+}
+
+@Composable
+private fun SessionCard(session: Session, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(4.dp).height(46.dp).clip(RoundedCornerShape(999.dp)).background(if (session.status == SessionStatus.CONFIRMED) Success else CompasAccent))
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(formatSessionDate(session.date), style = tBody, color = CompasFg)
@@ -463,66 +420,40 @@ private fun SessionMini(session: Session, onClick: () -> Unit) {
                 }
             }
             StatusPill(session.status)
-            Spacer(Modifier.width(4.dp))
             Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
         }
     }
 }
 
 @Composable
-private fun NotePreview(date: String, text: String, onClick: () -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(formatSessionDate(date), style = tMeta, color = CompasMutedFg, modifier = Modifier.weight(1f))
-            Text(
-                "Приватная",
-                style = tMeta,
-                color = Forest700,
-                modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(SuccessSoft).padding(horizontal = 9.dp, vertical = 4.dp),
-            )
-        }
+private fun NoteCard(session: Session, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
+        Text(formatSessionDate(session.date), style = tMeta, color = CompasMutedFg)
         Spacer(Modifier.height(8.dp))
-        Text(text, style = tBody2, maxLines = 4, overflow = TextOverflow.Ellipsis)
+        Text(session.notes.orEmpty(), style = tBody2, maxLines = 4, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun DocRow(title: String, status: String, accent: Color, icon: ImageVector) {
-    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 14.dp) {
+private fun DocumentRow(title: String, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 14.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, Modifier.size(19.dp), tint = accent)
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(Sage100), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Description, null, Modifier.size(19.dp), tint = Forest700)
             }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = tBody, color = CompasFg)
-                Text(status, style = tMeta, color = accent)
+                Text("Активный документ", style = tMeta, color = Success)
             }
-            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
+            Icon(Icons.Outlined.Send, null, Modifier.size(18.dp), tint = Forest700)
         }
     }
 }
 
 @Composable
-private fun DashedAction(text: String, icon: ImageVector, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
-            .border(1.dp, CompasBorder, RoundedCornerShape(17.dp))
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(15.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, Modifier.size(18.dp), tint = Forest700)
-        Spacer(Modifier.width(7.dp))
-        Text(text, style = tBody, color = Forest700)
-    }
-}
-
-@Composable
-private fun EmptyGlass(text: String, icon: ImageVector) {
-    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 18.dp) {
+private fun EmptyCard(text: String, icon: ImageVector) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(22.dp), tint = CompasMutedFg)
             Spacer(Modifier.width(10.dp))
@@ -533,19 +464,19 @@ private fun EmptyGlass(text: String, icon: ImageVector) {
 
 private fun Session.isFutureOrToday(): Boolean {
     val moment = runCatching { LocalDateTime.parse("${date}T$startTime") }.getOrNull()
-    return moment?.isAfter(LocalDateTime.now().minusMinutes(1)) ?: runCatching { LocalDate.parse(date) >= LocalDate.now() }.getOrDefault(false)
+    return moment?.isAfter(LocalDateTime.now().minusMinutes(1))
+        ?: runCatching { LocalDate.parse(date) >= LocalDate.now() }.getOrDefault(false)
 }
 
 private fun clientSince(sessions: List<Session>, fallback: String?): String {
-    val raw = sessions.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.minOrNull()
+    val first = sessions.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.minOrNull()
         ?: fallback?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    if (raw == null) return "новый клиент"
-    val month = raw.month.getDisplayName(TextStyle.SHORT, Locale("ru")).trimEnd('.')
-    return "с $month ${raw.year}"
+    if (first == null) return "новый клиент"
+    val month = first.month.getDisplayName(TextStyle.SHORT, Locale("ru")).trimEnd('.')
+    return "с $month ${first.year}"
 }
 
 private fun formatSessionDate(raw: String): String {
     val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return raw
-    val formatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
-    return date.format(formatter)
+    return date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru")))
 }
