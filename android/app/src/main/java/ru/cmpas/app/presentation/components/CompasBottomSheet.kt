@@ -22,11 +22,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import ru.cmpas.app.presentation.theme.*
 
 // ═══════════════════════════════════════════
 // Bottom sheet — SPEC/01 §7. Scrim + glass-strong panel, top corners 30dp,
 // drag handle, slide-up entrance.
+//
+// IMPORTANT: the sheet is rendered in a separate Dialog window. This guarantees
+// that every sheet in the app is above the floating navigation dock and that the
+// dock cannot intercept taps on sheet actions.
 // ═══════════════════════════════════════════
 
 @Composable
@@ -38,42 +44,57 @@ fun CompasBottomSheet(
     val scrimInteraction = remember { MutableInteractionSource() }
     val visible = remember { MutableTransitionState(false).apply { targetState = true } }
 
-    Box(Modifier.fillMaxSize()) {
-        // Scrim
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color(0x66102815))
-                .clickable(interactionSource = scrimInteraction, indication = null, onClick = onClose),
-        )
-        // Panel
-        AnimatedVisibility(
-            visibleState = visible,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(tween(320)) { it } + fadeIn(tween(320)),
-        ) {
-            Column(
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            // Full-screen scrim also blocks the floating dock underneath.
+            Box(
                 Modifier
-                    .fillMaxWidth()
-                    .shadow(24.dp, shape, spotColor = Color(0x33102820))
-                    .clip(shape)
-                    .background(Color.White.copy(alpha = 0.94f))
-                    .border(1.dp, Color.White.copy(alpha = 0.70f), shape)
-                    .navigationBarsPadding()
-                    .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 26.dp)
-                    .heightIn(max = 720.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .fillMaxSize()
+                    .background(Color(0x66102815))
+                    .clickable(
+                        interactionSource = scrimInteraction,
+                        indication = null,
+                        onClick = onClose,
+                    ),
+            )
+
+            AnimatedVisibility(
+                visibleState = visible,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = slideInVertically(tween(320)) { it } + fadeIn(tween(320)),
             ) {
-                Box(
+                Column(
                     Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .width(42.dp)
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(CompasBorder),
-                )
-                Spacer(Modifier.height(14.dp))
-                content()
+                        .fillMaxWidth()
+                        .shadow(24.dp, shape, spotColor = Color(0x33102820))
+                        .clip(shape)
+                        .background(Color.White.copy(alpha = 0.985f))
+                        .border(1.dp, Color.White.copy(alpha = 0.82f), shape)
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 26.dp)
+                        .heightIn(max = 720.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Box(
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(42.dp)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(CompasBorder),
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    content()
+                }
             }
         }
     }
