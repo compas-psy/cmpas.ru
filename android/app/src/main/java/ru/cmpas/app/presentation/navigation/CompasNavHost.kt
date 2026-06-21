@@ -24,6 +24,7 @@ import ru.cmpas.app.presentation.clients.ClientsViewModel
 import ru.cmpas.app.presentation.components.DockTab
 import ru.cmpas.app.presentation.components.GlassDock
 import ru.cmpas.app.presentation.dashboard.DashboardScreen
+import ru.cmpas.app.presentation.legal.LegalGateOverlay
 import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
@@ -170,6 +171,10 @@ fun CompasNavHost(
                     navController.navigate(Screen.ClientDetail.createRoute(id))
                 },
             )
+        }
+
+        if (isLoggedIn) {
+            LegalGateOverlay()
         }
     }
 }

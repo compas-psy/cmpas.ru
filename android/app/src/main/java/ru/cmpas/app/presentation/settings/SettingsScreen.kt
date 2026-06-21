@@ -18,15 +18,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.domain.model.MobileLegalDoc
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
 
 @Composable
-fun SettingsScreen(onLogout: () -> Unit = {}) {
+fun SettingsScreen(
+    onLogout: () -> Unit = {},
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
     var dayBefore by rememberSaveable { mutableStateOf(true) }
     var twoHoursBefore by rememberSaveable { mutableStateOf(true) }
     var paymentReminder by rememberSaveable { mutableStateOf(true) }
@@ -35,6 +42,7 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
     var copied by rememberSaveable { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val paymentLink = "cmpas.ru/pay/ilya-martynov"
+    val displayName = uiState.user?.name ?: "Профиль специалиста"
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
@@ -53,14 +61,14 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
             item {
                 GlassTintCard(Modifier.fillMaxWidth(), padding = 18.dp) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar("Илья Мартынов", 66.dp, ring = true)
+                        Avatar(displayName, 66.dp, ring = true)
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Илья Мартынов", style = tSection, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(displayName, style = tSection, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(3.dp))
-                            Text("Психолог · схема-терапия", style = tBody2, color = Color.White.copy(alpha = .76f))
+                            Text(uiState.user?.email ?: "Психолог · схема-терапия", style = tBody2, color = Color.White.copy(alpha = .76f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(8.dp))
-                            ProfilePill("Профиль заполнен на 86%")
+                            ProfilePill(if (uiState.legalStatus?.requiresTermsAcceptance == true) "Нужно принять документы" else "Документы актуальны")
                         }
                         IconButtonGlass(Icons.Outlined.Edit, "Редактировать") { activeSheet = ProfileSheet.PROFILE }
                     }
@@ -103,7 +111,7 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
                                 text = if (copied) "Скопировано" else "Скопировать",
                                 icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                                 onClick = {
-                                    clipboard.setText(AnnotatedString("https://$paymentLink"))
+                                    clipboard.setText(AnnotatedString("https:" + "//$paymentLink"))
                                     copied = true
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -125,7 +133,7 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                     SettingRow(Icons.Outlined.Link, "Ссылка для записи", "cmpas.ru/book/ilya-martynov") { activeSheet = ProfileSheet.BOOKING }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.Description, "Документы", "Согласия и шаблоны") { activeSheet = ProfileSheet.DOCUMENTS }
+                    SettingRow(Icons.Outlined.Description, "Документы", documentsSubtitle(uiState)) { activeSheet = ProfileSheet.DOCUMENTS }
                     ThinDivider()
                     SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Экспорт, доступ и удаление") { activeSheet = ProfileSheet.DATA }
                     ThinDivider()
@@ -145,10 +153,15 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
         }
 
         activeSheet?.let { sheet ->
-            ProfileInfoSheet(sheet, onClose = { activeSheet = null })
+            ProfileInfoSheet(
+                sheet = sheet,
+                state = uiState,
+                onClose = { activeSheet = null },
+                onRefresh = viewModel::refresh,
+                onAcceptRequired = viewModel::acceptRequiredDocuments,
+                onAdsChange = viewModel::setAdsConsent,
+            )
         }
-
-        activeSheet?.let { sheet -> ProfileInfoSheet(sheet, onClose = { activeSheet = null }) }
     }
 }
 
@@ -239,15 +252,27 @@ private fun QrBox() {
 }
 
 @Composable
-private fun ProfileInfoSheet(sheet: ProfileSheet, onClose: () -> Unit) {
+private fun ProfileInfoSheet(
+    sheet: ProfileSheet,
+    state: SettingsUiState,
+    onClose: () -> Unit,
+    onRefresh: () -> Unit,
+    onAcceptRequired: () -> Unit,
+    onAdsChange: (Boolean) -> Unit,
+) {
+    if (sheet == ProfileSheet.DOCUMENTS) {
+        DocumentsSheet(state, onClose, onRefresh, onAcceptRequired, onAdsChange)
+        return
+    }
+
     val (title, subtitle, body) = when (sheet) {
         ProfileSheet.PROFILE -> Triple("Профессиональный профиль", "Данные, которые видит клиент", "Имя, специализация и описание практики будут редактироваться в следующем шаге настройки профиля.")
         ProfileSheet.TELEGRAM -> Triple("Telegram", "Канал подключён", "Бот может отправлять клиентам сервисные сообщения после того, как клиент открыл его и подтвердил связь.")
         ProfileSheet.MAX -> Triple("MAX", "Подключение канала", "После подключения клиенты смогут получать уведомления в MAX. До этого приложение подготовит текст для ручной отправки.")
         ProfileSheet.BOOKING -> Triple("Ссылка для записи", "Самозапись клиентов", "По ссылке клиент увидит свободные окна, выберет формат встречи и подтвердит необходимые документы.")
-        ProfileSheet.DOCUMENTS -> Triple("Документы", "Шаблоны и версии", "Здесь будут храниться информированное согласие, правила работы и история отправленных версий.")
         ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
         ProfileSheet.HELP -> Triple("Помощь и поддержка", "КОМПАС Android 1.0.5", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+        ProfileSheet.DOCUMENTS -> Triple("Документы", "", "")
     }
     CompasBottomSheet(onClose = onClose) {
         SheetHead(title, subtitle)
@@ -256,6 +281,129 @@ private fun ProfileInfoSheet(sheet: ProfileSheet, onClose: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         PrimaryButton("Готово", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Check)
     }
+}
+
+@Composable
+private fun DocumentsSheet(
+    state: SettingsUiState,
+    onClose: () -> Unit,
+    onRefresh: () -> Unit,
+    onAcceptRequired: () -> Unit,
+    onAdsChange: (Boolean) -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    val status = state.legalStatus
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Документы", "Актуальные версии и ваши согласия")
+        Spacer(Modifier.height(14.dp))
+
+        if (state.isLoading) {
+            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Forest700)
+            }
+        } else if (status == null) {
+            GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+                Text(state.error ?: "Документы пока не загрузились", style = tBody2, color = CompasMutedFg)
+            }
+            Spacer(Modifier.height(12.dp))
+            GhostButton("Обновить", onRefresh, Modifier.fillMaxWidth(), Icons.Outlined.Refresh)
+        } else {
+            GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                status.terms?.let { doc ->
+                    LegalDocSettingRow(doc, "Пользовательское соглашение") { uriHandler.openUri(legalUrl(doc.url)) }
+                    ThinDivider()
+                }
+                status.privacy?.let { doc ->
+                    LegalDocSettingRow(doc, "Политика конфиденциальности") { uriHandler.openUri(legalUrl(doc.url)) }
+                    ThinDivider()
+                }
+                status.ads?.let { doc ->
+                    LegalDocSettingRow(doc, "Согласие на рекламные сообщения") { uriHandler.openUri(legalUrl(doc.url)) }
+                }
+                if (status.terms == null && status.privacy == null && status.ads == null) {
+                    Text(
+                        "В системе нет активных юридических документов. Добавьте и активируйте версии в админ-панели.",
+                        style = tBody2,
+                        color = CompasMutedFg,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+
+            if (status.requiresTermsAcceptance) {
+                Spacer(Modifier.height(14.dp))
+                GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+                    Text("Нужно принять актуальные версии соглашения и политики", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    Text("После нажатия acceptance будет записан в журнал сервиса с версией документа.", style = tBody2, color = CompasMutedFg)
+                    Spacer(Modifier.height(12.dp))
+                    PrimaryButton(
+                        text = if (state.isSavingLegal) "Сохраняем…" else "Принять актуальные версии",
+                        onClick = onAcceptRequired,
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Outlined.CheckCircle,
+                        enabled = !state.isSavingLegal,
+                    )
+                }
+            }
+
+            status.ads?.let {
+                Spacer(Modifier.height(14.dp))
+                GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Рекламные сообщения", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                            Text("Необязательное согласие. Можно включить или отозвать в любой момент.", style = tBody2, color = CompasMutedFg)
+                        }
+                        Switch(
+                            checked = status.adsAccepted,
+                            enabled = !state.isSavingLegal,
+                            onCheckedChange = onAdsChange,
+                            colors = SwitchDefaults.colors(checkedTrackColor = Forest700),
+                        )
+                    }
+                }
+            }
+
+            state.error?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(it, style = tMeta, color = Red600)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
+    }
+}
+
+@Composable
+private fun LegalDocSettingRow(doc: MobileLegalDoc, title: String, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(if (doc.type == "PRIVACY") Icons.Outlined.PrivacyTip else Icons.Outlined.Description, null, Modifier.size(21.dp), tint = Forest700)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Версия ${doc.version} · ${if (doc.accepted) "принято" else "не принято"}", style = tBody2, color = if (doc.accepted) Forest600 else Red600)
+        }
+        Icon(Icons.Outlined.OpenInNew, null, Modifier.size(18.dp), tint = CompasMutedFg)
+    }
+}
+
+private fun documentsSubtitle(state: SettingsUiState): String = when {
+    state.legalStatus?.requiresTermsAcceptance == true -> "Требуется принятие"
+    state.legalStatus != null -> "Версии и согласия"
+    state.isLoading -> "Загружаем…"
+    else -> "Версии и согласия"
+}
+
+private fun legalUrl(url: String): String {
+    if (url.startsWith("http")) return url
+    val normalized = if (url.startsWith("/")) url else "/$url"
+    return "https:" + "//cmpas.ru" + normalized
 }
 
 private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, DOCUMENTS, DATA, HELP }

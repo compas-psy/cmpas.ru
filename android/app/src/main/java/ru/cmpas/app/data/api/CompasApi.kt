@@ -117,6 +117,13 @@ interface CompasApi {
     @GET("me")
     suspend fun getProfile(): Response<User>
 
+    // ── Legal ──
+    @GET("legal/status")
+    suspend fun getLegalStatus(): Response<MobileLegalStatus>
+
+    @POST("legal/accept")
+    suspend fun acceptLegal(@Body body: MobileLegalAcceptBody): Response<Unit>
+
     // ── FCM ──
     @POST("fcm")
     suspend fun registerFcmToken(@Body body: FcmTokenRequest): Response<Unit>
