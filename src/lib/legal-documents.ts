@@ -1,6 +1,8 @@
 import type { LegalDocument } from '@prisma/client';
 import { db } from '@/lib/db';
 
+const PUBLIC_ORIGIN = 'https://cmpas.ru';
+
 export const LEGAL_DOC_TYPES = ['TERMS', 'PRIVACY', 'ADS'] as const;
 export type LegalDocType = typeof LEGAL_DOC_TYPES[number];
 
@@ -16,22 +18,22 @@ export const SYSTEM_LEGAL_DOCUMENTS: Record<LegalDocType, {
     TERMS: {
         title: 'Пользовательское соглашение',
         version: '2026-02-22',
-        url: '/legal/terms',
+        url: '/diary/legal/terms',
         publishedAt: new Date('2026-02-22T00:00:00.000Z'),
         required: true,
     },
     PRIVACY: {
         title: 'Политика конфиденциальности',
         version: '2026-02-22',
-        url: '/legal/privacy',
+        url: '/diary/legal/privacy',
         publishedAt: new Date('2026-02-22T00:00:00.000Z'),
         required: true,
     },
     ADS: {
-        title: 'Согласие на рекламные сообщения',
-        version: '2026-06-21',
-        url: '/legal/ads',
-        publishedAt: new Date('2026-06-21T00:00:00.000Z'),
+        title: 'Согласие на получение рекламных сообщений',
+        version: '2025-09-01',
+        url: '/legal/consent/marketing',
+        publishedAt: new Date('2025-09-01T00:00:00.000Z'),
         required: false,
     },
 };
@@ -41,9 +43,23 @@ export function legalDocTitle(type: string) {
 }
 
 export function normalizeLegalDocUrl(url: string) {
-    const lower = url.toLowerCase();
-    if (lower.startsWith('http')) return url;
-    return url.startsWith('/') ? url : `/${url}`;
+    const value = url.trim();
+    const lower = value.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+        const parsed = new URL(value);
+        return parsed.hostname === 'cmpas.ru' ? parsed.pathname : value;
+    }
+    if (lower.startsWith('cmpas.ru/')) return value.substring('cmpas.ru'.length);
+    return value.startsWith('/') ? value : `/${value}`;
+}
+
+export function publicLegalDocUrl(url: string) {
+    const value = url.trim();
+    const lower = value.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) return value;
+    if (lower.startsWith('cmpas.ru/')) return `https://${value}`;
+    const path = value.startsWith('/') ? value : `/${value}`;
+    return `${PUBLIC_ORIGIN}${path}`;
 }
 
 async function ensureSystemLegalDocument(type: LegalDocType): Promise<LegalDocument> {
@@ -55,7 +71,7 @@ async function ensureSystemLegalDocument(type: LegalDocType): Promise<LegalDocum
 
     if (active) {
         const activeUrl = normalizeLegalDocUrl(active.url);
-        if (activeUrl !== config.url || active.version === config.version) {
+        if (activeUrl === config.url && active.version === config.version) {
             return active;
         }
         await db.legalDocument.update({ where: { id: active.id }, data: { isActive: false } });
