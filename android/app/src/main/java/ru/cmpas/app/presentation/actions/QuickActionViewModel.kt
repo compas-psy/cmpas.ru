@@ -103,7 +103,9 @@ class QuickActionViewModel @Inject constructor(
                     _uiState.update { it.copy(isSaving = false) }
                     PracticeRefreshBus.notifyChanged()
                     loadClients()
-                    onFinished(true, message)
+                    if (_uiState.value.onboardingInfo == null) {
+                        onFinished(true, message)
+                    }
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isSaving = false) }
@@ -224,6 +226,18 @@ class QuickActionViewModel @Inject constructor(
             val client = if (response.isSuccessful) response.body() else null
             if (client != null) {
                 localStore.upsertClient(client)
+                if (client.telegramId.isNullOrBlank() && client.maxId.isNullOrBlank()) {
+                    _uiState.update {
+                        it.copy(
+                            onboardingInfo = OnboardingInfo(
+                                clientId = client.id,
+                                clientName = client.name,
+                                phone = client.phone,
+                                sessionId = null,
+                            ),
+                        )
+                    }
+                }
                 "Клиент добавлен"
             } else {
                 localStore.createClient(name.trim(), phone, email, gender, null)
