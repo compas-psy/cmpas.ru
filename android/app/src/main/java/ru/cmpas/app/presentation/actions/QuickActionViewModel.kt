@@ -226,7 +226,13 @@ class QuickActionViewModel @Inject constructor(
             val client = if (response.isSuccessful) response.body() else null
             if (client != null) {
                 localStore.upsertClient(client)
-                if (client.telegramId.isNullOrBlank() && client.maxId.isNullOrBlank()) {
+                val options = if (client.telegramId.isNullOrBlank() && client.maxId.isNullOrBlank()) {
+                    runCatching {
+                        val optionsResponse = api.getOnboardingOptions(client.id)
+                        if (optionsResponse.isSuccessful) optionsResponse.body() else null
+                    }.getOrNull()
+                } else null
+                if (options != null && (options.documents.isNotEmpty() || options.hasSession)) {
                     _uiState.update {
                         it.copy(
                             onboardingInfo = OnboardingInfo(
@@ -235,6 +241,8 @@ class QuickActionViewModel @Inject constructor(
                                 phone = client.phone,
                                 sessionId = null,
                             ),
+                            onboardingOptions = options,
+                            isOnboardingBusy = false,
                         )
                     }
                 }
