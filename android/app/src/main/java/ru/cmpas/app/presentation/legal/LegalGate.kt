@@ -29,17 +29,15 @@ fun LegalGateOverlay(
     viewModel: LegalGateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val adsDoc = state.ads
 
-    if (state.termsRequired && state.terms != null) {
-        RequiredTermsDialog(
-            state = state,
-            onAccept = viewModel::acceptRequired,
-        )
+    if (state.termsRequired && (state.terms != null || state.privacy != null)) {
+        RequiredTermsDialog(state = state, onContinue = viewModel::acceptRequired)
     }
 
-    if (!state.termsRequired && state.showAdsPrompt && state.ads != null) {
+    if (!state.termsRequired && state.showAdsPrompt && adsDoc != null) {
         AdsConsentDialog(
-            ads = state.ads,
+            ads = adsDoc,
             isSaving = state.isSaving,
             onAccept = viewModel::acceptAds,
             onDismiss = viewModel::dismissAdsPrompt,
@@ -50,71 +48,44 @@ fun LegalGateOverlay(
 @Composable
 private fun RequiredTermsDialog(
     state: LegalGateUiState,
-    onAccept: (Boolean) -> Unit,
+    onContinue: (Boolean) -> Unit,
 ) {
-    var acceptedTerms by remember { mutableStateOf(false) }
     var acceptedAds by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
 
     AlertDialog(
         onDismissRequest = {},
         confirmButton = {
-            Button(
-                onClick = { onAccept(acceptedAds) },
-                enabled = acceptedTerms && !state.isSaving,
-            ) {
-                Text(if (state.isSaving) "Сохраняем…" else "Принять и продолжить")
+            Button(onClick = { onContinue(acceptedAds) }, enabled = !state.isSaving) {
+                Text(if (state.isSaving) "Сохраняем…" else "Продолжить")
             }
         },
         title = { Text("Перед началом работы", style = tSection, color = CompasFg) },
         text = {
             Column(
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    "Нужно принять актуальную версию пользовательского соглашения CMPAS. Рекламные сообщения — только по отдельному желанию.",
+                    "Нажимая «Продолжить», вы принимаете пользовательское соглашение и политику конфиденциальности CMPAS в актуальных версиях. Принятие будет зафиксировано в журнале сервиса.",
                     style = tBody2,
                     color = CompasMutedFg,
                 )
 
                 state.terms?.let {
-                    LegalDocRow(
-                        doc = it,
-                        title = "Пользовательское соглашение",
-                        subtitle = "Обязательный документ · версия ${it.version}",
-                        onOpen = { uriHandler.openUri(legalUrl(it.url)) },
-                    )
+                    LegalDocRow(it, "Пользовательское соглашение", "Версия ${it.version}") { uriHandler.openUri(legalUrl(it.url)) }
                 }
                 state.privacy?.let {
-                    LegalDocRow(
-                        doc = it,
-                        title = "Политика конфиденциальности",
-                        subtitle = "Как CMPAS работает с данными",
-                        onOpen = { uriHandler.openUri(legalUrl(it.url)) },
-                    )
+                    LegalDocRow(it, "Политика конфиденциальности", "Версия ${it.version}") { uriHandler.openUri(legalUrl(it.url)) }
                 }
                 state.ads?.let {
-                    LegalDocRow(
-                        doc = it,
-                        title = "Согласие на рекламу",
-                        subtitle = "Необязательно · можно отказаться",
-                        onOpen = { uriHandler.openUri(legalUrl(it.url)) },
-                    )
+                    LegalDocRow(it, "Согласие на рекламу", "Необязательно · версия ${it.version}") { uriHandler.openUri(legalUrl(it.url)) }
                 }
 
                 ConsentCheckRow(
-                    checked = acceptedTerms,
-                    title = "Принимаю пользовательское соглашение CMPAS",
-                    subtitle = "Продолжение работы в приложении будет зафиксировано по активной версии документа.",
-                    onChange = { acceptedTerms = it },
-                )
-                ConsentCheckRow(
                     checked = acceptedAds,
                     title = "Получать полезные материалы и предложения CMPAS",
-                    subtitle = "Необязательно. Согласие можно отозвать в любой момент.",
+                    subtitle = "Необязательно. Можно отказаться сейчас и дать согласие позже.",
                     onChange = { acceptedAds = it },
                 )
                 state.error?.let { Text(it, style = tMeta, color = Red600) }
@@ -152,9 +123,7 @@ private fun AdsConsentDialog(
                 Text(if (isSaving) "Сохраняем…" else "Да, получать")
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Не сейчас") }
-        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Не сейчас") } },
     )
 }
 
@@ -185,11 +154,7 @@ private fun LegalDocRow(
             Text(title, style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = tMeta, color = CompasMutedFg)
         }
-        Text(
-            "Открыть",
-            style = tMeta.copy(textDecoration = TextDecoration.Underline),
-            color = Forest700,
-        )
+        Text("Открыть", style = tMeta.copy(textDecoration = TextDecoration.Underline), color = Forest700)
     }
 }
 
@@ -219,7 +184,7 @@ private fun ConsentCheckRow(
 }
 
 private fun legalUrl(url: String): String {
-    if (url.startsWith("http://") || url.startsWith("https://")) return url
+    if (url.startsWith("http")) return url
     val normalized = if (url.startsWith("/")) url else "/$url"
-    return "https://cmpas.ru$normalized"
+    return "https:" + "//cmpas.ru" + normalized
 }
