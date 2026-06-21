@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-
-const MOBILE_LEGAL_TYPES = ['TERMS', 'PRIVACY', 'ADS'];
-const REQUIRED_LEGAL_TYPES = ['TERMS', 'PRIVACY'];
+import { getActiveLegalDocuments, LEGAL_DOC_TYPES, REQUIRED_LEGAL_DOC_TYPES } from '@/lib/legal-documents';
 
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
 
     try {
-        const documents = await db.legalDocument.findMany({
-            where: { isActive: true, type: { in: MOBILE_LEGAL_TYPES } },
-            orderBy: [{ type: 'asc' }, { publishedAt: 'desc' }, { createdAt: 'desc' }],
-        });
+        const documents = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
 
-        const acceptances = documents.length
-            ? await db.legalDocumentAcceptance.findMany({
-                where: { userId: auth.userId, documentId: { in: documents.map((doc) => doc.id) } },
-                select: { documentId: true },
-            })
-            : [];
+        const acceptances = await db.legalDocumentAcceptance.findMany({
+            where: { userId: auth.userId, documentId: { in: documents.map((doc) => doc.id) } },
+            select: { documentId: true },
+        });
 
         const acceptedIds = new Set(acceptances.map((acceptance) => acceptance.documentId));
         const latestByType = (type: string) => documents.find((doc) => doc.type === type) ?? null;
@@ -33,7 +26,7 @@ export async function GET(req: NextRequest) {
             accepted: acceptedIds.has(doc.id),
         }) : null;
 
-        const requiredDocuments = REQUIRED_LEGAL_TYPES
+        const requiredDocuments = REQUIRED_LEGAL_DOC_TYPES
             .map((type) => latestByType(type))
             .filter((doc): doc is NonNullable<typeof doc> => !!doc && !acceptedIds.has(doc.id));
 
