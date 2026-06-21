@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/app/legal/actions": ["./src/app/legal/unified-actions.ts"],
       "@/*": ["./src/*"]
     }
   },
