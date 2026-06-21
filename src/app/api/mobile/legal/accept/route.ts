@@ -25,7 +25,9 @@ export async function POST(req: NextRequest) {
 
         if (body.acceptTerms === true) {
             const terms = await activeDocument('TERMS');
+            const privacy = await activeDocument('PRIVACY');
             if (terms) ids.add(terms.id);
+            if (privacy) ids.add(privacy.id);
         }
 
         if (body.acceptAds === true) {
