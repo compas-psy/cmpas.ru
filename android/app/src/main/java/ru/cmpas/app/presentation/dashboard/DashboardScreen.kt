@@ -11,11 +11,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +24,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.domain.model.AttentionItem
+import ru.cmpas.app.domain.model.PracticeNotification
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
@@ -47,6 +47,7 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = LocalUriHandler.current
+    var showNotifications by rememberSaveable { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
@@ -63,7 +64,6 @@ fun DashboardScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // 1. Header
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -73,14 +73,13 @@ fun DashboardScreen(
                         Text("Добрый день, ${firstName ?: "коллега"}", style = tHero, color = CompasFg)
                     }
                     IconButtonGlass(
-                        icon = if (uiState.attentionItems.isNotEmpty()) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsNone,
-                        badge = uiState.attentionItems.isNotEmpty(),
-                        onClick = { /* TODO notifications screen */ },
+                        icon = if (uiState.attentionItems.isNotEmpty() || uiState.notifications.any { it.unread }) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsNone,
+                        badge = uiState.attentionItems.isNotEmpty() || uiState.notifications.any { it.unread },
+                        onClick = { showNotifications = true },
                     )
                 }
             }
 
-            // 2. Hero — next session (Bug A: strict 3-tier layout)
             item {
                 val next = uiState.nextSession
                 if (next != null) {
@@ -89,9 +88,9 @@ fun DashboardScreen(
                         onOpen = { onSessionClick(next.id) },
                         onConnect = {
                             if (!next.videoLink.isNullOrBlank()) uriHandler.openUri(next.videoLink!!)
-                            else onSessionClick(next.id) // TODO start video intent
+                            else onSessionClick(next.id)
                         },
-                        onNote = { onSessionClick(next.id) }, // TODO open note editor directly
+                        onNote = { onSessionClick(next.id) },
                     )
                 } else {
                     GlassTintCard(padding = 18.dp) {
@@ -104,7 +103,6 @@ fun DashboardScreen(
                 }
             }
 
-            // 3. KPI row
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Kpi(Icons.Outlined.CalendarMonth, "${uiState.todaySessions.size}", "сегодня", Forest600, Modifier.weight(1f))
@@ -113,48 +111,38 @@ fun DashboardScreen(
                 }
             }
 
-            // 4. Section title
-            item {
-                SectionTitle("Расписание", actionLabel = "Весь день", onAction = onCalendarClick)
-            }
+            item { SectionTitle("Расписание", actionLabel = "Весь день", onAction = onCalendarClick) }
 
-            // 5. Schedule list
             if (uiState.todaySessions.isEmpty()) {
-                item {
-                    GlassCard(padding = 18.dp) {
-                        Text("Нет записей на сегодня", style = tBody2)
-                    }
-                }
+                item { GlassCard(padding = 18.dp) { Text("Нет записей на сегодня", style = tBody2) } }
             } else {
-                items(uiState.todaySessions, key = { it.id }) { s ->
-                    ScheduleRow(s, onClick = { onSessionClick(s.id) })
-                }
+                items(uiState.todaySessions, key = { it.id }) { s -> ScheduleRow(s, onClick = { onSessionClick(s.id) }) }
             }
+        }
+
+        if (showNotifications) {
+            NotificationsDialog(
+                attentionItems = uiState.attentionItems,
+                notifications = uiState.notifications,
+                onClose = { showNotifications = false },
+                onOpenSession = { id -> showNotifications = false; onSessionClick(id) },
+                onOpenClient = { id -> showNotifications = false; onClientClick(id) },
+            )
         }
     }
 }
 
 @Composable
-private fun HeroNextSession(
-    session: Session,
-    onOpen: () -> Unit,
-    onConnect: () -> Unit,
-    onNote: () -> Unit,
-) {
+private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () -> Unit, onNote: () -> Unit) {
     val dur = durationMin(session.startTime, session.endTime)
     val until = untilLabel(session.startTime)
     val isOnline = session.format == SessionFormat.ONLINE
 
     GlassTintCard(padding = 18.dp, onClick = onOpen) {
-        // tier 1
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("СЛЕДУЮЩАЯ СЕССИЯ", style = tEyebrow, color = Color.White.copy(alpha = 0.62f), modifier = Modifier.weight(1f))
             if (until != null) {
-                Row(
-                    Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.14f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Schedule, null, Modifier.size(14.dp), tint = CompasAccent400)
                     Spacer(Modifier.width(5.dp))
                     Text(until, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -162,7 +150,6 @@ private fun HeroNextSession(
             }
         }
         Spacer(Modifier.height(14.dp))
-        // tier 2
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(session.clientName, 52.dp, ring = true)
             Spacer(Modifier.width(12.dp))
@@ -172,34 +159,20 @@ private fun HeroNextSession(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (isOnline) Icons.Outlined.Videocam else Icons.Outlined.LocationOn, null, Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.78f))
                     Spacer(Modifier.width(5.dp))
-                    Text(
-                        "${session.startTime} · $dur мин · ${if (isOnline) "Видео" else "Очно"}",
-                        color = Color.White.copy(alpha = 0.78f), fontSize = 13.5.sp,
-                    )
+                    Text("${session.startTime} · $dur мин · ${if (isOnline) "Видео" else "Очно"}", color = Color.White.copy(alpha = 0.78f), fontSize = 13.5.sp)
                 }
             }
         }
         Spacer(Modifier.height(14.dp))
-        // tier 3
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             val connectInteraction = remember { MutableInteractionSource() }
-            Row(
-                Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White)
-                    .clickable(interactionSource = connectInteraction, indication = null, onClick = onConnect),
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).clickable(interactionSource = connectInteraction, indication = null, onClick = onConnect), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Videocam, null, Modifier.size(18.dp), tint = Forest800)
                 Spacer(Modifier.width(8.dp))
                 Text("Подключиться", color = Forest800, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
             val noteInteraction = remember { MutableInteractionSource() }
-            Box(
-                Modifier.size(width = 52.dp, height = 46.dp).clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.10f))
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
-                    .clickable(interactionSource = noteInteraction, indication = null, onClick = onNote),
-                contentAlignment = Alignment.Center,
-            ) {
+            Box(Modifier.size(width = 52.dp, height = 46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.10f)).border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp)).clickable(interactionSource = noteInteraction, indication = null, onClick = onNote), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.EditNote, "Заметка", Modifier.size(20.dp), tint = Color.White)
             }
         }
@@ -234,6 +207,45 @@ private fun ScheduleRow(s: Session, onClick: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun NotificationsDialog(
+    attentionItems: List<AttentionItem>,
+    notifications: List<PracticeNotification>,
+    onClose: () -> Unit,
+    onOpenSession: (String) -> Unit,
+    onOpenClient: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Уведомления", style = tSection, color = CompasFg) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (attentionItems.isEmpty() && notifications.isEmpty()) {
+                    Text("Сейчас всё спокойно. Новые события появятся здесь.", style = tBody2, color = CompasMutedFg)
+                }
+                attentionItems.forEach { item ->
+                    Text("• ${item.label}", style = tBody2, color = CompasFg)
+                }
+                notifications.take(8).forEach { item ->
+                    val details = listOfNotNull(item.subtitle, item.createdAt?.let { formatNotificationTime(it) }).joinToString(" · ")
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
+                            when {
+                                item.sessionId != null -> onOpenSession(item.sessionId)
+                                item.clientId != null -> onOpenClient(item.clientId)
+                            }
+                        }.padding(vertical = 6.dp),
+                    ) {
+                        Text(item.title, style = tBody, color = CompasFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (details.isNotBlank()) Text(details, style = tMeta, color = CompasMutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Закрыть") } },
+    )
 }
 
 private fun statusDotColor(status: SessionStatus): Color = when (status) {
