@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-
-async function activeDocument(type: string) {
-    return db.legalDocument.findFirst({
-        where: { isActive: true, type },
-        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-    });
-}
+import { getActiveLegalDocument, getActiveLegalDocuments, LEGAL_DOC_TYPES } from '@/lib/legal-documents';
 
 export async function POST(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
@@ -16,22 +10,23 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json().catch(() => ({}));
         const ids = new Set<string>();
+        const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
+        const activeDocIds = new Set(activeDocs.map((doc) => doc.id));
 
         if (Array.isArray(body.documentIds)) {
             for (const value of body.documentIds) {
-                if (typeof value === 'string') ids.add(value);
+                if (typeof value === 'string' && activeDocIds.has(value)) ids.add(value);
             }
         }
 
         if (body.acceptTerms === true) {
-            const terms = await activeDocument('TERMS');
-            const privacy = await activeDocument('PRIVACY');
-            if (terms) ids.add(terms.id);
-            if (privacy) ids.add(privacy.id);
+            for (const doc of activeDocs) {
+                if (doc.type === 'TERMS' || doc.type === 'PRIVACY') ids.add(doc.id);
+            }
         }
 
         if (body.acceptAds === true) {
-            const ads = await activeDocument('ADS');
+            const ads = await getActiveLegalDocument('ADS');
             if (ads) ids.add(ads.id);
         }
 
@@ -44,7 +39,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (body.acceptAds === false) {
-            const ads = await activeDocument('ADS');
+            const ads = await getActiveLegalDocument('ADS');
             if (ads) {
                 await db.legalDocumentAcceptance.deleteMany({ where: { userId: auth.userId, documentId: ads.id } });
             }
