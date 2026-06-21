@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 
 const MOBILE_LEGAL_TYPES = ['TERMS', 'PRIVACY', 'ADS'];
+const REQUIRED_LEGAL_TYPES = ['TERMS', 'PRIVACY'];
 
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
@@ -32,14 +33,15 @@ export async function GET(req: NextRequest) {
             accepted: acceptedIds.has(doc.id),
         }) : null;
 
-        const terms = latestByType('TERMS');
-        const requiredDocumentIds = terms && !acceptedIds.has(terms.id) ? [terms.id] : [];
+        const requiredDocuments = REQUIRED_LEGAL_TYPES
+            .map((type) => latestByType(type))
+            .filter((doc): doc is NonNullable<typeof doc> => !!doc && !acceptedIds.has(doc.id));
 
         return NextResponse.json({
             serverTime: new Date().toISOString(),
-            requiredDocumentIds,
-            requiresTermsAcceptance: requiredDocumentIds.length > 0,
-            terms: normalize(terms),
+            requiredDocumentIds: requiredDocuments.map((doc) => doc.id),
+            requiresTermsAcceptance: requiredDocuments.length > 0,
+            terms: normalize(latestByType('TERMS')),
             privacy: normalize(latestByType('PRIVACY')),
             ads: normalize(latestByType('ADS')),
             adsAccepted: !!latestByType('ADS') && acceptedIds.has(latestByType('ADS')!.id),
