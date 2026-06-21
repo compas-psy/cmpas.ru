@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { checkUserAcceptance, acceptDocumentsByIds } from "@/app/legal/actions"
 import Image from "next/image"
 import { AcceptButton } from "./AcceptButton"
+import { legalDocTitle, normalizeLegalDocUrl } from "@/lib/legal-documents"
 
 export default async function LegalAcceptancePage() {
     const session = await auth()
@@ -15,11 +16,11 @@ export default async function LegalAcceptancePage() {
 
     async function handleAccept() {
         "use server"
-        if (!session?.user?.id || !needsAcceptance) return;
-        
+        if (!session?.user?.id || !needsAcceptance) return
+
         await acceptDocumentsByIds(
-            session.user.id, 
-            needsAcceptance.map((d: { id: string }) => d.id)
+            session.user.id,
+            needsAcceptance.map((doc: { id: string }) => doc.id),
         )
         redirect("/diary")
     }
@@ -33,26 +34,29 @@ export default async function LegalAcceptancePage() {
                     </div>
                 </div>
 
-                <h1 className="text-2xl font-bold text-[#1a1a1a] mb-4">
-                    Мы обновили правила
-                </h1>
-                
+                <h1 className="text-2xl font-bold text-[#1a1a1a] mb-4">Мы обновили правила</h1>
+
                 <p className="text-[#1a1a1a]/70 mb-8 text-sm leading-relaxed">
-                    Для продолжения работы с сервисом необходимо ознакомиться и принять обновленные версии следующих документов:
+                    Для продолжения работы с сервисом необходимо ознакомиться и принять актуальные версии документов.
                 </p>
 
                 <div className="flex flex-col gap-3 mb-8 text-left">
-                    {needsAcceptance.map((doc: { id: string; type: string; url: string; }) => (
-                        <div key={doc.id} className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between items-center">
-                            <span className="font-medium text-[#1a1a1a]">
-                                {doc.type === "TERMS" ? "Пользовательское соглашение" : "Политика конфиденциальности"}
-                            </span>
-                            <a href={`/legal/${doc.type.toLowerCase()}`} target="_blank" className="text-sm font-semibold text-[#c9a961] hover:text-[#b49652] transition-colors underline underline-offset-4">
+                    {needsAcceptance.map((doc: { id: string; type: string; url: string; version: string }) => (
+                        <div key={doc.id} className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between items-center gap-4">
+                            <div>
+                                <span className="font-medium text-[#1a1a1a] block">{legalDocTitle(doc.type)}</span>
+                                <span className="text-xs text-[#1a1a1a]/50">Версия {doc.version}</span>
+                            </div>
+                            <a href={normalizeLegalDocUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#c9a961] hover:text-[#b49652] transition-colors underline underline-offset-4 whitespace-nowrap">
                                 Читать
                             </a>
                         </div>
                     ))}
                 </div>
+
+                <p className="text-xs text-[#1a1a1a]/50 mb-4 leading-relaxed">
+                    Нажимая кнопку, вы подтверждаете принятие перечисленных документов. Принятие будет зафиксировано в журнале сервиса.
+                </p>
 
                 <form action={handleAccept}>
                     <AcceptButton />
