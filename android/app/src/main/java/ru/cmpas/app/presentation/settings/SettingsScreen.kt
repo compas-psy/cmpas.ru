@@ -401,9 +401,15 @@ private fun documentsSubtitle(state: SettingsUiState): String = when {
 }
 
 private fun legalUrl(url: String): String {
-    if (url.startsWith("http")) return url
-    val normalized = if (url.startsWith("/")) url else "/$url"
-    return "https:" + "//cmpas.ru" + normalized
+    val value = url.trim()
+    val lower = value.lowercase()
+    return when {
+        lower.startsWith("http://") || lower.startsWith("https://") -> value
+        lower.startsWith("cmpas.ru/") -> "https://$value"
+        lower.startsWith("www.cmpas.ru/") -> "https://$value"
+        value.startsWith("/") -> "https://cmpas.ru$value"
+        else -> "https://cmpas.ru/$value"
+    }
 }
 
 private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, DOCUMENTS, DATA, HELP }
