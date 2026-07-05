@@ -42,6 +42,18 @@ export type NoteVisibility = 'private' | 'shared';
 
 export const SMART_BLOCK_DEFINITIONS: SmartBlockDefinition[] = [
     {
+        id: 'short_note',
+        label: 'Кратко',
+        emoji: '✍️',
+        iconId: 'note',
+        description: 'Короткая заметка после сессии',
+        category: 'basic',
+        priority: 1,
+        fields: [
+            { key: 'text', label: 'Заметка', placeholder: 'Что важно сохранить после встречи...', type: 'textarea', required: true },
+        ],
+    },
+    {
         id: 'request',
         label: 'Запрос',
         emoji: '🎯',
@@ -192,6 +204,18 @@ export const SMART_BLOCK_DEFINITIONS: SmartBlockDefinition[] = [
             { key: 'evidence', label: 'На чём основана', placeholder: 'Наблюдения, факты...', type: 'textarea' },
         ],
     },
+    {
+        id: 'voice_note',
+        label: 'Голосовая заметка',
+        emoji: '🎤',
+        iconId: 'note',
+        description: 'Черновик голосовой заметки без расшифровки',
+        category: 'basic',
+        priority: 2,
+        fields: [
+            { key: 'text', label: 'Описание', placeholder: 'Голосовая заметка...', type: 'textarea' },
+        ],
+    },
 ];
 
 // ============================================================
@@ -218,47 +242,4 @@ export const SESSION_TEMPLATES: SessionTemplate[] = [
         description: 'Динамика, наблюдение, интервенция, ДЗ',
         blockIds: ['dynamics', 'observation', 'intervention', 'homework', 'next_step'],
     },
-    {
-        id: 'crisis_session',
-        label: 'Кризисная сессия',
-        description: 'Наблюдение, ресурсы, следующий шаг',
-        blockIds: ['observation', 'resources', 'next_step'],
-    },
 ];
-
-// ============================================================
-// Helpers
-// ============================================================
-
-export function getDefinitionById(id: string): SmartBlockDefinition | undefined {
-    return SMART_BLOCK_DEFINITIONS.find(d => d.id === id);
-}
-
-export function createBlockInstance(definitionId: string): SmartBlock {
-    return {
-        id: `${definitionId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        definitionId,
-        values: {},
-        createdAt: new Date().toISOString(),
-    };
-}
-
-export function getCoreBlockIds(): string[] {
-    return SMART_BLOCK_DEFINITIONS.filter(d => d.priority === 1).map(d => d.id);
-}
-
-export function getSecondaryBlockIds(): string[] {
-    return SMART_BLOCK_DEFINITIONS.filter(d => d.priority === 2).map(d => d.id);
-}
-
-/** Canonical sort order for a block definition — its index in SMART_BLOCK_DEFINITIONS */
-export function getBlockSortIndex(definitionId: string): number {
-    const idx = SMART_BLOCK_DEFINITIONS.findIndex(d => d.id === definitionId);
-    return idx === -1 ? 999 : idx;
-}
-
-/** Sort blocks into canonical order based on SMART_BLOCK_DEFINITIONS ordering */
-export function sortBlocksByDefinition(blocks: SmartBlock[]): SmartBlock[] {
-    return [...blocks].sort((a, b) => getBlockSortIndex(a.definitionId) - getBlockSortIndex(b.definitionId));
-}
-

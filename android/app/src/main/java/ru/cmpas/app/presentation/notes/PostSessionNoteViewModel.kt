@@ -11,6 +11,7 @@ import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.domain.model.SmartNoteBlock
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,25 +27,35 @@ class PostSessionNoteViewModel @Inject constructor(
             val localText = localStore.getLatestNote(sessionId)?.text
             var session: Session? = null
             runCatching {
-                val response = api.getSessions()
-                session = response.body()?.firstOrNull { it.id == sessionId }
+                val response = api.getSession(sessionId)
+                if (response.isSuccessful) session = response.body()
+            }.onFailure {
+                runCatching {
+                    val response = api.getSessions()
+                    session = response.body()?.firstOrNull { it.id == sessionId }
+                }
             }
             _uiState.update {
                 it.copy(
                     session = session,
-                    savedText = localText?.takeIf(String::isNotBlank)
-                        ?: session?.notes?.takeIf(String::isNotBlank),
+                    structuredNotes = session?.structuredNotes.orEmpty(),
+                    savedText = session?.notesPlain?.takeIf(String::isNotBlank)
+                        ?: session?.notes?.takeIf(String::isNotBlank)
+                        ?: localText?.takeIf(String::isNotBlank),
                 )
             }
         }
     }
 
-    fun saveNote(sessionId: String, text: String, onFinished: (Boolean, String) -> Unit) {
+    fun saveNote(sessionId: String, text: String, structuredNotes: List<SmartNoteBlock>, onFinished: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                if (sessionId.isNotBlank() && !sessionId.startsWith("quick") && !sessionId.startsWith("voice") && !sessionId.startsWith("text") && !sessionId.startsWith("template") && !sessionId.startsWith("client-") && !sessionId.startsWith("local-")) {
-                    val response = api.updateSession(sessionId, UpdateSessionRequest(notes = text))
+                if (sessionId.isRemoteSessionId()) {
+                    val response = api.updateSession(
+                        sessionId,
+                        UpdateSessionRequest(notes = text, structuredNotes = structuredNotes),
+                    )
                     if (response.isSuccessful) response.body()?.let { localStore.upsertSession(it) }
                 }
                 localStore.saveNote(sessionId = sessionId, text = text)
@@ -52,7 +63,8 @@ class PostSessionNoteViewModel @Inject constructor(
                     state.copy(
                         isSaving = false,
                         savedText = text,
-                        session = state.session?.copy(notes = text),
+                        structuredNotes = structuredNotes,
+                        session = state.session?.copy(notes = text, notesPlain = text, structuredNotes = structuredNotes),
                     )
                 }
                 onFinished(true, "Заметка сохранена")
@@ -62,17 +74,21 @@ class PostSessionNoteViewModel @Inject constructor(
                     state.copy(
                         isSaving = false,
                         savedText = text,
-                        session = state.session?.copy(notes = text),
+                        session = state.session?.copy(notes = text, notesPlain = text),
                     )
                 }
                 onFinished(true, "Заметка сохранена локально")
             }
         }
     }
+
+    private fun String.isRemoteSessionId(): Boolean =
+        isNotBlank() && !startsWith("quick") && !startsWith("voice") && !startsWith("text") && !startsWith("template") && !startsWith("client-") && !startsWith("local-")
 }
 
 data class PostSessionNoteUiState(
     val isSaving: Boolean = false,
     val savedText: String? = null,
+    val structuredNotes: List<SmartNoteBlock> = emptyList(),
     val session: Session? = null,
 )
