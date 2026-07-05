@@ -19,6 +19,14 @@ data class User(
 enum class UserRole { PSYCHOLOGIST, CLIENT }
 
 @Serializable
+data class SmartNoteBlock(
+    val id: String,
+    val definitionId: String,
+    val values: Map<String, String> = emptyMap(),
+    val createdAt: String? = null,
+)
+
+@Serializable
 data class Session(
     val id: String,
     val clientId: String = "",
@@ -33,6 +41,8 @@ data class Session(
     val type: SessionType = SessionType.INDIVIDUAL,
     val videoLink: String? = null,
     val notes: String? = null,
+    val notesPlain: String? = null,
+    val structuredNotes: List<SmartNoteBlock>? = null,
     val seriesId: String? = null,
     val occurrenceIndex: Int? = null,
     val seriesTotal: Int? = null,
