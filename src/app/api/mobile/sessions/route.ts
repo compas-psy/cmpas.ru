@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { autoSyncSessionToCalendars } from '@/lib/calendar/auto-sync';
@@ -16,6 +17,30 @@ function toDatabaseType(value: unknown) {
     if (value === 'COUPLE') return 'couple';
     if (value === 'FAMILY') return 'family';
     return 'individual';
+}
+
+export function normalizePaymentStatus(value: unknown) {
+    const raw = String(value || 'not_required').toLowerCase();
+    if (raw === 'paid') return 'PAID';
+    if (raw === 'unpaid') return 'UNPAID';
+    return 'NOT_REQUIRED';
+}
+
+export function toDatabasePaymentStatus(value: unknown) {
+    const raw = String(value || '').toLowerCase();
+    if (raw === 'paid') return 'paid';
+    if (raw === 'unpaid') return 'unpaid';
+    if (raw === 'not_required') return 'not_required';
+    return null;
+}
+
+async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
+    if (!sessions.length) return sessions;
+    const rows = await db.$queryRaw<Array<{ id: string; paymentStatus: string }>>(Prisma.sql`
+        SELECT id, "paymentStatus" FROM "DiarySession" WHERE id IN (${Prisma.join(sessions.map((session) => session.id))})
+    `);
+    const byId = new Map(rows.map((row) => [row.id, row.paymentStatus]));
+    return sessions.map((session) => ({ ...session, paymentStatus: byId.get(session.id) || 'not_required' }));
 }
 
 const blockLabels: Record<string, string> = {
@@ -54,6 +79,7 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         startTime: s.time || '00:00',
         endTime: s.endTime || '',
         status: (s.status || 'PENDING').toUpperCase(),
+        paymentStatus: normalizePaymentStatus(s.paymentStatus),
         format: online ? 'ONLINE' : 'IN_PERSON',
         type: toMobileType(s.type),
         videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
@@ -72,7 +98,7 @@ export async function GET(req: NextRequest) {
     const status = req.nextUrl.searchParams.get('status');
 
     try {
-        const [sessions, settings] = await Promise.all([
+        const [sessionsRaw, settings] = await Promise.all([
             db.diarySession.findMany({
                 where: {
                     psychologistId: auth.userId,
@@ -93,6 +119,7 @@ export async function GET(req: NextRequest) {
                 select: { onlineSessionLink: true },
             }),
         ]);
+        const sessions = await withPaymentStatuses(sessionsRaw);
 
         return NextResponse.json(sessions.map(session => formatSession(session, settings?.onlineSessionLink || null)));
     } catch (error) {
@@ -211,7 +238,7 @@ export async function POST(req: NextRequest) {
             console.error('[mobile/sessions POST] notice failed:', error);
         }
 
-        return NextResponse.json({ ...formatSession(session, onlineSessionLink), noticeStatus }, { status: 201 });
+        return NextResponse.json({ ...formatSession({ ...session, paymentStatus: 'not_required' }, onlineSessionLink), noticeStatus }, { status: 201 });
     } catch (error) {
         console.error('[mobile/sessions POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
