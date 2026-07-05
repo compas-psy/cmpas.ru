@@ -198,11 +198,11 @@ class QuickActionViewModel @Inject constructor(
                 }
                 "Запись добавлена"
             } else {
-                localStore.createSession(client, date, time, type, format)
+                localStore.createSession(client, date, time, addMinutes(time, 50), format, type, comment)
                 "Запись сохранена на устройстве"
             }
         } catch (_: Exception) {
-            localStore.createSession(client!!, date!!, time!!, type, format)
+            localStore.createSession(client!!, date!!, time!!, addMinutes(time, 50), format, type, comment)
             "Запись сохранена на устройстве"
         }
     }
@@ -213,7 +213,7 @@ class QuickActionViewModel @Inject constructor(
         val count = secondary.filter { it.isDigit() }.toIntOrNull()?.coerceIn(2, 12) ?: 4
         repeat(count) { index ->
             val nextDate = java.time.LocalDate.parse(date).plusWeeks(index.toLong()).toString()
-            localStore.createSession(client!!, nextDate, time!!, SessionType.INDIVIDUAL, SessionFormat.ONLINE)
+            localStore.createSession(client!!, nextDate, time!!, addMinutes(time, 50), SessionFormat.ONLINE, SessionType.INDIVIDUAL, comment)
         }
         return "Создано повторов: $count"
     }
