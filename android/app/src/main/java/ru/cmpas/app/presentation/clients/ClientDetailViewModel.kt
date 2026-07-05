@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.api.ChannelRequest
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.InviteRequest
 import ru.cmpas.app.data.api.SendMessageRequest
@@ -65,8 +66,19 @@ class ClientDetailViewModel @Inject constructor(
                     )
                 }
                 loadDocuments(clientId)
+                loadChannels(clientId)
             } catch (error: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = error.localizedMessage ?: "Не удалось загрузить клиента") }
+            }
+        }
+    }
+
+    fun loadChannels(clientId: String? = loadedClientId) {
+        val id = clientId ?: return
+        viewModelScope.launch {
+            val response = runCatching { api.getClientChannels(id) }.getOrNull()
+            if (response?.isSuccessful == true) {
+                _uiState.update { it.copy(channelStatus = response.body(), channelActionError = null) }
             }
         }
     }
@@ -123,13 +135,28 @@ class ClientDetailViewModel @Inject constructor(
 
     fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
-            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null) }
-            val response = runCatching { api.createInviteLink(clientId, InviteRequest(channel)) }.getOrNull()
+            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null, channelActionError = null) }
+            val response = runCatching { api.createClientChannelInvite(clientId, InviteRequest(channel)) }.getOrNull()
             if (response?.isSuccessful == true) {
-                _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body(), channelStatus = null) }
+                _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body()) }
                 startChannelPolling(clientId)
             } else {
                 _uiState.update { it.copy(isCreatingInvite = false, inviteError = "Не удалось создать приглашение — повторите") }
+            }
+        }
+    }
+
+    fun revokeChannel(clientId: String, channel: String) {
+        if (channel != "telegram" && channel != "max") return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingChannel = true, channelActionError = null) }
+            val response = runCatching { api.revokeClientChannel(clientId, ChannelRequest(channel)) }.getOrNull()
+            if (response?.isSuccessful == true) {
+                _uiState.update { it.copy(isUpdatingChannel = false) }
+                loadClient(clientId, showLoader = false)
+                loadChannels(clientId)
+            } else {
+                _uiState.update { it.copy(isUpdatingChannel = false, channelActionError = "Не удалось отвязать канал") }
             }
         }
     }
@@ -199,4 +226,6 @@ data class ClientDetailUiState(
     val inviteResponse: InviteResponse? = null,
     val inviteError: String? = null,
     val channelStatus: ClientChannelStatus? = null,
+    val isUpdatingChannel: Boolean = false,
+    val channelActionError: String? = null,
 )
