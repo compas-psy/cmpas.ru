@@ -30,11 +30,24 @@ const blockLabels: Record<string, string> = {
     quote: 'Цитата',
     hypothesis: 'Гипотеза',
     short_note: 'Кратко',
+    voice_note: 'Голосовая заметка',
 };
 
+export function structuredNoteBlocks(value: unknown): any[] {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object' && Array.isArray((value as any).blocks)) return (value as any).blocks;
+    return [];
+}
+
+export function normalizeStructuredNotesForStorage(value: unknown): { blocks: any[] } | null {
+    const blocks = structuredNoteBlocks(value);
+    return blocks.length ? { blocks } : null;
+}
+
 export function notesPlainFromStructured(value: unknown): string | null {
-    if (!Array.isArray(value)) return null;
-    const parts = value.flatMap((block: any) => {
+    const blocks = structuredNoteBlocks(value);
+    if (!blocks.length) return null;
+    const parts = blocks.flatMap((block: any) => {
         const label = blockLabels[block?.definitionId] || block?.definitionId || 'Заметка';
         const values = block?.values && typeof block.values === 'object' ? Object.values(block.values) : [];
         const text = values.map((item) => String(item || '').trim()).filter(Boolean).join('\n');
@@ -45,6 +58,7 @@ export function notesPlainFromStructured(value: unknown): string | null {
 
 export function formatSession(s: any, onlineSessionLink: string | null = null) {
     const online = s.format !== 'in_person' && s.format !== 'offline';
+    const blocks = structuredNoteBlocks(s.structuredNotes);
     const notesPlain = notesPlainFromStructured(s.structuredNotes) || (typeof s.clientSummary === 'string' ? s.clientSummary : null) || (typeof s.notes === 'string' ? s.notes : null);
     return {
         id: s.id,
@@ -59,7 +73,7 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
         notes: typeof s.notes === 'string' ? s.notes : notesPlain,
         notesPlain,
-        structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
+        structuredNotes: blocks.length ? blocks : null,
     };
 }
 
