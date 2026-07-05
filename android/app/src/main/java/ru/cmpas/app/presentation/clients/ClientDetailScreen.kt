@@ -267,7 +267,7 @@ fun ClientDetailScreen(
                 onClose = { sheet = null; viewModel.clearInviteState(); inviteChannel = "auto" },
                 onRetry = { viewModel.generateInviteLink(clientId, inviteChannel) },
             )
-            ClientSheet.CHANNELS -> if (client != null) ChannelManagementSheet(
+            ClientSheet.CHANNELS -> if (client != null) MessengerManagementSheet(
                 clientName = client.name,
                 currentChannel = channel,
                 detail = detail,
@@ -381,14 +381,14 @@ private fun MessengerCard(
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(channelSummary(detail, channel), style = tBody, color = CompasFg)
-                Text(if (bound) "Каналы подключены — можно управлять и переключать" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (bound) "Мессенджеры подключены — можно управлять и переключать" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.height(12.dp))
         if (bound) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GhostButton("Написать", onMessage, Modifier.weight(1f), Icons.Outlined.Send)
-                PrimaryButton("Каналы", onManage, Modifier.weight(1f), Icons.Outlined.Settings)
+                PrimaryButton("Мессенджеры", onManage, Modifier.weight(1f), Icons.Outlined.Settings)
             }
         } else {
             PrimaryButton("Пригласить", onInvite, Modifier.fillMaxWidth(), Icons.Outlined.Link)
@@ -397,7 +397,7 @@ private fun MessengerCard(
 }
 
 @Composable
-private fun ChannelManagementSheet(
+private fun MessengerManagementSheet(
     clientName: String,
     currentChannel: String?,
     detail: ClientDetail?,
@@ -415,10 +415,10 @@ private fun ChannelManagementSheet(
     val maxConnected = status?.channels?.max?.connected ?: !detail?.maxId.isNullOrBlank()
 
     CompasBottomSheet(onClose = onClose) {
-        SheetHead("Каналы клиента", clientName)
+        SheetHead("Мессенджеры клиента", clientName)
         Spacer(Modifier.height(14.dp))
         ChannelInfoBanner(
-            text = "Можно держать Telegram и MAX одновременно. Если один канал заблокирован или клиент хочет перейти, добавьте второй канал, затем отвяжите ненужный.",
+            text = "Можно держать Telegram и MAX одновременно. Если один мессенджер заблокирован или клиент хочет перейти, добавьте второй, затем отвяжите ненужный.",
         )
         Spacer(Modifier.height(12.dp))
         ChannelManageRow(
@@ -448,7 +448,7 @@ private fun ChannelManagementSheet(
         }
         Spacer(Modifier.height(14.dp))
         if (telegramConnected || maxConnected) {
-            PrimaryButton("Написать в текущий канал", onMessage, Modifier.fillMaxWidth(), Icons.Outlined.Send)
+            PrimaryButton("Написать в текущий мессенджер", onMessage, Modifier.fillMaxWidth(), Icons.Outlined.Send)
             Spacer(Modifier.height(8.dp))
         }
         GhostButton("Обновить статус", onRefresh, Modifier.fillMaxWidth(), Icons.Outlined.Refresh)
@@ -460,7 +460,7 @@ private fun ChannelManagementSheet(
         AlertDialog(
             onDismissRequest = { confirmRevoke = null },
             title = { Text("Отвязать ${channelTitle(channel)}?") },
-            text = { Text("Клиент перестанет получать автоматические сообщения через этот канал. При необходимости его можно будет подключить заново по приглашению.") },
+            text = { Text("Клиент перестанет получать автоматические сообщения через этот мессенджер. При необходимости его можно будет подключить заново по приглашению.") },
             confirmButton = {
                 TextButton(
                     enabled = !isUpdating,
@@ -525,7 +525,7 @@ private fun channelSummary(detail: ClientDetail?, channel: String?): String {
     }
 }
 
-private fun activeLabel(isCurrent: Boolean) = if (isCurrent) "Подключён · текущий канал" else "Подключён"
+private fun activeLabel(isCurrent: Boolean) = if (isCurrent) "Подключён · текущий мессенджер" else "Подключён"
 private fun channelTitle(channel: String) = if (channel == "max") "MAX" else "Telegram"
 
 @Composable
