@@ -18,8 +18,34 @@ function toDatabaseType(value: unknown) {
     return 'individual';
 }
 
+const blockLabels: Record<string, string> = {
+    request: 'Запрос',
+    observation: 'Наблюдение',
+    intervention: 'Интервенция',
+    dynamics: 'Динамика',
+    next_step: 'Следующий шаг',
+    homework: 'Домашнее задание',
+    resources: 'Ресурсы',
+    anamnesis: 'Анамнез',
+    quote: 'Цитата',
+    hypothesis: 'Гипотеза',
+    short_note: 'Кратко',
+};
+
+export function notesPlainFromStructured(value: unknown): string | null {
+    if (!Array.isArray(value)) return null;
+    const parts = value.flatMap((block: any) => {
+        const label = blockLabels[block?.definitionId] || block?.definitionId || 'Заметка';
+        const values = block?.values && typeof block.values === 'object' ? Object.values(block.values) : [];
+        const text = values.map((item) => String(item || '').trim()).filter(Boolean).join('\n');
+        return text ? [`${label}:\n${text}`] : [];
+    });
+    return parts.length ? parts.join('\n\n') : null;
+}
+
 export function formatSession(s: any, onlineSessionLink: string | null = null) {
     const online = s.format !== 'in_person' && s.format !== 'offline';
+    const notesPlain = notesPlainFromStructured(s.structuredNotes) || (typeof s.clientSummary === 'string' ? s.clientSummary : null) || (typeof s.notes === 'string' ? s.notes : null);
     return {
         id: s.id,
         clientId: s.client?.id || s.clientId || '',
@@ -31,7 +57,9 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         format: online ? 'ONLINE' : 'IN_PERSON',
         type: toMobileType(s.type),
         videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
-        notes: typeof s.notes === 'string' ? s.notes : null,
+        notes: typeof s.notes === 'string' ? s.notes : notesPlain,
+        notesPlain,
+        structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
     };
 }
 

@@ -8,5 +8,5 @@ export async function acknowledgeSpecialistDocument(formData: FormData) {
     const token = String(formData.get('token') || '');
 
     await acknowledgeDocumentDelivery(deliveryId, token);
-    redirect(`/client/documents/${deliveryId}/done`);
+    redirect('/client/documents/' + deliveryId + '?t=' + encodeURIComponent(token) + '&accepted=1');
 }
