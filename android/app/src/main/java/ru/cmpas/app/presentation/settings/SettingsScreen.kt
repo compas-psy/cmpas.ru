@@ -31,6 +31,7 @@ import ru.cmpas.app.presentation.theme.*
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
+    onScheduleClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -131,6 +132,8 @@ fun SettingsScreen(
             }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    SettingRow(Icons.Outlined.EventBusy, "Расписание", "Блокировки, выходные и режим записи") { onScheduleClick() }
+                    ThinDivider()
                     SettingRow(Icons.Outlined.Link, "Ссылка для записи", "cmpas.ru/book/ilya-martynov") { activeSheet = ProfileSheet.BOOKING }
                     ThinDivider()
                     SettingRow(Icons.Outlined.Description, "Документы", documentsSubtitle(uiState)) { activeSheet = ProfileSheet.DOCUMENTS }

@@ -10,8 +10,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.local.LocalPracticeStore
-import ru.cmpas.app.data.local.LocalScheduleBlockStore
+import ru.cmpas.app.domain.model.ConsentStatus
+import ru.cmpas.app.domain.model.HomeworkStatus
+import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.domain.model.SessionFormat
+import ru.cmpas.app.domain.model.SessionStatus
+import ru.cmpas.app.domain.model.TimeBlock
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalDate
 import javax.inject.Inject
@@ -22,7 +27,6 @@ enum class CalendarViewMode { DAY, WEEK, MONTH, LIST }
 class CalendarViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
-    private val blockStore: LocalScheduleBlockStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CalendarUiState())
@@ -52,7 +56,8 @@ class CalendarViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = showLoader && it.sessions.isEmpty(), isRefreshing = !showLoader) }
             val range = currentRange(_uiState.value)
             val localSessions = localStore.getSessions(from = range.first, to = range.second)
-            val localBlocks = blockStore.getBlocks(from = range.first, to = range.second)
+            val blocks = runCatching { api.getBlocks(range.first, range.second) }
+                .getOrNull()?.takeIf { it.isSuccessful }?.body().orEmpty().map { it.toSession() }
             try {
                 val response = api.getSessions(from = range.first, to = range.second)
                 val remoteSessions = if (response.isSuccessful) response.body().orEmpty() else emptyList()
@@ -61,7 +66,7 @@ class CalendarViewModel @Inject constructor(
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        sessions = mergeSessions(remoteSessions, localStore.getSessions(range.first, range.second), localBlocks),
+                        sessions = mergeSessions(remoteSessions, localStore.getSessions(range.first, range.second), blocks),
                     )
                 }
             } catch (_: Exception) {
@@ -69,7 +74,7 @@ class CalendarViewModel @Inject constructor(
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        sessions = mergeSessions(emptyList(), localSessions, localBlocks),
+                        sessions = mergeSessions(emptyList(), localSessions, blocks),
                     )
                 }
             }
@@ -99,6 +104,29 @@ class CalendarViewModel @Inject constructor(
         return (remote + local + blocks)
             .distinctBy { it.id }
             .sortedWith(compareBy<Session> { it.date }.thenBy { it.startTime })
+    }
+
+    private fun TimeBlock.toSession(): Session {
+        val typeLabel = when (type) {
+            "vacation" -> "Отпуск"
+            "sick" -> "Больничный"
+            "personal" -> "Личное"
+            else -> "Блокировка"
+        }
+        return Session(
+            id = "block-$id",
+            clientId = "local-block",
+            clientName = typeLabel,
+            date = date,
+            startTime = startTime,
+            endTime = endTime,
+            status = SessionStatus.CONFIRMED,
+            format = SessionFormat.IN_PERSON,
+            notes = reason,
+            paymentStatus = PaymentStatus.NOT_REQUIRED,
+            consentStatus = ConsentStatus.OK,
+            homeworkStatus = HomeworkStatus.NOT_ASSIGNED,
+        )
     }
 }
 

@@ -27,6 +27,7 @@ import ru.cmpas.app.presentation.dashboard.DashboardScreen
 import ru.cmpas.app.presentation.legal.LegalGateOverlay
 import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
+import ru.cmpas.app.presentation.schedule.ScheduleScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
 import ru.cmpas.app.presentation.theme.Ambient
@@ -90,9 +91,15 @@ fun CompasNavHost(
                 NotesScreen(onSessionNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute(it)) })
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(onLogout = {
-                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
-                })
+                SettingsScreen(
+                    onLogout = {
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    },
+                    onScheduleClick = { navController.navigate(Screen.Schedule.route) },
+                )
+            }
+            composable(Screen.Schedule.route) {
+                ScheduleScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 Screen.QuickAction.route,
