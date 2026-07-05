@@ -141,6 +141,13 @@ jobs:
               if ! grep -q '^TELEGRAM_PROXY=' .env; then
                 echo "TELEGRAM_PROXY=" >> .env
               fi
+              # Ensure TELEGRAM_WEBHOOK_SECRET — authenticates incoming webhook
+              # updates (set as setWebhook secret_token, verified in the route).
+              # Generated once and kept stable so the header keeps matching.
+              if [ -z "$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2)" ]; then
+                sed -i '/^TELEGRAM_WEBHOOK_SECRET=/d' .env
+                echo "TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> .env
+              fi
             fi
 
             # Show AUTH_SECRET fingerprint (first 8 chars) for debugging
@@ -328,11 +335,12 @@ jobs:
             TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)
             TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2)
             TG_API_URL=${TG_API_URL:-https://api.telegram.org}
+            TG_WH_SECRET=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2)
             if [ -n "$TG_TOKEN" ]; then
-              echo "Registering Telegram webhook..."
+              echo "Registering Telegram webhook (with secret_token)..."
               TG_WEBHOOK_RESULT=$(curl -s -X POST "${TG_API_URL}/bot${TG_TOKEN}/setWebhook" \
                 -H "Content-Type: application/json" \
-                -d '{"url":"https://cmpas.ru/api/telegram/webhook","drop_pending_updates":false}' \
+                -d "{\"url\":\"https://cmpas.ru/api/telegram/webhook\",\"drop_pending_updates\":false,\"secret_token\":\"${TG_WH_SECRET}\"}" \
                 2>/dev/null || echo "curl failed")
               echo "Telegram webhook result: $TG_WEBHOOK_RESULT"
               TG_INFO_RESULT=$(curl -s "${TG_API_URL}/bot${TG_TOKEN}/getWebhookInfo" 2>/dev/null || echo "curl failed")

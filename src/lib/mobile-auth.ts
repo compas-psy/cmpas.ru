@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import * as crypto from 'crypto';
 
-const JWT_SECRET = process.env.AUTH_SECRET || 'fallback-secret';
+// NEVER fall back to a constant secret — a known signing key lets anyone forge
+// a token for any userId (full account takeover of every psychologist). If
+// AUTH_SECRET is somehow unset, use a random per-process key: tokens won't
+// survive a restart, but they can't be forged. Loud warning so it's noticed.
+const JWT_SECRET = process.env.AUTH_SECRET || (() => {
+    console.error('[mobile-auth] AUTH_SECRET is not set — using an ephemeral random key. Mobile tokens will not survive restarts.');
+    return crypto.randomBytes(48).toString('hex');
+})();
 const ACCESS_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days (mobile)
 const REFRESH_TOKEN_EXPIRY = 90 * 24 * 60 * 60; // 90 days
 
@@ -40,12 +47,17 @@ export function signJwt(payload: Omit<JwtPayload, 'iat'>): string {
 export function verifyJwt(token: string): JwtPayload | null {
     try {
         const [header, body, signature] = token.split('.');
+        if (!header || !body || !signature) return null;
         const expectedSig = crypto
             .createHmac('sha256', JWT_SECRET)
             .update(`${header}.${body}`)
             .digest('base64url');
 
-        if (signature !== expectedSig) return null;
+        // Timing-safe comparison so an attacker can't recover a valid signature
+        // byte-by-byte via response-time differences.
+        const sigBuf = Buffer.from(signature);
+        const expBuf = Buffer.from(expectedSig);
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
 
         const payload = JSON.parse(base64urlDecode(body)) as JwtPayload;
         if (payload.exp < Math.floor(Date.now() / 1000)) return null;
