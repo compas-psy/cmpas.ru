@@ -14,7 +14,13 @@ export function ConnectClient(props: {
     const [copied, setCopied] = useState(false);
     const [autoOpened, setAutoOpened] = useState(false);
     const firstName = useMemo(() => props.clientName.trim().split(/\s+/)[0] || 'Клиент', [props.clientName]);
-    const selectedLink = props.channel === 'telegram' ? props.telegramLink : props.channel === 'max' ? props.maxLink : null;
+    // MAX works in Russia without a VPN; Telegram may require one — prefer MAX
+    // whenever the psychologist didn't ask for a specific channel.
+    const selectedLink = props.channel === 'telegram'
+        ? props.telegramLink
+        : props.channel === 'max'
+            ? props.maxLink
+            : (props.maxLink || props.telegramLink);
     const channelName = props.channel === 'telegram' ? 'Telegram' : props.channel === 'max' ? 'MAX' : null;
 
     useEffect(() => {
@@ -53,15 +59,12 @@ export function ConnectClient(props: {
                     </p>
 
                     <div className="mt-7 space-y-3">
-                        {(props.channel === 'auto' || props.channel === 'telegram') && props.telegramLink && (
-                            <a href={props.telegramLink} className={`${buttonClass} bg-[#2F6B5A] text-white`}>
-                                Подключить Telegram
-                                <ExternalLink className="w-4 h-4" />
-                            </a>
-                        )}
                         {(props.channel === 'auto' || props.channel === 'max') && props.maxLink && (
-                            <a href={props.maxLink} className={`${buttonClass} bg-[#F3F6F4] text-[#234E42] border border-[#CDDAD4]`}>
-                                Подключить MAX
+                            <a href={props.maxLink} className={`${buttonClass} bg-[#2F6B5A] text-white`}>
+                                <span className="flex flex-col items-center leading-tight">
+                                    <span>Подключить MAX</span>
+                                    <span className="text-xs font-normal opacity-80">работает в России без VPN</span>
+                                </span>
                                 <ExternalLink className="w-4 h-4" />
                             </a>
                         )}
@@ -69,6 +72,15 @@ export function ConnectClient(props: {
                             <div className="rounded-2xl border border-[#E6D8B7] bg-[#FFF9E9] p-4 text-sm text-[#6B5A2D]">
                                 Подключение MAX временно недоступно. Попросите специалиста выбрать Telegram или повторить позже.
                             </div>
+                        )}
+                        {(props.channel === 'auto' || props.channel === 'telegram') && props.telegramLink && (
+                            <a href={props.telegramLink} className={`${buttonClass} bg-[#F3F6F4] text-[#234E42] border border-[#CDDAD4]`}>
+                                <span className="flex flex-col items-center leading-tight">
+                                    <span>Подключить Telegram</span>
+                                    <span className="text-xs font-normal opacity-70">может потребоваться VPN в России</span>
+                                </span>
+                                <ExternalLink className="w-4 h-4" />
+                            </a>
                         )}
                     </div>
 

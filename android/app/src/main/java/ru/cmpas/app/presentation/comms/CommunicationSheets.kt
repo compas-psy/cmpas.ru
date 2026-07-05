@@ -2,6 +2,7 @@ package ru.cmpas.app.presentation.comms
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,8 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import ru.cmpas.app.domain.model.ClientChannelStatus
+import ru.cmpas.app.domain.model.InviteResponse
 import ru.cmpas.app.domain.model.OnboardingDoc
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -127,56 +133,126 @@ fun SendMessageSheet(
 
 @Composable
 fun InviteSheet(
-    clientId: String,
     clientName: String,
+    isLoading: Boolean,
+    invite: InviteResponse?,
+    error: String?,
+    channelStatus: ClientChannelStatus?,
     onClose: () -> Unit,
-    onInvite: (String) -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    var selected by remember { mutableIntStateOf(0) }
-    var sent by remember { mutableStateOf(false) }
-    val channel = if (selected == 0) "telegram" else "max"
-    val suffix = if (selected == 0) "tg" else "mx"
-    val link = "cmpas.ru/i/${clientId.take(8)}-$suffix"
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    val connectedChannel = when {
+        channelStatus?.channels?.max?.connected == true -> "MAX"
+        channelStatus?.channels?.telegram?.connected == true -> "Telegram"
+        else -> null
+    }
 
     CompasBottomSheet(onClose = onClose) {
-        if (sent) {
-            SentState(delivered = false, onDone = onClose)
-            return@CompasBottomSheet
-        }
         SheetHead("Пригласить в КОМПАС", clientName)
         Spacer(Modifier.height(14.dp))
-        CompasSegmented(listOf("Telegram", "MAX"), selected) { selected = it }
-        Spacer(Modifier.height(14.dp))
-        GlassCard(modifier = Modifier.fillMaxWidth(), padding = 14.dp) {
-            Eyebrow("Ссылка действует 7 дней")
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Link, null, Modifier.size(18.dp), tint = Forest700)
-                Spacer(Modifier.width(8.dp))
-                Text(link, style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
+
+        when {
+            connectedChannel != null -> {
+                Spacer(Modifier.height(4.dp))
+                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(70.dp).clip(CircleShape).background(SuccessSoft), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.CheckCircle, null, Modifier.size(34.dp), tint = Success)
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text("$clientName подключён(а)", style = tSection, color = CompasFg)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Канал: $connectedChannel. Напоминания и подтверждения теперь приходят автоматически.", style = tBody2)
+                }
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton("Готово", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Check)
+            }
+            isLoading && invite == null -> {
+                Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Forest700)
+                }
+            }
+            error != null && invite == null -> {
+                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
+                    Icon(Icons.Outlined.WarningAmber, null, Modifier.size(28.dp), tint = CompasDestructive)
+                    Spacer(Modifier.height(10.dp))
+                    Text("Не удалось создать приглашение", style = tSection, color = CompasFg)
+                    Spacer(Modifier.height(4.dp))
+                    Text(error, style = tBody2)
+                    Spacer(Modifier.height(12.dp))
+                    GhostButton("Повторить", onRetry, Modifier.fillMaxWidth(), Icons.Outlined.Refresh)
+                }
+                Spacer(Modifier.height(8.dp))
+                GhostButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
+            }
+            invite != null -> {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    QrCodeImage(content = invite.inviteLink)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Покажите экран клиенту — пусть наведёт камеру",
+                    style = tMeta,
+                    color = CompasMutedFg,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(14.dp))
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    padding = 14.dp,
+                    onClick = {
+                        clipboard.setText(AnnotatedString(invite.inviteLink))
+                        copied = true
+                    },
+                ) {
+                    Eyebrow("Ссылка действует 72 часа · ${if (copied) "скопировано" else "нажмите, чтобы скопировать"}")
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Link, null, Modifier.size(18.dp), tint = Forest700)
+                        Spacer(Modifier.width(8.dp))
+                        Text(invite.inviteLink, style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                // MAX first — works in RU without a VPN; Telegram may require one.
+                invite.directLinks?.max?.let { maxLink ->
+                    GhostButton(
+                        "Открыть в MAX",
+                        onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(maxLink))) } },
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Outlined.Forum,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                invite.directLinks?.telegram?.let { tgLink ->
+                    GhostButton(
+                        "Открыть в Telegram",
+                        onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(tgLink))) } },
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Outlined.Send,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                InfoBanner(
+                    icon = Icons.Outlined.NotificationsActive,
+                    text = "Клиент сам выберет канал по кнопке. Как только он привяжет мессенджер, здесь появится подтверждение — обновлять экран не нужно.",
+                    background = Sage100,
+                    foreground = Forest700,
+                )
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton(
+                    text = "Поделиться приглашением",
+                    icon = Icons.Outlined.Share,
+                    onClick = { shareText(context, "Приглашение в КОМПАС", invite.shareText ?: invite.inviteLink) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                GhostButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
             }
         }
-        Spacer(Modifier.height(12.dp))
-        InfoBanner(
-            icon = Icons.Outlined.NotificationsActive,
-            text = "После открытия ссылки клиент привяжет мессенджер и сможет получать сервисные уведомления.",
-            background = Sage100,
-            foreground = Forest700,
-        )
-        Spacer(Modifier.height(16.dp))
-        PrimaryButton(
-            text = "Отправить приглашение",
-            icon = Icons.Outlined.Share,
-            onClick = {
-                onInvite(channel)
-                shareText(context, "Приглашение в КОМПАС", "Здравствуйте! Чтобы получать подтверждения и напоминания о встречах, откройте ссылку: https://$link")
-                sent = true
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        GhostButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
     }
 }
 

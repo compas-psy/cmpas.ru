@@ -3,16 +3,21 @@ package ru.cmpas.app.presentation.clients
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.InviteRequest
 import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.domain.model.Client
+import ru.cmpas.app.domain.model.ClientChannelStatus
 import ru.cmpas.app.domain.model.ClientDetail
+import ru.cmpas.app.domain.model.InviteResponse
 import ru.cmpas.app.domain.model.OnboardingDoc
 import ru.cmpas.app.domain.model.OnboardingResult
 import ru.cmpas.app.domain.model.OnboardingSendRequest
@@ -27,6 +32,7 @@ class ClientDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ClientDetailUiState())
     val uiState = _uiState.asStateFlow()
     private var loadedClientId: String? = null
+    private var channelPollJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -117,13 +123,46 @@ class ClientDetailViewModel @Inject constructor(
 
     fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
+            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null) }
             val response = runCatching { api.createInviteLink(clientId, InviteRequest(channel)) }.getOrNull()
-            _uiState.update { it.copy(inviteLink = response?.takeIf { result -> result.isSuccessful }?.body()?.inviteLink) }
+            if (response?.isSuccessful == true) {
+                _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body(), channelStatus = null) }
+                startChannelPolling(clientId)
+            } else {
+                _uiState.update { it.copy(isCreatingInvite = false, inviteError = "Не удалось создать приглашение — повторите") }
+            }
         }
     }
 
+    /** Polls channel-binding status every 4s while the invite sheet is open, so the
+     * psychologist sees "клиент подключён" live instead of having to refresh manually. */
+    private fun startChannelPolling(clientId: String) {
+        channelPollJob?.cancel()
+        channelPollJob = viewModelScope.launch {
+            while (isActive) {
+                delay(4_000)
+                val response = runCatching { api.getClientChannels(clientId) }.getOrNull()
+                val status = response?.takeIf { it.isSuccessful }?.body() ?: continue
+                _uiState.update { it.copy(channelStatus = status) }
+                if (status.channels.telegram.connected || status.channels.max.connected) {
+                    loadClient(clientId, showLoader = false)
+                    break
+                }
+            }
+        }
+    }
+
+    fun stopChannelPolling() {
+        channelPollJob?.cancel()
+        channelPollJob = null
+    }
+
     fun clearMessageResult() = _uiState.update { it.copy(messageResult = null) }
-    fun clearInviteLink() = _uiState.update { it.copy(inviteLink = null) }
+
+    fun clearInviteState() {
+        stopChannelPolling()
+        _uiState.update { it.copy(inviteResponse = null, inviteError = null, channelStatus = null, isCreatingInvite = false) }
+    }
 
     private fun ClientDetail.toClient() = Client(
         id = id,
@@ -156,5 +195,8 @@ data class ClientDetailUiState(
     val documentsError: String? = null,
     val error: String? = null,
     val messageResult: MessageResult? = null,
-    val inviteLink: String? = null,
+    val isCreatingInvite: Boolean = false,
+    val inviteResponse: InviteResponse? = null,
+    val inviteError: String? = null,
+    val channelStatus: ClientChannelStatus? = null,
 )
