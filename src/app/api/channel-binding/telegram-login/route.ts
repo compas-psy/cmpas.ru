@@ -3,6 +3,7 @@ import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { verifyTelegramLoginPayload, type TelegramLoginPayload } from '@/lib/telegram-login';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { db } from '@/lib/db';
+import { extractFirstName } from '@/lib/person-name';
 
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
 
         await sendTelegramMessage(
             payload.id,
-            `Уведомления подключены, ${client.name.split(/\s+/)[0]}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
+            `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
         );
 
         const queued = await db.scheduledClientMessage.findMany({

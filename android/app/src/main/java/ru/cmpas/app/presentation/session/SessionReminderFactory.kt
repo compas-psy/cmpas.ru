@@ -19,7 +19,10 @@ fun buildReminders(session: Session, bound: Boolean): List<SessionReminder> {
     }.getOrElse { LocalDateTime.now().plusDays(1) }
     val now = LocalDateTime.now()
     val firstAt = sessionDateTime.minusHours(24)
-    val secondAt = sessionDateTime.minusHours(2)
+    // Matches the server cron (src/lib/cron/reminders.ts), which sends the
+    // second reminder at -1h, not -2h — keep these in sync or the app shows
+    // "Отправлено" up to an hour before the message actually goes out.
+    val secondAt = sessionDateTime.minusHours(1)
 
     fun statusFor(moment: LocalDateTime): ReminderStatus = when {
         !bound -> ReminderStatus.SCHEDULED
@@ -32,9 +35,9 @@ fun buildReminders(session: Session, bound: Boolean): List<SessionReminder> {
     )
     val firstText = "Напоминаю о консультации $sessionDateLabel в ${session.startTime}. Всё в силе? Информация об оплате и QR будут в сообщении."
     val secondText = if (session.format == SessionFormat.ONLINE) {
-        "До консультации осталось 1–2 часа. Проверьте ссылку для подключения."
+        "Сессия начнётся через 1 час. Проверьте ссылку для подключения."
     } else {
-        "До консультации осталось 1–2 часа. Будем ждать вас в согласованном месте."
+        "Сессия начнётся через 1 час. Будем ждать вас в согласованном месте."
     }
 
     return listOf(
@@ -48,8 +51,8 @@ fun buildReminders(session: Session, bound: Boolean): List<SessionReminder> {
             text = firstText,
         ),
         SessionReminder(
-            id = "${session.id}:2h",
-            whenLabel = "За 1–2 часа",
+            id = "${session.id}:1h",
+            whenLabel = "За 1 час",
             atLabel = reminderAtLabel(secondAt),
             channel = "telegram",
             status = statusFor(secondAt),

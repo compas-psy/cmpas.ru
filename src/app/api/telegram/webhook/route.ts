@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { bot } from '@/lib/telegram-bot';
 import { db } from '@/lib/db';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { extractFirstName } from '@/lib/person-name';
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -32,7 +33,7 @@ async function handleClientInvite(body: any) {
 
         await bot.telegram.sendMessage(
             chatId,
-            `Уведомления подключены, ${client.name.split(/\s+/)[0]}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
+            `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
         );
 
         const queued = await db.scheduledClientMessage.findMany({

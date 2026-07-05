@@ -282,6 +282,29 @@ jobs:
             echo "Auth endpoint status: $AUTH_STATUS"
             
             # ============================================
+            # REGISTER TELEGRAM BOT WEBHOOK
+            # No code path ever called setWebhook — if it drifts (token
+            # rotation, URL change) the bot goes silent with no way to
+            # notice except a user reporting it. Re-register on every
+            # deploy so it self-heals, same pattern as the MAX webhook below.
+            # ============================================
+            TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)
+            TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2)
+            TG_API_URL=${TG_API_URL:-https://api.telegram.org}
+            if [ -n "$TG_TOKEN" ]; then
+              echo "Registering Telegram webhook..."
+              TG_WEBHOOK_RESULT=$(curl -s -X POST "${TG_API_URL}/bot${TG_TOKEN}/setWebhook" \
+                -H "Content-Type: application/json" \
+                -d '{"url":"https://cmpas.ru/api/telegram/webhook","drop_pending_updates":false}' \
+                2>/dev/null || echo "curl failed")
+              echo "Telegram webhook result: $TG_WEBHOOK_RESULT"
+              TG_INFO_RESULT=$(curl -s "${TG_API_URL}/bot${TG_TOKEN}/getWebhookInfo" 2>/dev/null || echo "curl failed")
+              echo "Telegram webhook info: $TG_INFO_RESULT"
+            else
+              echo "TELEGRAM_BOT_TOKEN not found, skipping webhook registration."
+            fi
+
+            # ============================================
             # REGISTER MAX BOT WEBHOOK
             # ============================================
             MAX_TOKEN=$(grep '^MAX_BOT_TOKEN=' .env | cut -d= -f2)

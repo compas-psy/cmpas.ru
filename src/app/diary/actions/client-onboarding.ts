@@ -6,6 +6,7 @@ import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, cr
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
+import { extractFirstName } from '@/lib/person-name';
 
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
@@ -121,7 +122,7 @@ export async function sendClientOnboarding(
         htmlText = buildSessionClientMessage({ ...base, mode: 'html' });
         plainText = buildSessionClientMessage({ ...base, mode: 'plain' });
     } else {
-        const firstName = client.name.trim().split(/\s+/)[0] || client.name;
+        const firstName = extractFirstName(client.name) || client.name;
         const lines = [`${firstName}, здравствуйте!`, '', `На связи специалист ${psyName}.`];
         if (documentLinks.length) {
             lines.push('', 'Записываясь на консультацию, вы соглашаетесь с условиями договора:');
@@ -166,7 +167,7 @@ export async function sendClientOnboarding(
     let preparedInTelegram = false;
     if (opts.channel === 'telegram' && psych?.telegramChatId) {
         const callbackUrl = `${APP_URL}/api/channel-binding/telegram-login?token=${encodeURIComponent(invite.rawToken)}`;
-        const firstName = client.name.trim().split(/\s+/)[0] || client.name;
+        const firstName = extractFirstName(client.name) || client.name;
         await sendTelegramMessage(
             psych.telegramChatId,
             `${firstName}, подключите уведомления о записях.\n\nКОМПАС будет присылать только подтверждения, напоминания, переносы и отмены встреч.`,
