@@ -59,6 +59,8 @@ ALTER TABLE "AvailabilitySlot" ADD COLUMN IF NOT EXISTS "scheduleRuleId" TEXT;
 
 -- DiarySession columns
 ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "addressId" TEXT;
+ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'not_required';
+CREATE INDEX IF NOT EXISTS "DiarySession_paymentStatus_idx" ON "DiarySession"("paymentStatus");
 
 -- CalendarIntegration columns
 ALTER TABLE "CalendarIntegration" ADD COLUMN IF NOT EXISTS "syncFrom" BOOLEAN NOT NULL DEFAULT true;

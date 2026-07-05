@@ -5,7 +5,7 @@ import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/li
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
-import { formatSession, notesPlainFromStructured } from '../route';
+import { formatSession, notesPlainFromStructured, toDatabasePaymentStatus } from '../route';
 
 function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientSummary?: string | null; notes?: string | null } | null) {
     if (!session) return null;
@@ -17,6 +17,26 @@ function notePatch(body: any) {
     if (body.notes !== undefined) data.notes = body.notes;
     if (body.structuredNotes !== undefined) data.structuredNotes = body.structuredNotes;
     return data;
+}
+
+async function readPaymentStatus(sessionId: string) {
+    const rows = await db.$queryRaw<Array<{ paymentStatus: string }>>`
+        SELECT "paymentStatus" FROM "DiarySession" WHERE id = ${sessionId} LIMIT 1
+    `;
+    return rows[0]?.paymentStatus || 'not_required';
+}
+
+async function writePaymentStatus(sessionId: string, value: string) {
+    await db.$executeRaw`
+        UPDATE "DiarySession" SET "paymentStatus" = ${value}, "updatedAt" = NOW() WHERE id = ${sessionId}
+    `;
+    if (value === 'paid') {
+        await db.$executeRaw`
+            UPDATE "SessionPaymentRequest"
+            SET status = 'paid', "markedPaidAt" = COALESCE("markedPaidAt", NOW()), "updatedAt" = NOW()
+            WHERE "sessionId" = ${sessionId}
+        `;
+    }
 }
 
 export async function GET(
@@ -34,7 +54,7 @@ export async function GET(
         });
         if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-        const [settings, previousSession] = await Promise.all([
+        const [settings, previousSession, paymentStatus] = await Promise.all([
             db.psychologistSettings.findUnique({
                 where: { psychologistId: auth.userId },
                 select: { onlineSessionLink: true },
@@ -50,10 +70,11 @@ export async function GET(
                 orderBy: [{ date: 'desc' }, { time: 'desc' }],
                 select: { notes: true, clientSummary: true, structuredNotes: true },
             }),
+            readPaymentStatus(session.id),
         ]);
 
         return NextResponse.json({
-            ...formatSession(session),
+            ...formatSession({ ...session, paymentStatus }),
             videoLink: session.format === 'online' ? settings?.onlineSessionLink || null : null,
             previousNotesSummary: buildPreviousNotesSummary(previousSession),
         });
@@ -77,6 +98,11 @@ export async function PATCH(
             where: { id, psychologistId: auth.userId },
         });
         if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+        const paymentStatus = body.paymentStatus !== undefined ? toDatabasePaymentStatus(body.paymentStatus) : null;
+        if (body.paymentStatus !== undefined && !paymentStatus) {
+            return NextResponse.json({ error: 'paymentStatus must be paid, unpaid or not_required' }, { status: 400 });
+        }
 
         const isReschedule = body.date || body.startTime;
         if (isReschedule) {
@@ -125,6 +151,7 @@ export async function PATCH(
                 },
                 include: { client: { select: { id: true, name: true } } },
             });
+            if (paymentStatus) await writePaymentStatus(id, paymentStatus);
 
             const fullUpdated = await db.diarySession.findUnique({
                 where: { id },
@@ -165,7 +192,7 @@ export async function PATCH(
                 console.error('[mobile/sessions/id PATCH] reschedule notice failed:', error);
             }
 
-            return NextResponse.json(formatSession(updated));
+            return NextResponse.json(formatSession({ ...updated, paymentStatus: paymentStatus || await readPaymentStatus(id) }));
         }
 
         const updateData: Record<string, unknown> = {};
@@ -173,12 +200,18 @@ export async function PATCH(
         Object.assign(updateData, notePatch(body));
         if (body.status?.toLowerCase() === 'cancelled') autoDeleteSessionFromCalendars(auth.userId, id).catch(console.error);
 
-        const updated = await db.diarySession.update({
-            where: { id },
-            data: updateData,
-            include: { client: { select: { id: true, name: true } } },
-        });
-        return NextResponse.json(formatSession(updated));
+        const updated = Object.keys(updateData).length > 0
+            ? await db.diarySession.update({
+                where: { id },
+                data: updateData,
+                include: { client: { select: { id: true, name: true } } },
+            })
+            : await db.diarySession.findFirstOrThrow({
+                where: { id, psychologistId: auth.userId },
+                include: { client: { select: { id: true, name: true } } },
+            });
+        if (paymentStatus) await writePaymentStatus(id, paymentStatus);
+        return NextResponse.json(formatSession({ ...updated, paymentStatus: paymentStatus || await readPaymentStatus(id) }));
     } catch (error) {
         console.error('[mobile/sessions/id PATCH]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

@@ -11,6 +11,7 @@ import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.domain.model.ClientDetail
+import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.ReminderStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionReminder
@@ -60,10 +61,24 @@ class SessionDetailViewModel @Inject constructor(
     fun sendMessage(clientId: String, sessionId: String, text: String) {
         viewModelScope.launch {
             runCatching {
-                api.sendMessage(
-                    clientId,
-                    SendMessageRequest(type = "custom", text = text, sessionId = sessionId),
-                )
+                api.sendMessage(clientId, SendMessageRequest(type = "custom", text = text, sessionId = sessionId))
+            }
+        }
+    }
+
+    fun setPaymentStatus(sessionId: String, status: PaymentStatus) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, actionError = null) }
+            try {
+                val response = api.updateSession(sessionId, UpdateSessionRequest(paymentStatus = status))
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
+                    PracticeRefreshBus.notifyChanged()
+                } else {
+                    _uiState.update { it.copy(isActionLoading = false, actionError = "Не удалось обновить оплату") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
             }
         }
     }
@@ -71,9 +86,7 @@ class SessionDetailViewModel @Inject constructor(
     /** TODO API: заменить локальное состояние на endpoint повторной отправки. */
     fun resendReminder(sessionId: String, reminderId: String) {
         _uiState.update { state ->
-            state.copy(reminders = state.reminders.map {
-                if (it.id == reminderId) it.copy(status = ReminderStatus.SENT) else it
-            })
+            state.copy(reminders = state.reminders.map { if (it.id == reminderId) it.copy(status = ReminderStatus.SENT) else it })
         }
     }
 
@@ -151,13 +164,7 @@ class SessionDetailViewModel @Inject constructor(
             try {
                 val r = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
                 if (r.isSuccessful) {
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            session = r.body(),
-                            showRescheduleDialog = false,
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false, session = r.body(), showRescheduleDialog = false) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Время уже занято") }
                 }
