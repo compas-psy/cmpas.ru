@@ -57,15 +57,20 @@ fun GhostButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     danger: Boolean = false,
+    enabled: Boolean = true,
 ) {
-    val foreground = if (danger) CompasDestructive else Forest800
+    val foreground = when {
+        !enabled -> CompasMutedFg
+        danger -> CompasDestructive
+        else -> Forest800
+    }
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
             .pressScale(interaction)
             .height(52.dp)
             .glass(radius = 16.dp)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = if (text == null) 0.dp else 18.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
