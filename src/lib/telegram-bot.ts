@@ -1,6 +1,7 @@
 import { Telegraf, Context, Markup } from 'telegraf';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
+import { consumeClientChannelInvite } from '@/lib/channel-binding';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -105,65 +106,60 @@ export function setupBot() {
             return showPsyMenu(ctx, psy);
         }
 
-        // 2a. Handle invite token (c_<token>) — psychologist invited this client
+        // 2a. Handle invite token (c_<token>) — psychologist invited this client.
+        // This mirrors api/telegram/webhook's handleClientInvite, which normally
+        // intercepts "/start c_" before bot.handleUpdate runs; kept here too as a
+        // defense-in-depth path for any other entry point (e.g. long-polling/tests).
+        // Uses the canonical consumeClientChannelInvite() — do not re-implement
+        // token lookup here: createClientChannelInvite stores a sha256 hash, and a
+        // direct `findUnique({ where: { token } })` against the raw value would
+        // silently fail to match new invites.
         if (payload?.startsWith('c_')) {
             const token = payload.slice(2);
             try {
-                const invite = await db.clientInviteToken.findUnique({
-                    where: { token },
+                const client = await consumeClientChannelInvite({
+                    token,
+                    channel: 'telegram',
+                    providerUserId: tgId,
+                    providerChatId: tgId,
+                    username: ctx.from?.username || null,
                 });
-                const client = invite
-                    ? await db.diaryClient.findUnique({ where: { id: invite.clientId } })
-                    : null;
-                if (invite && client && !invite.usedAt && invite.expiresAt > new Date()) {
-                    // Link Telegram to this DiaryClient
-                    await db.diaryClient.update({
-                        where: { id: client.id },
-                        data: { telegramChatId: tgId },
-                    });
-                    await db.clientInviteToken.update({
-                        where: { id: invite.id },
-                        data: { usedAt: new Date() },
-                    });
-                    const targetPsy = await db.user.findUnique({
-                        where: { id: invite.psychologistId },
-                        select: { name: true, psychologistSettings: { select: { fullName: true } } },
-                    });
-                    const psyName = targetPsy?.psychologistSettings?.fullName || targetPsy?.name || 'Ваш специалист';
-                    await ctx.reply(
-                        `Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту (${psyName}). Теперь вы будете получать уведомления о встречах здесь.`,
-                    );
 
-                    // Deliver any onboarding messages that were queued while the
-                    // client wasn't yet connected (notification + documents).
-                    try {
-                        const queued = await db.scheduledClientMessage.findMany({
-                            where: { clientId: invite.clientId, channel: 'telegram', status: 'pending' },
-                        });
-                        for (const m of queued) {
-                            try {
-                                await ctx.telegram.sendMessage(tgId, m.text, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
-                                await db.scheduledClientMessage.update({
-                                    where: { id: m.id },
-                                    data: { status: 'sent', sentAt: new Date() },
-                                });
-                            } catch (e) {
-                                console.error('[telegram-bot] queued onboarding delivery failed:', e);
-                            }
+                await ctx.reply(
+                    `Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`,
+                );
+
+                // Deliver any onboarding messages that were queued while the
+                // client wasn't yet connected (notification + documents).
+                try {
+                    const queued = await db.scheduledClientMessage.findMany({
+                        where: { clientId: client.id, channel: 'telegram', status: 'pending' },
+                        orderBy: { createdAt: 'asc' },
+                    });
+                    for (const m of queued) {
+                        try {
+                            await ctx.telegram.sendMessage(tgId, m.text, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+                            await db.scheduledClientMessage.update({
+                                where: { id: m.id },
+                                data: { status: 'sent', sentAt: new Date() },
+                            });
+                        } catch (e) {
+                            console.error('[telegram-bot] queued onboarding delivery failed:', e);
                         }
-                    } catch (e) {
-                        console.error('[telegram-bot] queued onboarding lookup failed:', e);
                     }
-                    return;
-                } else if (invite?.usedAt) {
-                    await ctx.reply('Эта ссылка уже была использована. Попросите специалиста отправить новую.');
-                    return;
-                } else {
-                    await ctx.reply('Ссылка недействительна или устарела. Попросите специалиста отправить новую.');
-                    return;
+                } catch (e) {
+                    console.error('[telegram-bot] queued onboarding lookup failed:', e);
                 }
+                return;
             } catch (e) {
-                console.error('[telegram-bot] invite token error:', e);
+                const code = e instanceof Error ? e.message : '';
+                const message = code === 'INVITE_ALREADY_USED'
+                    ? 'Эта ссылка уже была использована. Попросите специалиста отправить новую.'
+                    : code === 'INVITE_EXPIRED'
+                        ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
+                        : 'Ссылка недействительна. Попросите специалиста отправить новую.';
+                await ctx.reply(message);
+                return;
             }
         }
 

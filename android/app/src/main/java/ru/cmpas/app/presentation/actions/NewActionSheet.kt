@@ -40,8 +40,13 @@ fun NewActionSheet(
     val activeClients = remember(clients) { clients.filter { it.status == ClientStatus.ACTIVE }.take(4) }
 
     selectedClient?.let { client ->
-        val bound = !client.telegramId.isNullOrBlank()
-        val channel = if (bound) "telegram" else null
+        // MAX-first: it works in Russia without a VPN, Telegram may require one.
+        val channel = when {
+            !client.maxId.isNullOrBlank() -> "max"
+            !client.telegramId.isNullOrBlank() -> "telegram"
+            else -> null
+        }
+        val bound = channel != null
         when (mode) {
             QuickClientMode.MESSAGE -> SendMessageSheet(
                 clientName = client.name,
@@ -128,7 +133,11 @@ private fun QuickActionTile(
 
 @Composable
 private fun QuickClientRow(client: Client, onClick: () -> Unit) {
-    val bound = !client.telegramId.isNullOrBlank()
+    val channel = when {
+        !client.maxId.isNullOrBlank() -> "max"
+        !client.telegramId.isNullOrBlank() -> "telegram"
+        else -> null
+    }
     GlassCard(Modifier.fillMaxWidth(), padding = 12.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(client.name, 42.dp)
@@ -143,7 +152,7 @@ private fun QuickClientRow(client: Client, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            ChannelChip(if (bound) "telegram" else null, bound)
+            ChannelChip(channel, channel != null)
         }
     }
 }

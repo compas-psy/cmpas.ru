@@ -40,6 +40,24 @@ data class InviteDirectLinks(
 )
 
 @Serializable
+data class ClientChannelStatus(
+    val clientId: String,
+    val clientName: String,
+    val phone: String? = null,
+    val channels: ClientChannelsState,
+    val recommendedChannel: String,
+)
+
+@Serializable
+data class ClientChannelsState(
+    val telegram: ChannelConnectionState,
+    val max: ChannelConnectionState,
+)
+
+@Serializable
+data class ChannelConnectionState(val connected: Boolean)
+
+@Serializable
 data class OnboardingDoc(
     val id: String,
     val title: String,

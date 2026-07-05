@@ -58,6 +58,9 @@ fun ClientDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(clientId) { viewModel.loadClient(clientId) }
+    LaunchedEffect(sheet) {
+        if (sheet == ClientSheet.INVITE) viewModel.generateInviteLink(clientId)
+    }
 
     val client = uiState.client
     val detail = uiState.clientDetail
@@ -249,10 +252,13 @@ fun ClientDetailScreen(
                 onSend = { viewModel.sendMessage(clientId, "custom", text = it) },
             )
             ClientSheet.INVITE -> if (client != null) InviteSheet(
-                clientId = clientId,
                 clientName = client.name,
-                onClose = { sheet = null },
-                onInvite = { viewModel.generateInviteLink(clientId, it) },
+                isLoading = uiState.isCreatingInvite,
+                invite = uiState.inviteResponse,
+                error = uiState.inviteError,
+                channelStatus = uiState.channelStatus,
+                onClose = { sheet = null; viewModel.clearInviteState() },
+                onRetry = { viewModel.generateInviteLink(clientId) },
             )
             ClientSheet.DOCUMENT -> if (client != null) SendDocumentSheet(
                 clientName = client.name,

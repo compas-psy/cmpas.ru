@@ -79,6 +79,11 @@ interface CompasApi {
         @Body body: InviteRequest,
     ): Response<InviteResponse>
 
+    @GET("clients/{id}/channels")
+    suspend fun getClientChannels(
+        @Path("id") id: String,
+    ): Response<ClientChannelStatus>
+
     @GET("clients/{id}/onboarding")
     suspend fun getOnboardingOptions(
         @Path("id") id: String,

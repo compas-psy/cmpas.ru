@@ -112,6 +112,7 @@ dependencies {
 
     implementation(libs.datastore)
     implementation(libs.coil.compose)
+    implementation(libs.zxing.core)
 
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
