@@ -214,23 +214,6 @@ export async function getDocumentDelivery(deliveryId: string, token?: string | n
         `;
         delivery.openedAt = now;
         if (delivery.status === 'sent') delivery.status = 'opened';
-
-        // Opening the document = client accepts the agreement. Record consent
-        // on the client card (152-FZ trail), but only the first time so the
-        // original signing date/hash are preserved.
-        try {
-            const signedAt = now.toISOString();
-            const consentHash = createHash('sha256')
-                .update(`${delivery.clientId}:${delivery.documentVersion}:${delivery.documentContentHash || ''}:${signedAt}`)
-                .digest('hex');
-            await db.$executeRaw`
-                UPDATE "DiaryClient"
-                SET "consentDate" = COALESCE("consentDate", ${now}),
-                    "consentVersion" = COALESCE("consentVersion", ${delivery.documentVersion}),
-                    "consentHash" = COALESCE("consentHash", ${consentHash})
-                WHERE id = ${delivery.clientId}
-            `;
-        } catch { /* consent columns optional */ }
     }
 
     return delivery;
@@ -238,11 +221,39 @@ export async function getDocumentDelivery(deliveryId: string, token?: string | n
 
 export async function acknowledgeDocumentDelivery(deliveryId: string, token?: string | null) {
     if (!verifyDocumentDeliveryToken(deliveryId, token)) throw new Error('Некорректная ссылка документа');
+
+    const rows = await db.$queryRaw<Array<{
+        clientId: string;
+        documentVersion: string;
+        documentContentHash: string | null;
+        acknowledgedAt: Date | null;
+    }>>`
+        SELECT "clientId", "documentVersion", "documentContentHash", "acknowledgedAt"
+        FROM "ClientDocumentDelivery"
+        WHERE id = ${deliveryId}
+        LIMIT 1
+    `;
+    const delivery = rows[0];
+    if (!delivery) throw new Error('Документ не найден');
+
     const now = new Date();
     await db.$executeRaw`
         UPDATE "ClientDocumentDelivery"
         SET status = 'acknowledged', "acknowledgedAt" = COALESCE("acknowledgedAt", ${now}), "openedAt" = COALESCE("openedAt", ${now}), "updatedAt" = ${now}
         WHERE id = ${deliveryId}
+    `;
+
+    const signedAt = (delivery.acknowledgedAt || now).toISOString();
+    const consentHash = createHash('sha256')
+        .update(`${delivery.clientId}:${delivery.documentVersion}:${delivery.documentContentHash || ''}:${signedAt}`)
+        .digest('hex');
+
+    await db.$executeRaw`
+        UPDATE "DiaryClient"
+        SET "consentDate" = COALESCE("consentDate", ${delivery.acknowledgedAt || now}),
+            "consentVersion" = COALESCE("consentVersion", ${delivery.documentVersion}),
+            "consentHash" = COALESCE("consentHash", ${consentHash})
+        WHERE id = ${delivery.clientId}
     `;
 }
 
