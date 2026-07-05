@@ -186,6 +186,7 @@ data class CreateSessionRequest(
 data class UpdateSessionRequest(
     val status: SessionStatus? = null,
     val notes: String? = null,
+    val structuredNotes: List<SmartNoteBlock>? = null,
     val date: String? = null,
     val startTime: String? = null,
 )
