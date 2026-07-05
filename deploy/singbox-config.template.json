@@ -1,0 +1,38 @@
+{
+  "log": {
+    "level": "info"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "proxy-in",
+      "listen": "0.0.0.0",
+      "listen_port": 1080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "mieru",
+      "tag": "mieru-out",
+      "server": "${MIERU_SERVER}",
+      "server_port": ${MIERU_PORT},
+      "transport": "UDP",
+      "username": "${MIERU_USERNAME}",
+      "password": "${MIERU_PASSWORD}",
+      "multiplexing": "MULTIPLEXING_HIGH"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "protocol": "dns",
+        "outbound": "direct"
+      }
+    ],
+    "final": "mieru-out"
+  }
+}

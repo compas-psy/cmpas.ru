@@ -387,8 +387,8 @@ private fun MessengerCard(
         Spacer(Modifier.height(12.dp))
         if (bound) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GhostButton("Написать", onMessage, Modifier.weight(1f), Icons.Outlined.Send)
-                PrimaryButton("Мессенджеры", onManage, Modifier.weight(1f), Icons.Outlined.Settings)
+                GhostButton("Написать", onMessage, Modifier.weight(0.9f), Icons.Outlined.Send)
+                PrimaryButton("Мессенджеры", onManage, Modifier.weight(1.1f))
             }
         } else {
             PrimaryButton("Пригласить", onInvite, Modifier.fillMaxWidth(), Icons.Outlined.Link)

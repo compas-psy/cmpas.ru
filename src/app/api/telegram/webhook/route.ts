@@ -22,41 +22,20 @@ async function handleClientInvite(body: any) {
     const chatId = body.message?.chat?.id?.toString();
     if (!rawToken || !userId || !chatId || !bot) return false;
 
+    // consumeClientChannelInvite is the only step that can legitimately fail
+    // (bad/used/expired token). Everything after it is best-effort delivery —
+    // a Telegram send failing here (e.g. connectivity from a RU-hosted server)
+    // must NOT be reported back to the client as "linking failed", since the
+    // link already succeeded in the database.
+    let client;
     try {
-        const client = await consumeClientChannelInvite({
+        client = await consumeClientChannelInvite({
             token: rawToken,
             channel: 'telegram',
             providerUserId: userId,
             providerChatId: chatId,
             username: body.message?.from?.username || null,
         });
-
-        await bot.telegram.sendMessage(
-            chatId,
-            `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
-        );
-
-        const queued = await db.scheduledClientMessage.findMany({
-            where: { clientId: client.id, channel: 'telegram', status: 'pending' },
-            orderBy: { createdAt: 'asc' },
-        });
-        for (const message of queued) {
-            try {
-                await bot.telegram.sendMessage(chatId, message.text, {
-                    parse_mode: 'HTML',
-                    link_preview_options: { is_disabled: true },
-                });
-                await db.scheduledClientMessage.update({
-                    where: { id: message.id },
-                    data: { status: 'sent', sentAt: new Date() },
-                });
-            } catch (error) {
-                await db.scheduledClientMessage.update({
-                    where: { id: message.id },
-                    data: { status: 'failed', errorMsg: error instanceof Error ? error.message : 'Telegram send failed' },
-                });
-            }
-        }
     } catch (error) {
         const code = error instanceof Error ? error.message : '';
         const message = code === 'INVITE_ALREADY_USED'
@@ -64,7 +43,39 @@ async function handleClientInvite(body: any) {
             : code === 'INVITE_EXPIRED'
                 ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
                 : 'Не удалось подключить уведомления. Попросите специалиста отправить новую ссылку.';
-        await bot.telegram.sendMessage(chatId, message);
+        await bot.telegram.sendMessage(chatId, message).catch(e => console.error('[telegram-webhook] failure notice send failed:', e));
+        return true;
+    }
+
+    try {
+        await bot.telegram.sendMessage(
+            chatId,
+            `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
+        );
+    } catch (error) {
+        console.error('[telegram-webhook] confirmation send failed (link already succeeded):', error);
+    }
+
+    const queued = await db.scheduledClientMessage.findMany({
+        where: { clientId: client.id, channel: 'telegram', status: 'pending' },
+        orderBy: { createdAt: 'asc' },
+    });
+    for (const message of queued) {
+        try {
+            await bot.telegram.sendMessage(chatId, message.text, {
+                parse_mode: 'HTML',
+                link_preview_options: { is_disabled: true },
+            });
+            await db.scheduledClientMessage.update({
+                where: { id: message.id },
+                data: { status: 'sent', sentAt: new Date() },
+            });
+        } catch (error) {
+            await db.scheduledClientMessage.update({
+                where: { id: message.id },
+                data: { status: 'failed', errorMsg: error instanceof Error ? error.message : 'Telegram send failed' },
+            });
+        }
     }
 
     return true;

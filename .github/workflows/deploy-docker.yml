@@ -142,9 +142,34 @@ jobs:
                 echo "TELEGRAM_PROXY=" >> .env
               fi
             fi
-            
+
             # Show AUTH_SECRET fingerprint (first 8 chars) for debugging
             echo "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2 | cut -c1-8)..."
+
+            # ============================================
+            # MIERU VPN SIDECAR (server2server Telegram proxy)
+            # Only materialized/started if all 4 secrets are set. The app
+            # only actually routes Telegram calls through it when the
+            # telegram_vpn_proxy admin flag is switched on (/admin/features) —
+            # this just makes the tunnel available, it doesn't force its use.
+            # ============================================
+            if [ -n "${{ secrets.MIERU_SERVER }}" ] && [ -n "${{ secrets.MIERU_PORT }}" ] && [ -n "${{ secrets.MIERU_USERNAME }}" ] && [ -n "${{ secrets.MIERU_PASSWORD }}" ]; then
+              echo "Mieru credentials present — materializing sing-box config..."
+              sed \
+                -e 's|${MIERU_SERVER}|${{ secrets.MIERU_SERVER }}|g' \
+                -e 's|${MIERU_PORT}|${{ secrets.MIERU_PORT }}|g' \
+                -e 's|${MIERU_USERNAME}|${{ secrets.MIERU_USERNAME }}|g' \
+                -e 's|${MIERU_PASSWORD}|${{ secrets.MIERU_PASSWORD }}|g' \
+                deploy/singbox-config.template.json > deploy/singbox-config.json
+              if grep -q '^TELEGRAM_PROXY=' .env; then
+                sed -i 's|^TELEGRAM_PROXY=.*|TELEGRAM_PROXY=http://singbox:1080|' .env
+              else
+                echo "TELEGRAM_PROXY=http://singbox:1080" >> .env
+              fi
+              export COMPOSE_PROFILES=vpn
+            else
+              echo "Mieru credentials not set — VPN sidecar skipped, Telegram uses direct connection."
+            fi
 
             # ============================================
             # DATABASE BACKUP (CRITICAL - DO NOT SKIP!)

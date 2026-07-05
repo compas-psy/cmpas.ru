@@ -75,10 +75,10 @@ export function ConnectClient(props: {
                             </div>
                         )}
                         {(props.channel === 'auto' || props.channel === 'telegram') && props.telegramLink && (
-                            <a href={props.telegramLink} className={`${buttonClass} bg-[#F3F6F4] text-[#234E42] border border-[#CDDAD4]`}>
+                            <a href={props.telegramLink} className={`${buttonClass} bg-[#2F6B5A] text-white`}>
                                 <span className="flex flex-col items-center leading-tight">
                                     <span>Подключить Telegram</span>
-                                    <span className="text-xs font-normal opacity-70">может потребоваться VPN в России</span>
+                                    <span className="text-xs font-normal opacity-80">может потребоваться VPN в России</span>
                                 </span>
                                 <ExternalLink className="w-4 h-4" />
                             </a>

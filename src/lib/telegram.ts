@@ -1,14 +1,19 @@
 /**
  * Базовые функции для отправки уведомлений в Telegram клиенту или психологу.
- * Поддержка HTTPS прокси через TELEGRAM_PROXY env var.
+ * Поддержка HTTPS прокси через TELEGRAM_PROXY env var, включаемого админ-флагом
+ * telegram_vpn_proxy (см. src/app/admin/actions/features.ts).
  */
+import { isFeatureEnabled } from '@/app/admin/actions/features';
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 
 let _proxyAgent: any = null;
-function getProxyAgent() {
+async function getProxyAgent() {
     if (!TELEGRAM_PROXY) return undefined;
+    const enabled = await isFeatureEnabled('telegram_vpn_proxy').catch(() => false);
+    if (!enabled) return undefined;
     if (!_proxyAgent) {
         try {
             const { HttpsProxyAgent } = require('https-proxy-agent');
@@ -61,7 +66,7 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
             signal: controller.signal,
         };
 
-        const agent = getProxyAgent();
+        const agent = await getProxyAgent();
         if (agent) {
             try {
                 const nodeFetch = require('node-fetch');
