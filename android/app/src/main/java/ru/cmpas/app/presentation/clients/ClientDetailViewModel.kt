@@ -135,11 +135,11 @@ class ClientDetailViewModel @Inject constructor(
 
     fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
-            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null, channelActionError = null) }
+            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null, channelActionError = null, channelStatus = null) }
             val response = runCatching { api.createClientChannelInvite(clientId, InviteRequest(channel)) }.getOrNull()
             if (response?.isSuccessful == true) {
                 _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body()) }
-                startChannelPolling(clientId)
+                startChannelPolling(clientId, channel)
             } else {
                 _uiState.update { it.copy(isCreatingInvite = false, inviteError = "Не удалось создать приглашение — повторите") }
             }
@@ -163,15 +163,20 @@ class ClientDetailViewModel @Inject constructor(
 
     /** Polls channel-binding status every 4s while the invite sheet is open, so the
      * psychologist sees "клиент подключён" live instead of having to refresh manually. */
-    private fun startChannelPolling(clientId: String) {
+    private fun startChannelPolling(clientId: String, targetChannel: String) {
         channelPollJob?.cancel()
         channelPollJob = viewModelScope.launch {
             while (isActive) {
                 delay(4_000)
                 val response = runCatching { api.getClientChannels(clientId) }.getOrNull()
                 val status = response?.takeIf { it.isSuccessful }?.body() ?: continue
-                _uiState.update { it.copy(channelStatus = status) }
-                if (status.channels.telegram.connected || status.channels.max.connected) {
+                val targetConnected = when (targetChannel) {
+                    "telegram" -> status.channels.telegram.connected
+                    "max" -> status.channels.max.connected
+                    else -> status.channels.telegram.connected || status.channels.max.connected
+                }
+                if (targetConnected) {
+                    _uiState.update { it.copy(channelStatus = status) }
                     loadClient(clientId, showLoader = false)
                     break
                 }
