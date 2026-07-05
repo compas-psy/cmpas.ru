@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.domain.model.SmartNoteBlock
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
 
@@ -53,9 +54,20 @@ fun PostSessionNoteScreen(
     var restored by remember { mutableStateOf(false) }
 
     LaunchedEffect(sessionId) { viewModel.loadNote(sessionId) }
-    LaunchedEffect(uiState.savedText) {
+    LaunchedEffect(uiState.structuredNotes, uiState.savedText) {
+        if (restored) return@LaunchedEffect
+        val structured = uiState.structuredNotes
         val saved = uiState.savedText.orEmpty()
-        if (!restored && saved.isNotBlank()) {
+        if (structured.isNotEmpty()) {
+            shortText = structured.blockText("short_note", "text")
+            request = structured.blockText("request", "formulation")
+            observation = structured.blockText("observation", "emotional_state")
+            intervention = structured.blockText("intervention", "technique")
+            dynamics = structured.blockText("dynamics", "changes")
+            nextStep = structured.blockText("next_step", "focus")
+            mode = if (shortText.isNotBlank() && listOf(request, observation, intervention, dynamics, nextStep).all { it.isBlank() }) NoteMode.SHORT else NoteMode.BLOCKS
+            restored = true
+        } else if (saved.isNotBlank()) {
             shortText = saved
             request = extractBlock(saved, "Запрос")
             observation = extractBlock(saved, "Наблюдение")
@@ -78,9 +90,20 @@ fun PostSessionNoteScreen(
                 appendBlock("Динамика", dynamics)
                 appendBlock("Следующий шаг", nextStep)
             }
-            NoteMode.VOICE -> append(if (hasVoiceDraft) "Голосовая заметка зафиксирована и ожидает расшифровки." else shortText.trim())
+            NoteMode.VOICE -> append(if (hasVoiceDraft) "🎤 Голосовая заметка (локальный черновик). Расшифровка появится в следующих версиях." else shortText.trim())
         }
     }.trim()
+
+    fun buildStructured(): List<SmartNoteBlock> = buildStructuredNotes(
+        mode = mode,
+        shortText = shortText,
+        request = request,
+        observation = observation,
+        intervention = intervention,
+        dynamics = dynamics,
+        nextStep = nextStep,
+        hasVoiceDraft = hasVoiceDraft,
+    )
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
@@ -176,7 +199,7 @@ fun PostSessionNoteScreen(
                 enabled = !uiState.isSaving,
                 modifier = Modifier.weight(1.55f),
                 onClick = {
-                    viewModel.saveNote(sessionId, buildText()) { success, _ -> if (success) onSaved() }
+                    viewModel.saveNote(sessionId, buildText(), buildStructured()) { success, _ -> if (success) onSaved() }
                 },
             )
         }
@@ -280,7 +303,7 @@ private fun VoiceCapture(recording: Boolean, hasDraft: Boolean, onToggle: () -> 
                 style = tBody,
                 color = CompasFg,
             )
-            Text("После сохранения запись можно будет расшифровать", style = tMeta, color = CompasMutedFg)
+            Text("Расшифровка появится в следующих версиях", style = tMeta, color = CompasMutedFg)
         }
     }
 }
@@ -359,6 +382,47 @@ private fun extractBlock(text: String, title: String): String {
     val markers = listOf("Запрос:", "Наблюдение:", "Интервенция:", "Динамика:", "Следующий шаг:").filterNot { it == marker }
     val end = markers.map { after.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: after.length
     return after.substring(0, end).trim()
+}
+
+private fun List<SmartNoteBlock>.blockText(definitionId: String, preferredKey: String): String {
+    val block = firstOrNull { it.definitionId == definitionId } ?: return ""
+    return block.values[preferredKey]?.trim().takeUnless { it.isNullOrBlank() }
+        ?: block.values.values.joinToString("\n") { it.trim() }.trim()
+}
+
+private fun buildStructuredNotes(
+    mode: NoteMode,
+    shortText: String,
+    request: String,
+    observation: String,
+    intervention: String,
+    dynamics: String,
+    nextStep: String,
+    hasVoiceDraft: Boolean,
+): List<SmartNoteBlock> {
+    val createdAt = java.time.Instant.now().toString()
+    fun block(definitionId: String, key: String, text: String): SmartNoteBlock? =
+        text.trim().takeIf { it.isNotBlank() }?.let {
+            SmartNoteBlock(
+                id = "android-$definitionId-${System.nanoTime()}",
+                definitionId = definitionId,
+                values = mapOf(key to it),
+                createdAt = createdAt,
+            )
+        }
+    return when (mode) {
+        NoteMode.SHORT -> listOfNotNull(block("short_note", "text", shortText))
+        NoteMode.BLOCKS -> listOfNotNull(
+            block("request", "formulation", request),
+            block("observation", "emotional_state", observation),
+            block("intervention", "technique", intervention),
+            block("dynamics", "changes", dynamics),
+            block("next_step", "focus", nextStep),
+        )
+        NoteMode.VOICE -> listOfNotNull(
+            block("voice_note", "text", if (hasVoiceDraft) "🎤 Голосовая заметка (локальный черновик)" else shortText),
+        )
+    }
 }
 
 private fun Session.durationMinutes(): Long {
