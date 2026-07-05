@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
-import { getClientSessions, getClientSessionsById } from '../actions';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Video, MapPin, X, Calendar as CalendarIcon } from 'lucide-react';
@@ -44,13 +43,15 @@ function ClientCalendar() {
         if (!clientContext) return;
         setLoading(true);
         try {
-            let data = [];
-            if (clientContext.isTelegram) {
-                data = await getClientSessions(clientContext.id);
-            } else {
-                data = await getClientSessionsById(clientContext.id);
-            }
-            setSessions(data);
+            const params = new URLSearchParams(
+                clientContext.isTelegram
+                    ? { telegramChatId: clientContext.id }
+                    : { clientId: clientContext.id }
+            );
+            const response = await fetch(`/api/user/diary/bot/client/sessions?${params.toString()}`);
+            if (!response.ok) throw new Error('Failed to fetch sessions');
+            const data = await response.json();
+            setSessions(Array.isArray(data) ? data : []);
         } catch (e) {
             console.error('Failed to fetch sessions', e);
         } finally {
@@ -258,6 +259,8 @@ function ClientCalendar() {
                     sessionDate={format(new Date(sessionToCancel.date), 'dd.MM')}
                     sessionTime={sessionToCancel.time}
                     clientName={clientContext?.name || ''}
+                    clientId={sessionToCancel.clientId}
+                    clientToken={sessionToCancel.clientToken}
                 />
             )}
 
