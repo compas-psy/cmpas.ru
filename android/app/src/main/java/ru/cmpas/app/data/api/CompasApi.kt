@@ -84,6 +84,18 @@ interface CompasApi {
         @Path("id") id: String,
     ): Response<ClientChannelStatus>
 
+    @POST("clients/{id}/channels")
+    suspend fun createClientChannelInvite(
+        @Path("id") id: String,
+        @Body body: InviteRequest,
+    ): Response<InviteResponse>
+
+    @HTTP(method = "DELETE", path = "clients/{id}/channels", hasBody = true)
+    suspend fun revokeClientChannel(
+        @Path("id") id: String,
+        @Body body: ChannelRequest,
+    ): Response<Unit>
+
     @GET("clients/{id}/onboarding")
     suspend fun getOnboardingOptions(
         @Path("id") id: String,
@@ -215,6 +227,9 @@ data class SendMessageRequest(
 
 @kotlinx.serialization.Serializable
 data class InviteRequest(val channel: String = "telegram")
+
+@kotlinx.serialization.Serializable
+data class ChannelRequest(val channel: String)
 
 @kotlinx.serialization.Serializable
 data class CreateBlockRequest(
