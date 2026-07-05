@@ -24,19 +24,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import ru.cmpas.app.domain.model.AttentionItem
-import ru.cmpas.app.domain.model.PracticeNotification
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
 import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.notifications.NotificationCenterSheet
 import ru.cmpas.app.presentation.theme.*
 import ru.cmpas.app.presentation.util.PersonName
 import java.time.Duration
-import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -121,12 +117,11 @@ fun DashboardScreen(
         }
 
         if (showNotifications) {
-            NotificationsDialog(
+            NotificationCenterSheet(
                 attentionItems = uiState.attentionItems,
-                notifications = uiState.notifications,
                 onClose = { showNotifications = false },
-                onOpenSession = { id -> showNotifications = false; onSessionClick(id) },
-                onOpenClient = { id -> showNotifications = false; onClientClick(id) },
+                onOpenSession = { id -> onSessionClick(id) },
+                onOpenClient = { id -> onClientClick(id) },
             )
         }
     }
@@ -209,45 +204,6 @@ private fun ScheduleRow(s: Session, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun NotificationsDialog(
-    attentionItems: List<AttentionItem>,
-    notifications: List<PracticeNotification>,
-    onClose: () -> Unit,
-    onOpenSession: (String) -> Unit,
-    onOpenClient: (String) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("Уведомления", style = tSection, color = CompasFg) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (attentionItems.isEmpty() && notifications.isEmpty()) {
-                    Text("Сейчас всё спокойно. Новые события появятся здесь.", style = tBody2, color = CompasMutedFg)
-                }
-                attentionItems.forEach { item ->
-                    Text("• ${item.label}", style = tBody2, color = CompasFg)
-                }
-                notifications.take(8).forEach { item ->
-                    val details = listOfNotNull(item.subtitle, item.createdAt?.let { formatNotificationTime(it) }).joinToString(" · ")
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
-                            when {
-                                item.sessionId != null -> onOpenSession(item.sessionId)
-                                item.clientId != null -> onOpenClient(item.clientId)
-                            }
-                        }.padding(vertical = 6.dp),
-                    ) {
-                        Text(item.title, style = tBody, color = CompasFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        if (details.isNotBlank()) Text(details, style = tMeta, color = CompasMutedFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Закрыть") } },
-    )
-}
-
 private fun statusDotColor(status: SessionStatus): Color = when (status) {
     SessionStatus.CONFIRMED -> Success
     SessionStatus.PENDING -> CompasAccent
@@ -267,8 +223,3 @@ private fun untilLabel(start: String): String? = try {
         else -> "через $m мин"
     }
 } catch (_: Exception) { null }
-
-private fun formatNotificationTime(raw: String): String {
-    val value = runCatching { LocalDateTime.parse(raw.replace("Z", "")) }.getOrNull() ?: return ""
-    return value.format(DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale("ru")))
-}

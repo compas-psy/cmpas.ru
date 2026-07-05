@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { handleMaxUpdate, sendMaxMessage, type MaxUpdate } from '@/lib/max-bot';
 import { db } from '@/lib/db';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { extractFirstName } from '@/lib/person-name';
 
 type MaxWebhookUpdate = MaxUpdate & {
     payload?: string;
@@ -28,7 +29,7 @@ async function handleClientInvite(update: MaxWebhookUpdate) {
 
         await sendMaxMessage(
             userId,
-            `Уведомления подключены, ${client.name.split(/\s+/)[0]}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
+            `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
         );
 
         const queued = await db.scheduledClientMessage.findMany({

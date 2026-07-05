@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { db } from '@/lib/db';
+import { extractFirstName } from '@/lib/person-name';
 
 function appSecret() {
     return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'cmpas-local-secret';
@@ -255,8 +256,7 @@ export function escapeHtml(value: string) {
 
 /** First name only, capitalized — for a warm, personal greeting. */
 function firstName(fullName: string) {
-    const first = (fullName || '').trim().split(/\s+/)[0] || fullName.trim();
-    return first;
+    return extractFirstName(fullName) || fullName.trim();
 }
 
 /** Human label for a video-call link, so we can hide the raw URL behind text. */

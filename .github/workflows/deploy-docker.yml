@@ -55,7 +55,8 @@ jobs:
             AUTH_URL=https://cmpas.ru
             TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN || '7728157706:AAEZMpN66PSXd7GkyIhKK4Fz4vTi5lxJYI8' }}
             TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}
-            MAX_BOT_TOKEN=f9LHodD0cOK-JCdrh4xiYgtMkthjLwQNOKLuGTFlUSdM_mEplH1sehsD4ncMHCczpA0q5KL_NgLTgSmYaR7y
+            MAX_BOT_TOKEN=${{ secrets.MAX_BOT_TOKEN }}
+            MAX_BOT_USERNAME=${{ secrets.MAX_BOT_USERNAME || '' }}
             GOOGLE_CALENDAR_CLIENT_ID=649610920409-i5orvlp14u9qo882fqd6caji868o603c.apps.googleusercontent.com
             GOOGLE_CALENDAR_CLIENT_SECRET=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
             DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}
@@ -94,11 +95,22 @@ jobs:
               if [ -z "$(grep '^TELEGRAM_CHAT_ID=' .env | cut -d= -f2)" ]; then
                 sed -i "s|^TELEGRAM_CHAT_ID=.*|TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}|" .env
               fi
-              # Always update MAX_BOT_TOKEN (token may be regenerated)
+              # Always update MAX_BOT_TOKEN from the GitHub secret (token may be regenerated)
               if grep -q '^MAX_BOT_TOKEN=' .env; then
-                sed -i 's|^MAX_BOT_TOKEN=.*|MAX_BOT_TOKEN=f9LHodD0cOK-JCdrh4xiYgtMkthjLwQNOKLuGTFlUSdM_mEplH1sehsD4ncMHCczpA0q5KL_NgLTgSmYaR7y|' .env
+                sed -i 's|^MAX_BOT_TOKEN=.*|MAX_BOT_TOKEN=${{ secrets.MAX_BOT_TOKEN }}|' .env
               else
-                echo "MAX_BOT_TOKEN=f9LHodD0cOK-JCdrh4xiYgtMkthjLwQNOKLuGTFlUSdM_mEplH1sehsD4ncMHCczpA0q5KL_NgLTgSmYaR7y" >> .env
+                echo "MAX_BOT_TOKEN=${{ secrets.MAX_BOT_TOKEN }}" >> .env
+              fi
+              # Always update MAX_BOT_USERNAME from the GitHub secret, once set
+              # (used to build https://max.ru/<username>?start=... deep links)
+              if [ -n "${{ secrets.MAX_BOT_USERNAME }}" ]; then
+                if grep -q '^MAX_BOT_USERNAME=' .env; then
+                  sed -i 's|^MAX_BOT_USERNAME=.*|MAX_BOT_USERNAME=${{ secrets.MAX_BOT_USERNAME }}|' .env
+                else
+                  echo "MAX_BOT_USERNAME=${{ secrets.MAX_BOT_USERNAME }}" >> .env
+                fi
+              elif ! grep -q '^MAX_BOT_USERNAME=' .env; then
+                echo "MAX_BOT_USERNAME=" >> .env
               fi
 
               # Update non-secret env vars that may have changed
@@ -281,6 +293,29 @@ jobs:
             AUTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/auth/session)
             echo "Auth endpoint status: $AUTH_STATUS"
             
+            # ============================================
+            # REGISTER TELEGRAM BOT WEBHOOK
+            # No code path ever called setWebhook — if it drifts (token
+            # rotation, URL change) the bot goes silent with no way to
+            # notice except a user reporting it. Re-register on every
+            # deploy so it self-heals, same pattern as the MAX webhook below.
+            # ============================================
+            TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)
+            TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2)
+            TG_API_URL=${TG_API_URL:-https://api.telegram.org}
+            if [ -n "$TG_TOKEN" ]; then
+              echo "Registering Telegram webhook..."
+              TG_WEBHOOK_RESULT=$(curl -s -X POST "${TG_API_URL}/bot${TG_TOKEN}/setWebhook" \
+                -H "Content-Type: application/json" \
+                -d '{"url":"https://cmpas.ru/api/telegram/webhook","drop_pending_updates":false}' \
+                2>/dev/null || echo "curl failed")
+              echo "Telegram webhook result: $TG_WEBHOOK_RESULT"
+              TG_INFO_RESULT=$(curl -s "${TG_API_URL}/bot${TG_TOKEN}/getWebhookInfo" 2>/dev/null || echo "curl failed")
+              echo "Telegram webhook info: $TG_INFO_RESULT"
+            else
+              echo "TELEGRAM_BOT_TOKEN not found, skipping webhook registration."
+            fi
+
             # ============================================
             # REGISTER MAX BOT WEBHOOK
             # ============================================

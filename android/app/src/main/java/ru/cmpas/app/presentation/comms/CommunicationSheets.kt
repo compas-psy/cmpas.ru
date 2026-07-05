@@ -218,12 +218,21 @@ fun InviteSheet(
                 }
                 Spacer(Modifier.height(12.dp))
                 // MAX first — works in RU without a VPN; Telegram may require one.
-                invite.directLinks?.max?.let { maxLink ->
+                val maxLink = invite.directLinks?.max
+                if (maxLink != null) {
                     GhostButton(
                         "Открыть в MAX",
                         onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(maxLink))) } },
                         modifier = Modifier.fillMaxWidth(),
                         icon = Icons.Outlined.Forum,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    InfoBanner(
+                        icon = Icons.Outlined.WarningAmber,
+                        text = "Подключение MAX пока не настроено — доступен только Telegram.",
+                        background = GoldSoft,
+                        foreground = Color(0xFF8B6914),
                     )
                     Spacer(Modifier.height(8.dp))
                 }

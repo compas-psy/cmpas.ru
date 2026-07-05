@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { db } from '@/lib/db';
+import { extractFirstName } from '@/lib/person-name';
+import { createNotification } from '@/lib/notifications';
 
 export type ClientChannel = 'telegram' | 'max';
 export type ChannelInvitePreference = ClientChannel | 'auto';
@@ -35,7 +37,7 @@ export function buildChannelShareText(params: {
     psychologistName?: string | null;
     smartLink: string;
 }) {
-    const firstName = params.clientName?.trim().split(/\s+/)[0];
+    const firstName = extractFirstName(params.clientName);
     const greeting = firstName ? `${firstName}, здравствуйте!` : 'Здравствуйте!';
     const from = params.psychologistName
         ? `Подключите уведомления от специалиста ${params.psychologistName}.`
@@ -207,6 +209,14 @@ export async function consumeClientChannelInvite(params: {
             }),
         },
     }).catch(() => undefined);
+
+    await createNotification({
+        psychologistId: result.psychologistId,
+        type: 'channel_linked',
+        title: `${result.name} подключил(а) ${params.channel === 'max' ? 'MAX' : 'Telegram'}`,
+        subtitle: 'Уведомления и напоминания теперь приходят автоматически',
+        clientId: result.id,
+    });
 
     return result;
 }

@@ -1,6 +1,8 @@
 // Russian name gender detection
 // Uses common Russian first names to determine gender with high probability
 
+import { extractFirstName } from '@/lib/person-name';
+
 const maleNames = new Set([
     'александр', 'алексей', 'андрей', 'антон', 'артём', 'артем', 'богдан', 'борис',
     'вадим', 'валентин', 'валерий', 'василий', 'виктор', 'виталий', 'владимир', 'владислав',
@@ -47,8 +49,9 @@ export function detectGenderFromName(fullName: string): GenderResult {
         return { gender: 'unknown', confidence: 0, method: 'unknown' };
     }
 
-    // Extract first name (first word)
-    const firstName = fullName.trim().split(/\s+/)[0]?.toLowerCase();
+    // Extract first name — handles both "Имя Фамилия" and the official
+    // "Фамилия Имя Отчество" order, not just the first word.
+    const firstName = extractFirstName(fullName)?.toLowerCase();
 
     if (!firstName) {
         return { gender: 'unknown', confidence: 0, method: 'unknown' };

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, MessageCircle, ShieldCheck } from 'lucide-react';
+import { extractFirstName } from '@/lib/person-name';
 
 export function ConnectClient(props: {
     channel: 'telegram' | 'max' | 'auto';
@@ -13,7 +14,7 @@ export function ConnectClient(props: {
 }) {
     const [copied, setCopied] = useState(false);
     const [autoOpened, setAutoOpened] = useState(false);
-    const firstName = useMemo(() => props.clientName.trim().split(/\s+/)[0] || 'Клиент', [props.clientName]);
+    const firstName = useMemo(() => extractFirstName(props.clientName) || 'Клиент', [props.clientName]);
     // MAX works in Russia without a VPN; Telegram may require one — prefer MAX
     // whenever the psychologist didn't ask for a specific channel.
     const selectedLink = props.channel === 'telegram'
@@ -68,9 +69,9 @@ export function ConnectClient(props: {
                                 <ExternalLink className="w-4 h-4" />
                             </a>
                         )}
-                        {props.channel === 'max' && !props.maxLink && (
+                        {(props.channel === 'max' || props.channel === 'auto') && !props.maxLink && (
                             <div className="rounded-2xl border border-[#E6D8B7] bg-[#FFF9E9] p-4 text-sm text-[#6B5A2D]">
-                                Подключение MAX временно недоступно. Попросите специалиста выбрать Telegram или повторить позже.
+                                Подключение MAX пока не настроено специалистом. Используйте Telegram ниже.
                             </div>
                         )}
                         {(props.channel === 'auto' || props.channel === 'telegram') && props.telegramLink && (

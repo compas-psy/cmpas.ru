@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { clientBookingLink, verifyClientActionToken } from '@/lib/client-workflow';
+import { createNotification } from '@/lib/notifications';
 
 function resultPage(title: string, text: string, tone: 'success' | 'danger' = 'success') {
     const accent = tone === 'success' ? '#1A4D3A' : '#D4183D';
@@ -36,6 +37,14 @@ export async function GET(req: NextRequest) {
             });
         }
         const date = session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+        await createNotification({
+            psychologistId: session.psychologistId,
+            type: 'session_confirmed',
+            title: `${session.client.name} подтвердил(а) сессию`,
+            subtitle: `${date} в ${session.time}`,
+            sessionId: session.id,
+            clientId: session.clientId,
+        });
         return resultPage('Встреча подтверждена', `${date} в ${session.time}. Информация уже появилась у специалиста.`);
     }
 
@@ -45,6 +54,15 @@ export async function GET(req: NextRequest) {
             data: { status: 'cancelled' },
         });
         autoDeleteSessionFromCalendars(session.psychologistId, session.id).catch(console.error);
+        const date = session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+        await createNotification({
+            psychologistId: session.psychologistId,
+            type: 'session_cancelled',
+            title: `${session.client.name} отменил(а) сессию`,
+            subtitle: `${date} в ${session.time}`,
+            sessionId: session.id,
+            clientId: session.clientId,
+        });
         return resultPage('Встреча отменена', 'Специалист увидит изменение в КОМПАС.', 'danger');
     }
 

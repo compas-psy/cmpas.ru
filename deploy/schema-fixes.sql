@@ -340,3 +340,19 @@ CREATE TABLE IF NOT EXISTS "ClientInviteToken" (
 CREATE UNIQUE INDEX IF NOT EXISTS "ClientInviteToken_token_key" ON "ClientInviteToken"("token");
 CREATE INDEX IF NOT EXISTS "ClientInviteToken_token_idx" ON "ClientInviteToken"("token");
 CREATE INDEX IF NOT EXISTS "ClientInviteToken_clientId_idx" ON "ClientInviteToken"("clientId");
+
+-- PracticeNotification: persistent notification feed for the psychologist
+CREATE TABLE IF NOT EXISTS "PracticeNotification" (
+    "id"             TEXT NOT NULL,
+    "psychologistId" TEXT NOT NULL,
+    "type"           TEXT NOT NULL,
+    "title"          TEXT NOT NULL,
+    "subtitle"       TEXT,
+    "sessionId"      TEXT,
+    "clientId"       TEXT,
+    "readAt"         TIMESTAMP(3),
+    "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PracticeNotification_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "PracticeNotification_psychologistId_createdAt_idx" ON "PracticeNotification"("psychologistId", "createdAt");
+CREATE INDEX IF NOT EXISTS "PracticeNotification_psychologistId_readAt_idx" ON "PracticeNotification"("psychologistId", "readAt");

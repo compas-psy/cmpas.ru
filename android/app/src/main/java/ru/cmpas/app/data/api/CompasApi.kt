@@ -118,6 +118,16 @@ interface CompasApi {
     @DELETE("scheduled-messages/{id}")
     suspend fun deleteScheduledMessage(@Path("id") id: String): Response<Unit>
 
+    // ── Notifications ──
+    @GET("notifications")
+    suspend fun getNotifications(
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): Response<NotificationsPage>
+
+    @POST("notifications")
+    suspend fun markNotificationsRead(@Body body: MarkNotificationsReadRequest): Response<Unit>
+
     // ── Profile ──
     @GET("me")
     suspend fun getProfile(): Response<User>
@@ -186,6 +196,15 @@ data class UpdateClientRequest(
 
 @kotlinx.serialization.Serializable
 data class FcmTokenRequest(val token: String)
+
+@kotlinx.serialization.Serializable
+data class NotificationsPage(
+    val items: List<PracticeNotification>,
+    val nextCursor: String? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class MarkNotificationsReadRequest(val ids: List<String>? = null)
 
 @kotlinx.serialization.Serializable
 data class SendMessageRequest(

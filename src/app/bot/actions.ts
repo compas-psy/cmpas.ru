@@ -5,6 +5,7 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
+import { createNotification } from '@/lib/notifications';
 
 /** Send to Telegram and/or MAX depending on which IDs are set */
 async function notifyUser(
@@ -588,6 +589,14 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         (psy as any)?.maxChatId,
         `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
     );
+    await createNotification({
+        psychologistId,
+        type: 'new_booking',
+        title: 'Новая самозапись',
+        subtitle: `${form.name} · ${form.date} в ${form.time}`,
+        sessionId: session.id,
+        clientId: client.id,
+    });
 
     // Notify client (Telegram + MAX)
     const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
