@@ -39,7 +39,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-enum class ClientSheet { MESSAGE, INVITE, DOCUMENT }
+enum class ClientSheet { MESSAGE, INVITE, DOCUMENT, CHANNELS }
 
 @Composable
 fun ClientDetailScreen(
@@ -55,11 +55,16 @@ fun ClientDetailScreen(
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     var sheet by remember { mutableStateOf<ClientSheet?>(null) }
     var preferredDocumentId by remember { mutableStateOf<String?>(null) }
+    var inviteChannel by remember { mutableStateOf("auto") }
     var showMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(clientId) { viewModel.loadClient(clientId) }
-    LaunchedEffect(sheet) {
-        if (sheet == ClientSheet.INVITE) viewModel.generateInviteLink(clientId)
+    LaunchedEffect(sheet, inviteChannel) {
+        when (sheet) {
+            ClientSheet.INVITE -> viewModel.generateInviteLink(clientId, inviteChannel)
+            ClientSheet.CHANNELS -> viewModel.loadChannels(clientId)
+            else -> Unit
+        }
     }
 
     val client = uiState.client
@@ -119,7 +124,9 @@ fun ClientDetailScreen(
                             detail = detail,
                             bound = bound,
                             channel = channel,
-                            onClick = { sheet = if (bound) ClientSheet.MESSAGE else ClientSheet.INVITE },
+                            onMessage = { sheet = ClientSheet.MESSAGE },
+                            onInvite = { inviteChannel = "auto"; sheet = ClientSheet.INVITE },
+                            onManage = { sheet = ClientSheet.CHANNELS },
                         )
                     }
                     item {
@@ -257,8 +264,21 @@ fun ClientDetailScreen(
                 invite = uiState.inviteResponse,
                 error = uiState.inviteError,
                 channelStatus = uiState.channelStatus,
-                onClose = { sheet = null; viewModel.clearInviteState() },
-                onRetry = { viewModel.generateInviteLink(clientId) },
+                onClose = { sheet = null; viewModel.clearInviteState(); inviteChannel = "auto" },
+                onRetry = { viewModel.generateInviteLink(clientId, inviteChannel) },
+            )
+            ClientSheet.CHANNELS -> if (client != null) ChannelManagementSheet(
+                clientName = client.name,
+                currentChannel = channel,
+                detail = detail,
+                status = uiState.channelStatus,
+                isUpdating = uiState.isUpdatingChannel,
+                error = uiState.channelActionError,
+                onClose = { sheet = null },
+                onMessage = { sheet = ClientSheet.MESSAGE },
+                onInvite = { channelToInvite -> inviteChannel = channelToInvite; sheet = ClientSheet.INVITE },
+                onRevoke = { channelToRevoke -> viewModel.revokeChannel(clientId, channelToRevoke) },
+                onRefresh = { viewModel.loadChannels(clientId) },
             )
             ClientSheet.DOCUMENT -> if (client != null) SendDocumentSheet(
                 clientName = client.name,
@@ -339,7 +359,15 @@ private fun ClientHero(client: Client, sessions: List<Session>) {
 }
 
 @Composable
-private fun MessengerCard(client: Client, detail: ClientDetail?, bound: Boolean, channel: String?, onClick: () -> Unit) {
+private fun MessengerCard(
+    client: Client,
+    detail: ClientDetail?,
+    bound: Boolean,
+    channel: String?,
+    onMessage: () -> Unit,
+    onInvite: () -> Unit,
+    onManage: () -> Unit,
+) {
     GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -352,13 +380,153 @@ private fun MessengerCard(client: Client, detail: ClientDetail?, bound: Boolean,
             }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(when (channel) { "telegram" -> "Telegram"; "max" -> "MAX"; else -> "Мессенджер не привязан" }, style = tBody, color = CompasFg)
-                Text(if (bound) "Канал подключён" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(channelSummary(detail, channel), style = tBody, color = CompasFg)
+                Text(if (bound) "Каналы подключены — можно управлять и переключать" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            GhostButton(if (bound) "Написать" else "Пригласить", onClick, Modifier.widthIn(min = 112.dp), if (bound) Icons.Outlined.Send else Icons.Outlined.Link)
+        }
+        Spacer(Modifier.height(12.dp))
+        if (bound) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GhostButton("Написать", onMessage, Modifier.weight(1f), Icons.Outlined.Send)
+                PrimaryButton("Каналы", onManage, Modifier.weight(1f), Icons.Outlined.Settings)
+            }
+        } else {
+            PrimaryButton("Пригласить", onInvite, Modifier.fillMaxWidth(), Icons.Outlined.Link)
         }
     }
 }
+
+@Composable
+private fun ChannelManagementSheet(
+    clientName: String,
+    currentChannel: String?,
+    detail: ClientDetail?,
+    status: ClientChannelStatus?,
+    isUpdating: Boolean,
+    error: String?,
+    onClose: () -> Unit,
+    onMessage: () -> Unit,
+    onInvite: (String) -> Unit,
+    onRevoke: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    var confirmRevoke by remember { mutableStateOf<String?>(null) }
+    val telegramConnected = status?.channels?.telegram?.connected ?: !detail?.telegramId.isNullOrBlank()
+    val maxConnected = status?.channels?.max?.connected ?: !detail?.maxId.isNullOrBlank()
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Каналы клиента", clientName)
+        Spacer(Modifier.height(14.dp))
+        ChannelInfoBanner(
+            text = "Можно держать Telegram и MAX одновременно. Если один канал заблокирован или клиент хочет перейти, добавьте второй канал, затем отвяжите ненужный.",
+        )
+        Spacer(Modifier.height(12.dp))
+        ChannelManageRow(
+            title = "MAX",
+            subtitle = if (maxConnected) activeLabel(currentChannel == "max") else "Не подключён",
+            connected = maxConnected,
+            accent = Max,
+            icon = Icons.Outlined.Forum,
+            isUpdating = isUpdating,
+            onInvite = { onInvite("max") },
+            onRevoke = { confirmRevoke = "max" },
+        )
+        Spacer(Modifier.height(8.dp))
+        ChannelManageRow(
+            title = "Telegram",
+            subtitle = if (telegramConnected) activeLabel(currentChannel == "telegram") else "Не подключён",
+            connected = telegramConnected,
+            accent = Tg,
+            icon = Icons.Outlined.Send,
+            isUpdating = isUpdating,
+            onInvite = { onInvite("telegram") },
+            onRevoke = { confirmRevoke = "telegram" },
+        )
+        error?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = tMeta, color = CompasDestructive)
+        }
+        Spacer(Modifier.height(14.dp))
+        if (telegramConnected || maxConnected) {
+            PrimaryButton("Написать в текущий канал", onMessage, Modifier.fillMaxWidth(), Icons.Outlined.Send)
+            Spacer(Modifier.height(8.dp))
+        }
+        GhostButton("Обновить статус", onRefresh, Modifier.fillMaxWidth(), Icons.Outlined.Refresh)
+        Spacer(Modifier.height(8.dp))
+        GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
+    }
+
+    confirmRevoke?.let { channel ->
+        AlertDialog(
+            onDismissRequest = { confirmRevoke = null },
+            title = { Text("Отвязать ${channelTitle(channel)}?") },
+            text = { Text("Клиент перестанет получать автоматические сообщения через этот канал. При необходимости его можно будет подключить заново по приглашению.") },
+            confirmButton = {
+                TextButton(
+                    enabled = !isUpdating,
+                    onClick = {
+                        confirmRevoke = null
+                        onRevoke(channel)
+                    },
+                ) { Text("Отвязать", color = CompasDestructive) }
+            },
+            dismissButton = { TextButton(onClick = { confirmRevoke = null }) { Text("Отмена") } },
+        )
+    }
+}
+
+@Composable
+private fun ChannelManageRow(
+    title: String,
+    subtitle: String,
+    connected: Boolean,
+    accent: Color,
+    icon: ImageVector,
+    isUpdating: Boolean,
+    onInvite: () -> Unit,
+    onRevoke: () -> Unit,
+) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 13.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(accent.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, Modifier.size(19.dp), tint = accent)
+            }
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, style = tMeta, color = if (connected) Success else CompasMutedFg)
+            }
+            if (connected) {
+                GhostButton("Отвязать", onRevoke, Modifier.widthIn(min = 104.dp), Icons.Outlined.Close, danger = true)
+            } else {
+                GhostButton("Добавить", onInvite, Modifier.widthIn(min = 104.dp), Icons.Outlined.Link, enabled = !isUpdating)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelInfoBanner(text: String) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Sage100).padding(12.dp), verticalAlignment = Alignment.Top) {
+        Icon(Icons.Outlined.Info, null, Modifier.size(19.dp), tint = Forest700)
+        Spacer(Modifier.width(9.dp))
+        Text(text, style = tBody2, color = Forest700, modifier = Modifier.weight(1f))
+    }
+}
+
+private fun channelSummary(detail: ClientDetail?, channel: String?): String {
+    val hasTelegram = !detail?.telegramId.isNullOrBlank()
+    val hasMax = !detail?.maxId.isNullOrBlank()
+    return when {
+        hasTelegram && hasMax -> "MAX и Telegram"
+        channel == "telegram" -> "Telegram"
+        channel == "max" -> "MAX"
+        else -> "Мессенджер не привязан"
+    }
+}
+
+private fun activeLabel(isCurrent: Boolean) = if (isCurrent) "Подключён · текущий канал" else "Подключён"
+private fun channelTitle(channel: String) = if (channel == "max") "MAX" else "Telegram"
 
 @Composable
 private fun StatusRow(detail: ClientDetail?, session: Session?) {
