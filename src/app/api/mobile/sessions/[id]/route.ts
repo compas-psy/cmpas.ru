@@ -5,7 +5,7 @@ import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/li
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
-import { formatSession, normalizeStructuredNotesForStorage, notesPlainFromStructured } from '../route';
+import { formatSession, normalizeStructuredNotesForStorage, notesPlainFromStructured } from '@/lib/mobile-session-format';
 
 function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientSummary?: string | null; notes?: string | null } | null) {
     if (!session) return null;
