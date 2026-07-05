@@ -5,7 +5,19 @@ import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/li
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
-import { formatSession } from '../route';
+import { formatSession, notesPlainFromStructured } from '../route';
+
+function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientSummary?: string | null; notes?: string | null } | null) {
+    if (!session) return null;
+    return notesPlainFromStructured(session.structuredNotes) || session.clientSummary || session.notes || null;
+}
+
+function notePatch(body: any) {
+    const data: Record<string, unknown> = {};
+    if (body.notes !== undefined) data.notes = body.notes;
+    if (body.structuredNotes !== undefined) data.structuredNotes = body.structuredNotes;
+    return data;
+}
 
 export async function GET(
     req: NextRequest,
@@ -36,14 +48,14 @@ export async function GET(
                     status: { in: ['completed', 'confirmed'] },
                 },
                 orderBy: [{ date: 'desc' }, { time: 'desc' }],
-                select: { notes: true, clientSummary: true },
+                select: { notes: true, clientSummary: true, structuredNotes: true },
             }),
         ]);
 
         return NextResponse.json({
             ...formatSession(session),
             videoLink: session.format === 'online' ? settings?.onlineSessionLink || null : null,
-            previousNotesSummary: previousSession?.notes || previousSession?.clientSummary || null,
+            previousNotesSummary: buildPreviousNotesSummary(previousSession),
         });
     } catch (error) {
         console.error('[mobile/sessions/id GET]', error);
@@ -109,7 +121,7 @@ export async function PATCH(
                     status: body.status ? body.status.toLowerCase() : 'pending',
                     notified24h: false,
                     notified1h: false,
-                    ...(body.notes !== undefined && { notes: body.notes }),
+                    ...notePatch(body),
                 },
                 include: { client: { select: { id: true, name: true } } },
             });
@@ -158,7 +170,7 @@ export async function PATCH(
 
         const updateData: Record<string, unknown> = {};
         if (body.status) updateData.status = body.status.toLowerCase();
-        if (body.notes !== undefined) updateData.notes = body.notes;
+        Object.assign(updateData, notePatch(body));
         if (body.status?.toLowerCase() === 'cancelled') autoDeleteSessionFromCalendars(auth.userId, id).catch(console.error);
 
         const updated = await db.diarySession.update({
