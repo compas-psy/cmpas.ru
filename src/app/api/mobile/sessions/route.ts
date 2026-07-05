@@ -6,33 +6,7 @@ import { autoSyncSessionToCalendars } from '@/lib/calendar/auto-sync';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
-
-function toMobileType(value: unknown) {
-    if (value === 'couple') return 'COUPLE';
-    if (value === 'family') return 'FAMILY';
-    return 'INDIVIDUAL';
-}
-
-function toDatabaseType(value: unknown) {
-    if (value === 'COUPLE') return 'couple';
-    if (value === 'FAMILY') return 'family';
-    return 'individual';
-}
-
-export function normalizePaymentStatus(value: unknown) {
-    const raw = String(value || 'not_required').toLowerCase();
-    if (raw === 'paid') return 'PAID';
-    if (raw === 'unpaid') return 'UNPAID';
-    return 'NOT_REQUIRED';
-}
-
-export function toDatabasePaymentStatus(value: unknown) {
-    const raw = String(value || '').toLowerCase();
-    if (raw === 'paid') return 'paid';
-    if (raw === 'unpaid') return 'unpaid';
-    if (raw === 'not_required') return 'not_required';
-    return null;
-}
+import { formatSession, toDatabaseType } from '@/lib/mobile-session-format';
 
 async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     if (!sessions.length) return sessions;
@@ -43,56 +17,9 @@ async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     return sessions.map((session) => ({ ...session, paymentStatus: byId.get(session.id) || 'not_required' }));
 }
 
-const blockLabels: Record<string, string> = {
-    request: 'Запрос',
-    observation: 'Наблюдение',
-    intervention: 'Интервенция',
-    dynamics: 'Динамика',
-    next_step: 'Следующий шаг',
-    homework: 'Домашнее задание',
-    resources: 'Ресурсы',
-    anamnesis: 'Анамнез',
-    quote: 'Цитата',
-    hypothesis: 'Гипотеза',
-    short_note: 'Кратко',
-};
-
-export function notesPlainFromStructured(value: unknown): string | null {
-    if (!Array.isArray(value)) return null;
-    const parts = value.flatMap((block: any) => {
-        const label = blockLabels[block?.definitionId] || block?.definitionId || 'Заметка';
-        const values = block?.values && typeof block.values === 'object' ? Object.values(block.values) : [];
-        const text = values.map((item) => String(item || '').trim()).filter(Boolean).join('\n');
-        return text ? [`${label}:\n${text}`] : [];
-    });
-    return parts.length ? parts.join('\n\n') : null;
-}
-
-export function formatSession(s: any, onlineSessionLink: string | null = null) {
-    const online = s.format !== 'in_person' && s.format !== 'offline';
-    const notesPlain = notesPlainFromStructured(s.structuredNotes) || (typeof s.clientSummary === 'string' ? s.clientSummary : null) || (typeof s.notes === 'string' ? s.notes : null);
-    return {
-        id: s.id,
-        clientId: s.client?.id || s.clientId || '',
-        clientName: s.client?.name || 'Без имени',
-        date: s.date instanceof Date ? s.date.toISOString().split('T')[0] : s.date,
-        startTime: s.time || '00:00',
-        endTime: s.endTime || '',
-        status: (s.status || 'PENDING').toUpperCase(),
-        paymentStatus: normalizePaymentStatus(s.paymentStatus),
-        format: online ? 'ONLINE' : 'IN_PERSON',
-        type: toMobileType(s.type),
-        videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
-        notes: typeof s.notes === 'string' ? s.notes : notesPlain,
-        notesPlain,
-        structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
-    };
-}
-
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
-
     const from = req.nextUrl.searchParams.get('from');
     const to = req.nextUrl.searchParams.get('to');
     const status = req.nextUrl.searchParams.get('status');
@@ -102,25 +29,16 @@ export async function GET(req: NextRequest) {
             db.diarySession.findMany({
                 where: {
                     psychologistId: auth.userId,
-                    ...(from && to && {
-                        date: {
-                            gte: new Date(from),
-                            lte: new Date(to + 'T23:59:59.999Z'),
-                        },
-                    }),
+                    ...(from && to && { date: { gte: new Date(from), lte: new Date(to + 'T23:59:59.999Z') } }),
                     ...(status && { status: status.toLowerCase() }),
                 },
                 include: { client: { select: { id: true, name: true } } },
                 orderBy: [{ date: 'asc' }, { time: 'asc' }],
                 take: 200,
             }),
-            db.psychologistSettings.findUnique({
-                where: { psychologistId: auth.userId },
-                select: { onlineSessionLink: true },
-            }),
+            db.psychologistSettings.findUnique({ where: { psychologistId: auth.userId }, select: { onlineSessionLink: true } }),
         ]);
         const sessions = await withPaymentStatuses(sessionsRaw);
-
         return NextResponse.json(sessions.map(session => formatSession(session, settings?.onlineSessionLink || null)));
     } catch (error) {
         console.error('[mobile/sessions GET]', error);
@@ -137,19 +55,14 @@ export async function POST(req: NextRequest) {
         if (!clientId || !date || !startTime) {
             return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
         }
-
         const duration = durationReq || 50;
         const [hours, minutes] = startTime.split(':').map(Number);
         const endMinutes = hours * 60 + minutes + duration;
         const computedEnd = endTime || `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-
         const sessionDate = new Date(date);
         const dayStart = new Date(sessionDate); dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(sessionDate); dayEnd.setHours(23, 59, 59, 999);
-
-        const existing = await db.diarySession.findMany({
-            where: { psychologistId: auth.userId, date: { gte: dayStart, lte: dayEnd }, status: { not: 'cancelled' } },
-        });
+        const existing = await db.diarySession.findMany({ where: { psychologistId: auth.userId, date: { gte: dayStart, lte: dayEnd }, status: { not: 'cancelled' } } });
         const newStart = hours * 60 + minutes;
         const newEnd = newStart + duration;
         for (const item of existing) {
@@ -160,7 +73,6 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
             }
         }
-
         const session = await db.diarySession.create({
             data: {
                 psychologistId: auth.userId,
@@ -175,30 +87,17 @@ export async function POST(req: NextRequest) {
             },
             include: { client: true },
         });
-
         const sessionsCount = await db.diarySession.count({ where: { clientId } });
-        const nextSession = await db.diarySession.findFirst({
-            where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } },
-            orderBy: { date: 'asc' },
-        });
-        await db.diaryClient.update({
-            where: { id: clientId },
-            data: { totalSessions: sessionsCount, nextSessionDate: nextSession?.date || null },
-        });
-
+        const nextSession = await db.diarySession.findFirst({ where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } }, orderBy: { date: 'asc' } });
+        await db.diaryClient.update({ where: { id: clientId }, data: { totalSessions: sessionsCount, nextSessionDate: nextSession?.date || null } });
         autoSyncSessionToCalendars(auth.userId, session as any).catch(console.error);
-
         let noticeStatus = 'none';
         let onlineSessionLink: string | null = null;
         try {
-            const psychologist = await db.user.findUnique({
-                where: { id: auth.userId },
-                include: { psychologistSettings: true },
-            });
+            const psychologist = await db.user.findUnique({ where: { id: auth.userId }, include: { psychologistSettings: true } });
             const client = session.client as any;
             const channel = client.telegramChatId ? 'telegram' : client.maxChatId ? 'max' : null;
             onlineSessionLink = psychologist?.psychologistSettings?.onlineSessionLink || null;
-
             const deliveries = sessionsCount === 1 ? await createAutoDocumentDeliveries({
                 psychologistId: auth.userId,
                 clientId,
@@ -207,24 +106,12 @@ export async function POST(req: NextRequest) {
                 channel: channel || 'manual',
                 recipientContact: client.telegramChatId || client.maxChatId || null,
             }) : [];
-
             const psychologistName = psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист';
             const bookingLink = clientBookingLink(auth.userId, clientId);
             const onlineLink = session.format === 'online' ? onlineSessionLink : null;
             const paymentText = await getPaymentInstruction(auth.userId, session.id, clientId);
-            const text = buildSessionClientMessage({
-                clientName: client.name,
-                psychologistName,
-                date: session.date,
-                time: session.time,
-                format: session.format,
-                onlineLink,
-                documentLinks: deliveries.map((delivery: any) => ({ title: delivery.title, link: delivery.link })),
-                paymentText,
-                bookingLink,
-            });
+            const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: session.date, time: session.time, format: session.format, onlineLink, documentLinks: deliveries.map((delivery: any) => ({ title: delivery.title, link: delivery.link })), paymentText, bookingLink });
             const message = `${text}\n\nПожалуйста, подтвердите встречу в сообщении-напоминании.`;
-
             if (client.telegramChatId) {
                 await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' });
                 noticeStatus = 'telegram';
@@ -237,7 +124,6 @@ export async function POST(req: NextRequest) {
         } catch (error) {
             console.error('[mobile/sessions POST] notice failed:', error);
         }
-
         return NextResponse.json({ ...formatSession({ ...session, paymentStatus: 'not_required' }, onlineSessionLink), noticeStatus }, { status: 201 });
     } catch (error) {
         console.error('[mobile/sessions POST]', error);
