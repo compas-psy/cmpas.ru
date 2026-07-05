@@ -1,16 +1,5 @@
 const blockLabels: Record<string, string> = {
-    request: 'Запрос',
-    observation: 'Наблюдение',
-    intervention: 'Интервенция',
-    dynamics: 'Динамика',
-    next_step: 'Следующий шаг',
-    homework: 'Домашнее задание',
-    resources: 'Ресурсы',
-    anamnesis: 'Анамнез',
-    quote: 'Цитата',
-    hypothesis: 'Гипотеза',
-    short_note: 'Кратко',
-    voice_note: 'Голосовая заметка',
+    request: 'Запрос', observation: 'Наблюдение', intervention: 'Интервенция', dynamics: 'Динамика', next_step: 'Следующий шаг', homework: 'Домашнее задание', resources: 'Ресурсы', anamnesis: 'Анамнез', quote: 'Цитата', hypothesis: 'Гипотеза', short_note: 'Кратко', voice_note: 'Голосовая заметка',
 };
 
 export function toMobileType(value: unknown) {
@@ -23,6 +12,21 @@ export function toDatabaseType(value: unknown) {
     if (value === 'COUPLE') return 'couple';
     if (value === 'FAMILY') return 'family';
     return 'individual';
+}
+
+export function normalizePaymentStatus(value: unknown) {
+    const raw = String(value || 'not_required').toLowerCase();
+    if (raw === 'paid') return 'PAID';
+    if (raw === 'unpaid') return 'UNPAID';
+    return 'NOT_REQUIRED';
+}
+
+export function toDatabasePaymentStatus(value: unknown) {
+    const raw = String(value || '').toLowerCase();
+    if (raw === 'paid') return 'paid';
+    if (raw === 'unpaid') return 'unpaid';
+    if (raw === 'not_required') return 'not_required';
+    return null;
 }
 
 export function structuredNoteBlocks(value: unknown): any[] {
@@ -51,10 +55,7 @@ export function notesPlainFromStructured(value: unknown): string | null {
 export function formatSession(s: any, onlineSessionLink: string | null = null) {
     const online = s.format !== 'in_person' && s.format !== 'offline';
     const blocks = structuredNoteBlocks(s.structuredNotes);
-    const notesPlain = notesPlainFromStructured(s.structuredNotes)
-        || (typeof s.clientSummary === 'string' ? s.clientSummary : null)
-        || (typeof s.notes === 'string' ? s.notes : null);
-
+    const notesPlain = notesPlainFromStructured(s.structuredNotes) || (typeof s.clientSummary === 'string' ? s.clientSummary : null) || (typeof s.notes === 'string' ? s.notes : null);
     return {
         id: s.id,
         clientId: s.client?.id || s.clientId || '',
@@ -63,6 +64,7 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         startTime: s.time || '00:00',
         endTime: s.endTime || '',
         status: (s.status || 'PENDING').toUpperCase(),
+        paymentStatus: normalizePaymentStatus(s.paymentStatus),
         format: online ? 'ONLINE' : 'IN_PERSON',
         type: toMobileType(s.type),
         videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
