@@ -9,6 +9,7 @@
  */
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
+import { createNotification } from '@/lib/notifications';
 
 const MAX_API = 'https://botapi.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -334,6 +335,14 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
                 `⚠️ Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`
             );
         }
+        await createNotification({
+            psychologistId: session.psychologistId,
+            type: 'session_cancelled',
+            title: `${session.client.name} отменил(а) сессию`,
+            subtitle: `${format(session.date, 'dd.MM.yyyy')} в ${session.time}`,
+            sessionId: session.id,
+            clientId: session.clientId,
+        });
     }
 
     // ── Confirm session (from 24h reminder) ──
@@ -357,6 +366,14 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
                 `✅ Клиент ${session.client.name} подтвердил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`
             );
         }
+        await createNotification({
+            psychologistId: session.psychologistId,
+            type: 'session_confirmed',
+            title: `${session.client.name} подтвердил(а) сессию`,
+            subtitle: `${format(session.date, 'dd.MM.yyyy')} в ${session.time}`,
+            sessionId: session.id,
+            clientId: session.clientId,
+        });
     }
 
     // ── Reschedule session ──

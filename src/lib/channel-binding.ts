@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { extractFirstName } from '@/lib/person-name';
+import { createNotification } from '@/lib/notifications';
 
 export type ClientChannel = 'telegram' | 'max';
 export type ChannelInvitePreference = ClientChannel | 'auto';
@@ -208,6 +209,14 @@ export async function consumeClientChannelInvite(params: {
             }),
         },
     }).catch(() => undefined);
+
+    await createNotification({
+        psychologistId: result.psychologistId,
+        type: 'channel_linked',
+        title: `${result.name} подключил(а) ${params.channel === 'max' ? 'MAX' : 'Telegram'}`,
+        subtitle: 'Уведомления и напоминания теперь приходят автоматически',
+        clientId: result.id,
+    });
 
     return result;
 }

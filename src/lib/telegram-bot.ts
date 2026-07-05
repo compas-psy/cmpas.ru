@@ -2,6 +2,7 @@ import { Telegraf, Context, Markup } from 'telegraf';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { createNotification } from '@/lib/notifications';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -325,6 +326,14 @@ export function setupBot() {
                 await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `⚠️ <b>Отмена записи</b>\n\nКлиент ${session.client.name} отменил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
             } catch (e) { }
         }
+        await createNotification({
+            psychologistId: session.psychologistId,
+            type: 'session_cancelled',
+            title: `${session.client.name} отменил(а) сессию`,
+            subtitle: `${format(session.date, 'dd.MM.yyyy')} в ${session.time}`,
+            sessionId: session.id,
+            clientId: session.clientId,
+        });
     });
 
     // Session Confirm Callback (from 24h reminder)
@@ -350,6 +359,14 @@ export function setupBot() {
                 await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `✅ Клиент ${session.client.name} подтвердил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
             } catch (e) { }
         }
+        await createNotification({
+            psychologistId: session.psychologistId,
+            type: 'session_confirmed',
+            title: `${session.client.name} подтвердил(а) сессию`,
+            subtitle: `${format(session.date, 'dd.MM.yyyy')} в ${session.time}`,
+            sessionId: session.id,
+            clientId: session.clientId,
+        });
     });
 
     // Session Reschedule Callback (from 24h reminder)

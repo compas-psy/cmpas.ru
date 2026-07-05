@@ -816,3 +816,21 @@ model ClientInviteToken {
   @@index([token])
   @@index([clientId])
 }
+
+// Persistent notification feed for the psychologist (Android/web bell icon).
+// Written at the moment an event happens, so unread state and history survive
+// past the old 7-day rolling window computed on the fly by the dashboard.
+model PracticeNotification {
+  id             String    @id @default(cuid())
+  psychologistId String
+  type           String // "session_confirmed" | "session_cancelled" | "session_pending" | "new_booking" | "channel_linked" | "homework_received" | "document_acknowledged" | "document_opened"
+  title          String
+  subtitle       String?
+  sessionId      String?
+  clientId       String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([psychologistId, createdAt])
+  @@index([psychologistId, readAt])
+}
