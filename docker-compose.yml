@@ -32,6 +32,21 @@ services:
       mailer:
         condition: service_started
 
+  # Local HTTP/SOCKS proxy tunneling outbound traffic through a mieru VPN
+  # server, used to reach api.telegram.org from a RU-hosted server (Telegram
+  # is blocked/throttled from Russian IPs). Only started if the mieru
+  # credentials are present in .env — see deploy-docker.yml. The app only
+  # actually routes through it when the telegram_vpn_proxy admin flag is on
+  # (/admin/features) — this container being up does not force proxying.
+  singbox:
+    image: ghcr.io/sagernet/sing-box:latest
+    container_name: cmpas-singbox
+    restart: always
+    profiles: ["vpn"]
+    volumes:
+      - ./deploy/singbox-config.json:/etc/sing-box/config.json:ro
+    command: ["run", "-c", "/etc/sing-box/config.json"]
+
   postgres:
     image: postgres:15-alpine
     container_name: cmpas-postgres

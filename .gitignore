@@ -41,3 +41,7 @@ gh_deploy_key.pub
 
 # Geist font: temp files only; the .ttf binaries are committed under res/font/
 /android/app/src/main/res/font/*.tmp
+
+# Materialized from deploy/singbox-config.template.json at deploy time —
+# contains real mieru VPN credentials, never commit the real file.
+/deploy/singbox-config.json

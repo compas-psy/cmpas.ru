@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { format } from 'date-fns';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { createNotification } from '@/lib/notifications';
+import { isFeatureEnabled } from '@/app/admin/actions/features';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -17,7 +18,16 @@ if (!BOT_TOKEN) {
 // Custom Telegram API URL (mirror/proxy for Russia-based servers)
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 
-// Create Telegraf with optional HTTPS proxy for servers behind restrictive firewalls
+let proxyAgent: import('http').Agent | undefined;
+if (TELEGRAM_PROXY) {
+    try {
+        const { HttpsProxyAgent } = require('https-proxy-agent');
+        proxyAgent = new HttpsProxyAgent(TELEGRAM_PROXY);
+    } catch (e) {
+        console.error('[TG Bot] Failed to create proxy agent:', e);
+    }
+}
+
 function createBot() {
     if (!BOT_TOKEN) return null;
     try {
@@ -26,12 +36,6 @@ function createBot() {
                 apiRoot: TELEGRAM_API_URL,
             }
         };
-        if (TELEGRAM_PROXY) {
-            const { HttpsProxyAgent } = require('https-proxy-agent');
-            const agent = new HttpsProxyAgent(TELEGRAM_PROXY);
-            opts.telegram.agent = agent;
-            console.log(`[TG Bot] Using proxy: ${TELEGRAM_PROXY.replace(/\/\/.*@/, '//*:*@')}`);
-        }
         console.log(`[TG Bot] API root: ${TELEGRAM_API_URL}`);
         return new Telegraf(BOT_TOKEN, opts);
     } catch (e) {
@@ -41,6 +45,27 @@ function createBot() {
 }
 
 export const bot = createBot();
+
+// The telegram_vpn_proxy admin flag can be flipped at any time without a
+// restart: Telegraf's ApiClient reads options.agent fresh on every call
+// (see node_modules/telegraf/lib/core/network/client.js callApi), so mutating
+// it here takes effect on the very next request instead of only at cold start.
+if (bot && proxyAgent) {
+    const syncProxyState = async () => {
+        try {
+            const enabled = await isFeatureEnabled('telegram_vpn_proxy');
+            const desired = enabled ? proxyAgent : undefined;
+            if (bot.telegram.options.agent !== desired) {
+                bot.telegram.options.agent = desired;
+                console.log(`[TG Bot] VPN proxy ${enabled ? 'enabled' : 'disabled'} (server2server)`);
+            }
+        } catch (e) {
+            console.error('[TG Bot] Failed to sync VPN proxy flag:', e);
+        }
+    };
+    syncProxyState();
+    setInterval(syncProxyState, 20_000);
+}
 
 async function showPsyMenu(ctx: Context, psy: any) {
     await ctx.reply(`Добро пожаловать в кабинет психолога, ${psy.name || 'Специалист'}!`,

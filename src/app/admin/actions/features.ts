@@ -11,6 +11,10 @@ const DEFAULT_FLAGS: Record<string, { label: string; category: string }> = {
   ai_interventions: { label: 'AI рекомендации интервенций', category: 'features' },
   client_notes_sharing: { label: 'Отправка заметок клиенту', category: 'features' },
   diagnostics: { label: 'Диагностика (тесты)', category: 'features' },
+  telegram_vpn_proxy: {
+    label: 'Telegram через VPN (server2server, mieru)',
+    category: 'network',
+  },
 };
 
 async function requireAdmin() {
@@ -22,9 +26,10 @@ async function requireAdmin() {
 }
 
 export async function getFeatureFlags() {
-  // Get all flags from DB
-  const rows = await db.systemConfig.findMany({ where: { category: 'features' } });
-  const flags: Record<string, { enabled: boolean; label: string }> = {};
+  // Query by the known flag keys, not a single hardcoded category — flags can
+  // live under different categories (features/network/etc).
+  const rows = await db.systemConfig.findMany({ where: { key: { in: Object.keys(DEFAULT_FLAGS) } } });
+  const flags: Record<string, { enabled: boolean; label: string; category: string }> = {};
 
   // Start with defaults
   for (const [key, info] of Object.entries(DEFAULT_FLAGS)) {
@@ -32,6 +37,7 @@ export async function getFeatureFlags() {
     flags[key] = {
       enabled: row ? row.value === 'true' : false,
       label: info.label,
+      category: info.category,
     };
   }
   return flags;
