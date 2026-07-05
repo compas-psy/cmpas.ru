@@ -51,6 +51,8 @@ export async function POST(
             directLinks: invite.directLinks,
             shareText: invite.shareText,
             expiresAt: invite.expiresAt.toISOString(),
+            clientName: invite.clientName,
+            phone: invite.phone || null,
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Internal error';
