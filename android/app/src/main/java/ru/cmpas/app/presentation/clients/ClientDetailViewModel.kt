@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.api.ChannelRequest
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.InviteRequest
 import ru.cmpas.app.data.api.SendMessageRequest
@@ -65,8 +66,19 @@ class ClientDetailViewModel @Inject constructor(
                     )
                 }
                 loadDocuments(clientId)
+                loadChannels(clientId)
             } catch (error: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = error.localizedMessage ?: "Не удалось загрузить клиента") }
+            }
+        }
+    }
+
+    fun loadChannels(clientId: String? = loadedClientId) {
+        val id = clientId ?: return
+        viewModelScope.launch {
+            val response = runCatching { api.getClientChannels(id) }.getOrNull()
+            if (response?.isSuccessful == true) {
+                _uiState.update { it.copy(channelStatus = response.body(), channelActionError = null) }
             }
         }
     }
@@ -123,28 +135,48 @@ class ClientDetailViewModel @Inject constructor(
 
     fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
-            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null) }
-            val response = runCatching { api.createInviteLink(clientId, InviteRequest(channel)) }.getOrNull()
+            _uiState.update { it.copy(isCreatingInvite = true, inviteError = null, channelActionError = null, channelStatus = null) }
+            val response = runCatching { api.createClientChannelInvite(clientId, InviteRequest(channel)) }.getOrNull()
             if (response?.isSuccessful == true) {
-                _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body(), channelStatus = null) }
-                startChannelPolling(clientId)
+                _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body()) }
+                startChannelPolling(clientId, channel)
             } else {
                 _uiState.update { it.copy(isCreatingInvite = false, inviteError = "Не удалось создать приглашение — повторите") }
             }
         }
     }
 
+    fun revokeChannel(clientId: String, channel: String) {
+        if (channel != "telegram" && channel != "max") return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingChannel = true, channelActionError = null) }
+            val response = runCatching { api.revokeClientChannel(clientId, ChannelRequest(channel)) }.getOrNull()
+            if (response?.isSuccessful == true) {
+                _uiState.update { it.copy(isUpdatingChannel = false) }
+                loadClient(clientId, showLoader = false)
+                loadChannels(clientId)
+            } else {
+                _uiState.update { it.copy(isUpdatingChannel = false, channelActionError = "Не удалось отвязать канал") }
+            }
+        }
+    }
+
     /** Polls channel-binding status every 4s while the invite sheet is open, so the
      * psychologist sees "клиент подключён" live instead of having to refresh manually. */
-    private fun startChannelPolling(clientId: String) {
+    private fun startChannelPolling(clientId: String, targetChannel: String) {
         channelPollJob?.cancel()
         channelPollJob = viewModelScope.launch {
             while (isActive) {
                 delay(4_000)
                 val response = runCatching { api.getClientChannels(clientId) }.getOrNull()
                 val status = response?.takeIf { it.isSuccessful }?.body() ?: continue
-                _uiState.update { it.copy(channelStatus = status) }
-                if (status.channels.telegram.connected || status.channels.max.connected) {
+                val targetConnected = when (targetChannel) {
+                    "telegram" -> status.channels.telegram.connected
+                    "max" -> status.channels.max.connected
+                    else -> status.channels.telegram.connected || status.channels.max.connected
+                }
+                if (targetConnected) {
+                    _uiState.update { it.copy(channelStatus = status) }
                     loadClient(clientId, showLoader = false)
                     break
                 }
@@ -199,4 +231,6 @@ data class ClientDetailUiState(
     val inviteResponse: InviteResponse? = null,
     val inviteError: String? = null,
     val channelStatus: ClientChannelStatus? = null,
+    val isUpdatingChannel: Boolean = false,
+    val channelActionError: String? = null,
 )
