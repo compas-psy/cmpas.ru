@@ -1,9 +1,27 @@
-import { createHash, randomUUID } from 'crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { db } from '@/lib/db';
 import { extractFirstName } from '@/lib/person-name';
 
+// Ephemeral random fallback instead of a known constant: 'cmpas-local-secret'
+// was public in the repo, so anyone could forge clientActionToken /
+// documentDeliveryToken (cancel any session, open any client document) if
+// AUTH_SECRET were ever unset. Random fallback makes forged tokens impossible
+// (existing links break on restart — the safe failure mode).
+let _ephemeralSecret: string | undefined;
 function appSecret() {
-    return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'cmpas-local-secret';
+    const s = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+    if (s) return s;
+    if (!_ephemeralSecret) {
+        console.error('[client-workflow] AUTH_SECRET is not set — using an ephemeral key; client action/document links will not survive restarts.');
+        _ephemeralSecret = createHash('sha256').update(randomUUID() + randomUUID()).digest('hex');
+    }
+    return _ephemeralSecret;
+}
+
+function safeEqualHex(a: string, b: string) {
+    const ba = Buffer.from(a);
+    const bb = Buffer.from(b);
+    return ba.length === bb.length && timingSafeEqual(ba, bb);
 }
 
 export function publicBaseUrl() {
@@ -18,7 +36,7 @@ export function clientActionToken(psychologistId: string, clientId: string) {
 
 export function verifyClientActionToken(psychologistId: string, clientId: string, token?: string | null) {
     if (!token) return false;
-    return token === clientActionToken(psychologistId, clientId);
+    return safeEqualHex(token, clientActionToken(psychologistId, clientId));
 }
 
 export function documentDeliveryToken(deliveryId: string) {
@@ -29,7 +47,7 @@ export function documentDeliveryToken(deliveryId: string) {
 
 export function verifyDocumentDeliveryToken(deliveryId: string, token?: string | null) {
     if (!token) return false;
-    return token === documentDeliveryToken(deliveryId);
+    return safeEqualHex(token, documentDeliveryToken(deliveryId));
 }
 
 export function clientBookingLink(psychologistId: string, clientId: string) {

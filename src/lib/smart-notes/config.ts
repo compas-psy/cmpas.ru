@@ -243,3 +243,39 @@ export const SESSION_TEMPLATES: SessionTemplate[] = [
         blockIds: ['dynamics', 'observation', 'intervention', 'homework', 'next_step'],
     },
 ];
+
+// ============================================================
+// Helpers (imported by note editors and the client timeline)
+// ============================================================
+
+/** Look up a block definition by its id. */
+export function getDefinitionById(id: string): SmartBlockDefinition | undefined {
+    return SMART_BLOCK_DEFINITIONS.find(d => d.id === id);
+}
+
+/** Create a fresh, empty block instance for the given definition. */
+export function createBlockInstance(definitionId: string): SmartBlock {
+    const def = getDefinitionById(definitionId);
+    const values: Record<string, string> = {};
+    def?.fields.forEach(f => { values[f.key] = ''; });
+    const rand = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return {
+        id: `blk_${rand}`,
+        definitionId,
+        values,
+        createdAt: new Date().toISOString(),
+    };
+}
+
+/** Order blocks by their definition's position in SMART_BLOCK_DEFINITIONS so the
+ * note always reads in a consistent, guided order regardless of add sequence. */
+export function sortBlocksByDefinition(blocks: SmartBlock[]): SmartBlock[] {
+    const order = new Map(SMART_BLOCK_DEFINITIONS.map((d, i) => [d.id, i]));
+    return [...blocks].sort((a, b) => {
+        const ai = order.get(a.definitionId) ?? Number.MAX_SAFE_INTEGER;
+        const bi = order.get(b.definitionId) ?? Number.MAX_SAFE_INTEGER;
+        return ai - bi;
+    });
+}
