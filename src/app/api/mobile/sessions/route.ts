@@ -19,32 +19,16 @@ function toDatabaseType(value: unknown) {
 }
 
 const blockLabels: Record<string, string> = {
-    request: 'Запрос',
-    observation: 'Наблюдение',
-    intervention: 'Интервенция',
-    dynamics: 'Динамика',
-    next_step: 'Следующий шаг',
-    homework: 'Домашнее задание',
-    resources: 'Ресурсы',
-    anamnesis: 'Анамнез',
-    quote: 'Цитата',
-    hypothesis: 'Гипотеза',
-    short_note: 'Кратко',
-    voice_note: 'Голосовая заметка',
+    request: 'Запрос', observation: 'Наблюдение', intervention: 'Интервенция', dynamics: 'Динамика', next_step: 'Следующий шаг', homework: 'Домашнее задание', resources: 'Ресурсы', anamnesis: 'Анамнез', quote: 'Цитата', hypothesis: 'Гипотеза', short_note: 'Кратко', voice_note: 'Голосовая заметка',
 };
 
-export function structuredNoteBlocks(value: unknown): any[] {
+function structuredNoteBlocks(value: unknown): any[] {
     if (Array.isArray(value)) return value;
     if (value && typeof value === 'object' && Array.isArray((value as any).blocks)) return (value as any).blocks;
     return [];
 }
 
-export function normalizeStructuredNotesForStorage(value: unknown): { blocks: any[] } | null {
-    const blocks = structuredNoteBlocks(value);
-    return blocks.length ? { blocks } : null;
-}
-
-export function notesPlainFromStructured(value: unknown): string | null {
+function notesPlainFromStructured(value: unknown): string | null {
     const blocks = structuredNoteBlocks(value);
     if (!blocks.length) return null;
     const parts = blocks.flatMap((block: any) => {
@@ -56,7 +40,7 @@ export function notesPlainFromStructured(value: unknown): string | null {
     return parts.length ? parts.join('\n\n') : null;
 }
 
-export function formatSession(s: any, onlineSessionLink: string | null = null) {
+function formatSession(s: any, onlineSessionLink: string | null = null) {
     const online = s.format !== 'in_person' && s.format !== 'offline';
     const blocks = structuredNoteBlocks(s.structuredNotes);
     const notesPlain = notesPlainFromStructured(s.structuredNotes) || (typeof s.clientSummary === 'string' ? s.clientSummary : null) || (typeof s.notes === 'string' ? s.notes : null);
@@ -80,34 +64,23 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
-
     const from = req.nextUrl.searchParams.get('from');
     const to = req.nextUrl.searchParams.get('to');
     const status = req.nextUrl.searchParams.get('status');
-
     try {
         const [sessions, settings] = await Promise.all([
             db.diarySession.findMany({
                 where: {
                     psychologistId: auth.userId,
-                    ...(from && to && {
-                        date: {
-                            gte: new Date(from),
-                            lte: new Date(to + 'T23:59:59.999Z'),
-                        },
-                    }),
+                    ...(from && to && { date: { gte: new Date(from), lte: new Date(to + 'T23:59:59.999Z') } }),
                     ...(status && { status: status.toLowerCase() }),
                 },
                 include: { client: { select: { id: true, name: true } } },
                 orderBy: [{ date: 'asc' }, { time: 'asc' }],
                 take: 200,
             }),
-            db.psychologistSettings.findUnique({
-                where: { psychologistId: auth.userId },
-                select: { onlineSessionLink: true },
-            }),
+            db.psychologistSettings.findUnique({ where: { psychologistId: auth.userId }, select: { onlineSessionLink: true } }),
         ]);
-
         return NextResponse.json(sessions.map(session => formatSession(session, settings?.onlineSessionLink || null)));
     } catch (error) {
         console.error('[mobile/sessions GET]', error);
@@ -118,113 +91,53 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
-
     try {
         const { clientId, date, startTime, endTime, format, type, duration: durationReq } = await req.json();
-        if (!clientId || !date || !startTime) {
-            return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
-        }
-
+        if (!clientId || !date || !startTime) return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
         const duration = durationReq || 50;
         const [hours, minutes] = startTime.split(':').map(Number);
         const endMinutes = hours * 60 + minutes + duration;
         const computedEnd = endTime || `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-
         const sessionDate = new Date(date);
         const dayStart = new Date(sessionDate); dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(sessionDate); dayEnd.setHours(23, 59, 59, 999);
-
-        const existing = await db.diarySession.findMany({
-            where: { psychologistId: auth.userId, date: { gte: dayStart, lte: dayEnd }, status: { not: 'cancelled' } },
-        });
+        const existing = await db.diarySession.findMany({ where: { psychologistId: auth.userId, date: { gte: dayStart, lte: dayEnd }, status: { not: 'cancelled' } } });
         const newStart = hours * 60 + minutes;
         const newEnd = newStart + duration;
         for (const item of existing) {
             const [itemHours, itemMinutes] = item.time.split(':').map(Number);
             const itemStart = itemHours * 60 + itemMinutes;
             const itemEnd = itemStart + (item.duration || 50);
-            if (newStart < itemEnd && newEnd > itemStart) {
-                return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
-            }
+            if (newStart < itemEnd && newEnd > itemStart) return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
         }
-
         const session = await db.diarySession.create({
-            data: {
-                psychologistId: auth.userId,
-                clientId,
-                date: sessionDate,
-                time: startTime,
-                endTime: computedEnd,
-                duration,
-                type: toDatabaseType(type),
-                format: format === 'IN_PERSON' ? 'in_person' : 'online',
-                status: 'pending',
-            },
+            data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending' },
             include: { client: true },
         });
-
         const sessionsCount = await db.diarySession.count({ where: { clientId } });
-        const nextSession = await db.diarySession.findFirst({
-            where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } },
-            orderBy: { date: 'asc' },
-        });
-        await db.diaryClient.update({
-            where: { id: clientId },
-            data: { totalSessions: sessionsCount, nextSessionDate: nextSession?.date || null },
-        });
-
+        const nextSession = await db.diarySession.findFirst({ where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } }, orderBy: { date: 'asc' } });
+        await db.diaryClient.update({ where: { id: clientId }, data: { totalSessions: sessionsCount, nextSessionDate: nextSession?.date || null } });
         autoSyncSessionToCalendars(auth.userId, session as any).catch(console.error);
-
         let noticeStatus = 'none';
         let onlineSessionLink: string | null = null;
         try {
-            const psychologist = await db.user.findUnique({
-                where: { id: auth.userId },
-                include: { psychologistSettings: true },
-            });
+            const psychologist = await db.user.findUnique({ where: { id: auth.userId }, include: { psychologistSettings: true } });
             const client = session.client as any;
             const channel = client.telegramChatId ? 'telegram' : client.maxChatId ? 'max' : null;
             onlineSessionLink = psychologist?.psychologistSettings?.onlineSessionLink || null;
-
-            const deliveries = sessionsCount === 1 ? await createAutoDocumentDeliveries({
-                psychologistId: auth.userId,
-                clientId,
-                sessionId: session.id,
-                trigger: 'first_session',
-                channel: channel || 'manual',
-                recipientContact: client.telegramChatId || client.maxChatId || null,
-            }) : [];
-
+            const deliveries = sessionsCount === 1 ? await createAutoDocumentDeliveries({ psychologistId: auth.userId, clientId, sessionId: session.id, trigger: 'first_session', channel: channel || 'manual', recipientContact: client.telegramChatId || client.maxChatId || null }) : [];
             const psychologistName = psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист';
             const bookingLink = clientBookingLink(auth.userId, clientId);
             const onlineLink = session.format === 'online' ? onlineSessionLink : null;
             const paymentText = await getPaymentInstruction(auth.userId, session.id, clientId);
-            const text = buildSessionClientMessage({
-                clientName: client.name,
-                psychologistName,
-                date: session.date,
-                time: session.time,
-                format: session.format,
-                onlineLink,
-                documentLinks: deliveries.map((delivery: any) => ({ title: delivery.title, link: delivery.link })),
-                paymentText,
-                bookingLink,
-            });
+            const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: session.date, time: session.time, format: session.format, onlineLink, documentLinks: deliveries.map((delivery: any) => ({ title: delivery.title, link: delivery.link })), paymentText, bookingLink });
             const message = `${text}\n\nПожалуйста, подтвердите встречу в сообщении-напоминании.`;
-
-            if (client.telegramChatId) {
-                await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' });
-                noticeStatus = 'telegram';
-            } else if (client.maxChatId) {
-                await sendMaxMessage(client.maxChatId, message);
-                noticeStatus = 'max';
-            } else {
-                noticeStatus = 'manual';
-            }
+            if (client.telegramChatId) { await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' }); noticeStatus = 'telegram'; }
+            else if (client.maxChatId) { await sendMaxMessage(client.maxChatId, message); noticeStatus = 'max'; }
+            else noticeStatus = 'manual';
         } catch (error) {
             console.error('[mobile/sessions POST] notice failed:', error);
         }
-
         return NextResponse.json({ ...formatSession(session, onlineSessionLink), noticeStatus }, { status: 201 });
     } catch (error) {
         console.error('[mobile/sessions POST]', error);
