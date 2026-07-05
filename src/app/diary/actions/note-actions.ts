@@ -9,23 +9,22 @@ async function getPsychologistId() {
     return session.user.id;
 }
 
+function normalizeStructuredNotesForWeb(value: unknown) {
+    if (Array.isArray(value)) return { blocks: value };
+    if (value && typeof value === 'object' && Array.isArray((value as any).blocks)) return value;
+    return null;
+}
+
 export async function getSessionForNotes(sessionId: string) {
     const psychologistId = await getPsychologistId();
     const session = await db.diarySession.findFirst({
         where: { id: sessionId, psychologistId },
-        include: {
-            client: { select: { id: true, name: true } },
-        },
+        include: { client: { select: { id: true, name: true } } },
     });
     if (!session) return null;
 
-    // Count previous sessions with this client
     const sessionNumber = await db.diarySession.count({
-        where: {
-            psychologistId,
-            clientId: session.clientId,
-            date: { lte: session.date },
-        },
+        where: { psychologistId, clientId: session.clientId, date: { lte: session.date } },
     });
 
     return {
@@ -40,7 +39,7 @@ export async function getSessionForNotes(sessionId: string) {
         format: session.format,
         status: session.status,
         notes: session.notes,
-        structuredNotes: session.structuredNotes as any,
+        structuredNotes: normalizeStructuredNotesForWeb(session.structuredNotes),
         privateNotes: session.privateNotes as any,
         clientSummary: session.clientSummary,
     };
@@ -55,7 +54,7 @@ export async function saveSessionNotes(sessionId: string, data: {
     const psychologistId = await getPsychologistId();
     const updatePayload: any = {};
     if (data.notes !== undefined) updatePayload.notes = data.notes;
-    if (data.structuredNotes !== undefined) updatePayload.structuredNotes = data.structuredNotes;
+    if (data.structuredNotes !== undefined) updatePayload.structuredNotes = normalizeStructuredNotesForWeb(data.structuredNotes);
     if (data.privateNotes !== undefined) updatePayload.privateNotes = data.privateNotes;
     if (data.clientSummary !== undefined) updatePayload.clientSummary = data.clientSummary;
 
