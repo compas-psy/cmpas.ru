@@ -688,7 +688,6 @@ private fun clientContext(client: Client): String = when {
 }
 
 private fun quickActionTitle(type: String) = when (type) {
-    "block-time" -> "Добавить блокировку"
     "booking-link" -> "Ссылка для записи"
     "payment" -> "Отметить оплату"
     "repeat-slot" -> "Повторить слот"
@@ -699,7 +698,6 @@ private fun quickActionTitle(type: String) = when (type) {
 }
 
 private fun genericIcon(type: String): ImageVector = when (type) {
-    "block-time" -> Icons.Outlined.EventBusy
     "booking-link" -> Icons.Outlined.Link
     "payment" -> Icons.Outlined.Payments
     "repeat-slot" -> Icons.Outlined.Replay

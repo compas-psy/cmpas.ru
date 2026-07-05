@@ -11,7 +11,6 @@ import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateClientRequest
 import ru.cmpas.app.data.api.CreateSessionRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
-import ru.cmpas.app.data.local.LocalScheduleBlockStore
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.OnboardingOptions
 import ru.cmpas.app.domain.model.OnboardingResult
@@ -35,7 +34,6 @@ data class OnboardingInfo(
 class QuickActionViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
-    private val blockStore: LocalScheduleBlockStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(QuickActionUiState())
     val uiState = _uiState.asStateFlow()
@@ -153,7 +151,6 @@ class QuickActionViewModel @Inject constructor(
             _uiState.update { it.copy(isSaving = true) }
             runCatching {
                 when (type) {
-                    "block-time" -> saveBlock(primary, secondary, date, time, comment)
                     "repeat-slot" -> saveRepeatedSlot(selectedClient, date, time, secondary, comment)
                     "payment" -> "Оплата отмечена"
                     "booking-link" -> "Ссылка записи подготовлена для ${selectedClient?.name ?: "клиента"}"
@@ -312,16 +309,8 @@ class QuickActionViewModel @Inject constructor(
         return "Запись добавлена"
     }
 
-    private fun saveBlock(title: String, type: String, date: String?, time: String?, comment: String): String {
-        require(!date.isNullOrBlank()) { "Выберите дату" }
-        require(!time.isNullOrBlank()) { "Выберите время" }
-        blockStore.saveBlock(title.ifBlank { "Блокировка" }, type, date, time, addMinutes(time, 50), comment)
-        return "Блокировка добавлена в расписание"
-    }
-
     private fun buildLocalSlots(date: String): List<TimeSlot> {
-        val busy = localStore.getSessions(date, date).map { it.startTime }.toSet() +
-            blockStore.getBlocks(date, date).map { it.startTime }.toSet()
+        val busy = localStore.getSessions(date, date).map { it.startTime }.toSet()
         return generateSequence(LocalTime.of(9, 0)) { it.plusHours(1) }
             .takeWhile { it <= LocalTime.of(20, 0) }
             .map { start -> start.format(DateTimeFormatter.ofPattern("HH:mm")) }
