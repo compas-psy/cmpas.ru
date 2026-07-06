@@ -368,6 +368,9 @@ private fun MessengerCard(
     onInvite: () -> Unit,
     onManage: () -> Unit,
 ) {
+    val telegramConnected = !detail?.telegramId.isNullOrBlank()
+    val maxConnected = !detail?.maxId.isNullOrBlank()
+
     GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -380,9 +383,18 @@ private fun MessengerCard(
             }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(channelSummary(detail, channel), style = tBody, color = CompasFg)
-                Text(if (bound) "Мессенджеры подключены — можно управлять и переключать" else client.phone ?: "Приглашение ещё не открыто", style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Мессенджеры клиента", style = tBody, color = CompasFg)
+                Text(
+                    if (bound) "Активен только один канал — второй отключён" else client.phone ?: "Приглашение ещё не открыто",
+                    style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        // Explicit per-channel state: подключён (зелёный) / отключён (серый).
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChannelStatusChip("MAX", Icons.Outlined.Forum, maxConnected, Modifier.weight(1f))
+            ChannelStatusChip("Telegram", Icons.Outlined.Send, telegramConnected, Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
         if (bound) {
@@ -393,6 +405,29 @@ private fun MessengerCard(
         } else {
             PrimaryButton("Пригласить", onInvite, Modifier.fillMaxWidth(), Icons.Outlined.Link)
         }
+    }
+}
+
+/** Compact chip that transparently shows whether a given messenger is connected
+ * for this client (green) or off (grey) — so it's obvious at a glance that
+ * binding one channel leaves the other disabled. */
+@Composable
+private fun ChannelStatusChip(title: String, icon: ImageVector, connected: Boolean, modifier: Modifier = Modifier) {
+    val fg = if (connected) Success else CompasMutedFg
+    Row(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (connected) SuccessSoft else CompasMuted)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(15.dp), tint = fg)
+        Spacer(Modifier.width(6.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = tMeta, color = CompasFg, maxLines = 1)
+            Text(if (connected) "подключён" else "отключён", style = tMeta, color = fg, maxLines = 1)
+        }
+        Box(Modifier.size(7.dp).clip(CircleShape).background(fg))
     }
 }
 
@@ -418,12 +453,12 @@ private fun MessengerManagementSheet(
         SheetHead("Мессенджеры клиента", clientName)
         Spacer(Modifier.height(14.dp))
         ChannelInfoBanner(
-            text = "Можно держать Telegram и MAX одновременно. Если один мессенджер заблокирован или клиент хочет перейти, добавьте второй, затем отвяжите ненужный.",
+            text = "У клиента активен один мессенджер, второй — отключён. Чтобы сменить канал: сначала добавьте нужный, затем отвяжите прежний.",
         )
         Spacer(Modifier.height(12.dp))
         ChannelManageRow(
             title = "MAX",
-            subtitle = if (maxConnected) activeLabel(currentChannel == "max") else "Не подключён",
+            subtitle = if (maxConnected) activeLabel(currentChannel == "max") else "Отключён",
             connected = maxConnected,
             accent = Max,
             icon = Icons.Outlined.Forum,
@@ -434,7 +469,7 @@ private fun MessengerManagementSheet(
         Spacer(Modifier.height(8.dp))
         ChannelManageRow(
             title = "Telegram",
-            subtitle = if (telegramConnected) activeLabel(currentChannel == "telegram") else "Не подключён",
+            subtitle = if (telegramConnected) activeLabel(currentChannel == "telegram") else "Отключён",
             connected = telegramConnected,
             accent = Tg,
             icon = Icons.Outlined.Send,
@@ -514,18 +549,7 @@ private fun ChannelInfoBanner(text: String) {
     }
 }
 
-private fun channelSummary(detail: ClientDetail?, channel: String?): String {
-    val hasTelegram = !detail?.telegramId.isNullOrBlank()
-    val hasMax = !detail?.maxId.isNullOrBlank()
-    return when {
-        hasTelegram && hasMax -> "MAX и Telegram"
-        channel == "telegram" -> "Telegram"
-        channel == "max" -> "MAX"
-        else -> "Мессенджер не привязан"
-    }
-}
-
-private fun activeLabel(isCurrent: Boolean) = if (isCurrent) "Подключён · текущий мессенджер" else "Подключён"
+private fun activeLabel(isCurrent: Boolean) = if (isCurrent) "Подключён · текущий канал" else "Подключён"
 private fun channelTitle(channel: String) = if (channel == "max") "MAX" else "Telegram"
 
 @Composable
