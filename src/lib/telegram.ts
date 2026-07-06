@@ -1,27 +1,13 @@
 /**
  * Базовые функции для отправки уведомлений в Telegram клиенту или психологу.
- * Поддержка HTTPS прокси через TELEGRAM_PROXY env var, включаемого админ-флагом
- * telegram_vpn_proxy (см. src/app/admin/actions/features.ts).
+ * Прокси (mieru VPN) используется только когда админ-флаг telegram_vpn_proxy
+ * включён И проба через прокси проходит — см. src/lib/telegram-proxy.ts.
+ * Если прокси недоступен, отправка идёт напрямую (никогда не виснет).
  */
-import { isFeatureEnabled } from '@/app/admin/actions/features';
+import { telegramSendAgent } from '@/lib/telegram-proxy';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
-
-let _proxyAgent: any = null;
-async function getProxyAgent() {
-    if (!TELEGRAM_PROXY) return undefined;
-    const enabled = await isFeatureEnabled('telegram_vpn_proxy').catch(() => false);
-    if (!enabled) return undefined;
-    if (!_proxyAgent) {
-        try {
-            const { HttpsProxyAgent } = require('https-proxy-agent');
-            _proxyAgent = new HttpsProxyAgent(TELEGRAM_PROXY);
-        } catch { /* package not installed */ }
-    }
-    return _proxyAgent;
-}
 
 export type SendMessageOptions = {
     parse_mode?: string;
@@ -66,7 +52,7 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
             signal: controller.signal,
         };
 
-        const agent = await getProxyAgent();
+        const agent = await telegramSendAgent();
         if (agent) {
             try {
                 const nodeFetch = require('node-fetch');
@@ -74,7 +60,9 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
                 if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
                 return;
             } catch (e: any) {
-                if (e.name === 'AbortError') throw e;
+                // Proxy attempt failed (incl. timeout) — fall through to a DIRECT
+                // send so a flaky VPN never silently drops a message.
+                console.warn('[Telegram] proxy send failed, falling back to direct:', e?.message || e);
             }
         }
 
