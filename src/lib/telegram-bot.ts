@@ -1,9 +1,10 @@
 import { Telegraf, Context, Markup } from 'telegraf';
+import type { Agent } from 'http';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { createNotification } from '@/lib/notifications';
-import { isFeatureEnabled } from '@/app/admin/actions/features';
+import { telegramSendAgent } from '@/lib/telegram-proxy';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -18,22 +19,16 @@ if (!BOT_TOKEN) {
 // Custom Telegram API URL (mirror/proxy for Russia-based servers)
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 
-let proxyAgent: import('http').Agent | undefined;
-if (TELEGRAM_PROXY) {
-    try {
-        const { HttpsProxyAgent } = require('https-proxy-agent');
-        proxyAgent = new HttpsProxyAgent(TELEGRAM_PROXY);
-    } catch (e) {
-        console.error('[TG Bot] Failed to create proxy agent:', e);
-    }
-}
-
 function createBot() {
     if (!BOT_TOKEN) return null;
     try {
         const opts: any = {
             telegram: {
                 apiRoot: TELEGRAM_API_URL,
+                // Cap per-call time so a hung request can't block for Telegraf's
+                // 500s default (which is what made a dead VPN freeze the bot).
+                // A slow/dead proxy is avoided upstream by telegramSendAgent()
+                // only returning the agent when the proxy probe passes.
             }
         };
         console.log(`[TG Bot] API root: ${TELEGRAM_API_URL}`);
@@ -46,18 +41,19 @@ function createBot() {
 
 export const bot = createBot();
 
-// The telegram_vpn_proxy admin flag can be flipped at any time without a
-// restart: Telegraf's ApiClient reads options.agent fresh on every call
-// (see node_modules/telegraf/lib/core/network/client.js callApi), so mutating
-// it here takes effect on the very next request instead of only at cold start.
-if (bot && proxyAgent) {
+// Keep the bot's outbound agent in sync with the health-gated proxy decision.
+// telegramSendAgent() returns the proxy agent ONLY when the admin flag is on
+// AND the proxy is actually reachable; otherwise undefined (direct). So a
+// broken mieru tunnel can never make the bot hang — it just uses direct.
+// Telegraf reads options.agent fresh per call, so mutation takes effect
+// immediately (see node_modules/telegraf/lib/core/network/client.js callApi).
+if (bot && TELEGRAM_PROXY) {
     const syncProxyState = async () => {
         try {
-            const enabled = await isFeatureEnabled('telegram_vpn_proxy');
-            const desired = enabled ? proxyAgent : undefined;
+            const desired = (await telegramSendAgent()) as Agent | undefined;
             if (bot.telegram.options.agent !== desired) {
                 bot.telegram.options.agent = desired;
-                console.log(`[TG Bot] VPN proxy ${enabled ? 'enabled' : 'disabled'} (server2server)`);
+                console.log(`[TG Bot] VPN proxy ${desired ? 'active' : 'bypassed (direct)'}`);
             }
         } catch (e) {
             console.error('[TG Bot] Failed to sync VPN proxy flag:', e);

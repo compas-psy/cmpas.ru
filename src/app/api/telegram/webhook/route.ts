@@ -44,17 +44,23 @@ async function handleClientInvite(body: any) {
             : code === 'INVITE_EXPIRED'
                 ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
                 : 'Не удалось подключить уведомления. Попросите специалиста отправить новую ссылку.';
-        await bot.telegram.sendMessage(chatId, message).catch(e => console.error('[telegram-webhook] failure notice send failed:', e));
+        await withTimeout(bot.telegram.sendMessage(chatId, message), 6000).catch(e => console.error('[telegram-webhook] failure notice send failed:', e instanceof Error ? e.message : e));
         return true;
     }
 
+    // The binding already succeeded in the DB. All sends below are best-effort
+    // and TIME-BOUNDED: Telegraf's default per-call timeout is 500s, so a
+    // blocked/slow Telegram connection (RU IP without a working VPN) would hang
+    // the webhook, Telegram would retry, and the retry would hit "уже
+    // использована". Capping each send keeps the webhook fast and the binding
+    // reliable regardless of delivery.
     try {
-        await bot.telegram.sendMessage(
+        await withTimeout(bot.telegram.sendMessage(
             chatId,
             `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
-        );
+        ), 6000);
     } catch (error) {
-        console.error('[telegram-webhook] confirmation send failed (link already succeeded):', error);
+        console.error('[telegram-webhook] confirmation send failed/slow (link already succeeded):', error instanceof Error ? error.message : error);
     }
 
     const queued = await db.scheduledClientMessage.findMany({
@@ -63,10 +69,10 @@ async function handleClientInvite(body: any) {
     });
     for (const message of queued) {
         try {
-            await bot.telegram.sendMessage(chatId, message.text, {
+            await withTimeout(bot.telegram.sendMessage(chatId, message.text, {
                 parse_mode: 'HTML',
                 link_preview_options: { is_disabled: true },
-            });
+            }), 6000);
             await db.scheduledClientMessage.update({
                 where: { id: message.id },
                 data: { status: 'sent', sentAt: new Date() },

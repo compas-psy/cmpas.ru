@@ -7,20 +7,18 @@ import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
 
-/** Send to Telegram and/or MAX depending on which IDs are set */
+/** Send to Telegram and/or MAX depending on which IDs are set. Runs both in
+ * parallel so a slow/failed Telegram send (e.g. flaky VPN) never delays or
+ * blocks the MAX send, and vice versa. */
 async function notifyUser(
     tgId: string | null | undefined,
     maxId: string | null | undefined,
     text: string
 ) {
-    if (tgId) {
-        try { await sendTelegramMessage(tgId, text, { parse_mode: 'HTML' }); }
-        catch (e) { console.error('[notify] Telegram error:', e); }
-    }
-    if (maxId) {
-        try { await sendMaxMessage(maxId, text); }
-        catch (e) { console.error('[notify] MAX error:', e); }
-    }
+    await Promise.allSettled([
+        tgId ? sendTelegramMessage(tgId, text, { parse_mode: 'HTML' }).catch(e => console.error('[notify] Telegram error:', e)) : null,
+        maxId ? sendMaxMessage(maxId, text).catch(e => console.error('[notify] MAX error:', e)) : null,
+    ]);
 }
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
