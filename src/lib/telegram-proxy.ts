@@ -84,7 +84,10 @@ export async function getVpnProxyStatus(force = false): Promise<VpnProxyStatus> 
             latencyMs = Date.now() - started;
             if (!res.ok) error = `HTTP ${res.status}`;
         } catch (e: any) {
-            error = e?.name === 'AbortError' ? 'timeout (>5s)' : (e?.message || 'proxy error');
+            const raw = e?.name === 'AbortError' ? 'timeout (>5s)' : (e?.message || 'proxy error');
+            // Never surface the bot token: the probe URL contains /bot<token>/
+            // and node-fetch echoes the URL in its error message.
+            error = raw.replace(/\/bot\d+:[A-Za-z0-9_-]+/g, '/bot***');
         } finally {
             clearTimeout(timer);
         }
