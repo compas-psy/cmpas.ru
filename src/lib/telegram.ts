@@ -4,7 +4,7 @@
  * включён И проба через прокси проходит — см. src/lib/telegram-proxy.ts.
  * Если прокси недоступен, отправка идёт напрямую (никогда не виснет).
  */
-import { telegramSendAgent } from '@/lib/telegram-proxy';
+import { telegramSendAgent, nodeFetch } from '@/lib/telegram-proxy';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
@@ -55,8 +55,8 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
         const agent = await telegramSendAgent();
         if (agent) {
             try {
-                const nodeFetch = require('node-fetch');
-                const res = await nodeFetch(url, { ...fetchOpts, agent });
+                const f = nodeFetch();
+                const res = await f(url, { ...fetchOpts, agent });
                 if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
                 return;
             } catch (e: any) {

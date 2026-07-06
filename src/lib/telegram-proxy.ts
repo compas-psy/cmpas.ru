@@ -15,6 +15,19 @@ const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// node-fetch is needed for the `agent` option (global fetch/undici uses
+// `dispatcher` instead). In the Next standalone bundle, `require('node-fetch')`
+// (an ESM module) comes back as { default: fn }, so calling the require result
+// directly throws "f is not a function" — which is exactly what broke the VPN
+// probe. Normalize to the callable regardless of CJS/ESM interop.
+let _nodeFetch: any;
+export function nodeFetch(): any {
+    if (_nodeFetch) return _nodeFetch;
+    const mod = require('node-fetch');
+    _nodeFetch = typeof mod === 'function' ? mod : (mod?.default ?? mod);
+    return _nodeFetch;
+}
+
 let _agent: unknown = null;
 let _agentTried = false;
 function proxyAgent(): unknown {
@@ -62,8 +75,8 @@ export async function getVpnProxyStatus(force = false): Promise<VpnProxyStatus> 
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 5000);
         try {
-            const nodeFetch = require('node-fetch');
-            const res = await nodeFetch(`${TELEGRAM_API_URL}/bot${BOT_TOKEN}/getMe`, {
+            const f = nodeFetch();
+            const res = await f(`${TELEGRAM_API_URL}/bot${BOT_TOKEN}/getMe`, {
                 agent,
                 signal: controller.signal,
             });

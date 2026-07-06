@@ -91,11 +91,11 @@ export async function getMessagingStatus(): Promise<MessagingStatus> {
   const tgApi = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
   if (tgToken) {
     try {
-      const { telegramSendAgent } = await import('@/lib/telegram-proxy');
+      const { telegramSendAgent, nodeFetch } = await import('@/lib/telegram-proxy');
       const agent = await telegramSendAgent();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 6000);
-      const doFetch = agent ? require('node-fetch') : fetch;
+      const doFetch = agent ? nodeFetch() : fetch;
       const res: any = await doFetch(`${tgApi}/bot${tgToken}/getMe`, { agent, signal: controller.signal } as any);
       clearTimeout(timer);
       const json = await res.json();
