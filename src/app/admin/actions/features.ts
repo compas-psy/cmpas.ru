@@ -101,7 +101,8 @@ export async function getMessagingStatus(): Promise<MessagingStatus> {
       const json = await res.json();
       telegramBot = { ok: Boolean(json?.ok), username: json?.result?.username || null, error: json?.ok ? null : (json?.description || `HTTP ${res.status}`) };
     } catch (e: any) {
-      telegramBot = { ok: false, username: null, error: e?.name === 'AbortError' ? 'timeout (>6s)' : (e?.message || 'error') };
+      const raw = e?.name === 'AbortError' ? 'timeout (>6s)' : (e?.message || 'error');
+      telegramBot = { ok: false, username: null, error: raw.replace(/\/bot\d+:[A-Za-z0-9_-]+/g, '/bot***') };
     }
   }
 
