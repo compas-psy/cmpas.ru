@@ -11,7 +11,7 @@ export default async function LegalAcceptancePage({ searchParams }: { searchPara
     const session = await auth()
     if (!session?.user?.id) return redirect("/auth")
 
-    const [{ needsAcceptance }, adsDoc, adsStatus, query] = await Promise.all([
+    const [{ needsAcceptance }, adsDoc, adsStatusRaw, query] = await Promise.all([
         checkUserAcceptance(session.user.id),
         getActiveLegalDocument("ADS"),
         getAdsConsentStatus(session.user.id),
@@ -22,7 +22,8 @@ export default async function LegalAcceptancePage({ searchParams }: { searchPara
     if (requiredDocs.length === 0) {
         return redirect("/diary")
     }
-    const showAds = Boolean(adsDoc && !adsStatus.isAccepted)
+    const adsAccepted = Boolean((adsStatusRaw as { isAccepted?: boolean }).isAccepted)
+    const showAds = Boolean(adsDoc && !adsAccepted)
 
     async function handleAccept(formData: FormData) {
         "use server"
