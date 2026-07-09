@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.api.FeatureInterestRequest
 import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.domain.model.Session
@@ -82,6 +83,18 @@ class PostSessionNoteViewModel @Inject constructor(
         }
     }
 
+    fun markAiInterest(onFinished: (String) -> Unit) {
+        if (_uiState.value.aiInterestRecorded || _uiState.value.isMarkingAiInterest) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMarkingAiInterest = true) }
+            val response = runCatching {
+                api.markFeatureInterest(FeatureInterestRequest("ai_notes_assistant"))
+            }.getOrNull()
+            _uiState.update { it.copy(isMarkingAiInterest = false, aiInterestRecorded = response?.isSuccessful == true) }
+            onFinished(if (response?.isSuccessful == true) "Вы в списке первыми" else "Не удалось записать интерес")
+        }
+    }
+
     private fun String.isRemoteSessionId(): Boolean =
         isNotBlank() && !startsWith("quick") && !startsWith("voice") && !startsWith("text") && !startsWith("template") && !startsWith("client-") && !startsWith("local-")
 }
@@ -91,4 +104,6 @@ data class PostSessionNoteUiState(
     val savedText: String? = null,
     val structuredNotes: List<SmartNoteBlock> = emptyList(),
     val session: Session? = null,
+    val isMarkingAiInterest: Boolean = false,
+    val aiInterestRecorded: Boolean = false,
 )
