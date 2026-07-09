@@ -150,7 +150,7 @@ private fun notificationIcon(type: String): ImageVector = when (type) {
     "session_needs_note" -> Icons.Outlined.EditNote
     "session_unpaid" -> Icons.Outlined.Payments
     "client_cancel_attempt" -> Icons.Outlined.WarningAmber
-    "invite_expired" -> Icons.Outlined.LinkOff
+    "invite_expired" -> Icons.Outlined.Link
     "new_booking" -> Icons.Outlined.CalendarMonth
     "channel_linked" -> Icons.Outlined.Link
     "homework_received" -> Icons.Outlined.Assignment
