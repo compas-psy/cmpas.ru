@@ -171,7 +171,7 @@ data class MarkNotificationsReadRequest(val ids: List<String>? = null)
 data class SendMessageRequest(val type: String, val text: String? = null, val sessionId: String? = null)
 
 @kotlinx.serialization.Serializable
-data class InviteRequest(val channel: String = "telegram")
+data class InviteRequest(val channel: String = "auto")
 
 @kotlinx.serialization.Serializable
 data class ChannelRequest(val channel: String)
@@ -180,6 +180,8 @@ data class ChannelRequest(val channel: String)
 data class CreateBlockRequest(
     val startDate: String,
     val endDate: String? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
     val type: String,
     val reason: String? = null,
     val cancelIntersectingSessions: Boolean = false,
