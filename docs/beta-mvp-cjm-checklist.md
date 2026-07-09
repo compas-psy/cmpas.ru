@@ -18,8 +18,8 @@
 - [x] Серверный статус каналов теперь MAX-first при рекомендации.
 - [x] Добавлен warning при отсутствии `MAX_BOT_USERNAME`, а не молчаливая недоступность.
 - [x] Добавлены admin/cron endpoint протухания invite-токенов и admin conversion metrics.
-- [ ] Android InviteSheet: использовать только реальный `inviteLink`, добавить QR, share, copy.
-- [ ] Live-polling channel status в карточке клиента и invite sheet.
+- [x] Android InviteSheet использует реальный `inviteLink`, QR, share, copy и MAX-first кнопки.
+- [x] Live-polling channel status уже есть в `ClientDetailViewModel` и отображается в invite sheet.
 - [ ] Проверить MAX-first во всех поверхностях UI.
 
 ## CJM-3 · Заметки после сессии
