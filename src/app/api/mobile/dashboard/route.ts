@@ -45,7 +45,9 @@ export async function GET(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        await settlePastSessionsForPsychologist(auth.userId);
+        await settlePastSessionsForPsychologist(auth.userId).catch((error) => {
+            console.error('[mobile/dashboard] settle skipped:', error);
+        });
 
         const now = new Date();
         const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -65,11 +67,7 @@ export async function GET(req: NextRequest) {
                 select: { name: true, psychologistSettings: { select: { fullName: true, onlineSessionLink: true, onboardingCompleted: true } } },
             }),
             db.diarySession.findMany({
-                where: {
-                    psychologistId: auth.userId,
-                    date: { gte: today, lte: horizon },
-                    status: { in: ['pending', 'confirmed'] },
-                },
+                where: { psychologistId: auth.userId, date: { gte: today, lte: horizon }, status: { in: ['pending', 'confirmed'] } },
                 include: { client: { select: { id: true, name: true } } },
                 orderBy: [{ date: 'asc' }, { time: 'asc' }],
                 take: 60,
@@ -86,12 +84,10 @@ export async function GET(req: NextRequest) {
                   AND status = 'completed'
                   AND "paymentStatus" = 'unpaid'
             `.catch(() => []),
-            listNotifications(auth.userId, { limit: 30 }),
+            listNotifications(auth.userId, { limit: 30 }).catch(() => ({ items: [] })),
         ]);
 
-        const nextSessionRaw = futureCandidates
-            .filter((session) => isSessionFuture(session, now))
-            .sort(compareSessionStart)[0] || null;
+        const nextSessionRaw = futureCandidates.filter((session) => isSessionFuture(session, now)).sort(compareSessionStart)[0] || null;
 
         const paymentById = await paymentStatusMap([
             ...todaySessions.map((s) => s.id),
@@ -104,7 +100,7 @@ export async function GET(req: NextRequest) {
 
         const attentionItems: Array<{ type: string; count: number; label: string }> = [];
         const sessionsWithoutNotes = completedCandidates.filter((session) => !hasSessionNotes(session)).length;
-        const clientsWithoutConsent = await db.diaryClient.count({ where: { psychologistId: auth.userId, consentDate: null, status: 'active' } });
+        const clientsWithoutConsent = await db.diaryClient.count({ where: { psychologistId: auth.userId, consentDate: null, status: 'active' } }).catch(() => 0);
         const unpaidCount = Number(unpaidPastSessions[0]?.count || 0);
 
         if (sessionsWithoutNotes > 0) attentionItems.push({ type: 'sessions_without_notes', count: sessionsWithoutNotes, label: 'Сессии без заметок' });
