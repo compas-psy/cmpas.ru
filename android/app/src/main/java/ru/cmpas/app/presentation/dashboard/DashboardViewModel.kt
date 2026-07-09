@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.domain.model.AttentionItem
+import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.PracticeNotification
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
@@ -67,6 +69,25 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    fun markPaid(sessionId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(paymentUpdatingSessionId = sessionId) }
+            try {
+                val response = api.updateSession(sessionId, UpdateSessionRequest(paymentStatus = PaymentStatus.PAID))
+                if (response.isSuccessful) {
+                    PracticeRefreshBus.notifyChanged()
+                    loadDashboard(showLoader = false)
+                } else {
+                    _uiState.update { it.copy(error = "Не удалось отметить оплату") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.localizedMessage ?: "Не удалось отметить оплату") }
+            } finally {
+                _uiState.update { it.copy(paymentUpdatingSessionId = null) }
+            }
+        }
+    }
+
     private fun loadProfile() {
         viewModelScope.launch {
             try {
@@ -90,6 +111,7 @@ data class DashboardUiState(
     val bookingLink: String? = null,
     val error: String? = null,
     val isDataLoaded: Boolean = false,
+    val paymentUpdatingSessionId: String? = null,
     val todayFormatted: String = LocalDate.now()
         .format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")))
         .replaceFirstChar { it.uppercase() },
