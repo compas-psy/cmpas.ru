@@ -54,20 +54,14 @@ fun NotificationCenterSheet(
                         Spacer(Modifier.width(10.dp))
                         Text(attention.label, style = tBody2, color = CompasFg, modifier = Modifier.weight(1f))
                     }
-                    if (index != attentionItems.lastIndex) {
-                        HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
-                    }
+                    if (index != attentionItems.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
                 }
             }
             Spacer(Modifier.height(14.dp))
         }
 
         when {
-            uiState.isLoading && uiState.items.isEmpty() -> {
-                Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Forest700)
-                }
-            }
+            uiState.isLoading && uiState.items.isEmpty() -> Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Forest700) }
             uiState.error != null && uiState.items.isEmpty() -> {
                 GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
                     Text("Не удалось загрузить уведомления", style = tSection, color = CompasFg)
@@ -87,9 +81,7 @@ fun NotificationCenterSheet(
                 }
             }
             else -> {
-                val (today, earlier) = remember(uiState.items) {
-                    uiState.items.partition { isToday(it.createdAt) }
-                }
+                val (today, earlier) = remember(uiState.items) { uiState.items.partition { isToday(it.createdAt) } }
                 if (today.isNotEmpty()) {
                     Eyebrow("Сегодня")
                     Spacer(Modifier.height(8.dp))
@@ -109,13 +101,8 @@ fun NotificationCenterSheet(
                 }
                 if (uiState.nextCursor != null) {
                     Spacer(Modifier.height(4.dp))
-                    if (uiState.isLoadingMore) {
-                        Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Forest700)
-                        }
-                    } else {
-                        GhostButton("Показать ещё", { viewModel.loadMore() }, Modifier.fillMaxWidth(), Icons.Outlined.ExpandMore)
-                    }
+                    if (uiState.isLoadingMore) Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Forest700) }
+                    else GhostButton("Показать ещё", { viewModel.loadMore() }, Modifier.fillMaxWidth(), Icons.Outlined.ExpandMore)
                 }
             }
         }
@@ -124,12 +111,7 @@ fun NotificationCenterSheet(
     }
 }
 
-private fun openNotification(
-    item: PracticeNotification,
-    closeAndMarkRead: () -> Unit,
-    onOpenSession: (String) -> Unit,
-    onOpenClient: (String) -> Unit,
-) {
+private fun openNotification(item: PracticeNotification, closeAndMarkRead: () -> Unit, onOpenSession: (String) -> Unit, onOpenClient: (String) -> Unit) {
     closeAndMarkRead()
     when {
         item.sessionId != null -> onOpenSession(item.sessionId)
@@ -165,6 +147,10 @@ private fun notificationIcon(type: String): ImageVector = when (type) {
     "session_confirmed" -> Icons.Outlined.EventAvailable
     "session_cancelled" -> Icons.Outlined.EventBusy
     "session_pending" -> Icons.Outlined.Schedule
+    "session_needs_note" -> Icons.Outlined.EditNote
+    "session_unpaid" -> Icons.Outlined.Payments
+    "client_cancel_attempt" -> Icons.Outlined.WarningAmber
+    "invite_expired" -> Icons.Outlined.LinkOff
     "new_booking" -> Icons.Outlined.CalendarMonth
     "channel_linked" -> Icons.Outlined.Link
     "homework_received" -> Icons.Outlined.Assignment
@@ -173,8 +159,9 @@ private fun notificationIcon(type: String): ImageVector = when (type) {
 }
 
 private fun notificationTint(type: String) = when (type) {
-    "session_confirmed", "channel_linked" -> Success
-    "session_cancelled" -> CompasDestructive
+    "session_confirmed", "channel_linked", "document_acknowledged" -> Success
+    "session_cancelled", "client_cancel_attempt" -> CompasDestructive
+    "session_unpaid", "session_needs_note", "invite_expired" -> CompasAccent
     else -> Forest700
 }
 
