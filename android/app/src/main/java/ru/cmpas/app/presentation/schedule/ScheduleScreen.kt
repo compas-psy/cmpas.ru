@@ -121,16 +121,10 @@ fun ScheduleScreen(
                     )
                 }
 
-                item {
-                    SectionTitle("Ближайшие блокировки", actionLabel = "+ Добавить") { showAddSheet = true }
-                }
+                item { SectionTitle("Ближайшие блокировки", actionLabel = "+ Добавить") { showAddSheet = true } }
 
                 when {
-                    uiState.isLoading -> item {
-                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = Forest700)
-                        }
-                    }
+                    uiState.isLoading -> item { Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Forest700) } }
                     uiState.blocks.isEmpty() -> item {
                         GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
                             Text("Блокировок нет", style = tSection, color = CompasFg)
@@ -138,9 +132,7 @@ fun ScheduleScreen(
                             Text("В расписании нет дополнительных закрытых дней или периодов.", style = tBody2)
                         }
                     }
-                    else -> items(uiState.blocks, key = { it.id }) { block ->
-                        BlockRow(block = block, isDeleting = uiState.deletingId == block.id, onDelete = { pendingDelete = block })
-                    }
+                    else -> items(uiState.blocks, key = { it.id }) { block -> BlockRow(block = block, isDeleting = uiState.deletingId == block.id, onDelete = { pendingDelete = block }) }
                 }
             }
         }
@@ -187,7 +179,7 @@ private fun QuickBlockActionsCard(
     val tomorrow = today.plusDays(1)
     GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Bolt, null, Modifier.size(20.dp), tint = Forest700)
+            Icon(Icons.Outlined.EventBusy, null, Modifier.size(20.dp), tint = Forest700)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("Быстрые блокировки", style = tBody, color = CompasFg)
@@ -215,14 +207,14 @@ private fun QuickBlockActionsCard(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GhostButton(
                 text = "С 18:00",
-                icon = Icons.Outlined.NightsStay,
+                icon = Icons.Outlined.Schedule,
                 enabled = !isSaving,
                 modifier = Modifier.weight(1f),
                 onClick = { onBlock(today.toString(), today.toString(), "18:00", "23:59", "personal", "Закончить день раньше") },
             )
             GhostButton(
                 text = "Отпуск",
-                icon = Icons.Outlined.Luggage,
+                icon = Icons.Outlined.EditCalendar,
                 enabled = !isSaving,
                 modifier = Modifier.weight(1f),
                 onClick = onCustom,
@@ -232,14 +224,7 @@ private fun QuickBlockActionsCard(
 }
 
 @Composable
-private fun ScheduleModeCard(
-    mode: String,
-    isSaving: Boolean,
-    bookingBufferHours: Int,
-    horizonDays: Int,
-    cancellationHours: Int,
-    onMode: (String) -> Unit,
-) {
+private fun ScheduleModeCard(mode: String, isSaving: Boolean, bookingBufferHours: Int, horizonDays: Int, cancellationHours: Int, onMode: (String) -> Unit) {
     val modes = listOf("private", "readonly", "booking")
     val selected = modes.indexOf(mode).coerceAtLeast(0)
     GlassTintCard(Modifier.fillMaxWidth(), padding = 16.dp) {
@@ -287,13 +272,7 @@ private fun WeekOverviewCard(rules: List<AvailabilityRule>, slots: List<Availabi
             slots.groupBy { it.dayOfWeek }.toSortedMap().entries.take(7).forEach { (day, daySlots) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(dayLabel(day), style = tMeta, color = CompasMutedFg, modifier = Modifier.width(34.dp))
-                    Text(
-                        daySlots.take(3).joinToString(" · ") { "${it.startTime}-${it.endTime}" } + if (daySlots.size > 3) " …" else "",
-                        style = tBody2,
-                        color = CompasFg,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Text(daySlots.take(3).joinToString(" · ") { "${it.startTime}-${it.endTime}" } + if (daySlots.size > 3) " …" else "", style = tBody2, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -317,13 +296,7 @@ private fun BlockRow(block: TimeBlock, isDeleting: Boolean, onDelete: () -> Unit
             Column(Modifier.weight(1f)) {
                 Text(prettyBlockDate(block.date), style = tBody, color = CompasFg)
                 Spacer(Modifier.height(3.dp))
-                Text(
-                    blockTypeLabel(block.type) + " · ${block.startTime}-${block.endTime}" + (block.reason?.let { " · $it" } ?: ""),
-                    style = tMeta,
-                    color = CompasMutedFg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text(blockTypeLabel(block.type) + " · ${block.startTime}-${block.endTime}" + (block.reason?.let { " · $it" } ?: ""), style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (isDeleting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Forest700)
             else IconButtonGlass(Icons.Outlined.Close, "Снять блокировку", onClick = onDelete)
@@ -333,11 +306,7 @@ private fun BlockRow(block: TimeBlock, isDeleting: Boolean, onDelete: () -> Unit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddBlockSheet(
-    isSaving: Boolean,
-    onClose: () -> Unit,
-    onSave: (startDate: String, endDate: String, type: String, reason: String?, cancelSessions: Boolean) -> Unit,
-) {
+private fun AddBlockSheet(isSaving: Boolean, onClose: () -> Unit, onSave: (startDate: String, endDate: String, type: String, reason: String?, cancelSessions: Boolean) -> Unit) {
     var startDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var endDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var typeIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -365,21 +334,10 @@ private fun AddBlockSheet(
         CompasSegmented(listOf("Отпуск", "Больничный", "Личное"), typeIndex) { typeIndex = it }
         Spacer(Modifier.height(14.dp))
         GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
-            OutlinedTextField(
-                value = reason,
-                onValueChange = { reason = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Комментарий") },
-                placeholder = { Text("Необязательно") },
-                shape = RoundedCornerShape(16.dp),
-                minLines = 2,
-            )
+            OutlinedTextField(value = reason, onValueChange = { reason = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Комментарий") }, placeholder = { Text("Необязательно") }, shape = RoundedCornerShape(16.dp), minLines = 2)
         }
         Spacer(Modifier.height(10.dp))
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.5f)).padding(horizontal = 14.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.5f)).padding(horizontal = 14.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Отменить попадающие сессии", style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
             Switch(checked = cancelSessions, onCheckedChange = { cancelSessions = it })
         }
@@ -388,34 +346,20 @@ private fun AddBlockSheet(
             Text("Дата «по» не может быть раньше даты «с»", style = tMeta, color = CompasDestructive)
         }
         Spacer(Modifier.height(16.dp))
-        PrimaryButton(
-            text = if (isSaving) "Сохраняем…" else "Добавить блокировку",
-            icon = if (isSaving) null else Icons.Outlined.Check,
-            enabled = valid && !isSaving,
-            onClick = { onSave(startDateText, endDateText, types[typeIndex], reason, cancelSessions) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        PrimaryButton(text = if (isSaving) "Сохраняем…" else "Добавить блокировку", icon = if (isSaving) null else Icons.Outlined.Check, enabled = valid && !isSaving, onClick = { onSave(startDateText, endDateText, types[typeIndex], reason, cancelSessions) }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
         GhostButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
     }
 
     if (showStartPicker) {
-        DateDialog(
-            initial = startDate ?: LocalDate.now(),
-            onDismiss = { showStartPicker = false },
-            onPick = { picked ->
-                startDateText = picked.toString()
-                if (endDate == null || endDate.isBefore(picked)) endDateText = picked.toString()
-                showStartPicker = false
-            },
-        )
+        DateDialog(initial = startDate ?: LocalDate.now(), onDismiss = { showStartPicker = false }, onPick = { picked ->
+            startDateText = picked.toString()
+            if (endDate == null || endDate.isBefore(picked)) endDateText = picked.toString()
+            showStartPicker = false
+        })
     }
     if (showEndPicker) {
-        DateDialog(
-            initial = endDate ?: startDate ?: LocalDate.now(),
-            onDismiss = { showEndPicker = false },
-            onPick = { picked -> endDateText = picked.toString(); showEndPicker = false },
-        )
+        DateDialog(initial = endDate ?: startDate ?: LocalDate.now(), onDismiss = { showEndPicker = false }, onPick = { picked -> endDateText = picked.toString(); showEndPicker = false })
     }
 }
 
@@ -423,27 +367,11 @@ private fun AddBlockSheet(
 @Composable
 private fun DateDialog(initial: LocalDate, onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
     val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val state = rememberDatePickerState(
-        initialSelectedDateMillis = initial.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        selectableDates = object : SelectableDates { override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStart },
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                state.selectedDateMillis?.let { millis -> onPick(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()) } ?: onDismiss()
-            }) { Text("Выбрать") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-    ) { DatePicker(state = state) }
+    val state = rememberDatePickerState(initialSelectedDateMillis = initial.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), selectableDates = object : SelectableDates { override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStart })
+    DatePickerDialog(onDismissRequest = onDismiss, confirmButton = { TextButton(onClick = { state.selectedDateMillis?.let { millis -> onPick(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()) } ?: onDismiss() }) { Text("Выбрать") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }) { DatePicker(state = state) }
 }
 
-private fun blockTypeLabel(type: String) = when (type) {
-    "vacation" -> "Отпуск"
-    "sick" -> "Больничный"
-    "personal" -> "Личное"
-    else -> "Блокировка"
-}
+private fun blockTypeLabel(type: String) = when (type) { "vacation" -> "Отпуск"; "sick" -> "Больничный"; "personal" -> "Личное"; else -> "Блокировка" }
 
 private fun dayLabel(day: Int) = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").getOrElse(day.coerceIn(0, 6)) { "—" }
 
