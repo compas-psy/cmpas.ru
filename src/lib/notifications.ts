@@ -8,7 +8,11 @@ export type NotificationType =
     | 'channel_linked'
     | 'homework_received'
     | 'document_acknowledged'
-    | 'document_opened';
+    | 'document_opened'
+    | 'session_needs_note'
+    | 'client_cancel_attempt'
+    | 'invite_expired'
+    | 'session_unpaid';
 
 /** Writes a notification at the moment an event happens, so the psychologist's
  * bell/center has real history and read-state instead of a 7-day rolling
