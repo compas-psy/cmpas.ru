@@ -6,6 +6,15 @@ import { createNotification } from '@/lib/notifications';
 
 const ALLOWED = new Set(['not_required', 'unpaid', 'paid']);
 
+async function ensurePaymentStatusColumn() {
+    await db.$executeRaw(Prisma.sql`
+        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'not_required'
+    `);
+    await db.$executeRaw(Prisma.sql`
+        CREATE INDEX IF NOT EXISTS "DiarySession_paymentStatus_idx" ON "DiarySession"("paymentStatus")
+    `).catch(() => undefined);
+}
+
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
     const session = await auth();
     const psychologistId = session?.user?.id;
@@ -13,6 +22,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
     const { id } = await context.params;
     try {
+        await ensurePaymentStatusColumn();
         const rows = await db.$queryRaw<Array<{ id: string; paymentStatus: string | null }>>(Prisma.sql`
             SELECT id, "paymentStatus"
             FROM "DiarySession"
@@ -41,6 +51,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     try {
+        await ensurePaymentStatusColumn();
         const rows = await db.$queryRaw<Array<{ id: string; clientId: string; clientName: string | null }>>(Prisma.sql`
             SELECT s.id, s."clientId", c.name as "clientName"
             FROM "DiarySession" s
