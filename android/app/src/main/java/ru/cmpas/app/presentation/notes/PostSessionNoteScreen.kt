@@ -20,10 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SmartNoteBlock
 import ru.cmpas.app.presentation.components.*
@@ -39,6 +39,8 @@ fun PostSessionNoteScreen(
     viewModel: PostSessionNoteViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var mode by rememberSaveable { mutableStateOf(NoteMode.BLOCKS) }
     var shortText by rememberSaveable { mutableStateOf("") }
     var request by rememberSaveable { mutableStateOf("") }
@@ -76,6 +78,10 @@ fun PostSessionNoteScreen(
             nextStep = extractBlock(saved, "Следующий шаг")
             restored = true
         }
+    }
+
+    fun showMessage(message: String) {
+        scope.launch { snackbarHostState.showSnackbar(message) }
     }
 
     fun buildText(): String = buildString {
@@ -181,7 +187,13 @@ fun PostSessionNoteScreen(
                         }
                     }
                 }
-                item { AiHelperCard() }
+                item {
+                    AiHelperCard(
+                        isLoading = uiState.isMarkingAiInterest,
+                        recorded = uiState.aiInterestRecorded,
+                        onInterested = { viewModel.markAiInterest(::showMessage) },
+                    )
+                }
             }
         }
 
@@ -203,6 +215,7 @@ fun PostSessionNoteScreen(
                 },
             )
         }
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
     }
 }
 
@@ -347,22 +360,34 @@ private fun AddTagPill(onClick: () -> Unit) {
 }
 
 @Composable
-private fun AiHelperCard() {
-    Row(
+private fun AiHelperCard(isLoading: Boolean, recorded: Boolean, onInterested: () -> Unit) {
+    Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
             .background(Brush.linearGradient(listOf(GoldSoft, Color(0xFFFFFBF1))))
             .border(1.dp, CompasAccent400.copy(alpha = 0.55f), RoundedCornerShape(19.dp))
             .padding(15.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(21.dp), tint = CompasAccent)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(21.dp), tint = CompasAccent)
+            }
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f)) {
+                Text("AI-помощник · скоро ✨", style = tBody, color = CompasFg)
+                Text("Будет делать резюме, предлагать теги и готовить фокус следующей сессии. Сейчас можно попасть в список первых.", style = tMeta, color = CompasMutedFg)
+            }
         }
-        Spacer(Modifier.width(11.dp))
-        Column(Modifier.weight(1f)) {
-            Text("AI-помощник", style = tBody, color = CompasFg)
-            Text("После сохранения сделает резюме, предложит теги и подготовку к следующей сессии.", style = tMeta, color = CompasMutedFg)
-        }
+        Spacer(Modifier.height(12.dp))
+        GhostButton(
+            text = when {
+                recorded -> "Вы в списке"
+                isLoading -> "Записываем…"
+                else -> "Хочу первым"
+            },
+            onClick = onInterested,
+            modifier = Modifier.fillMaxWidth(),
+            icon = if (recorded) Icons.Outlined.Check else Icons.Outlined.NotificationsActive,
+        )
     }
 }
 
