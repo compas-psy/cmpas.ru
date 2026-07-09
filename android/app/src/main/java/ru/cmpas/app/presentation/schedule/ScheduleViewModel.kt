@@ -7,8 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.api.AvailabilityRule
+import ru.cmpas.app.data.api.AvailabilitySlotDto
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateBlockRequest
+import ru.cmpas.app.data.api.ScheduleModeRequest
 import ru.cmpas.app.domain.model.TimeBlock
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalDate
@@ -21,22 +24,69 @@ class ScheduleViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState = _uiState.asStateFlow()
 
-    init { loadBlocks() }
+    init { loadSchedule() }
 
-    fun loadBlocks() {
+    fun loadSchedule() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val from = LocalDate.now().toString()
-                val to = LocalDate.now().plusDays(120).toString()
-                val response = api.getBlocks(from, to)
-                if (response.isSuccessful) {
-                    _uiState.update { it.copy(isLoading = false, blocks = response.body().orEmpty().sortedBy { b -> b.date }) }
+                val availability = api.getAvailability()
+                if (availability.isSuccessful) {
+                    val body = availability.body()
+                    _uiState.update {
+                        it.copy(
+                            scheduleMode = body?.scheduleMode ?: "private",
+                            bookingBufferHours = body?.bookingBufferHours ?: 24,
+                            bookingHorizonDays = body?.bookingHorizonDays ?: 14,
+                            cancellationHours = body?.cancellationHours ?: 24,
+                            rules = body?.rules.orEmpty(),
+                            slots = body?.slots.orEmpty(),
+                            blocks = body?.blocks.orEmpty().sortedBy { block -> block.date },
+                            isLoading = false,
+                        )
+                    }
                 } else {
-                    _uiState.update { it.copy(isLoading = false, error = "Не удалось загрузить блокировки") }
+                    loadBlocksFallback("Не удалось загрузить расписание")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage ?: "Не удалось загрузить блокировки") }
+                loadBlocksFallback(e.localizedMessage ?: "Не удалось загрузить расписание")
+            }
+        }
+    }
+
+    fun loadBlocks() = loadSchedule()
+
+    private suspend fun loadBlocksFallback(message: String) {
+        try {
+            val from = LocalDate.now().toString()
+            val to = LocalDate.now().plusDays(120).toString()
+            val response = api.getBlocks(from, to)
+            if (response.isSuccessful) {
+                _uiState.update { it.copy(isLoading = false, error = message, blocks = response.body().orEmpty().sortedBy { b -> b.date }) }
+            } else {
+                _uiState.update { it.copy(isLoading = false, error = message) }
+            }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(isLoading = false, error = message) }
+        }
+    }
+
+    fun updateScheduleMode(mode: String, onFinished: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingMode = true) }
+            try {
+                val response = api.updateScheduleMode(ScheduleModeRequest(mode))
+                _uiState.update { it.copy(isSavingMode = false) }
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(scheduleMode = response.body()?.scheduleMode ?: mode) }
+                    PracticeRefreshBus.notifyChanged()
+                    onFinished(true, scheduleModeLabel(mode))
+                } else {
+                    onFinished(false, "Не удалось изменить режим записи")
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSavingMode = false) }
+                onFinished(false, e.localizedMessage ?: "Не удалось изменить режим записи")
             }
         }
     }
@@ -64,7 +114,7 @@ class ScheduleViewModel @Inject constructor(
                 _uiState.update { it.copy(isSaving = false) }
                 if (response.isSuccessful) {
                     PracticeRefreshBus.notifyChanged()
-                    loadBlocks()
+                    loadSchedule()
                     onFinished(true, "Блокировка добавлена в расписание")
                 } else {
                     onFinished(false, "Не удалось сохранить (${response.code()})")
@@ -84,7 +134,7 @@ class ScheduleViewModel @Inject constructor(
                 _uiState.update { it.copy(deletingId = null) }
                 if (response.isSuccessful) {
                     PracticeRefreshBus.notifyChanged()
-                    loadBlocks()
+                    loadSchedule()
                     onFinished(true, "Блокировка снята")
                 } else {
                     onFinished(false, "Не удалось снять блокировку")
@@ -100,7 +150,20 @@ class ScheduleViewModel @Inject constructor(
 data class ScheduleUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
+    val isSavingMode: Boolean = false,
+    val scheduleMode: String = "private",
+    val bookingBufferHours: Int = 24,
+    val bookingHorizonDays: Int = 14,
+    val cancellationHours: Int = 24,
+    val rules: List<AvailabilityRule> = emptyList(),
+    val slots: List<AvailabilitySlotDto> = emptyList(),
     val blocks: List<TimeBlock> = emptyList(),
     val deletingId: String? = null,
     val error: String? = null,
 )
+
+fun scheduleModeLabel(mode: String) = when (mode) {
+    "booking" -> "Запись открыта"
+    "readonly" -> "Превью расписания"
+    else -> "Запись закрыта"
+}
