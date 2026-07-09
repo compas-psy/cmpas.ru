@@ -28,7 +28,7 @@
 
 Сценарий:
 
-новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark in Android dashboard and web session modal → document journal CSV → client cancel blocked/allowed through miniapp, signed link, Telegram callback, MAX callback.
+новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark in Android dashboard and web session modal → document journal CSV → resend outdated document → client cancel blocked/allowed through miniapp, signed link, Telegram callback, MAX callback.
 
 **DoD:** сценарий проходит без ручного SQL и без fake buttons.
 
@@ -60,9 +60,9 @@
 
 ### B3. Documents journal final UI
 
-**Сейчас сделано:** таб журнала, фильтр «Без согласия/Принятые», CSV с BOM и contentHash.
+**Сейчас сделано:** таб журнала, фильтр «Без согласия/Принятые», CSV с BOM и contentHash, кнопка «Старые версии» в карточке документа: проверяет клиентов со старой версией и запускает resend актуальной версии.
 
-**Осталось:** кнопка переотправки клиентам со старой версией прямо из UI документа/журнала.
+**Осталось:** smoke-test реальной доставки после resend и проверка записи в журнале.
 
 **DoD:** психолог видит старые версии и запускает resend без API-клиента.
 
@@ -108,6 +108,7 @@
 - ONB-1: no phantom step, preserves timezone/sessionBreak/lunch/cancellation, adds document/messenger/first client steps.
 - Android onboarding bridge: `needsOnboarding` card.
 - JOURNAL-1: web journal tab + consent filters + CSV with contentHash.
+- DOCVER-1: outdated version check + resend button in documents UI.
 - PAY-1: backend GET/PATCH + web session modal controls + Android dashboard action.
 - NOTIF-1 UX: Android explicit «Прочитать все» and local read-state update.
 - VOICE-1: local m4a recording + player, with honest AI teaser.
