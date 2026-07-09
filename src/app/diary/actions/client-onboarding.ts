@@ -56,13 +56,15 @@ export async function getOnboardingOptions(clientId: string) {
         select: { id: true },
     });
 
+    const channelStatus = await getClientChannelStatus(psychologistId, clientId).catch(() => null);
+
     return {
         clientId: client.id,
         clientName: client.name,
         phone: client.phone ?? null,
         hasTelegram: Boolean(client.telegramChatId),
         hasMax: Boolean(client.maxChatId),
-        recommendedChannel: client.telegramChatId ? 'telegram' as const : client.maxChatId ? 'max' as const : 'telegram' as const,
+        recommendedChannel: channelStatus?.recommendedChannel || (client.maxChatId ? 'max' as const : client.telegramChatId ? 'telegram' as const : 'max' as const),
         documents,
         hasSession: Boolean(session),
     };
@@ -203,7 +205,7 @@ export async function sendClientOnboarding(
     };
 }
 
-export async function generateClientInviteLink(clientId: string, channel: OnboardingChannel = 'telegram') {
+export async function generateClientInviteLink(clientId: string, channel: OnboardingChannel = 'max') {
     const psychologistId = await getPsychologistId();
     const invite = await createClientChannelInvite({ psychologistId, clientId, channel });
     return {
