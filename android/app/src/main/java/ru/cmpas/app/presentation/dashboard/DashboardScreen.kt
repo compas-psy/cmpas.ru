@@ -215,8 +215,8 @@ private fun ScheduleRow(
                     Spacer(Modifier.height(3.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
-                        if (passed) FmtChip("completed")
-                        if (s.paymentStatus == PaymentStatus.PAID) FmtChip("paid")
+                        if (passed) TinyBadge("Прошла")
+                        if (s.paymentStatus == PaymentStatus.PAID) TinyBadge("Оплачено")
                     }
                 }
                 Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
@@ -249,6 +249,17 @@ private fun ScheduleRow(
             }
         }
     }
+}
+
+@Composable
+private fun TinyBadge(text: String) {
+    Text(
+        text,
+        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Sage100).padding(horizontal = 8.dp, vertical = 3.dp),
+        style = tMeta,
+        color = Forest700,
+        maxLines = 1,
+    )
 }
 
 private fun statusDotColor(status: SessionStatus): Color = when (status) {
