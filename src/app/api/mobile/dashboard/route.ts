@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
             db.diarySession.findMany({ where: { psychologistId: auth.userId, date: { gte: weekAgo, lt: tomorrow } }, select: { id: true, status: true, clientId: true } }),
             db.user.findUnique({
                 where: { id: auth.userId },
-                select: { name: true, psychologistSettings: { select: { fullName: true, onlineSessionLink: true } } },
+                select: { name: true, psychologistSettings: { select: { fullName: true, onlineSessionLink: true, onboardingCompleted: true } } },
             }),
             db.diarySession.findMany({
                 where: {
@@ -135,6 +135,8 @@ export async function GET(req: NextRequest) {
                 cancelledCount: weekSessions.filter(s => s.status === 'cancelled').length,
             },
             userName: user?.psychologistSettings?.fullName || user?.name || null,
+            needsOnboarding: !user?.psychologistSettings?.onboardingCompleted,
+            onboardingUrl: '/onboarding',
             attentionItems,
             notifications,
             bookingLink: baseBookingLink,
