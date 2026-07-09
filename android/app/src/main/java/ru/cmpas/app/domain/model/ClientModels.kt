@@ -69,6 +69,8 @@ data class DashboardDataV2(
     val attentionItems: List<AttentionItem> = emptyList(),
     val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
+    val needsOnboarding: Boolean = false,
+    val onboardingUrl: String? = null,
 )
 
 @Serializable
