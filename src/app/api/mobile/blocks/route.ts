@@ -2,9 +2,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 
+function dayStart(value: string) {
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
+function dayEnd(value: string) {
+    const date = new Date(value);
+    date.setHours(23, 59, 59, 999);
+    return date;
+}
+
+function normalizeTime(value: unknown, fallback: string) {
+    if (typeof value !== 'string') return fallback;
+    const trimmed = value.trim();
+    return /^\d{2}:\d{2}$/.test(trimmed) ? trimmed : fallback;
+}
+
+function minutesOf(value: string) {
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours * 60 + minutes;
+}
+
+function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
+    return minutesOf(aStart) < minutesOf(bEnd) && minutesOf(aEnd) > minutesOf(bStart);
+}
+
 /**
  * GET /api/mobile/blocks?from=YYYY-MM-DD&to=YYYY-MM-DD
- * Returns time blocks (unavailability) for the given range.
+ * Returns server-side time blocks for the requested range.
  */
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
@@ -18,19 +45,19 @@ export async function GET(req: NextRequest) {
             where: {
                 psychologistId: auth.userId,
                 ...(from && to && {
-                    date: { gte: new Date(from), lte: new Date(to) },
+                    date: { gte: dayStart(from), lte: dayEnd(to) },
                 }),
             },
-            orderBy: { date: 'asc' },
+            orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
         });
 
-        return NextResponse.json(blocks.map(b => ({
-            id: b.id,
-            date: b.date.toISOString().split('T')[0],
-            startTime: b.startTime || '00:00',
-            endTime: b.endTime || '23:59',
-            type: b.type || 'block',
-            reason: b.reason || null,
+        return NextResponse.json(blocks.map((block) => ({
+            id: block.id,
+            date: block.date.toISOString().split('T')[0],
+            startTime: block.startTime || '00:00',
+            endTime: block.endTime || '23:59',
+            type: block.type || 'personal',
+            reason: block.reason || null,
         })));
     } catch (error) {
         console.error('[mobile/blocks GET]', error);
@@ -40,68 +67,97 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/mobile/blocks
- * Create a time block (vacation, sick, personal, etc.).
- * Body: { startDate, endDate, type, reason?, cancelIntersectingSessions? }
+ * Create one or more server-side DiaryBlock rows.
+ * Body supports both beta formats:
+ * - { date, startTime, endTime, type, reason }
+ * - { startDate, endDate, startTime?, endTime?, type, reason?, cancelIntersectingSessions? }
  */
 export async function POST(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { startDate, endDate, type, reason, cancelIntersectingSessions } = await req.json();
+        const body = await req.json();
+        const startDate = body.startDate || body.date;
+        const endDate = body.endDate || startDate;
+        const type = typeof body.type === 'string' && body.type.trim() ? body.type.trim() : 'personal';
+        const reason = typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim() : null;
+        const startTime = normalizeTime(body.startTime, '00:00');
+        const endTime = normalizeTime(body.endTime, body.startTime ? '23:59' : '23:59');
 
-        if (!startDate || !type) {
-            return NextResponse.json({ error: 'startDate and type required' }, { status: 400 });
+        if (!startDate) {
+            return NextResponse.json({ error: 'startDate or date required' }, { status: 400 });
+        }
+        if (minutesOf(startTime) >= minutesOf(endTime)) {
+            return NextResponse.json({ error: 'endTime must be after startTime' }, { status: 400 });
         }
 
-        const start = new Date(startDate);
-        const end = new Date(endDate || startDate);
+        const start = dayStart(startDate);
+        const end = dayStart(endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+            return NextResponse.json({ error: 'Invalid date range' }, { status: 400 });
+        }
 
         const blocksToCreate = [];
-        for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
             blocksToCreate.push({
                 psychologistId: auth.userId,
-                date: new Date(d),
-                startTime: '00:00',
-                endTime: '23:59',
+                date: new Date(cursor),
+                startTime,
+                endTime,
                 type,
-                reason: reason || null,
+                reason,
             });
         }
 
-        await db.diaryBlock.createMany({ data: blocksToCreate });
+        const created = await db.diaryBlock.createMany({ data: blocksToCreate });
 
-        if (cancelIntersectingSessions) {
+        let cancelled = 0;
+        if (body.cancelIntersectingSessions) {
             const sessionsToCancel = await db.diarySession.findMany({
                 where: {
                     psychologistId: auth.userId,
-                    date: { gte: start, lte: end },
+                    date: { gte: start, lte: dayEnd(endDate) },
                     status: { notIn: ['cancelled', 'completed'] },
                 },
                 include: { client: true },
             });
-            if (sessionsToCancel.length > 0) {
+
+            const intersecting = sessionsToCancel.filter((session) => {
+                const sessionStart = session.time || '00:00';
+                const sessionEnd = session.endTime || (() => {
+                    const endMinutes = minutesOf(sessionStart) + (session.duration || 50);
+                    return `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+                })();
+                return overlaps(startTime, endTime, sessionStart, sessionEnd);
+            });
+
+            if (intersecting.length > 0) {
                 await db.diarySession.updateMany({
-                    where: { id: { in: sessionsToCancel.map(s => s.id) } },
+                    where: { id: { in: intersecting.map((session) => session.id) } },
                     data: { status: 'cancelled' },
                 });
-                for (const s of sessionsToCancel) {
-                    const client = s.client as any;
-                    const msg = `⚠️ Ваша запись на ${s.date.toLocaleDateString('ru-RU')} в ${s.time} была отменена${reason ? ` (${reason})` : ''}. Свяжитесь для переноса.`;
+                cancelled = intersecting.length;
+
+                for (const session of intersecting) {
+                    const client = session.client as any;
+                    const message = `Ваша запись на ${session.date.toLocaleDateString('ru-RU')} в ${session.time} отменена${reason ? `: ${reason}` : ''}. Если будет удобно, свяжитесь со специалистом для переноса.`;
                     try {
                         if (client?.telegramChatId) {
                             const { sendTelegramMessage } = await import('@/lib/telegram');
-                            await sendTelegramMessage(client.telegramChatId, msg);
+                            await sendTelegramMessage(client.telegramChatId, message);
                         } else if (client?.maxChatId) {
                             const { sendMaxMessage } = await import('@/lib/max-bot');
-                            await sendMaxMessage(client.maxChatId, msg);
+                            await sendMaxMessage(client.maxChatId, message);
                         }
-                    } catch { /* ignore */ }
+                    } catch (error) {
+                        console.error('[mobile/blocks POST] notify cancelled session failed:', error);
+                    }
                 }
             }
         }
 
-        return NextResponse.json({ ok: true, created: blocksToCreate.length }, { status: 201 });
+        return NextResponse.json({ ok: true, created: created.count, cancelled }, { status: 201 });
     } catch (error) {
         console.error('[mobile/blocks POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
