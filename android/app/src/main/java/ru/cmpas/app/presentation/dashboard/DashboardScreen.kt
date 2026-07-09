@@ -78,6 +78,14 @@ fun DashboardScreen(
                 }
             }
 
+            if (uiState.needsOnboarding) {
+                item {
+                    OnboardingBridgeCard(
+                        onOpen = { uriHandler.openUri("https://cmpas.ru${uiState.onboardingUrl ?: "/onboarding"}") },
+                    )
+                }
+            }
+
             item {
                 val next = uiState.nextSession
                 if (next != null) {
@@ -134,6 +142,41 @@ fun DashboardScreen(
                 onOpenClient = { id -> onClientClick(id) },
             )
         }
+    }
+}
+
+@Composable
+private fun OnboardingBridgeCard(onOpen: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Tune, null, Modifier.size(22.dp), tint = Forest700)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Начните с настройки", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text("Клиенты · расписание · мессенджер. Полный визард открыт в веб-кабинете.", style = tMeta, color = CompasMutedFg)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TinySetupStep("1", "Клиент", Modifier.weight(1f))
+            TinySetupStep("2", "Расписание", Modifier.weight(1f))
+            TinySetupStep("3", "Мессенджер", Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(12.dp))
+        PrimaryButton(
+            text = "Полная настройка в веб-кабинете",
+            icon = Icons.Outlined.OpenInNew,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpen,
+        )
+    }
+}
+
+@Composable
+private fun TinySetupStep(number: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Sage100).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(number, style = tBody, color = Forest700, fontWeight = FontWeight.Bold)
+        Text(label, style = tMeta, color = CompasMutedFg, maxLines = 1)
     }
 }
 
