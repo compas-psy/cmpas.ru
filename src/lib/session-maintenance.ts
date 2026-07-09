@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
 
+const POST_SESSION_SETTLE_GRACE_MINUTES = 15;
+
 function minutesOf(value: string) {
     const [hours, minutes] = value.split(':').map(Number);
     return hours * 60 + minutes;
@@ -19,6 +21,11 @@ function sessionEndAt(session: { date: Date; time?: string | null; endTime?: str
     const [hours, minutes] = endTimeFor(session).split(':').map(Number);
     result.setHours(hours, minutes, 0, 0);
     return result;
+}
+
+function sessionIsReadyToSettle(session: { date: Date; time?: string | null; endTime?: string | null; duration?: number | null }, now: Date) {
+    const cutoff = new Date(now.getTime() - POST_SESSION_SETTLE_GRACE_MINUTES * 60 * 1000);
+    return sessionEndAt(session) < cutoff;
 }
 
 function isBlankStructuredNotes(value: unknown) {
@@ -55,8 +62,8 @@ async function maybeNotifySessionNeedsNote(session: any) {
     await createNotification({
         psychologistId: session.psychologistId,
         type: 'session_needs_note',
-        title: 'Добавьте заметку после сессии',
-        subtitle: `${session.client?.name || 'Клиент'} · ${session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}, ${session.time}`,
+        title: `Сессия с ${session.client?.name || 'клиентом'} завершена`,
+        subtitle: 'Самое время для заметки — если будет удобно',
         sessionId: session.id,
         clientId: session.clientId,
     });
@@ -101,7 +108,7 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
         take: 200,
     });
 
-    const ended = candidates.filter((session) => sessionEndAt(session) <= now);
+    const ended = candidates.filter((session) => sessionIsReadyToSettle(session, now));
     let completed = 0;
     let noteNudges = 0;
     let unpaidNudges = 0;
@@ -127,7 +134,7 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
         take: 200,
     });
 
-    for (const session of completedWithoutNudge.filter((item) => sessionEndAt(item) <= now)) {
+    for (const session of completedWithoutNudge.filter((item) => sessionIsReadyToSettle(item, now))) {
         await db.diarySession.update({ where: { id: session.id }, data: { postSessionNudged: true } });
         if (await maybeNotifySessionNeedsNote(session)) noteNudges += 1;
         if (await maybeNotifyUnpaidSession(session)) unpaidNudges += 1;
