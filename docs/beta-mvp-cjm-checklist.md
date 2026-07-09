@@ -32,8 +32,8 @@
 - [x] Mobile sessions API уже принимает/возвращает `structuredNotes` и `notesPlain`.
 - [x] `previousNotesSummary` строится из structured notes с fallback.
 - [x] AI teaser в заметке честно показывает `Скоро ✨ · Хочу первым` и пишет `/api/mobile/feature-interest`.
+- [x] Voice: Android записывает локальный m4a, показывает длительность, воспроизводит через player и честно сообщает, что расшифровка будет позже.
 - [ ] Smoke: web structured note → Android edit → web read без потерь.
-- [ ] Voice: заменить локальный флаг на настоящую запись m4a + player.
 
 ## CJM-4 · Управление днём
 
