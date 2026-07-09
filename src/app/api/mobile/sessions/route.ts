@@ -8,33 +8,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
 import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
-
-function toMobileType(value: unknown) {
-    if (value === 'couple') return 'COUPLE';
-    if (value === 'family') return 'FAMILY';
-    return 'INDIVIDUAL';
-}
-
-function toDatabaseType(value: unknown) {
-    if (value === 'COUPLE') return 'couple';
-    if (value === 'FAMILY') return 'family';
-    return 'individual';
-}
-
-export function normalizePaymentStatus(value: unknown) {
-    const raw = String(value || 'not_required').toLowerCase();
-    if (raw === 'paid') return 'PAID';
-    if (raw === 'unpaid') return 'UNPAID';
-    return 'NOT_REQUIRED';
-}
-
-export function toDatabasePaymentStatus(value: unknown) {
-    const raw = String(value || '').toLowerCase();
-    if (raw === 'paid') return 'paid';
-    if (raw === 'unpaid') return 'unpaid';
-    if (raw === 'not_required') return 'not_required';
-    return null;
-}
+import { formatSession, toDatabaseType } from '@/lib/mobile-sessions';
 
 async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     if (!sessions.length) return sessions;
@@ -43,52 +17,6 @@ async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     `).catch(() => []);
     const byId = new Map(rows.map((row) => [row.id, row.paymentStatus]));
     return sessions.map((session) => ({ ...session, paymentStatus: byId.get(session.id) || 'not_required' }));
-}
-
-const blockLabels: Record<string, string> = {
-    request: 'Запрос',
-    observation: 'Наблюдение',
-    intervention: 'Интервенция',
-    dynamics: 'Динамика',
-    next_step: 'Следующий шаг',
-    homework: 'Домашнее задание',
-    resources: 'Ресурсы',
-    anamnesis: 'Анамнез',
-    quote: 'Цитата',
-    hypothesis: 'Гипотеза',
-    short_note: 'Кратко',
-};
-
-export function notesPlainFromStructured(value: unknown): string | null {
-    if (!Array.isArray(value)) return null;
-    const parts = value.flatMap((block: any) => {
-        const label = blockLabels[block?.definitionId] || block?.definitionId || 'Заметка';
-        const values = block?.values && typeof block.values === 'object' ? Object.values(block.values) : [];
-        const text = values.map((item) => String(item || '').trim()).filter(Boolean).join('\n');
-        return text ? [`${label}:\n${text}`] : [];
-    });
-    return parts.length ? parts.join('\n\n') : null;
-}
-
-export function formatSession(s: any, onlineSessionLink: string | null = null) {
-    const online = s.format !== 'in_person' && s.format !== 'offline';
-    const notesPlain = notesPlainFromStructured(s.structuredNotes) || (typeof s.clientSummary === 'string' ? s.clientSummary : null) || (typeof s.notes === 'string' ? s.notes : null);
-    return {
-        id: s.id,
-        clientId: s.client?.id || s.clientId || '',
-        clientName: s.client?.name || 'Без имени',
-        date: s.date instanceof Date ? s.date.toISOString().split('T')[0] : s.date,
-        startTime: s.time || '00:00',
-        endTime: s.endTime || '',
-        status: (s.status || 'PENDING').toUpperCase(),
-        paymentStatus: normalizePaymentStatus(s.paymentStatus),
-        format: online ? 'ONLINE' : 'IN_PERSON',
-        type: toMobileType(s.type),
-        videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
-        notes: typeof s.notes === 'string' ? s.notes : notesPlain,
-        notesPlain,
-        structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
-    };
 }
 
 export async function GET(req: NextRequest) {
@@ -107,10 +35,7 @@ export async function GET(req: NextRequest) {
                 where: {
                     psychologistId: auth.userId,
                     ...(from && to && {
-                        date: {
-                            gte: new Date(from),
-                            lte: new Date(to + 'T23:59:59.999Z'),
-                        },
+                        date: { gte: new Date(from), lte: new Date(to + 'T23:59:59.999Z') },
                     }),
                     ...(status && { status: status.toLowerCase() }),
                 },
@@ -124,7 +49,6 @@ export async function GET(req: NextRequest) {
             }),
         ]);
         const sessions = await withPaymentStatuses(sessionsRaw);
-
         return NextResponse.json(sessions.map(session => formatSession(session, settings?.onlineSessionLink || null)));
     } catch (error) {
         console.error('[mobile/sessions GET]', error);
@@ -194,20 +118,14 @@ export async function POST(req: NextRequest) {
             where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } },
             orderBy: { date: 'asc' },
         });
-        await db.diaryClient.update({
-            where: { id: clientId },
-            data: { totalSessions: sessionsCount, nextSessionDate: nextSession?.date || null },
-        });
+        await db.diaryClient.update({ where: { id: clientId }, data: { totalSessions: sessionsCount, nextSessionDate: nextSession?.date || null } });
 
         autoSyncSessionToCalendars(auth.userId, session as any).catch(console.error);
 
         let noticeStatus = 'none';
         let onlineSessionLink: string | null = null;
         try {
-            const psychologist = await db.user.findUnique({
-                where: { id: auth.userId },
-                include: { psychologistSettings: true },
-            });
+            const psychologist = await db.user.findUnique({ where: { id: auth.userId }, include: { psychologistSettings: true } });
             const client = session.client as any;
             const channel = client.maxChatId ? 'max' : client.telegramChatId ? 'telegram' : null;
             onlineSessionLink = psychologist?.psychologistSettings?.onlineSessionLink || null;
@@ -237,21 +155,19 @@ export async function POST(req: NextRequest) {
                 bookingLink,
             });
             const message = `${text}\n\nПожалуйста, подтвердите встречу в сообщении-напоминании.`;
-
-            if (client.maxChatId) {
+            if (channel === 'max') {
                 await sendMaxMessage(client.maxChatId, message);
-                noticeStatus = 'max';
-            } else if (client.telegramChatId) {
+                noticeStatus = 'max_sent';
+            } else if (channel === 'telegram') {
                 await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' });
-                noticeStatus = 'telegram';
-            } else {
-                noticeStatus = 'manual';
+                noticeStatus = 'telegram_sent';
             }
-        } catch (error) {
-            console.error('[mobile/sessions POST] notice failed:', error);
+        } catch (notifyError) {
+            console.error('[mobile/sessions POST] client notice failed:', notifyError);
+            noticeStatus = 'failed';
         }
 
-        return NextResponse.json({ ...formatSession({ ...session, paymentStatus: 'not_required' }, onlineSessionLink), noticeStatus }, { status: 201 });
+        return NextResponse.json({ ...formatSession(session, onlineSessionLink), noticeStatus }, { status: 201 });
     } catch (error) {
         console.error('[mobile/sessions POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
