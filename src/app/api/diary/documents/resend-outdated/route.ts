@@ -46,10 +46,9 @@ export async function POST(req: NextRequest) {
                 psychologistId,
                 clientId: candidate.clientId,
                 documentId,
-                trigger: undefined as never,
                 channel: 'manual',
                 recipientContact: null,
-            } as any));
+            }));
         }
 
         return NextResponse.json({ success: true, count: deliveries.length, deliveries });
