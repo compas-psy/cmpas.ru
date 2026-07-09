@@ -14,7 +14,7 @@
 
 ### A1. CI / build recovery
 
-**Почему первым:** после больших правок onboarding, Android dashboard, documents page, voice и bot callbacks любой TypeScript/Kotlin compile error блокирует всё остальное.
+**Почему первым:** после больших правок onboarding, Android dashboard, documents page, voice, bot callbacks и session modal любой TypeScript/Kotlin compile error блокирует всё остальное.
 
 **Что сделать:**
 - `npm run lint` / `npx tsc` / `npm run build`;
@@ -28,7 +28,7 @@
 
 Сценарий:
 
-новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark → document journal CSV → client cancel blocked/allowed through miniapp, signed link, Telegram callback, MAX callback.
+новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark in Android dashboard and web session modal → document journal CSV → client cancel blocked/allowed through miniapp, signed link, Telegram callback, MAX callback.
 
 **DoD:** сценарий проходит без ручного SQL и без fake buttons.
 
@@ -44,9 +44,9 @@
 
 ### B1. Web PAY-1 UI
 
-**Сейчас сделано:** backend web endpoint `PATCH /api/diary/sessions/[id]/payment`, mobile PATCH, Android dashboard action.
+**Сейчас сделано:** backend web endpoint `GET/PATCH /api/diary/sessions/[id]/payment`, mobile PATCH, Android dashboard action, web `SessionModal` buttons `Не требуется / Ожидает / Оплачено` with explicit copy that KOMPAS only records payment status.
 
-**Осталось:** встроить кнопки оплаты в web calendar/session modal.
+**Осталось:** optional right-rail duplication in the calendar screen, if we want payment actions without opening modal.
 
 **DoD:** отметка оплаты видна web ↔ Android, `SessionPaymentRequest` синхронизируется, КОМПАС нигде не выглядит принимающим деньги.
 
@@ -108,11 +108,11 @@
 - ONB-1: no phantom step, preserves timezone/sessionBreak/lunch/cancellation, adds document/messenger/first client steps.
 - Android onboarding bridge: `needsOnboarding` card.
 - JOURNAL-1: web journal tab + consent filters + CSV with contentHash.
-- PAY-1 backend: web payment endpoint for calendar/session modal integration.
+- PAY-1: backend GET/PATCH + web session modal controls + Android dashboard action.
 - NOTIF-1 UX: Android explicit «Прочитать все» and local read-state update.
 - VOICE-1: local m4a recording + player, with honest AI teaser.
 - CANCEL-1: miniapp, signed link, Telegram callback and MAX callback all route through `canClientCancel`.
 
 ## Release recommendation
 
-До зелёного CI и smoke это **не beta release**. После CI + smoke, но до FCM/web-payment UI — допустим только **internal beta candidate** с ограничениями в release notes.
+До зелёного CI и smoke это **не beta release**. После CI + smoke, но до FCM/right-rail payment duplication — допустим **internal beta candidate** с ограничениями в release notes.
