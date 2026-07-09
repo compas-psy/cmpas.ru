@@ -50,9 +50,10 @@
 - [x] SEC-1 endpoint miniapp cancellation защищён `clientActionToken` и client ownership.
 - [x] Miniapp cancellation теперь соблюдает `cancellationHours` и пишет `client_cancel_attempt`.
 - [x] Signed action link `/api/client/session-action?a=cancel` теперь соблюдает `cancellationHours`.
+- [x] Telegram callback cancellation теперь соблюдает `cancellationHours`, пишет `client_cancel_attempt` и удаляет событие из календарей только при допустимой отмене.
+- [x] MAX callback cancellation теперь соблюдает `cancellationHours`, пишет `client_cancel_attempt` и удаляет событие из календарей только при допустимой отмене.
 - [x] `paymentStatus` уже поддерживается mobile API.
 - [x] Web payment endpoint `PATCH /api/diary/sessions/[id]/payment` для календаря/session modal.
-- [ ] Политика отмены N часов во всех 4 клиентских каналах: явно проверить/подключить TG и MAX callback paths.
 - [ ] Web-кнопки оплаты в календаре/session modal.
 - [ ] Единый текст напоминаний `-1ч`, убрать рассинхрон Android `-2ч`.
 
