@@ -10,7 +10,10 @@
 - [x] Android legal gate берёт актуальные версии через `/api/mobile/legal/status`.
 - [x] Android legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
 - [x] Web legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
-- [ ] Onboarding: убрать фантомный шаг, сохранять все поля, добавить документы/мессенджер/первого клиента.
+- [x] Onboarding без шага-фантома: профиль → расписание → документы → мессенджер → первый клиент → финиш.
+- [x] Onboarding сохраняет timezone, sessionBreak, lunch break и cancellationHours через `/api/user/profile`.
+- [x] Android bridge: если onboarding не завершён, dashboard показывает «Начните с настройки» без дублирования веб-визарда.
+- [ ] Onboarding calendar import preview должен получить полноценный web UI, а не только endpoint/link.
 
 ## CJM-2 · Добавление клиента и подключение канала
 
@@ -22,21 +25,22 @@
 - [x] Добавлены admin/cron endpoint протухания invite-токенов и admin conversion metrics.
 - [x] Android InviteSheet использует реальный `inviteLink`, QR, share, copy и MAX-first кнопки.
 - [x] Live-polling channel status уже есть в `ClientDetailViewModel` и отображается в invite sheet.
-- [ ] Проверить MAX-first во всех поверхностях UI.
+- [ ] Deployment-smoke: проверить MAX env и MAX-first на `/connect/<token>` в продовом окружении.
 
 ## CJM-3 · Заметки после сессии
 
 - [x] Mobile sessions API уже принимает/возвращает `structuredNotes` и `notesPlain`.
 - [x] `previousNotesSummary` строится из structured notes с fallback.
 - [x] AI teaser в заметке честно показывает `Скоро ✨ · Хочу первым` и пишет `/api/mobile/feature-interest`.
-- [ ] Android UI: убедиться, что web-structured заметка полностью восстанавливается в полях.
+- [ ] Smoke: web structured note → Android edit → web read без потерь.
 - [ ] Voice: заменить локальный флаг на настоящую запись m4a + player.
 
 ## CJM-4 · Управление днём
 
 - [x] Cron/admin endpoint автозавершения confirmed → completed.
+- [x] COMPLETE-1 QA-fix: confirmed → completed только после endTime + 15 минут, pending не трогаем.
 - [x] Dashboard и sessions list запускают settle для текущего психолога перед выдачей данных.
-- [x] Нудж `session_needs_note` после прошедшей сессии без заметки.
+- [x] Нудж `session_needs_note` после прошедшей сессии без заметки, бережный текст из ТЗ.
 - [x] «Следующая сессия» берётся только из будущих pending/confirmed встреч.
 - [x] «Сессии без заметок» считается сразу по completed без 14-дневной задержки.
 - [x] Android-карточка прошедшей сессии: заметка + отметка оплаты.
@@ -47,7 +51,7 @@
 - [x] Miniapp cancellation теперь соблюдает `cancellationHours` и пишет `client_cancel_attempt`.
 - [x] Signed action link `/api/client/session-action?a=cancel` теперь соблюдает `cancellationHours`.
 - [x] `paymentStatus` уже поддерживается mobile API.
-- [ ] Политика отмены N часов во всех 4 клиентских каналах.
+- [ ] Политика отмены N часов во всех 4 клиентских каналах: явно проверить/подключить TG и MAX callback paths.
 - [ ] Web-кнопки оплаты в календаре/session modal.
 - [ ] Единый текст напоминаний `-1ч`, убрать рассинхрон Android `-2ч`.
 
@@ -81,6 +85,7 @@
 - [x] CSV export с BOM.
 - [x] API поиска клиентов со старой версией документа и переотправки актуальной версии.
 - [x] Импорт календаря: будущие сессии с предпросмотром и дедупом.
+- [ ] Web UI журнала документов: общий таб, фильтры «Без согласия» / «Старая версия», кнопка переотправки.
 
 ## Cross-cutting · Честные будущие функции
 
@@ -90,6 +95,7 @@
 - [x] Admin UI/table `/admin/feature-interest` for counters.
 - [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` для новых beta-DDL.
 - [x] Deploy script `npm run deploy:schema` применяет legacy schema-fixes, beta schema-fixes и Prisma migrations.
+- [x] CPO/QA audit зафиксирован в `docs/beta-mvp-cpo-qa-audit.md`.
 - [ ] Web/Android reusable teaser component.
 
 ## Перед релизом beta
