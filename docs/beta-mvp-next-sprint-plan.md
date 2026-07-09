@@ -14,7 +14,7 @@
 
 ### A1. CI / build recovery
 
-**Почему первым:** после больших правок onboarding, Android dashboard, documents page и voice любой TypeScript/Kotlin compile error блокирует всё остальное.
+**Почему первым:** после больших правок onboarding, Android dashboard, documents page, voice и bot callbacks любой TypeScript/Kotlin compile error блокирует всё остальное.
 
 **Что сделать:**
 - `npm run lint` / `npx tsc` / `npm run build`;
@@ -28,7 +28,7 @@
 
 Сценарий:
 
-новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark → document journal CSV.
+новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark → document journal CSV → client cancel blocked/allowed through miniapp, signed link, Telegram callback, MAX callback.
 
 **DoD:** сценарий проходит без ручного SQL и без fake buttons.
 
@@ -52,11 +52,11 @@
 
 ### B2. CANCEL-1 all paths audit
 
-**Сейчас сделано:** miniapp cancel и signed action link соблюдают `cancellationHours`; reminders TG/MAX используют URL action links.
+**Сейчас сделано:** miniapp, signed action link, Telegram callback и MAX callback используют единую `canClientCancel`-политику, учитывают `cancellationHours`, пишут `client_cancel_attempt` при поздней отмене и не меняют статус сессии, если отмена уже недоступна.
 
-**Осталось:** проверить, нет ли отдельных TG/MAX callback payload для cancel/reschedule. Если есть — перевести на `canClientCancel` или signed web link.
+**Осталось:** smoke-test действующих сообщений/старых inline-кнопок в Telegram/MAX на реальном окружении.
 
-**DoD:** все четыре пути — TG, MAX, signed link, miniapp — используют одну политику.
+**DoD:** все четыре пути — Telegram, MAX, signed link, miniapp — используют одну политику и проходят smoke.
 
 ### B3. Documents journal final UI
 
@@ -111,6 +111,7 @@
 - PAY-1 backend: web payment endpoint for calendar/session modal integration.
 - NOTIF-1 UX: Android explicit «Прочитать все» and local read-state update.
 - VOICE-1: local m4a recording + player, with honest AI teaser.
+- CANCEL-1: miniapp, signed link, Telegram callback and MAX callback all route through `canClientCancel`.
 
 ## Release recommendation
 
