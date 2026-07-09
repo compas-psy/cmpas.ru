@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
                 if (!doc) continue;
                 await db.$executeRaw`
                     INSERT INTO "LegalDocumentAcceptance" (id, "userId", "documentId", "acceptedAt", "ipAddress", source, "documentType", "documentVersion")
-                    VALUES (gen_random_uuid()::text, ${auth.userId}, ${documentId}, NOW(), ${ipAddress}, 'android', ${doc.type}, ${doc.version})
+                    VALUES (${randomUUID()}, ${auth.userId}, ${documentId}, NOW(), ${ipAddress}, 'android', ${doc.type}, ${doc.version})
                     ON CONFLICT ("userId", "documentId") DO UPDATE
                     SET source = EXCLUDED.source,
                         "documentType" = COALESCE("LegalDocumentAcceptance"."documentType", EXCLUDED."documentType"),
