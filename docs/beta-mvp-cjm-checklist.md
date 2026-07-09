@@ -9,7 +9,7 @@
 - [x] Mobile/web acceptance получают audit snapshot: source, documentType, documentVersion.
 - [x] Android legal gate берёт актуальные версии через `/api/mobile/legal/status`.
 - [x] Android legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
-- [ ] Единый web-экран legal gate: TERMS + PRIVACY обязательные, ADS отдельный optional.
+- [x] Web legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
 - [ ] Onboarding: убрать фантомный шаг, сохранять все поля, добавить документы/мессенджер/первого клиента.
 
 ## CJM-2 · Добавление клиента и подключение канала
