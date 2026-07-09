@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
@@ -37,6 +38,7 @@ import java.time.LocalTime
 @Composable
 fun DashboardScreen(
     onSessionClick: (String) -> Unit = {},
+    onNoteClick: (String) -> Unit = {},
     onCalendarClick: () -> Unit = {},
     onClientClick: (String) -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
@@ -86,7 +88,7 @@ fun DashboardScreen(
                             if (!next.videoLink.isNullOrBlank()) uriHandler.openUri(next.videoLink!!)
                             else onSessionClick(next.id)
                         },
-                        onNote = { onSessionClick(next.id) },
+                        onNote = { onNoteClick(next.id) },
                     )
                 } else {
                     GlassTintCard(padding = 18.dp) {
@@ -112,7 +114,15 @@ fun DashboardScreen(
             if (uiState.todaySessions.isEmpty()) {
                 item { GlassCard(padding = 18.dp) { Text("Нет записей на сегодня", style = tBody2) } }
             } else {
-                items(uiState.todaySessions, key = { it.id }) { s -> ScheduleRow(s, onClick = { onSessionClick(s.id) }) }
+                items(uiState.todaySessions, key = { it.id }) { s ->
+                    ScheduleRow(
+                        s = s,
+                        isUpdatingPayment = uiState.paymentUpdatingSessionId == s.id,
+                        onClick = { onSessionClick(s.id) },
+                        onNote = { onNoteClick(s.id) },
+                        onPaid = { viewModel.markPaid(s.id) },
+                    )
+                }
             }
         }
 
@@ -175,8 +185,15 @@ private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () 
 }
 
 @Composable
-private fun ScheduleRow(s: Session, onClick: () -> Unit) {
+private fun ScheduleRow(
+    s: Session,
+    isUpdatingPayment: Boolean,
+    onClick: () -> Unit,
+    onNote: () -> Unit,
+    onPaid: () -> Unit,
+) {
     val dur = durationMin(s.startTime, s.endTime)
+    val passed = s.status == SessionStatus.COMPLETED
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Column(Modifier.width(46.dp), horizontalAlignment = Alignment.End) {
             Text(s.startTime, style = tBody.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = CompasFg)
@@ -196,9 +213,39 @@ private fun ScheduleRow(s: Session, onClick: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text(s.clientName, color = CompasFg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(3.dp))
-                    FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
+                        if (passed) FmtChip("completed")
+                        if (s.paymentStatus == PaymentStatus.PAID) FmtChip("paid")
+                    }
                 }
                 Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
+            }
+            if (passed) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton(
+                        text = "Заметка",
+                        icon = Icons.Outlined.EditNote,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNote,
+                    )
+                    if (s.paymentStatus == PaymentStatus.PAID) {
+                        GhostButton(
+                            text = "Оплачено",
+                            icon = Icons.Outlined.CheckCircle,
+                            modifier = Modifier.weight(1f),
+                            onClick = onClick,
+                        )
+                    } else {
+                        GhostButton(
+                            text = if (isUpdatingPayment) "Отмечаем…" else "Оплачено",
+                            icon = Icons.Outlined.Payments,
+                            modifier = Modifier.weight(1f),
+                            onClick = onPaid,
+                        )
+                    }
+                }
             }
         }
     }
