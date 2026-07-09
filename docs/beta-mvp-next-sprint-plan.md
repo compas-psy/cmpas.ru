@@ -14,7 +14,7 @@
 
 ### A1. CI / build recovery
 
-**Почему первым:** после больших правок onboarding, Android dashboard и documents page любой TypeScript/Kotlin compile error блокирует всё остальное.
+**Почему первым:** после больших правок onboarding, Android dashboard, documents page и voice любой TypeScript/Kotlin compile error блокирует всё остальное.
 
 **Что сделать:**
 - `npm run lint` / `npx tsc` / `npm run build`;
@@ -28,7 +28,7 @@
 
 Сценарий:
 
-новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → payment mark → document journal CSV.
+новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark → document journal CSV.
 
 **DoD:** сценарий проходит без ручного SQL и без fake buttons.
 
@@ -70,16 +70,9 @@
 
 ### C1. VOICE-1 honest voice
 
-**Сейчас:** нельзя считать done.
+**Сейчас сделано:** `RECORD_AUDIO`, `MediaRecorder` m4a, локальное хранение, `MediaPlayer`, duration `N:SS`, graceful permission denial, AI teaser под карточкой.
 
-**Что сделать:**
-- `RECORD_AUDIO` permission;
-- `MediaRecorder` m4a;
-- локальное хранение;
-- `MediaPlayer`;
-- duration `N:SS`;
-- graceful отказ, если permission denied;
-- AI teaser под плеером.
+**Осталось:** Android build + device smoke; серверная синхронизация аудио не входит в текущий beta DoD и должна быть отдельным решением по ПДн/безопасности.
 
 **DoD:** на экране заметки можно записать, остановить, прослушать m4a; нет ложного текста о расшифровке.
 
@@ -117,7 +110,8 @@
 - JOURNAL-1: web journal tab + consent filters + CSV with contentHash.
 - PAY-1 backend: web payment endpoint for calendar/session modal integration.
 - NOTIF-1 UX: Android explicit «Прочитать все» and local read-state update.
+- VOICE-1: local m4a recording + player, with honest AI teaser.
 
 ## Release recommendation
 
-До зелёного CI и smoke это **не beta release**. После CI + smoke, но до voice/FCM/web-payment UI — допустим только **internal beta candidate** с ограничениями в release notes.
+До зелёного CI и smoke это **не beta release**. После CI + smoke, но до FCM/web-payment UI — допустим только **internal beta candidate** с ограничениями в release notes.
