@@ -331,7 +331,7 @@ private fun AddBlockSheet(isSaving: Boolean, onClose: () -> Unit, onSave: (start
         Spacer(Modifier.height(14.dp))
         Eyebrow("Тип")
         Spacer(Modifier.height(8.dp))
-        CompasSegmented(listOf("Отпуск", "Больничный", "Личное"), typeIndex) { typeIndex = it }
+        CompasSegmented(options = listOf("Отпуск", "Больничный", "Личное"), selectedIndex = typeIndex, onSelect = { typeIndex = it })
         Spacer(Modifier.height(14.dp))
         GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
             OutlinedTextField(value = reason, onValueChange = { reason = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Комментарий") }, placeholder = { Text("Необязательно") }, shape = RoundedCornerShape(16.dp), minLines = 2)
