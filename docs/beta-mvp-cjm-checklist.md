@@ -87,10 +87,10 @@
 - [x] DB migration `FeatureInterest`.
 - [x] Mobile endpoint `/api/mobile/feature-interest`.
 - [x] Admin counters `/api/admin/feature-interest`.
+- [x] Admin UI/table `/admin/feature-interest` for counters.
 - [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` для новых beta-DDL.
 - [x] Deploy script `npm run deploy:schema` применяет legacy schema-fixes, beta schema-fixes и Prisma migrations.
 - [ ] Web/Android reusable teaser component.
-- [ ] Admin UI/table for counters.
 
 ## Перед релизом beta
 
