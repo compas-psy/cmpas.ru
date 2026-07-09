@@ -1,3 +1,89 @@
 # Beta MVP CJM Checklist
 
-Черновик будет заменён после аудита репозитория.
+Этот чек-лист дополняет `docs/beta-mvp-execution-plan.md`: карта CJM задаёт полный целевой контур, ТЗ — конкретные задачи. Статусы ниже нужны, чтобы не потерять ни один путь психолога/клиента до beta MVP.
+
+## CJM-1 · Регистрация и onboarding психолога
+
+- [x] Убран implicit accept документов на sign-in.
+- [x] Legal gate проверяется до onboarding в diary layout.
+- [x] Mobile/web acceptance получают audit snapshot: source, documentType, documentVersion.
+- [ ] Единый web-экран legal gate: TERMS + PRIVACY обязательные, ADS отдельный optional.
+- [ ] Android legal gate должен брать те же версии через `/api/mobile/legal/status`.
+- [ ] Onboarding: убрать фантомный шаг, сохранять все поля, добавить документы/мессенджер/первого клиента.
+
+## CJM-2 · Добавление клиента и подключение канала
+
+- [x] Серверный invite-flow существует: token, `/connect/<token>`, каналы, очередь.
+- [x] Android API invite request переведён на `channel = auto`.
+- [ ] Android InviteSheet: использовать только реальный `inviteLink`, добавить QR, share, copy.
+- [ ] Live-polling channel status в карточке клиента и invite sheet.
+- [ ] TTL 72ч + уведомление об истёкшем приглашении.
+- [ ] Проверить MAX-first во всех поверхностях.
+
+## CJM-3 · Заметки после сессии
+
+- [x] Mobile sessions API уже принимает/возвращает `structuredNotes` и `notesPlain`.
+- [x] `previousNotesSummary` строится из structured notes с fallback.
+- [ ] Android UI: убедиться, что web-structured заметка полностью восстанавливается в полях.
+- [ ] Voice: заменить локальный флаг на настоящую запись m4a + player.
+- [ ] AI teaser в заметке: `Скоро ✨ · Хочу первым` → `/api/mobile/feature-interest`.
+
+## CJM-4 · Управление днём
+
+- [ ] Cron автозавершения confirmed → completed.
+- [ ] Нудж `session_needs_note` после прошедшей сессии без заметки.
+- [ ] Карточка «Сессия прошла»: заметка + отметка оплаты.
+- [ ] «Следующая сессия» не показывает прошедшие встречи.
+- [ ] «Сессии без заметок» вместо некорректного label.
+
+## CJM-5 · Запись, перенос, отмена, оплата
+
+- [x] SEC-1 endpoint miniapp cancellation защищён `clientActionToken` и client ownership.
+- [x] `paymentStatus` уже поддерживается mobile API.
+- [ ] Политика отмены N часов во всех 4 клиентских каналах.
+- [ ] Web-кнопки оплаты в календаре/session modal.
+- [ ] Android QuickAction payment stub окончательно убрать из быстрых действий.
+- [ ] Единый текст напоминаний `-1ч`, убрать рассинхрон Android `-2ч`.
+
+## CJM-6 · Расписание с телефона
+
+- [x] `/api/mobile/blocks` пишет в серверный `DiaryBlock`.
+- [x] Endpoint поддерживает частичные блокировки `startTime/endTime` и диапазоны дат.
+- [x] Android API-модель поддерживает `startTime/endTime`.
+- [ ] Android экран расписания: режим записи closed/preview/open.
+- [ ] Неделя read-only: правила + слоты.
+- [ ] Быстрые действия: сегодня/завтра, отпуск на даты, закончить день раньше.
+- [ ] Миграция старых локальных блокировок на сервер.
+
+## CJM-7 · Уведомления психолога
+
+- [x] `PracticeNotification` таблица уже есть в схеме/deploy fixes.
+- [ ] Все события пишут persistent notification.
+- [ ] FCM deep-links.
+- [ ] Тихие часы 21:00–9:00 + утренняя сводка.
+- [ ] Android full-screen notification sheet вместо alert.
+
+## CJM-8 · Перенос практики и журнал согласий
+
+- [x] Client document page: opened != accepted, согласие только checkbox + button.
+- [x] Server action валидирует checkbox.
+- [ ] Журнал всех доставок документов: клиент, документ, версия, status, канал.
+- [ ] CSV export с BOM.
+- [ ] Новая версия договора → предложить переотправку клиентам со старой версией.
+- [ ] Импорт календаря: будущие сессии с предпросмотром и дедупом.
+
+## Cross-cutting · Честные будущие функции
+
+- [x] DB migration `FeatureInterest`.
+- [x] Mobile endpoint `/api/mobile/feature-interest`.
+- [x] Admin counters `/api/admin/feature-interest`.
+- [ ] Web/Android reusable teaser component.
+- [ ] Admin UI/table for counters.
+- [ ] `deploy/schema-fixes.sql` должен получить idempotent DDL после CI-проверки миграций.
+
+## Перед релизом beta
+
+- [ ] `npm run lint` / `npx tsc`.
+- [ ] Android Build CI.
+- [ ] Проверка старого APK на `/api/mobile/*` совместимость.
+- [ ] Smoke-test: новый психолог → legal → onboarding → первый клиент → invite → документ → первая сессия → заметка → оплата/уведомление.
