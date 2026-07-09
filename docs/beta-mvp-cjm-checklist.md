@@ -26,9 +26,9 @@
 
 - [x] Mobile sessions API уже принимает/возвращает `structuredNotes` и `notesPlain`.
 - [x] `previousNotesSummary` строится из structured notes с fallback.
+- [x] AI teaser в заметке честно показывает `Скоро ✨ · Хочу первым` и пишет `/api/mobile/feature-interest`.
 - [ ] Android UI: убедиться, что web-structured заметка полностью восстанавливается в полях.
 - [ ] Voice: заменить локальный флаг на настоящую запись m4a + player.
-- [ ] AI teaser в заметке: `Скоро ✨ · Хочу первым` → `/api/mobile/feature-interest`.
 
 ## CJM-4 · Управление днём
 
