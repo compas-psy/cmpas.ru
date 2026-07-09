@@ -17,6 +17,7 @@
 - [x] Серверный invite-flow существует: token, `/connect/<token>`, каналы, очередь.
 - [x] Android API invite request переведён на `channel = auto`.
 - [x] Серверный статус каналов теперь MAX-first при рекомендации.
+- [x] Web onboarding и генерация invite-ссылки теперь MAX-first.
 - [x] Добавлен warning при отсутствии `MAX_BOT_USERNAME`, а не молчаливая недоступность.
 - [x] Добавлены admin/cron endpoint протухания invite-токенов и admin conversion metrics.
 - [x] Android InviteSheet использует реальный `inviteLink`, QR, share, copy и MAX-first кнопки.
