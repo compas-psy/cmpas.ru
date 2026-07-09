@@ -19,12 +19,14 @@ export async function GET(req: NextRequest) {
     const status = req.nextUrl.searchParams.get('status');
     const clientId = req.nextUrl.searchParams.get('clientId');
     const documentId = req.nextUrl.searchParams.get('documentId');
+    const consent = req.nextUrl.searchParams.get('consent');
 
     try {
         const rows = await db.$queryRaw<Array<{
             status: string;
             documentTitle: string;
             documentVersion: string;
+            documentContentHash: string;
             deliveryChannel: string;
             recipientContact: string | null;
             sentAt: Date;
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
             clientEmail: string | null;
             sessionId: string | null;
         }>>`
-            SELECT d.status, d."documentTitle", d."documentVersion", d."deliveryChannel", d."recipientContact",
+            SELECT d.status, d."documentTitle", d."documentVersion", d."documentContentHash", d."deliveryChannel", d."recipientContact",
                    d."sentAt", d."openedAt", d."acknowledgedAt", d."sessionId",
                    c.name as "clientName", c.phone as "clientPhone", c.email as "clientEmail"
             FROM "ClientDocumentDelivery" d
@@ -44,6 +46,7 @@ export async function GET(req: NextRequest) {
               AND (${status}::text IS NULL OR d.status = ${status})
               AND (${clientId}::text IS NULL OR d."clientId" = ${clientId})
               AND (${documentId}::text IS NULL OR d."documentId" = ${documentId})
+              AND (${consent}::text IS NULL OR (${consent} = 'missing' AND d."acknowledgedAt" IS NULL) OR (${consent} = 'accepted' AND d."acknowledgedAt" IS NOT NULL))
             ORDER BY d."createdAt" DESC
         `;
 
@@ -53,6 +56,7 @@ export async function GET(req: NextRequest) {
             'Email',
             'Документ',
             'Версия',
+            'ContentHash',
             'Статус',
             'Канал',
             'Контакт доставки',
@@ -69,6 +73,7 @@ export async function GET(req: NextRequest) {
                 row.clientEmail,
                 row.documentTitle,
                 row.documentVersion,
+                row.documentContentHash,
                 row.status,
                 row.deliveryChannel,
                 row.recipientContact,
@@ -79,7 +84,6 @@ export async function GET(req: NextRequest) {
             ].map(csvCell).join(';'));
         }
 
-        // UTF-8 BOM helps Excel on Windows open Cyrillic CSV correctly.
         const csv = '\uFEFF' + lines.join('\n');
         const fileDate = new Date().toISOString().slice(0, 10);
         return new NextResponse(csv, {
