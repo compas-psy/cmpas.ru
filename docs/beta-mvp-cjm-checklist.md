@@ -54,8 +54,8 @@
 - [x] MAX callback cancellation теперь соблюдает `cancellationHours`, пишет `client_cancel_attempt` и удаляет событие из календарей только при допустимой отмене.
 - [x] `paymentStatus` уже поддерживается mobile API.
 - [x] Web payment endpoint `PATCH /api/diary/sessions/[id]/payment` для календаря/session modal.
+- [x] Reminder audit: клиентское `-1ч` напоминание есть в cron/settings; Android `-2ч` рассинхрон поиском по коду не обнаружен, `2 часа` остаётся только опцией web-настройки напоминания психологу.
 - [ ] Web-кнопки оплаты в календаре/session modal.
-- [ ] Единый текст напоминаний `-1ч`, убрать рассинхрон Android `-2ч`.
 
 ## CJM-6 · Расписание с телефона
 
