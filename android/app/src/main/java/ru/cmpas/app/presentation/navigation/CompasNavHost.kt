@@ -70,6 +70,7 @@ fun CompasNavHost(
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
                     onSessionClick = { navController.navigate(Screen.SessionDetail.createRoute(it)) },
+                    onNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute(it)) },
                     onCalendarClick = { navController.navigateTopLevel(Screen.Calendar) },
                     onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
                 )
