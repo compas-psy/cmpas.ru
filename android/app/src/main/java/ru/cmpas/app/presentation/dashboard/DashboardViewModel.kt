@@ -56,6 +56,8 @@ class DashboardViewModel @Inject constructor(
                                 notifications = data.notifications,
                                 userName = data.userName ?: it.userName,
                                 bookingLink = data.bookingLink,
+                                needsOnboarding = data.needsOnboarding,
+                                onboardingUrl = data.onboardingUrl,
                                 isDataLoaded = true,
                             )
                         }
@@ -109,6 +111,8 @@ data class DashboardUiState(
     val attentionItems: List<AttentionItem> = emptyList(),
     val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
+    val needsOnboarding: Boolean = false,
+    val onboardingUrl: String? = null,
     val error: String? = null,
     val isDataLoaded: Boolean = false,
     val paymentUpdatingSessionId: String? = null,
