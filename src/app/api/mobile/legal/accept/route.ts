@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const ids = new Set<string>();
         const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
+        const docsById = new Map(activeDocs.map((doc) => [doc.id, doc]));
         const activeDocIds = new Set(activeDocs.map((doc) => doc.id));
 
         if (Array.isArray(body.documentIds)) {
@@ -27,15 +28,26 @@ export async function POST(req: NextRequest) {
 
         if (body.acceptAds === true) {
             const ads = await getActiveLegalDocument('ADS');
-            if (ads) ids.add(ads.id);
+            if (ads) {
+                ids.add(ads.id);
+                docsById.set(ads.id, ads);
+            }
         }
 
         if (ids.size > 0) {
             const ipAddress = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for') || 'unknown';
-            await db.legalDocumentAcceptance.createMany({
-                data: [...ids].map((documentId) => ({ userId: auth.userId, documentId, ipAddress })),
-                skipDuplicates: true,
-            });
+            for (const documentId of ids) {
+                const doc = docsById.get(documentId);
+                if (!doc) continue;
+                await db.$executeRaw`
+                    INSERT INTO "LegalDocumentAcceptance" (id, "userId", "documentId", "acceptedAt", "ipAddress", source, "documentType", "documentVersion")
+                    VALUES (gen_random_uuid()::text, ${auth.userId}, ${documentId}, NOW(), ${ipAddress}, 'android', ${doc.type}, ${doc.version})
+                    ON CONFLICT ("userId", "documentId") DO UPDATE
+                    SET source = EXCLUDED.source,
+                        "documentType" = COALESCE("LegalDocumentAcceptance"."documentType", EXCLUDED."documentType"),
+                        "documentVersion" = COALESCE("LegalDocumentAcceptance"."documentVersion", EXCLUDED."documentVersion")
+                `;
+            }
         }
 
         if (body.acceptAds === false) {
