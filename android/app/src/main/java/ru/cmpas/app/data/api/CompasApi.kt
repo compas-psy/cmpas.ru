@@ -88,6 +88,12 @@ interface CompasApi {
     @DELETE("blocks/{id}")
     suspend fun deleteBlock(@Path("id") id: String): Response<Unit>
 
+    @GET("availability")
+    suspend fun getAvailability(): Response<AvailabilitySummary>
+
+    @PATCH("availability/mode")
+    suspend fun updateScheduleMode(@Body body: ScheduleModeRequest): Response<ScheduleModeResponse>
+
     @GET("scheduled-messages")
     suspend fun getScheduledMessages(): Response<List<ScheduledMessage>>
 
@@ -189,6 +195,50 @@ data class CreateBlockRequest(
     val reason: String? = null,
     val cancelIntersectingSessions: Boolean = false,
 )
+
+@kotlinx.serialization.Serializable
+data class AvailabilitySummary(
+    val scheduleMode: String = "private",
+    val bookingBufferHours: Int = 24,
+    val bookingHorizonDays: Int = 14,
+    val cancellationHours: Int = 24,
+    val rules: List<AvailabilityRule> = emptyList(),
+    val slots: List<AvailabilitySlotDto> = emptyList(),
+    val blocks: List<TimeBlock> = emptyList(),
+)
+
+@kotlinx.serialization.Serializable
+data class AvailabilityRule(
+    val id: String,
+    val name: String,
+    val priority: Int = 0,
+    val isActive: Boolean = true,
+    val color: String? = null,
+    val format: String = "online",
+    val duration: Int = 50,
+    val breakDuration: Int = 15,
+    val audienceFilter: String = "all",
+    val startDate: String? = null,
+    val endDate: String? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class AvailabilitySlotDto(
+    val id: String,
+    val ruleId: String? = null,
+    val dayOfWeek: Int,
+    val startTime: String,
+    val endTime: String,
+    val duration: Int = 50,
+    val format: String = "online",
+    val addressId: String? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class ScheduleModeRequest(val scheduleMode: String)
+
+@kotlinx.serialization.Serializable
+data class ScheduleModeResponse(val success: Boolean, val scheduleMode: String)
 
 @kotlinx.serialization.Serializable
 data class FeatureInterestRequest(val feature: String)
