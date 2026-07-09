@@ -15,10 +15,12 @@
 
 - [x] Серверный invite-flow существует: token, `/connect/<token>`, каналы, очередь.
 - [x] Android API invite request переведён на `channel = auto`.
+- [x] Серверный статус каналов теперь MAX-first при рекомендации.
+- [x] Добавлен warning при отсутствии `MAX_BOT_USERNAME`, а не молчаливая недоступность.
+- [x] Добавлены admin/cron endpoint протухания invite-токенов и admin conversion metrics.
 - [ ] Android InviteSheet: использовать только реальный `inviteLink`, добавить QR, share, copy.
 - [ ] Live-polling channel status в карточке клиента и invite sheet.
-- [ ] TTL 72ч + уведомление об истёкшем приглашении.
-- [ ] Проверить MAX-first во всех поверхностях.
+- [ ] Проверить MAX-first во всех поверхностях UI.
 
 ## CJM-3 · Заметки после сессии
 
@@ -39,6 +41,7 @@
 ## CJM-5 · Запись, перенос, отмена, оплата
 
 - [x] SEC-1 endpoint miniapp cancellation защищён `clientActionToken` и client ownership.
+- [x] Miniapp cancellation теперь соблюдает `cancellationHours` и пишет `client_cancel_attempt`.
 - [x] `paymentStatus` уже поддерживается mobile API.
 - [ ] Политика отмены N часов во всех 4 клиентских каналах.
 - [ ] Web-кнопки оплаты в календаре/session modal.
@@ -50,14 +53,16 @@
 - [x] `/api/mobile/blocks` пишет в серверный `DiaryBlock`.
 - [x] Endpoint поддерживает частичные блокировки `startTime/endTime` и диапазоны дат.
 - [x] Android API-модель поддерживает `startTime/endTime`.
-- [ ] Android экран расписания: режим записи closed/preview/open.
-- [ ] Неделя read-only: правила + слоты.
+- [x] Серверные mobile endpoints `GET /availability` и `PATCH /availability/mode`.
+- [x] Android экран расписания показывает режим записи closed/preview/open.
+- [x] Android экран расписания показывает read-only неделю: правила + слоты.
 - [ ] Быстрые действия: сегодня/завтра, отпуск на даты, закончить день раньше.
 - [ ] Миграция старых локальных блокировок на сервер.
 
 ## CJM-7 · Уведомления психолога
 
 - [x] `PracticeNotification` таблица уже есть в схеме/deploy fixes.
+- [x] Добавлены beta-типы уведомлений: `session_needs_note`, `client_cancel_attempt`, `invite_expired`, `session_unpaid`.
 - [ ] Все события пишут persistent notification.
 - [ ] FCM deep-links.
 - [ ] Тихие часы 21:00–9:00 + утренняя сводка.
@@ -77,9 +82,10 @@
 - [x] DB migration `FeatureInterest`.
 - [x] Mobile endpoint `/api/mobile/feature-interest`.
 - [x] Admin counters `/api/admin/feature-interest`.
+- [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` для новых beta-DDL.
 - [ ] Web/Android reusable teaser component.
 - [ ] Admin UI/table for counters.
-- [ ] `deploy/schema-fixes.sql` должен получить idempotent DDL после CI-проверки миграций.
+- [ ] Влить beta-DDL непосредственно в `deploy/schema-fixes.sql` после CI-проверки миграций.
 
 ## Перед релизом beta
 
