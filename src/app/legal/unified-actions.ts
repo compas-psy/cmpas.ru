@@ -9,7 +9,7 @@ type ActiveDoc = Awaited<ReturnType<typeof getActiveLegalDocuments>>[number]
 async function writeAcceptance(userId: string, doc: ActiveDoc, source = "web") {
     await db.$executeRaw`
         INSERT INTO "LegalDocumentAcceptance" (id, "userId", "documentId", "acceptedAt", "ipAddress", source, "documentType", "documentVersion")
-        VALUES (${randomUUID()}, ${userId}, ${doc.id}, NOW(), ${source}, ${source}, ${doc.type}, ${doc.version})
+        VALUES (${randomUUID()}, ${userId}, ${doc.id}, NOW(), 'unknown', ${source}, ${doc.type}, ${doc.version})
         ON CONFLICT ("userId", "documentId") DO UPDATE
         SET source = EXCLUDED.source,
             "documentType" = COALESCE("LegalDocumentAcceptance"."documentType", EXCLUDED."documentType"),
