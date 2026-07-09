@@ -112,6 +112,9 @@ interface CompasApi {
     @POST("legal/accept")
     suspend fun acceptLegal(@Body body: MobileLegalAcceptBody): Response<Unit>
 
+    @POST("feature-interest")
+    suspend fun markFeatureInterest(@Body body: FeatureInterestRequest): Response<FeatureInterestResponse>
+
     @POST("fcm")
     suspend fun registerFcmToken(@Body body: FcmTokenRequest): Response<Unit>
 
@@ -185,6 +188,17 @@ data class CreateBlockRequest(
     val type: String,
     val reason: String? = null,
     val cancelIntersectingSessions: Boolean = false,
+)
+
+@kotlinx.serialization.Serializable
+data class FeatureInterestRequest(val feature: String)
+
+@kotlinx.serialization.Serializable
+data class FeatureInterestResponse(
+    val success: Boolean,
+    val feature: String,
+    val alreadyInList: Boolean = true,
+    val count: Int = 0,
 )
 
 @kotlinx.serialization.Serializable
