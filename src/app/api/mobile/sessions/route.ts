@@ -6,6 +6,8 @@ import { autoSyncSessionToCalendars } from '@/lib/calendar/auto-sync';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
+import { createNotification } from '@/lib/notifications';
+import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 
 function toMobileType(value: unknown) {
     if (value === 'couple') return 'COUPLE';
@@ -38,7 +40,7 @@ async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     if (!sessions.length) return sessions;
     const rows = await db.$queryRaw<Array<{ id: string; paymentStatus: string }>>(Prisma.sql`
         SELECT id, "paymentStatus" FROM "DiarySession" WHERE id IN (${Prisma.join(sessions.map((session) => session.id))})
-    `);
+    `).catch(() => []);
     const byId = new Map(rows.map((row) => [row.id, row.paymentStatus]));
     return sessions.map((session) => ({ ...session, paymentStatus: byId.get(session.id) || 'not_required' }));
 }
@@ -98,6 +100,8 @@ export async function GET(req: NextRequest) {
     const status = req.nextUrl.searchParams.get('status');
 
     try {
+        await settlePastSessionsForPsychologist(auth.userId);
+
         const [sessionsRaw, settings] = await Promise.all([
             db.diarySession.findMany({
                 where: {
@@ -176,6 +180,15 @@ export async function POST(req: NextRequest) {
             include: { client: true },
         });
 
+        await createNotification({
+            psychologistId: auth.userId,
+            type: 'session_pending',
+            title: 'Новая сессия ожидает подтверждения',
+            subtitle: `${session.client?.name || 'Клиент'} · ${session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}, ${session.time}`,
+            sessionId: session.id,
+            clientId,
+        });
+
         const sessionsCount = await db.diarySession.count({ where: { clientId } });
         const nextSession = await db.diarySession.findFirst({
             where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } },
@@ -196,7 +209,7 @@ export async function POST(req: NextRequest) {
                 include: { psychologistSettings: true },
             });
             const client = session.client as any;
-            const channel = client.telegramChatId ? 'telegram' : client.maxChatId ? 'max' : null;
+            const channel = client.maxChatId ? 'max' : client.telegramChatId ? 'telegram' : null;
             onlineSessionLink = psychologist?.psychologistSettings?.onlineSessionLink || null;
 
             const deliveries = sessionsCount === 1 ? await createAutoDocumentDeliveries({
@@ -205,7 +218,7 @@ export async function POST(req: NextRequest) {
                 sessionId: session.id,
                 trigger: 'first_session',
                 channel: channel || 'manual',
-                recipientContact: client.telegramChatId || client.maxChatId || null,
+                recipientContact: client.maxChatId || client.telegramChatId || null,
             }) : [];
 
             const psychologistName = psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист';
@@ -225,12 +238,12 @@ export async function POST(req: NextRequest) {
             });
             const message = `${text}\n\nПожалуйста, подтвердите встречу в сообщении-напоминании.`;
 
-            if (client.telegramChatId) {
-                await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' });
-                noticeStatus = 'telegram';
-            } else if (client.maxChatId) {
+            if (client.maxChatId) {
                 await sendMaxMessage(client.maxChatId, message);
                 noticeStatus = 'max';
+            } else if (client.telegramChatId) {
+                await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' });
+                noticeStatus = 'telegram';
             } else {
                 noticeStatus = 'manual';
             }
