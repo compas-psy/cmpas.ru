@@ -35,6 +35,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             WHERE id = ${id} AND "psychologistId" = ${psychologistId}
         `);
 
+        if (paymentStatus === 'paid') {
+            await db.$executeRaw(Prisma.sql`
+                UPDATE "SessionPaymentRequest"
+                SET status = 'paid', "markedPaidAt" = COALESCE("markedPaidAt", NOW()), "updatedAt" = NOW()
+                WHERE "sessionId" = ${id}
+            `).catch(() => undefined);
+        }
+
         if (paymentStatus === 'unpaid') {
             await createNotification({
                 psychologistId,
