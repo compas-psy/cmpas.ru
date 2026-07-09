@@ -36,13 +36,24 @@ function isBlankStructuredNotes(value: unknown) {
     });
 }
 
+async function ensureSessionMaintenanceColumns() {
+    await db.$executeRaw(Prisma.sql`
+        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "postSessionNudged" BOOLEAN NOT NULL DEFAULT false
+    `);
+    await db.$executeRaw(Prisma.sql`
+        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "clientMoodRating" INTEGER
+    `);
+    await db.$executeRaw(Prisma.sql`
+        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'not_required'
+    `);
+    await db.$executeRaw(Prisma.sql`
+        CREATE INDEX IF NOT EXISTS "DiarySession_paymentStatus_idx" ON "DiarySession"("paymentStatus")
+    `).catch(() => undefined);
+}
+
 async function notificationExists(params: { psychologistId: string; sessionId: string; type: string }) {
     const count = await db.practiceNotification.count({
-        where: {
-            psychologistId: params.psychologistId,
-            sessionId: params.sessionId,
-            type: params.type,
-        },
+        where: { psychologistId: params.psychologistId, sessionId: params.sessionId, type: params.type },
     }).catch(() => 0);
     return count > 0;
 }
@@ -52,11 +63,7 @@ async function maybeNotifySessionNeedsNote(session: any) {
     const hasStructuredNotes = !isBlankStructuredNotes(session.structuredNotes);
     if (hasPlainNotes || hasStructuredNotes) return false;
 
-    const exists = await notificationExists({
-        psychologistId: session.psychologistId,
-        sessionId: session.id,
-        type: 'session_needs_note',
-    });
+    const exists = await notificationExists({ psychologistId: session.psychologistId, sessionId: session.id, type: 'session_needs_note' });
     if (exists) return false;
 
     await createNotification({
@@ -66,7 +73,7 @@ async function maybeNotifySessionNeedsNote(session: any) {
         subtitle: 'Самое время для заметки — если будет удобно',
         sessionId: session.id,
         clientId: session.clientId,
-    });
+    }).catch(() => undefined);
     return true;
 }
 
@@ -76,11 +83,7 @@ async function maybeNotifyUnpaidSession(session: any) {
     `).catch(() => []);
     if ((rows[0]?.paymentStatus || '').toLowerCase() !== 'unpaid') return false;
 
-    const exists = await notificationExists({
-        psychologistId: session.psychologistId,
-        sessionId: session.id,
-        type: 'session_unpaid',
-    });
+    const exists = await notificationExists({ psychologistId: session.psychologistId, sessionId: session.id, type: 'session_unpaid' });
     if (exists) return false;
 
     await createNotification({
@@ -90,20 +93,18 @@ async function maybeNotifyUnpaidSession(session: any) {
         subtitle: `${session.client?.name || 'Клиент'} · ${session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}, ${session.time}`,
         sessionId: session.id,
         clientId: session.clientId,
-    });
+    }).catch(() => undefined);
     return true;
 }
 
 export async function settlePastSessionsForPsychologist(psychologistId: string, now = new Date()) {
+    await ensureSessionMaintenanceColumns();
+
     const dayEnd = new Date(now);
     dayEnd.setHours(23, 59, 59, 999);
 
     const candidates = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            status: 'confirmed',
-            date: { lte: dayEnd },
-        },
+        where: { psychologistId, status: 'confirmed', date: { lte: dayEnd } },
         include: { client: { select: { id: true, name: true } } },
         take: 200,
     });
@@ -114,22 +115,14 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
     let unpaidNudges = 0;
 
     for (const session of ended) {
-        await db.diarySession.update({
-            where: { id: session.id },
-            data: { status: 'completed', postSessionNudged: true },
-        });
+        await db.diarySession.update({ where: { id: session.id }, data: { status: 'completed', postSessionNudged: true } });
         completed += 1;
         if (await maybeNotifySessionNeedsNote(session)) noteNudges += 1;
         if (await maybeNotifyUnpaidSession(session)) unpaidNudges += 1;
     }
 
     const completedWithoutNudge = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            status: 'completed',
-            postSessionNudged: false,
-            date: { lte: dayEnd },
-        },
+        where: { psychologistId, status: 'completed', postSessionNudged: false, date: { lte: dayEnd } },
         include: { client: { select: { id: true, name: true } } },
         take: 200,
     });
@@ -144,6 +137,7 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
 }
 
 export async function settlePastSessionsForAllPsychologists(now = new Date()) {
+    await ensureSessionMaintenanceColumns();
     const users = await db.diarySession.findMany({
         where: { status: { in: ['confirmed', 'completed'] }, date: { lte: now } },
         select: { psychologistId: true },
