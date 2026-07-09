@@ -41,7 +41,15 @@ fun NotificationCenterSheet(
     }
 
     CompasBottomSheet(onClose = ::closeAndMarkRead) {
-        SheetHead("Уведомления")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SheetHead("Уведомления")
+            Spacer(Modifier.weight(1f))
+            if (uiState.items.any { it.unread }) {
+                TextButton(onClick = { viewModel.markAllVisibleRead() }) {
+                    Text("Прочитать все")
+                }
+            }
+        }
         Spacer(Modifier.height(14.dp))
 
         if (attentionItems.isNotEmpty()) {
