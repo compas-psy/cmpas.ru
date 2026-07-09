@@ -6,6 +6,28 @@ import { createNotification } from '@/lib/notifications';
 
 const ALLOWED = new Set(['not_required', 'unpaid', 'paid']);
 
+export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const session = await auth();
+    const psychologistId = session?.user?.id;
+    if (!psychologistId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { id } = await context.params;
+    try {
+        const rows = await db.$queryRaw<Array<{ id: string; paymentStatus: string | null }>>(Prisma.sql`
+            SELECT id, "paymentStatus"
+            FROM "DiarySession"
+            WHERE id = ${id} AND "psychologistId" = ${psychologistId}
+            LIMIT 1
+        `);
+        const found = rows[0];
+        if (!found) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+        return NextResponse.json({ id, paymentStatus: found.paymentStatus || 'not_required' });
+    } catch (error) {
+        console.error('[diary/sessions/payment GET]', error);
+        return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    }
+}
+
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
     const session = await auth();
     const psychologistId = session?.user?.id;
