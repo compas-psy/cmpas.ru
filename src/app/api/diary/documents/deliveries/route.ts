@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const status = req.nextUrl.searchParams.get('status');
     const clientId = req.nextUrl.searchParams.get('clientId');
     const documentId = req.nextUrl.searchParams.get('documentId');
+    const consent = req.nextUrl.searchParams.get('consent');
     const limit = Math.min(Number(req.nextUrl.searchParams.get('limit') || 100), 300);
 
     try {
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest) {
             documentId: string;
             documentTitle: string;
             documentVersion: string;
+            documentContentHash: string;
             deliveryChannel: string;
             recipientContact: string | null;
             sentAt: Date;
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
             createdAt: Date;
             updatedAt: Date;
         }>>`
-            SELECT d.id, d.status, d."documentId", d."documentTitle", d."documentVersion", d."deliveryChannel", d."recipientContact",
+            SELECT d.id, d.status, d."documentId", d."documentTitle", d."documentVersion", d."documentContentHash", d."deliveryChannel", d."recipientContact",
                    d."sentAt", d."openedAt", d."acknowledgedAt", d."clientId", d."sessionId", d."createdAt", d."updatedAt",
                    c.name as "clientName"
             FROM "ClientDocumentDelivery" d
@@ -43,6 +45,7 @@ export async function GET(req: NextRequest) {
               AND (${status}::text IS NULL OR d.status = ${status})
               AND (${clientId}::text IS NULL OR d."clientId" = ${clientId})
               AND (${documentId}::text IS NULL OR d."documentId" = ${documentId})
+              AND (${consent}::text IS NULL OR (${consent} = 'missing' AND d."acknowledgedAt" IS NULL) OR (${consent} = 'accepted' AND d."acknowledgedAt" IS NOT NULL))
             ORDER BY d."createdAt" DESC
             LIMIT ${limit}
         `;
@@ -54,6 +57,7 @@ export async function GET(req: NextRequest) {
                 documentId: row.documentId,
                 documentTitle: row.documentTitle,
                 documentVersion: row.documentVersion,
+                documentContentHash: row.documentContentHash,
                 deliveryChannel: row.deliveryChannel,
                 recipientContact: row.recipientContact,
                 sentAt: row.sentAt.toISOString(),
