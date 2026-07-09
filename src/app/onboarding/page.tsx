@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { parseClientLines, type ParsedClient } from "@/lib/clients/parse"
 
@@ -302,7 +302,7 @@ export default function OnboardingPage() {
     )
 }
 
-function StepCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function StepCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
     return (
         <div className="space-y-5">
             <div>
@@ -314,6 +314,6 @@ function StepCard({ title, subtitle, children }: { title: string; subtitle: stri
     )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
     return <label className="block space-y-2"><span className="text-sm font-semibold text-white/80 md:text-[#4d5a52]">{label}</span>{children}</label>
 }
