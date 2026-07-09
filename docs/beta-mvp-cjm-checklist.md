@@ -7,8 +7,9 @@
 - [x] Убран implicit accept документов на sign-in.
 - [x] Legal gate проверяется до onboarding в diary layout.
 - [x] Mobile/web acceptance получают audit snapshot: source, documentType, documentVersion.
+- [x] Android legal gate берёт актуальные версии через `/api/mobile/legal/status`.
+- [x] Android legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
 - [ ] Единый web-экран legal gate: TERMS + PRIVACY обязательные, ADS отдельный optional.
-- [ ] Android legal gate должен брать те же версии через `/api/mobile/legal/status`.
 - [ ] Onboarding: убрать фантомный шаг, сохранять все поля, добавить документы/мессенджер/первого клиента.
 
 ## CJM-2 · Добавление клиента и подключение канала
@@ -47,7 +48,6 @@
 - [x] `paymentStatus` уже поддерживается mobile API.
 - [ ] Политика отмены N часов во всех 4 клиентских каналах.
 - [ ] Web-кнопки оплаты в календаре/session modal.
-- [ ] Android QuickAction payment stub окончательно убрать из быстрых действий.
 - [ ] Единый текст напоминаний `-1ч`, убрать рассинхрон Android `-2ч`.
 
 ## CJM-6 · Расписание с телефона
@@ -66,6 +66,7 @@
 - [x] `PracticeNotification` таблица уже есть в схеме/deploy fixes.
 - [x] Добавлены beta-типы уведомлений: `session_needs_note`, `client_cancel_attempt`, `invite_expired`, `session_unpaid`.
 - [x] Dashboard теперь читает persistent notification feed, а не пересобирает историю на лету.
+- [x] Документы: opened/acknowledged теперь пишут persistent notifications.
 - [ ] Все события пишут persistent notification.
 - [ ] FCM deep-links.
 - [ ] Тихие часы 21:00–9:00 + утренняя сводка.
@@ -86,9 +87,9 @@
 - [x] Mobile endpoint `/api/mobile/feature-interest`.
 - [x] Admin counters `/api/admin/feature-interest`.
 - [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` для новых beta-DDL.
+- [x] Deploy script `npm run deploy:schema` применяет legacy schema-fixes, beta schema-fixes и Prisma migrations.
 - [ ] Web/Android reusable teaser component.
 - [ ] Admin UI/table for counters.
-- [ ] Влить beta-DDL непосредственно в `deploy/schema-fixes.sql` после CI-проверки миграций.
 
 ## Перед релизом beta
 
