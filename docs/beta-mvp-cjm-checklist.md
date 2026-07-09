@@ -32,11 +32,12 @@
 
 ## CJM-4 · Управление днём
 
-- [ ] Cron автозавершения confirmed → completed.
-- [ ] Нудж `session_needs_note` после прошедшей сессии без заметки.
+- [x] Cron/admin endpoint автозавершения confirmed → completed.
+- [x] Dashboard и sessions list запускают settle для текущего психолога перед выдачей данных.
+- [x] Нудж `session_needs_note` после прошедшей сессии без заметки.
+- [x] «Следующая сессия» берётся только из будущих pending/confirmed встреч.
+- [x] «Сессии без заметок» считается сразу по completed без 14-дневной задержки.
 - [ ] Карточка «Сессия прошла»: заметка + отметка оплаты.
-- [ ] «Следующая сессия» не показывает прошедшие встречи.
-- [ ] «Сессии без заметок» вместо некорректного label.
 
 ## CJM-5 · Запись, перенос, отмена, оплата
 
@@ -63,6 +64,7 @@
 
 - [x] `PracticeNotification` таблица уже есть в схеме/deploy fixes.
 - [x] Добавлены beta-типы уведомлений: `session_needs_note`, `client_cancel_attempt`, `invite_expired`, `session_unpaid`.
+- [x] Dashboard теперь читает persistent notification feed, а не пересобирает историю на лету.
 - [ ] Все события пишут persistent notification.
 - [ ] FCM deep-links.
 - [ ] Тихие часы 21:00–9:00 + утренняя сводка.
