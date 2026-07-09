@@ -43,6 +43,7 @@
 
 - [x] SEC-1 endpoint miniapp cancellation защищён `clientActionToken` и client ownership.
 - [x] Miniapp cancellation теперь соблюдает `cancellationHours` и пишет `client_cancel_attempt`.
+- [x] Signed action link `/api/client/session-action?a=cancel` теперь соблюдает `cancellationHours`.
 - [x] `paymentStatus` уже поддерживается mobile API.
 - [ ] Политика отмены N часов во всех 4 клиентских каналах.
 - [ ] Web-кнопки оплаты в календаре/session modal.
@@ -74,8 +75,8 @@
 
 - [x] Client document page: opened != accepted, согласие только checkbox + button.
 - [x] Server action валидирует checkbox.
-- [ ] Журнал всех доставок документов: клиент, документ, версия, status, канал.
-- [ ] CSV export с BOM.
+- [x] API журнала всех доставок документов: клиент, документ, версия, status, канал.
+- [x] CSV export с BOM.
 - [ ] Новая версия договора → предложить переотправку клиентам со старой версией.
 - [ ] Импорт календаря: будущие сессии с предпросмотром и дедупом.
 
