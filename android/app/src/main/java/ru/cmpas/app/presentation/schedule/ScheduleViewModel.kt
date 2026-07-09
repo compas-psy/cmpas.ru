@@ -91,9 +91,49 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
+    fun quickBlock(
+        startDate: String,
+        endDate: String = startDate,
+        startTime: String = "00:00",
+        endTime: String = "23:59",
+        type: String = "personal",
+        reason: String,
+        cancelIntersectingSessions: Boolean = false,
+        onFinished: (Boolean, String) -> Unit,
+    ) = createBlock(
+        startDate = startDate,
+        endDate = endDate,
+        startTime = startTime,
+        endTime = endTime,
+        type = type,
+        reason = reason,
+        cancelIntersectingSessions = cancelIntersectingSessions,
+        onFinished = onFinished,
+    )
+
     fun createBlock(
         startDate: String,
         endDate: String,
+        type: String,
+        reason: String?,
+        cancelIntersectingSessions: Boolean,
+        onFinished: (Boolean, String) -> Unit,
+    ) = createBlock(
+        startDate = startDate,
+        endDate = endDate,
+        startTime = null,
+        endTime = null,
+        type = type,
+        reason = reason,
+        cancelIntersectingSessions = cancelIntersectingSessions,
+        onFinished = onFinished,
+    )
+
+    fun createBlock(
+        startDate: String,
+        endDate: String,
+        startTime: String?,
+        endTime: String?,
         type: String,
         reason: String?,
         cancelIntersectingSessions: Boolean,
@@ -106,6 +146,8 @@ class ScheduleViewModel @Inject constructor(
                     CreateBlockRequest(
                         startDate = startDate,
                         endDate = endDate,
+                        startTime = startTime,
+                        endTime = endTime,
                         type = type,
                         reason = reason?.ifBlank { null },
                         cancelIntersectingSessions = cancelIntersectingSessions,
