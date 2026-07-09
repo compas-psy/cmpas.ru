@@ -98,13 +98,28 @@ fun ScheduleScreen(
                         bookingBufferHours = uiState.bookingBufferHours,
                         horizonDays = uiState.bookingHorizonDays,
                         cancellationHours = uiState.cancellationHours,
-                        onMode = { mode ->
-                            viewModel.updateScheduleMode(mode) { success, message -> showMessage(if (success) message else message) }
-                        },
+                        onMode = { mode -> viewModel.updateScheduleMode(mode) { _, message -> showMessage(message) } },
                     )
                 }
 
                 item { WeekOverviewCard(rules = uiState.rules, slots = uiState.slots) }
+
+                item {
+                    QuickBlockActionsCard(
+                        isSaving = uiState.isSaving,
+                        onCustom = { showAddSheet = true },
+                        onBlock = { startDate, endDate, startTime, endTime, type, reason ->
+                            viewModel.quickBlock(
+                                startDate = startDate,
+                                endDate = endDate,
+                                startTime = startTime,
+                                endTime = endTime,
+                                type = type,
+                                reason = reason,
+                            ) { _, message -> showMessage(message) }
+                        },
+                    )
+                }
 
                 item {
                     SectionTitle("Ближайшие блокировки", actionLabel = "+ Добавить") { showAddSheet = true }
@@ -124,11 +139,7 @@ fun ScheduleScreen(
                         }
                     }
                     else -> items(uiState.blocks, key = { it.id }) { block ->
-                        BlockRow(
-                            block = block,
-                            isDeleting = uiState.deletingId == block.id,
-                            onDelete = { pendingDelete = block },
-                        )
+                        BlockRow(block = block, isDeleting = uiState.deletingId == block.id, onDelete = { pendingDelete = block })
                     }
                 }
             }
@@ -167,6 +178,60 @@ fun ScheduleScreen(
 }
 
 @Composable
+private fun QuickBlockActionsCard(
+    isSaving: Boolean,
+    onCustom: () -> Unit,
+    onBlock: (startDate: String, endDate: String, startTime: String, endTime: String, type: String, reason: String) -> Unit,
+) {
+    val today = LocalDate.now()
+    val tomorrow = today.plusDays(1)
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Bolt, null, Modifier.size(20.dp), tint = Forest700)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Быстрые блокировки", style = tBody, color = CompasFg)
+                Text("Закрыть день или часть дня в одно касание", style = tMeta, color = CompasMutedFg)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GhostButton(
+                text = "Сегодня",
+                icon = Icons.Outlined.Today,
+                enabled = !isSaving,
+                modifier = Modifier.weight(1f),
+                onClick = { onBlock(today.toString(), today.toString(), "00:00", "23:59", "personal", "Личный день") },
+            )
+            GhostButton(
+                text = "Завтра",
+                icon = Icons.Outlined.Event,
+                enabled = !isSaving,
+                modifier = Modifier.weight(1f),
+                onClick = { onBlock(tomorrow.toString(), tomorrow.toString(), "00:00", "23:59", "personal", "Личный день") },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GhostButton(
+                text = "С 18:00",
+                icon = Icons.Outlined.NightsStay,
+                enabled = !isSaving,
+                modifier = Modifier.weight(1f),
+                onClick = { onBlock(today.toString(), today.toString(), "18:00", "23:59", "personal", "Закончить день раньше") },
+            )
+            GhostButton(
+                text = "Отпуск",
+                icon = Icons.Outlined.Luggage,
+                enabled = !isSaving,
+                modifier = Modifier.weight(1f),
+                onClick = onCustom,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ScheduleModeCard(
     mode: String,
     isSaving: Boolean,
@@ -186,11 +251,7 @@ private fun ScheduleModeCard(
             if (isSaving) CircularProgressIndicator(Modifier.size(18.dp), color = CompasAccent400, strokeWidth = 2.dp)
         }
         Spacer(Modifier.height(12.dp))
-        CompasSegmented(
-            options = listOf("Закрыта", "Превью", "Открыта"),
-            selectedIndex = selected,
-            onSelect = { onMode(modes[it]) },
-        )
+        CompasSegmented(options = listOf("Закрыта", "Превью", "Открыта"), selectedIndex = selected, onSelect = { onMode(modes[it]) })
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MiniPolicy("Запись", "за $bookingBufferHours ч", Modifier.weight(1f))
@@ -264,11 +325,8 @@ private fun BlockRow(block: TimeBlock, isDeleting: Boolean, onDelete: () -> Unit
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (isDeleting) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Forest700)
-            } else {
-                IconButtonGlass(Icons.Outlined.Close, "Снять блокировку", onClick = onDelete)
-            }
+            if (isDeleting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Forest700)
+            else IconButtonGlass(Icons.Outlined.Close, "Снять блокировку", onClick = onDelete)
         }
     }
 }
@@ -298,18 +356,8 @@ private fun AddBlockSheet(
         Eyebrow("Период")
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            DateSelectorCard(
-                label = "С",
-                value = startDate?.let { prettyBlockDate(it) } ?: "Выбрать",
-                onClick = { showStartPicker = true },
-                modifier = Modifier.weight(1f),
-            )
-            DateSelectorCard(
-                label = "По",
-                value = endDate?.let { prettyBlockDate(it) } ?: "Выбрать",
-                onClick = { showEndPicker = true },
-                modifier = Modifier.weight(1f),
-            )
+            DateSelectorCard("С", startDate?.let { prettyBlockDate(it) } ?: "Выбрать", { showStartPicker = true }, Modifier.weight(1f))
+            DateSelectorCard("По", endDate?.let { prettyBlockDate(it) } ?: "Выбрать", { showEndPicker = true }, Modifier.weight(1f))
         }
         Spacer(Modifier.height(14.dp))
         Eyebrow("Тип")
@@ -329,8 +377,7 @@ private fun AddBlockSheet(
         }
         Spacer(Modifier.height(10.dp))
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.5f))
-                .padding(horizontal = 14.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.5f)).padding(horizontal = 14.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Отменить попадающие сессии", style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
@@ -378,17 +425,13 @@ private fun DateDialog(initial: LocalDate, onDismiss: () -> Unit, onPick: (Local
     val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initial.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStart
-        },
+        selectableDates = object : SelectableDates { override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStart },
     )
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                state.selectedDateMillis?.let { millis ->
-                    onPick(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate())
-                } ?: onDismiss()
+                state.selectedDateMillis?.let { millis -> onPick(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()) } ?: onDismiss()
             }) { Text("Выбрать") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
@@ -404,8 +447,6 @@ private fun blockTypeLabel(type: String) = when (type) {
 
 private fun dayLabel(day: Int) = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").getOrElse(day.coerceIn(0, 6)) { "—" }
 
-private fun prettyBlockDate(date: String): String =
-    runCatching { prettyBlockDate(LocalDate.parse(date)) }.getOrDefault(date)
+private fun prettyBlockDate(date: String): String = runCatching { prettyBlockDate(LocalDate.parse(date)) }.getOrDefault(date)
 
-private fun prettyBlockDate(date: LocalDate): String =
-    date.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))).replaceFirstChar { it.titlecase(Locale("ru")) }
+private fun prettyBlockDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))).replaceFirstChar { it.titlecase(Locale("ru")) }
