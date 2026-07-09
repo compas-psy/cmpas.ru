@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getDocumentDelivery } from '@/lib/client-workflow';
+import { notifyDocumentDeliveryEvent } from '@/lib/document-delivery-notifications';
 import { acknowledgeSpecialistDocument } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,7 @@ export default async function ClientDocumentPage({ params, searchParams }: { par
     let delivery;
     try {
         delivery = await getDocumentDelivery(deliveryId, token);
+        await notifyDocumentDeliveryEvent(deliveryId, 'opened');
     } catch {
         notFound();
     }
