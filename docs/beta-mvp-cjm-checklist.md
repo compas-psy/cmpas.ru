@@ -51,6 +51,7 @@
 - [x] Miniapp cancellation теперь соблюдает `cancellationHours` и пишет `client_cancel_attempt`.
 - [x] Signed action link `/api/client/session-action?a=cancel` теперь соблюдает `cancellationHours`.
 - [x] `paymentStatus` уже поддерживается mobile API.
+- [x] Web payment endpoint `PATCH /api/diary/sessions/[id]/payment` для календаря/session modal.
 - [ ] Политика отмены N часов во всех 4 клиентских каналах: явно проверить/подключить TG и MAX callback paths.
 - [ ] Web-кнопки оплаты в календаре/session modal.
 - [ ] Единый текст напоминаний `-1ч`, убрать рассинхрон Android `-2ч`.
@@ -72,10 +73,10 @@
 - [x] Добавлены beta-типы уведомлений: `session_needs_note`, `client_cancel_attempt`, `invite_expired`, `session_unpaid`.
 - [x] Dashboard теперь читает persistent notification feed, а не пересобирает историю на лету.
 - [x] Документы: opened/acknowledged теперь пишут persistent notifications.
+- [x] Android notification sheet: группы «Сегодня/Ранее», deep-link tap, «Прочитать все», локальный read-state.
 - [ ] Все события пишут persistent notification.
 - [ ] FCM deep-links.
 - [ ] Тихие часы 21:00–9:00 + утренняя сводка.
-- [ ] Android full-screen notification sheet вместо alert.
 
 ## CJM-8 · Перенос практики и журнал согласий
 
@@ -97,6 +98,7 @@
 - [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` для новых beta-DDL.
 - [x] Deploy script `npm run deploy:schema` применяет legacy schema-fixes, beta schema-fixes и Prisma migrations.
 - [x] CPO/QA audit зафиксирован в `docs/beta-mvp-cpo-qa-audit.md`.
+- [x] Next sprint plan зафиксирован в `docs/beta-mvp-next-sprint-plan.md`.
 - [ ] Web/Android reusable teaser component.
 
 ## Перед релизом beta
