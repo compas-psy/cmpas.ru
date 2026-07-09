@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.api.AvailabilityRule
+import ru.cmpas.app.data.api.AvailabilitySlotDto
 import ru.cmpas.app.domain.model.TimeBlock
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -58,7 +60,7 @@ fun ScheduleScreen(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Расписание", style = tSection, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("Блокировки и выходные", style = tBody2, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Режим записи и блокировки", style = tBody2, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
@@ -74,7 +76,7 @@ fun ScheduleScreen(
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "Заблокируйте дни, когда вы недоступны — клиенты не смогут записаться на них через самозапись.",
+                                    "Управляйте самозаписью с телефона. Быстрые блокировки сразу закрывают время для клиентов.",
                                     style = tBody2,
                                 )
                                 Spacer(Modifier.height(8.dp))
@@ -90,6 +92,21 @@ fun ScheduleScreen(
                 }
 
                 item {
+                    ScheduleModeCard(
+                        mode = uiState.scheduleMode,
+                        isSaving = uiState.isSavingMode,
+                        bookingBufferHours = uiState.bookingBufferHours,
+                        horizonDays = uiState.bookingHorizonDays,
+                        cancellationHours = uiState.cancellationHours,
+                        onMode = { mode ->
+                            viewModel.updateScheduleMode(mode) { success, message -> showMessage(if (success) message else message) }
+                        },
+                    )
+                }
+
+                item { WeekOverviewCard(rules = uiState.rules, slots = uiState.slots) }
+
+                item {
                     SectionTitle("Ближайшие блокировки", actionLabel = "+ Добавить") { showAddSheet = true }
                 }
 
@@ -103,7 +120,7 @@ fun ScheduleScreen(
                         GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
                             Text("Блокировок нет", style = tSection, color = CompasFg)
                             Spacer(Modifier.height(4.dp))
-                            Text("Всё расписание открыто для самозаписи клиентов.", style = tBody2)
+                            Text("В расписании нет дополнительных закрытых дней или периодов.", style = tBody2)
                         }
                     }
                     else -> items(uiState.blocks, key = { it.id }) { block ->
@@ -137,15 +154,88 @@ fun ScheduleScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Снять блокировку?", style = tSection) },
-            text = { Text("${blockTypeLabel(block.type)} · ${prettyBlockDate(block.date)} будет снова доступны для самозаписи.", style = tBody2) },
+            text = { Text("${blockTypeLabel(block.type)} · ${prettyBlockDate(block.date)} снова станет доступной для самозаписи.", style = tBody2) },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteBlock(block.id) { success, message -> showMessage(message) }
+                    viewModel.deleteBlock(block.id) { _, message -> showMessage(message) }
                     pendingDelete = null
                 }) { Text("Снять", color = CompasDestructive) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Отмена") } },
         )
+    }
+}
+
+@Composable
+private fun ScheduleModeCard(
+    mode: String,
+    isSaving: Boolean,
+    bookingBufferHours: Int,
+    horizonDays: Int,
+    cancellationHours: Int,
+    onMode: (String) -> Unit,
+) {
+    val modes = listOf("private", "readonly", "booking")
+    val selected = modes.indexOf(mode).coerceAtLeast(0)
+    GlassTintCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Самозапись клиентов", style = tSection, color = Color.White)
+                Text(scheduleModeLabel(mode), style = tBody2, color = Color.White.copy(alpha = .78f))
+            }
+            if (isSaving) CircularProgressIndicator(Modifier.size(18.dp), color = CompasAccent400, strokeWidth = 2.dp)
+        }
+        Spacer(Modifier.height(12.dp))
+        CompasSegmented(
+            options = listOf("Закрыта", "Превью", "Открыта"),
+            selectedIndex = selected,
+            onSelect = { onMode(modes[it]) },
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MiniPolicy("Запись", "за $bookingBufferHours ч", Modifier.weight(1f))
+            MiniPolicy("Горизонт", "$horizonDays дн.", Modifier.weight(1f))
+            MiniPolicy("Отмена", "за $cancellationHours ч", Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun MiniPolicy(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .14f)).padding(10.dp)) {
+        Text(label, style = tMeta, color = Color.White.copy(alpha = .68f), maxLines = 1)
+        Text(value, style = tBody, color = Color.White, maxLines = 1)
+    }
+}
+
+@Composable
+private fun WeekOverviewCard(rules: List<AvailabilityRule>, slots: List<AvailabilitySlotDto>) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(20.dp), tint = Forest700)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Неделя", style = tBody, color = CompasFg)
+                Text("${rules.count { it.isActive }} правил · ${slots.size} слотов", style = tMeta, color = CompasMutedFg)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        if (slots.isEmpty()) {
+            Text("Слоты не настроены. Тонкая настройка пока в веб-кабинете.", style = tBody2)
+        } else {
+            slots.groupBy { it.dayOfWeek }.toSortedMap().entries.take(7).forEach { (day, daySlots) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(dayLabel(day), style = tMeta, color = CompasMutedFg, modifier = Modifier.width(34.dp))
+                    Text(
+                        daySlots.take(3).joinToString(" · ") { "${it.startTime}-${it.endTime}" } + if (daySlots.size > 3) " …" else "",
+                        style = tBody2,
+                        color = CompasFg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -167,7 +257,7 @@ private fun BlockRow(block: TimeBlock, isDeleting: Boolean, onDelete: () -> Unit
                 Text(prettyBlockDate(block.date), style = tBody, color = CompasFg)
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    blockTypeLabel(block.type) + (block.reason?.let { " · $it" } ?: ""),
+                    blockTypeLabel(block.type) + " · ${block.startTime}-${block.endTime}" + (block.reason?.let { " · $it" } ?: ""),
                     style = tMeta,
                     color = CompasMutedFg,
                     maxLines = 1,
@@ -311,6 +401,8 @@ private fun blockTypeLabel(type: String) = when (type) {
     "personal" -> "Личное"
     else -> "Блокировка"
 }
+
+private fun dayLabel(day: Int) = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").getOrElse(day.coerceIn(0, 6)) { "—" }
 
 private fun prettyBlockDate(date: String): String =
     runCatching { prettyBlockDate(LocalDate.parse(date)) }.getOrDefault(date)
