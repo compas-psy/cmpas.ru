@@ -6,7 +6,6 @@ import { db } from "@/lib/db"
 import { html, text } from "@/lib/email-template"
 // @ts-expect-error - nodemailer types not installed due to peer dep conflict
 import { createTransport } from "nodemailer"
-import { acceptActiveDocuments } from "@/app/legal/actions"
 
 // ============================================
 // AUTH_SECRET VALIDATION (CRITICAL!)
@@ -104,12 +103,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     callbacks: {
         async signIn({ user }) {
             if (user?.id) {
-                try {
-                    await acceptActiveDocuments(user.id);
-                } catch (e) {
-                    console.error("[auth] acceptActiveDocuments failed:", e);
-                }
-                // Set 30-day trial for new users (trialEndsAt not yet set)
+                // Legal documents must never be accepted implicitly on sign-in.
+                // The beta legal gate records TERMS/PRIVACY/ADS only after an explicit
+                // checkbox/button action in web or Android, with version, date and source.
                 try {
                     const dbUser = await db.user.findUnique({
                         where: { id: user.id },
@@ -144,4 +140,3 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     secret: process.env.AUTH_SECRET,
     trustHost: true,
 })
-
