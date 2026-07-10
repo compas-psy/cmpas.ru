@@ -1,5 +1,6 @@
 -- Beta MVP idempotent schema fixes for CMPAS.RU
--- Keep in sync with prisma/migrations/20260709_* before production deploy.
+-- Applied before the production Next.js process starts.
+-- Keep in sync with the corresponding Prisma migrations.
 
 -- LegalDocumentAcceptance audit snapshots
 ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'web';
@@ -14,6 +15,13 @@ WHERE d.id = a."documentId";
 
 CREATE INDEX IF NOT EXISTS "LegalDocumentAcceptance_userId_source_idx" ON "LegalDocumentAcceptance"("userId", "source");
 CREATE INDEX IF NOT EXISTS "LegalDocumentAcceptance_documentType_idx" ON "LegalDocumentAcceptance"("documentType");
+
+-- DiarySession fields used by beta API/dashboard maintenance.
+-- These must exist before the new app process accepts requests.
+ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "postSessionNudged" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "clientMoodRating" INTEGER;
+ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'not_required';
+CREATE INDEX IF NOT EXISTS "DiarySession_paymentStatus_idx" ON "DiarySession"("paymentStatus");
 
 -- FeatureInterest: interest list for honest `Скоро ✨` beta features
 CREATE TABLE IF NOT EXISTS "FeatureInterest" (
