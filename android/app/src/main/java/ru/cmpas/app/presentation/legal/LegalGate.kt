@@ -126,7 +126,7 @@ private fun AdsConsentDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Иногда будем отправлять обновления сервиса, материалы и предложения для практики. Это необязательно и не влияет на доступ к КОМПАС.",
+                    "Рекламные сообщения CMPAS можно получать только по отдельному согласию. Это необязательно и не влияет на доступ к сервису.",
                     style = tBody2,
                     color = CompasMutedFg,
                 )
@@ -201,7 +201,13 @@ private fun ConsentCheckRow(
 }
 
 private fun legalUrl(url: String): String {
-    if (url.startsWith("http")) return url
-    val normalized = if (url.startsWith("/")) url else "/$url"
-    return "https:" + "//cmpas.ru" + normalized
+    val value = url.trim()
+    val lower = value.lowercase()
+    return when {
+        lower.startsWith("http://") || lower.startsWith("https://") -> value
+        lower.startsWith("cmpas.ru/") -> "https://$value"
+        lower.startsWith("www.cmpas.ru/") -> "https://$value"
+        value.startsWith("/") -> "https://cmpas.ru$value"
+        else -> "https://cmpas.ru/$value"
+    }
 }

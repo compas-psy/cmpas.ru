@@ -5,10 +5,16 @@ on:
     branches: [main]
     paths:
       - 'android/**'
+      - 'src/app/api/mobile/**'
+      - 'src/lib/mobile-auth.ts'
+      - 'src/lib/legal-documents.ts'
       - '.github/workflows/android-build.yml'
   pull_request:
     paths:
       - 'android/**'
+      - 'src/app/api/mobile/**'
+      - 'src/lib/mobile-auth.ts'
+      - 'src/lib/legal-documents.ts'
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
