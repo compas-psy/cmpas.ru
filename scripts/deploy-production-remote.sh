@@ -169,7 +169,6 @@ docker compose build app
 
 systemctl stop exim4 postfix sendmail 2>/dev/null || true
 systemctl disable exim4 postfix sendmail 2>/dev/null || true
-fuser -k 25/tcp 2>/dev/null || true
 
 if [ "$vpn_enabled" = '1' ]; then
   export COMPOSE_PROFILES=vpn
@@ -212,7 +211,11 @@ fi
 log 'New application is healthy.'
 docker compose exec -T app node scripts/verify-production-schema.js
 
-auth_status=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/session || printf '000')
+if auth_status=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/session); then
+  :
+else
+  auth_status='000'
+fi
 log "Auth endpoint status: ${auth_status}"
 if [ "$auth_status" = '000' ] || [ "$auth_status" -ge 500 ]; then
   log 'ERROR: auth endpoint verification failed.'
