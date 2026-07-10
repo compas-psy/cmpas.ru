@@ -30,12 +30,7 @@ async function writeBaseAcceptance(params: {
     `);
 }
 
-async function updateAuditSnapshot(params: {
-    userId: string;
-    document: ActiveLegalDocument;
-    source: string;
-}) {
-    const { userId, document, source } = params;
+async function ensureAuditColumns() {
     try {
         await db.$executeRaw(Prisma.sql`
             ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'web'
@@ -46,18 +41,29 @@ async function updateAuditSnapshot(params: {
         await db.$executeRaw(Prisma.sql`
             ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentVersion" TEXT
         `);
-        await db.$executeRaw(Prisma.sql`
-            UPDATE "LegalDocumentAcceptance"
-            SET source = ${source},
-                "documentType" = ${document.type},
-                "documentVersion" = ${document.version}
-            WHERE "userId" = ${userId} AND "documentId" = ${document.id}
-        `);
+        return true;
     } catch (error) {
-        // The acceptance itself is already safely stored in the base table.
-        // Audit enrichment must never make required legal acceptance fail.
-        console.error('[mobile/legal/accept] audit snapshot skipped', error);
+        // Acceptance uses the stable base columns and remains valid even if the
+        // deployment role cannot perform DDL. Migration/deploy must still fix
+        // audit fields before external beta.
+        console.error('[mobile/legal/accept] audit columns unavailable', error);
+        return false;
     }
+}
+
+async function updateAuditSnapshot(params: {
+    userId: string;
+    document: ActiveLegalDocument;
+    source: string;
+}) {
+    const { userId, document, source } = params;
+    await db.$executeRaw(Prisma.sql`
+        UPDATE "LegalDocumentAcceptance"
+        SET source = ${source},
+            "documentType" = ${document.type},
+            "documentVersion" = ${document.version}
+        WHERE "userId" = ${userId} AND "documentId" = ${document.id}
+    `);
 }
 
 export async function POST(req: NextRequest) {
@@ -69,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     try {
         const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
-        const requiredDocs = activeDocs.filter((doc) => REQUIRED_LEGAL_DOC_TYPES.includes(doc.type as any));
+        const requiredDocs = activeDocs.filter((doc) => REQUIRED_LEGAL_DOC_TYPES.some((type) => type === doc.type));
         const adsDoc = activeDocs.find((doc) => doc.type === 'ADS') ?? null;
 
         if (body.acceptTerms === true) {
@@ -89,11 +95,11 @@ export async function POST(req: NextRequest) {
                 `)),
             );
 
-            await Promise.all(requiredDocs.map((document) => updateAuditSnapshot({
-                userId: auth.userId,
-                document,
-                source: 'android',
-            })));
+            if (await ensureAuditColumns()) {
+                for (const document of requiredDocs) {
+                    await updateAuditSnapshot({ userId: auth.userId, document, source: 'android' });
+                }
+            }
         }
 
         let adsAccepted: boolean | null = null;
@@ -102,7 +108,9 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Advertising consent document is unavailable' }, { status: 503 });
             }
             await writeBaseAcceptance({ userId: auth.userId, document: adsDoc, ipAddress });
-            await updateAuditSnapshot({ userId: auth.userId, document: adsDoc, source: 'android' });
+            if (await ensureAuditColumns()) {
+                await updateAuditSnapshot({ userId: auth.userId, document: adsDoc, source: 'android' });
+            }
             adsAccepted = true;
         } else if (body.acceptAds === false && adsDoc) {
             await db.legalDocumentAcceptance.deleteMany({ where: { userId: auth.userId, documentId: adsDoc.id } });
