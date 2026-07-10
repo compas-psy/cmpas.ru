@@ -29,3 +29,10 @@ data class MobileLegalAcceptBody(
     val acceptAds: Boolean? = null,
     val documentIds: List<String> = emptyList(),
 )
+
+@Serializable
+data class MobileLegalAcceptResponse(
+    val success: Boolean = false,
+    val requiredAccepted: Boolean = false,
+    val adsAccepted: Boolean? = null,
+)
