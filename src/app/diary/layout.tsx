@@ -58,7 +58,6 @@ function SidebarContent({
 }) {
     return (
         <div className="flex flex-col h-full bg-sidebar">
-            {/* Logo */}
             <div className="px-6 pt-6 pb-4">
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white/8 flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -68,16 +67,13 @@ function SidebarContent({
                 </div>
             </div>
 
-            {/* Navigation */}
             <SidebarNav />
 
-            {/* Trial Card or Spacer */}
             <div className="mt-auto">
                 {daysLeft !== null && daysLeft > 0 && (
                     <TrialCard daysLeft={daysLeft} totalDays={30} />
                 )}
 
-                {/* Logout */}
                 <div className="px-4 pb-4 pt-2 border-t border-sidebar-border">
                     <Link
                         href="/"
@@ -94,7 +90,6 @@ function SidebarContent({
 
 export default async function DiaryLayout({
     children,
-    params,
     searchParams,
 }: {
     children: React.ReactNode;
@@ -110,7 +105,6 @@ export default async function DiaryLayout({
         redirect('/auth');
     }
 
-    // Fetch user with settings to determine onboarding and block status
     let dbUser;
     try {
         dbUser = await db.user.findUnique({
@@ -126,17 +120,21 @@ export default async function DiaryLayout({
         );
     }
 
-    if (!dbUser?.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
-        redirect('/onboarding');
+    if (!dbUser) {
+        redirect('/auth');
     }
 
-    // Check if user has accepted the latest mandatory documents
+    // Legal gate goes before onboarding: a new psychologist must explicitly accept
+    // TERMS + PRIVACY first; onboarding must not become an implicit acceptance path.
     const acceptanceCheck = await checkUserAcceptance(dbUser.id, ["TERMS", "PRIVACY"]);
     if (acceptanceCheck.success && acceptanceCheck.needsAcceptance && acceptanceCheck.needsAcceptance.length > 0) {
         redirect('/legal-acceptance');
     }
 
-    // Trial & subscription check
+    if (!dbUser.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
+        redirect('/onboarding');
+    }
+
     const trialEndsAt = dbUser.trialEndsAt;
     const now = new Date();
     const isForever = trialEndsAt && trialEndsAt.getFullYear() >= 2099;
@@ -160,17 +158,14 @@ export default async function DiaryLayout({
 
     return (
         <div className="min-h-screen bg-background flex">
-            {/* Desktop sidebar — 252px width */}
             <aside className="hidden md:flex w-[252px] fixed h-full flex-col z-30" style={{ boxShadow: '4px 0 24px rgba(20,32,24,0.06)' }}>
                 <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
             </aside>
 
-            {/* Mobile sidebar */}
             <MobileSidebar>
                 <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
             </MobileSidebar>
 
-            {/* Main content — 252px offset, 32px padding */}
             <main className="flex-1 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
                 {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
                 <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto overflow-x-hidden">
@@ -179,11 +174,7 @@ export default async function DiaryLayout({
             </main>
 
             <Toaster position="top-right" richColors theme="system" />
-
-            {/* Mobile Bottom Tab Bar */}
             <BottomTabBar />
-
-            {/* Deferred Ads Consent Modal */}
             <AdsConsentWrapper userId={dbUser.id} />
         </div>
     );

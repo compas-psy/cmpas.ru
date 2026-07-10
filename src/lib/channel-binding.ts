@@ -10,6 +10,7 @@ const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
 const MAX_BOT_USERNAME = process.env.MAX_BOT_USERNAME || '';
 const DEFAULT_TTL_MS = 72 * 60 * 60 * 1000;
+let maxUsernameWarned = false;
 
 function tokenHash(token: string) {
     return `sha256:${createHash('sha256').update(token).digest('hex')}`;
@@ -24,7 +25,13 @@ export function buildDirectChannelLink(channel: ClientChannel, rawToken: string)
     if (channel === 'telegram') {
         return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
     }
-    if (!MAX_BOT_USERNAME) return null;
+    if (!MAX_BOT_USERNAME) {
+        if (!maxUsernameWarned) {
+            console.warn('[channel-binding] MAX_BOT_USERNAME is not set — MAX direct invite links are disabled. Smart /connect links still work.');
+            maxUsernameWarned = true;
+        }
+        return null;
+    }
     return `https://max.ru/${MAX_BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
 }
 
@@ -98,7 +105,7 @@ export async function createClientChannelInvite(params: {
         directLink: params.channel === 'auto'
             ? smartLink
             : (params.channel === 'telegram' ? telegramLink : maxLink) || smartLink,
-        directLinks: { telegram: telegramLink, max: maxLink },
+        directLinks: { max: maxLink, telegram: telegramLink },
         shareText: buildChannelShareText({ clientName: client.name, psychologistName, smartLink }),
     };
 }
@@ -133,8 +140,8 @@ export async function getPublicChannelInvite(rawToken: string) {
         psychologistName: psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист',
         channel,
         directLinks: {
-            telegram: buildDirectChannelLink('telegram', normalized),
             max: buildDirectChannelLink('max', normalized),
+            telegram: buildDirectChannelLink('telegram', normalized),
         },
         expiresAt: invite.expiresAt,
     };
@@ -221,6 +228,35 @@ export async function consumeClientChannelInvite(params: {
     return result;
 }
 
+export async function expireClientChannelInvites(now = new Date()) {
+    const expired = await db.clientInviteToken.findMany({
+        where: { usedAt: null, expiresAt: { lte: now } },
+        select: { id: true, psychologistId: true, clientId: true, channel: true, expiresAt: true },
+        take: 200,
+    });
+
+    for (const invite of expired) {
+        await db.auditLog.create({
+            data: {
+                userId: invite.psychologistId,
+                action: 'CLIENT_CHANNEL_INVITE_EXPIRED',
+                provider: invite.channel,
+                metadata: JSON.stringify({ clientId: invite.clientId, inviteId: invite.id, expiresAt: invite.expiresAt.toISOString() }),
+            },
+        }).catch(() => undefined);
+
+        await createNotification({
+            psychologistId: invite.psychologistId,
+            type: 'invite_expired',
+            title: 'Приглашение клиента истекло',
+            subtitle: 'Можно отправить новую ссылку подключения',
+            clientId: invite.clientId,
+        });
+    }
+
+    return { expired: expired.length };
+}
+
 export async function getClientChannelStatus(psychologistId: string, clientId: string) {
     const client = await db.diaryClient.findFirst({
         where: { id: clientId, psychologistId },
@@ -233,10 +269,10 @@ export async function getClientChannelStatus(psychologistId: string, clientId: s
         clientName: client.name,
         phone: client.phone,
         channels: {
-            telegram: { connected: Boolean(client.telegramChatId) },
             max: { connected: Boolean(client.maxChatId) },
+            telegram: { connected: Boolean(client.telegramChatId) },
         },
-        recommendedChannel: client.telegramChatId ? 'telegram' as const : client.maxChatId ? 'max' as const : 'telegram' as const,
+        recommendedChannel: client.maxChatId ? 'max' as const : client.telegramChatId ? 'telegram' as const : 'max' as const,
     };
 }
 

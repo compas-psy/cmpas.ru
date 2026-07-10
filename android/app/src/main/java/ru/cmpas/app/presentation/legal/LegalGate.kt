@@ -50,14 +50,17 @@ private fun RequiredTermsDialog(
     state: LegalGateUiState,
     onContinue: (Boolean) -> Unit,
 ) {
-    var acceptedAds by remember { mutableStateOf(false) }
+    var acceptedTerms by remember(state.terms?.id) { mutableStateOf(false) }
+    var acceptedPrivacy by remember(state.privacy?.id) { mutableStateOf(false) }
+    var acceptedAds by remember(state.ads?.id) { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
+    val canContinue = !state.isSaving && (state.terms == null || acceptedTerms) && (state.privacy == null || acceptedPrivacy)
 
     AlertDialog(
         onDismissRequest = {},
         confirmButton = {
-            Button(onClick = { onContinue(acceptedAds) }, enabled = !state.isSaving) {
-                Text(if (state.isSaving) "Сохраняем…" else "Продолжить")
+            Button(onClick = { onContinue(acceptedAds) }, enabled = canContinue) {
+                Text(if (state.isSaving) "Сохраняем…" else "Принять и продолжить")
             }
         },
         title = { Text("Перед началом работы", style = tSection, color = CompasFg) },
@@ -67,27 +70,41 @@ private fun RequiredTermsDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    "Нажимая «Продолжить», вы принимаете пользовательское соглашение и политику конфиденциальности CMPAS в актуальных версиях. Принятие будет зафиксировано в журнале сервиса.",
+                    "Чтобы продолжить работу в КОМПАС, подтвердите обязательные документы. Принятие будет зафиксировано в журнале сервиса с версией и датой.",
                     style = tBody2,
                     color = CompasMutedFg,
                 )
 
-                state.terms?.let {
-                    LegalDocRow(it, "Пользовательское соглашение", "Версия ${it.version}") { uriHandler.openUri(legalUrl(it.url)) }
+                state.terms?.let { doc ->
+                    LegalDocRow(doc, "Пользовательское соглашение", "Версия ${doc.version}") { uriHandler.openUri(legalUrl(doc.url)) }
+                    ConsentCheckRow(
+                        checked = acceptedTerms,
+                        title = "Я принимаю пользовательское соглашение",
+                        subtitle = "Обязательно для использования сервиса · версия ${doc.version}",
+                        onChange = { acceptedTerms = it },
+                    )
                 }
-                state.privacy?.let {
-                    LegalDocRow(it, "Политика конфиденциальности", "Версия ${it.version}") { uriHandler.openUri(legalUrl(it.url)) }
+                state.privacy?.let { doc ->
+                    LegalDocRow(doc, "Политика конфиденциальности", "Версия ${doc.version}") { uriHandler.openUri(legalUrl(doc.url)) }
+                    ConsentCheckRow(
+                        checked = acceptedPrivacy,
+                        title = "Я принимаю политику конфиденциальности",
+                        subtitle = "Обязательно для обработки персональных данных · версия ${doc.version}",
+                        onChange = { acceptedPrivacy = it },
+                    )
                 }
-                state.ads?.let {
-                    LegalDocRow(it, "Согласие на рекламу", "Необязательно · версия ${it.version}") { uriHandler.openUri(legalUrl(it.url)) }
+                state.ads?.let { doc ->
+                    LegalDocRow(doc, "Согласие на рекламу", "Необязательно · версия ${doc.version}") { uriHandler.openUri(legalUrl(doc.url)) }
+                    ConsentCheckRow(
+                        checked = acceptedAds,
+                        title = "Получать полезные материалы и предложения CMPAS",
+                        subtitle = "Необязательно. Можно отказаться сейчас и дать согласие позже.",
+                        onChange = { acceptedAds = it },
+                    )
                 }
-
-                ConsentCheckRow(
-                    checked = acceptedAds,
-                    title = "Получать полезные материалы и предложения CMPAS",
-                    subtitle = "Необязательно. Можно отказаться сейчас и дать согласие позже.",
-                    onChange = { acceptedAds = it },
-                )
+                if (!canContinue && !state.isSaving) {
+                    Text("Для продолжения отметьте обязательные согласия.", style = tMeta, color = CompasMutedFg)
+                }
                 state.error?.let { Text(it, style = tMeta, color = Red600) }
             }
         },
@@ -109,7 +126,7 @@ private fun AdsConsentDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Иногда будем отправлять обновления сервиса, материалы и предложения для практики. Это необязательно и не влияет на доступ к КОМПАС.",
+                    "Рекламные сообщения CMPAS можно получать только по отдельному согласию. Это необязательно и не влияет на доступ к сервису.",
                     style = tBody2,
                     color = CompasMutedFg,
                 )
@@ -184,7 +201,13 @@ private fun ConsentCheckRow(
 }
 
 private fun legalUrl(url: String): String {
-    if (url.startsWith("http")) return url
-    val normalized = if (url.startsWith("/")) url else "/$url"
-    return "https:" + "//cmpas.ru" + normalized
+    val value = url.trim()
+    val lower = value.lowercase()
+    return when {
+        lower.startsWith("http://") || lower.startsWith("https://") -> value
+        lower.startsWith("cmpas.ru/") -> "https://$value"
+        lower.startsWith("www.cmpas.ru/") -> "https://$value"
+        value.startsWith("/") -> "https://cmpas.ru$value"
+        else -> "https://cmpas.ru/$value"
+    }
 }

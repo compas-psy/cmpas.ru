@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as crypto from 'crypto';
 import { bot } from '@/lib/telegram-bot';
 import { db } from '@/lib/db';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
@@ -43,17 +44,23 @@ async function handleClientInvite(body: any) {
             : code === 'INVITE_EXPIRED'
                 ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
                 : 'Не удалось подключить уведомления. Попросите специалиста отправить новую ссылку.';
-        await bot.telegram.sendMessage(chatId, message).catch(e => console.error('[telegram-webhook] failure notice send failed:', e));
+        await withTimeout(bot.telegram.sendMessage(chatId, message), 6000).catch(e => console.error('[telegram-webhook] failure notice send failed:', e instanceof Error ? e.message : e));
         return true;
     }
 
+    // The binding already succeeded in the DB. All sends below are best-effort
+    // and TIME-BOUNDED: Telegraf's default per-call timeout is 500s, so a
+    // blocked/slow Telegram connection (RU IP without a working VPN) would hang
+    // the webhook, Telegram would retry, and the retry would hit "уже
+    // использована". Capping each send keeps the webhook fast and the binding
+    // reliable regardless of delivery.
     try {
-        await bot.telegram.sendMessage(
+        await withTimeout(bot.telegram.sendMessage(
             chatId,
             `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
-        );
+        ), 6000);
     } catch (error) {
-        console.error('[telegram-webhook] confirmation send failed (link already succeeded):', error);
+        console.error('[telegram-webhook] confirmation send failed/slow (link already succeeded):', error instanceof Error ? error.message : error);
     }
 
     const queued = await db.scheduledClientMessage.findMany({
@@ -62,10 +69,10 @@ async function handleClientInvite(body: any) {
     });
     for (const message of queued) {
         try {
-            await bot.telegram.sendMessage(chatId, message.text, {
+            await withTimeout(bot.telegram.sendMessage(chatId, message.text, {
                 parse_mode: 'HTML',
                 link_preview_options: { is_disabled: true },
-            });
+            }), 6000);
             await db.scheduledClientMessage.update({
                 where: { id: message.id },
                 data: { status: 'sent', sentAt: new Date() },
@@ -81,14 +88,40 @@ async function handleClientInvite(body: any) {
     return true;
 }
 
+// Verifies Telegram's secret token (set via setWebhook's secret_token param and
+// sent back on every update in this header). Without it, anyone who knows the
+// public webhook URL can POST forged updates — e.g. a fake callback_query to
+// confirm/cancel a guessed session, or a forged /start c_<token> consumption.
+// Timing-safe compare. If TELEGRAM_WEBHOOK_SECRET is unset we fail OPEN (log a
+// warning) so a misconfigured deploy doesn't silently drop all bot traffic;
+// the deploy sets the secret, so in production this is enforced.
+function verifyWebhookSecret(request: NextRequest): boolean {
+    const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expected) {
+        console.warn('[TG Webhook] TELEGRAM_WEBHOOK_SECRET not set — skipping authenticity check');
+        return true;
+    }
+    const got = request.headers.get('x-telegram-bot-api-secret-token') || '';
+    const a = Buffer.from(got);
+    const b = Buffer.from(expected);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 export async function POST(request: NextRequest) {
     if (!bot) {
         return NextResponse.json({ error: 'Telegram bot not configured' }, { status: 500 });
     }
 
+    if (!verifyWebhookSecret(request)) {
+        // Return 200 so a probing attacker can't distinguish "wrong secret" from
+        // "endpoint down", and Telegram never retries on 200.
+        return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
     try {
         const body = await request.json();
-        console.log('[TG Webhook] Received update:', body.update_id, body.message?.text || body.callback_query?.data || '(no text)');
+        // Do NOT log message text / callback data — that's client PII (152-ФЗ).
+        console.log('[TG Webhook] update', body.update_id, body.message ? 'message' : body.callback_query ? 'callback' : 'other');
 
         if (await handleClientInvite(body)) {
             return NextResponse.json({ success: true });

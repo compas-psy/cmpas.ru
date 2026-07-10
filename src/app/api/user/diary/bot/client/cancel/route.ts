@@ -4,6 +4,8 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { verifyClientActionToken } from '@/lib/client-workflow';
+import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
+import { createNotification } from '@/lib/notifications';
 
 export async function POST(req: Request) {
     try {
@@ -28,10 +30,37 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
+        const settings = await db.psychologistSettings.findUnique({
+            where: { psychologistId: session.psychologistId },
+            select: { cancellationHours: true },
+        });
+        const policy = canClientCancel(session, settings);
+        if (!policy.allowed) {
+            const message = clientCancelBlockedMessage(policy.limitHours);
+            await createNotification({
+                psychologistId: session.psychologistId,
+                type: 'client_cancel_attempt',
+                title: `${clientName || session.client?.name || 'Клиент'} пытался отменить запись`,
+                subtitle: message,
+                sessionId: session.id,
+                clientId: session.clientId,
+            });
+            return NextResponse.json({ error: message, limitHours: policy.limitHours }, { status: 409 });
+        }
+
         const cancelled = await db.diarySession.update({
             where: { id: sessionId },
             data: { status: 'cancelled' },
             include: { psychologist: true, client: true },
+        });
+
+        await createNotification({
+            psychologistId: cancelled.psychologistId,
+            type: 'session_cancelled',
+            title: `${clientName || cancelled.client?.name || 'Клиент'} отменил запись`,
+            subtitle: `${format(new Date(cancelled.date), 'd MMMM', { locale: ru })} в ${cancelled.time}`,
+            sessionId: cancelled.id,
+            clientId: cancelled.clientId,
         });
 
         if (cancelled.psychologist?.telegramChatId) {

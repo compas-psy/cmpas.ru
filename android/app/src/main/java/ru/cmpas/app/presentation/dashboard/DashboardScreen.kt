@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
@@ -37,6 +38,7 @@ import java.time.LocalTime
 @Composable
 fun DashboardScreen(
     onSessionClick: (String) -> Unit = {},
+    onNoteClick: (String) -> Unit = {},
     onCalendarClick: () -> Unit = {},
     onClientClick: (String) -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
@@ -76,6 +78,14 @@ fun DashboardScreen(
                 }
             }
 
+            if (uiState.needsOnboarding) {
+                item {
+                    OnboardingBridgeCard(
+                        onOpen = { uriHandler.openUri("https://cmpas.ru${uiState.onboardingUrl ?: "/onboarding"}") },
+                    )
+                }
+            }
+
             item {
                 val next = uiState.nextSession
                 if (next != null) {
@@ -86,7 +96,7 @@ fun DashboardScreen(
                             if (!next.videoLink.isNullOrBlank()) uriHandler.openUri(next.videoLink!!)
                             else onSessionClick(next.id)
                         },
-                        onNote = { onSessionClick(next.id) },
+                        onNote = { onNoteClick(next.id) },
                     )
                 } else {
                     GlassTintCard(padding = 18.dp) {
@@ -112,7 +122,15 @@ fun DashboardScreen(
             if (uiState.todaySessions.isEmpty()) {
                 item { GlassCard(padding = 18.dp) { Text("Нет записей на сегодня", style = tBody2) } }
             } else {
-                items(uiState.todaySessions, key = { it.id }) { s -> ScheduleRow(s, onClick = { onSessionClick(s.id) }) }
+                items(uiState.todaySessions, key = { it.id }) { s ->
+                    ScheduleRow(
+                        s = s,
+                        isUpdatingPayment = uiState.paymentUpdatingSessionId == s.id,
+                        onClick = { onSessionClick(s.id) },
+                        onNote = { onNoteClick(s.id) },
+                        onPaid = { viewModel.markPaid(s.id) },
+                    )
+                }
             }
         }
 
@@ -124,6 +142,41 @@ fun DashboardScreen(
                 onOpenClient = { id -> onClientClick(id) },
             )
         }
+    }
+}
+
+@Composable
+private fun OnboardingBridgeCard(onOpen: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Tune, null, Modifier.size(22.dp), tint = Forest700)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Начните с настройки", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text("Клиенты · расписание · мессенджер. Полный визард открыт в веб-кабинете.", style = tMeta, color = CompasMutedFg)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TinySetupStep("1", "Клиент", Modifier.weight(1f))
+            TinySetupStep("2", "Расписание", Modifier.weight(1f))
+            TinySetupStep("3", "Мессенджер", Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(12.dp))
+        PrimaryButton(
+            text = "Полная настройка в веб-кабинете",
+            icon = Icons.Outlined.OpenInNew,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpen,
+        )
+    }
+}
+
+@Composable
+private fun TinySetupStep(number: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Sage100).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(number, style = tBody, color = Forest700, fontWeight = FontWeight.Bold)
+        Text(label, style = tMeta, color = CompasMutedFg, maxLines = 1)
     }
 }
 
@@ -175,8 +228,15 @@ private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () 
 }
 
 @Composable
-private fun ScheduleRow(s: Session, onClick: () -> Unit) {
+private fun ScheduleRow(
+    s: Session,
+    isUpdatingPayment: Boolean,
+    onClick: () -> Unit,
+    onNote: () -> Unit,
+    onPaid: () -> Unit,
+) {
     val dur = durationMin(s.startTime, s.endTime)
+    val passed = s.status == SessionStatus.COMPLETED
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Column(Modifier.width(46.dp), horizontalAlignment = Alignment.End) {
             Text(s.startTime, style = tBody.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = CompasFg)
@@ -196,12 +256,53 @@ private fun ScheduleRow(s: Session, onClick: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text(s.clientName, color = CompasFg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(3.dp))
-                    FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
+                        if (passed) TinyBadge("Прошла")
+                        if (s.paymentStatus == PaymentStatus.PAID) TinyBadge("Оплачено")
+                    }
                 }
                 Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
             }
+            if (passed) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton(
+                        text = "Заметка",
+                        icon = Icons.Outlined.EditNote,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNote,
+                    )
+                    if (s.paymentStatus == PaymentStatus.PAID) {
+                        GhostButton(
+                            text = "Оплачено",
+                            icon = Icons.Outlined.CheckCircle,
+                            modifier = Modifier.weight(1f),
+                            onClick = onClick,
+                        )
+                    } else {
+                        GhostButton(
+                            text = if (isUpdatingPayment) "Отмечаем…" else "Оплачено",
+                            icon = Icons.Outlined.Payments,
+                            modifier = Modifier.weight(1f),
+                            onClick = onPaid,
+                        )
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun TinyBadge(text: String) {
+    Text(
+        text,
+        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Sage100).padding(horizontal = 8.dp, vertical = 3.dp),
+        style = tMeta,
+        color = Forest700,
+        maxLines = 1,
+    )
 }
 
 private fun statusDotColor(status: SessionStatus): Color = when (status) {

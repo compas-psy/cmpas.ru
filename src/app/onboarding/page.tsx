@@ -1,30 +1,45 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import { parseClientLines, type ParsedClient } from "@/lib/clients/parse"
 
 const METHODS = [
-    "КПТ (Когнитивно-поведенческая терапия)",
+    "Схема-терапия",
+    "КПТ",
     "Гештальт-терапия",
     "Психоанализ",
-    "Эмоционально-фокусированная терапия",
-    "Экзистенциальная терапия",
-    "Клиент-центрированная терапия",
-    "Схема-терапия",
-    "EMDR (ДПДГ)",
+    "EMDR",
     "Семейная системная терапия",
-    "Юнгианский анализ",
-    "Транзактный анализ",
-    "Телесно-ориентированная терапия",
-    "Арт-терапия",
-    "Сказкотерапия",
+    "Экзистенциальная терапия",
+    "Коучинг",
+]
+
+type StepKey = "profile" | "schedule" | "documents" | "messenger" | "firstClient" | "finish"
+
+const STEPS: Array<{ key: StepKey; title: string }> = [
+    { key: "profile", title: "Профиль" },
+    { key: "schedule", title: "Расписание" },
+    { key: "documents", title: "Документы" },
+    { key: "messenger", title: "Мессенджер" },
+    { key: "firstClient", title: "Первый клиент" },
+    { key: "finish", title: "Финиш" },
 ]
 
 export default function OnboardingPage() {
     const router = useRouter()
-    const [step, setStep] = useState(1)
+    const [stepIndex, setStepIndex] = useState(0)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [clientsText, setClientsText] = useState("")
+    const [error, setError] = useState<string | null>(null)
+    const [docDraft, setDocDraft] = useState({
+        title: "Договор / информированное согласие",
+        version: new Date().toISOString().slice(0, 10),
+        content: "",
+        sendOnNewClient: true,
+        sendOnFirstSession: true,
+        requiresAcknowledgement: true,
+    })
     const [formData, setFormData] = useState({
         name: "",
         email: "",
@@ -42,762 +57,263 @@ export default function OnboardingPage() {
         basePrice: 0,
         cancellationHours: 24,
         cancellationFee: 50,
-        cancellationText: "Отмена сессии возможна не позднее чем за 24 часа...",
+        cancellationText: "Отмена сессии возможна не позднее чем за 24 часа.",
     })
 
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [clientsText, setClientsText] = useState("")
-    const [isSavingClients, setIsSavingClients] = useState(false)
-
+    const current = STEPS[stepIndex]
     const parsedClients = useMemo<ParsedClient[]>(() => parseClientLines(clientsText), [clientsText])
     const validParsedClients = parsedClients.filter(p => p.valid)
+    const hasProfile = formData.name.trim() && (formData.methods.length > 0 || formData.customMethod.trim())
 
-    // Calendar connection state
-    const [googleConnected, setGoogleConnected] = useState(false)
-    const [yandexConnected, setYandexConnected] = useState(false)
-    const [showYandexForm, setShowYandexForm] = useState(false)
-    const [yandexLogin, setYandexLogin] = useState('')
-    const [yandexPassword, setYandexPassword] = useState('')
-    const [yandexConnecting, setYandexConnecting] = useState(false)
-    const [yandexError, setYandexError] = useState('')
-
-    // Check if we're returning from a calendar connection
     useEffect(() => {
-        if (typeof window !== 'undefined' && window.location.search.includes('calendar_connected=google')) {
-            setGoogleConnected(true)
-            const url = new URL(window.location.href)
-            url.searchParams.delete('calendar_connected')
-            window.history.replaceState({}, '', url.toString())
-        }
+        fetch("/api/user/profile", { cache: "no-store" })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data) return
+                const settings = data.psychologistSettings || {}
+                setFormData(prev => ({
+                    ...prev,
+                    name: data.name || prev.name,
+                    email: data.email || prev.email,
+                    methods: Array.isArray(settings.methods) ? settings.methods : prev.methods,
+                    timezone: settings.timezone || prev.timezone,
+                    defaultSessionDuration: settings.defaultSessionDuration || prev.defaultSessionDuration,
+                    sessionBreak: settings.sessionBreak ?? prev.sessionBreak,
+                    basePrice: settings.basePrice || prev.basePrice,
+                    cancellationHours: settings.cancellationHours ?? prev.cancellationHours,
+                    cancellationFee: settings.cancellationFee ?? prev.cancellationFee,
+                    cancellationText: settings.cancellationText || prev.cancellationText,
+                }))
+            })
+            .catch(() => undefined)
     }, [])
 
-    // Open Google Calendar OAuth in popup, listen for it to close
-    const handleGoogleConnect = () => {
-        const popup = window.open(
-            '/api/calendar/google/connect?returnUrl=/onboarding',
-            'google-calendar-oauth',
-            'width=520,height=640,scrollbars=yes'
-        )
-        if (!popup) return
-        const timer = setInterval(() => {
-            if (popup.closed) {
-                clearInterval(timer)
-                fetch('/api/onboarding/progress', { cache: 'no-store' })
-                    .then(r => r.json())
-                    .then(d => { if (d.calendarConnected) setGoogleConnected(true) })
-                    .catch(() => {})
-            }
-        }, 500)
-    }
+    const nextStep = () => setStepIndex(i => Math.min(i + 1, STEPS.length - 1))
+    const prevStep = () => setStepIndex(i => Math.max(i - 1, 0))
 
-    const handleYandexConnect = async () => {
-        if (!yandexLogin || !yandexPassword) return
-        setYandexConnecting(true)
-        setYandexError('')
-        try {
-            const res = await fetch('/api/calendar/yandex/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ login: yandexLogin, password: yandexPassword }),
-            })
-            const data = await res.json()
-            if (data.success) {
-                setYandexConnected(true)
-                setShowYandexForm(false)
-            } else {
-                setYandexError(data.error || 'Ошибка подключения')
-            }
-        } catch {
-            setYandexError('Ошибка сети')
-        }
-        setYandexConnecting(false)
-    }
-
-    // Derived states
-    const hasSelectedMethods = formData.methods.length > 0 || formData.customMethod.trim() !== ""
-
-    const handleMethodToggle = (method: string) => {
+    const toggleMethod = (method: string) => {
         setFormData(prev => ({
             ...prev,
-            methods: prev.methods.includes(method)
-                ? prev.methods.filter(m => m !== method)
-                : [...prev.methods, method]
+            methods: prev.methods.includes(method) ? prev.methods.filter(item => item !== method) : [...prev.methods, method],
         }))
     }
 
     const toggleWorkDay = (index: number) => {
-        const newDays = [...formData.workDays]
-        newDays[index] = !newDays[index]
-        setFormData({ ...formData, workDays: newDays })
+        const workDays = [...formData.workDays]
+        workDays[index] = !workDays[index]
+        setFormData(prev => ({ ...prev, workDays }))
     }
 
-    const nextStep = () => {
-        if (step < 7) setStep(step + 1)
+    async function saveDocumentIfNeeded() {
+        if (!docDraft.title.trim() || !docDraft.content.trim()) return
+        const res = await fetch("/api/onboarding/client-document", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(docDraft),
+        })
+        if (!res.ok) throw new Error("Не удалось сохранить документ")
     }
 
-    const prevStep = () => {
-        if (step > 1) setStep(step - 1)
+    async function saveClientsIfNeeded() {
+        if (validParsedClients.length === 0) return
+        const { bulkCreateClients } = await import("@/app/diary/actions/clients")
+        await bulkCreateClients(validParsedClients.map(p => ({ name: p.name, phone: p.phone, email: p.email })))
     }
 
-    const skipOnboarding = () => {
-        // We will just mark as verified and go to dashboard
-        submitData()
+    async function submitProfile() {
+        const methods = [...formData.methods]
+        if (formData.customMethod.trim()) methods.push(formData.customMethod.trim())
+        const res = await fetch("/api/user/profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name: formData.name,
+                methods,
+                timezone: formData.timezone,
+                workDays: formData.workDays,
+                startTime: formData.startTime,
+                endTime: formData.endTime,
+                defaultSessionDuration: formData.defaultSessionDuration,
+                sessionBreak: formData.sessionBreak,
+                hasLunchBreak: formData.hasLunchBreak,
+                lunchStartTime: formData.lunchStartTime,
+                lunchEndTime: formData.lunchEndTime,
+                basePrice: formData.basePrice,
+                cancellationHours: formData.cancellationHours,
+                cancellationFee: formData.cancellationFee,
+                cancellationText: formData.cancellationText,
+            }),
+        })
+        if (!res.ok) throw new Error("Не удалось сохранить профиль")
     }
 
-    const saveClientsAndContinue = async () => {
-        if (validParsedClients.length === 0) {
-            nextStep()
-            return
-        }
-        setIsSavingClients(true)
-        try {
-            const { bulkCreateClients } = await import("@/app/diary/actions/clients")
-            await bulkCreateClients(
-                validParsedClients.map(p => ({
-                    name: p.name,
-                    phone: p.phone,
-                    email: p.email,
-                }))
-            )
-            setClientsText("")
-            nextStep()
-        } catch {
-            nextStep()
-        } finally {
-            setIsSavingClients(false)
-        }
-    }
-
-    const submitData = async () => {
+    async function completeOnboarding() {
         setIsSubmitting(true)
+        setError(null)
         try {
-            const allMethods = [...formData.methods]
-            if (formData.customMethod.trim()) {
-                allMethods.push(formData.customMethod.trim())
-            }
-
-            const res = await fetch("/api/user/profile", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: formData.name,
-                    email: formData.email,
-                    methods: allMethods,
-                    workDays: formData.workDays,
-                    startTime: formData.startTime,
-                    endTime: formData.endTime,
-                    defaultSessionDuration: formData.defaultSessionDuration,
-                    basePrice: formData.basePrice,
-                    cancellationHours: formData.cancellationHours,
-                    cancellationFee: formData.cancellationFee,
-                    cancellationText: formData.cancellationText,
-                })
-            })
-            if (res.ok) {
-                router.refresh()
-                router.push("/diary")
-            }
-        } catch (error) {
-            console.error("Profile save error:", error)
+            await saveDocumentIfNeeded()
+            await saveClientsIfNeeded()
+            await submitProfile()
+            router.refresh()
+            router.push("/diary")
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Не удалось завершить настройку")
+        } finally {
+            setIsSubmitting(false)
         }
-        setIsSubmitting(false)
     }
-
-    // Step 1: Basics
-    const renderStep1 = () => (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-white text-2xl font-bold mb-2">Общая информация</h2>
-            <p className="text-white/70 text-sm mb-8">
-                Эта информация поможет персонализировать ваш профиль. Вы всегда сможете изменить её в настройках.
-            </p>
-
-            <div className="space-y-6">
-                <div>
-                    <label className="block text-white text-sm mb-2">Имя и Фамилия</label>
-                    <input
-                        type="text"
-                        placeholder="Анна Иванова"
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:bg-white/15 transition-all"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-white text-sm mb-2">Email</label>
-                    <input
-                        type="email"
-                        placeholder="anna@example.com"
-                        required
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:bg-white/15 transition-all"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-white text-sm mb-2">Метод (выберите один или несколько)</label>
-                    <div className="max-h-[200px] overflow-y-auto pr-2 space-y-2 custom-scrollbar mb-3">
-                        {METHODS.map(method => (
-                            <label key={method} className="flex items-center gap-3 cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    className="hidden"
-                                    checked={formData.methods.includes(method)}
-                                    onChange={() => handleMethodToggle(method)}
-                                />
-                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.methods.includes(method) ? 'bg-[#c9a961] border-[#c9a961]' : 'border-white/30 group-hover:border-white/60'}`}>
-                                    {formData.methods.includes(method) && (
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                    )}
-                                </div>
-                                <span className={`text-sm ${formData.methods.includes(method) ? 'text-white' : 'text-white/70 group-hover:text-white/90'}`}>
-                                    {method}
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Другой метод..."
-                        value={formData.customMethod}
-                        onChange={(e) => setFormData({ ...formData, customMethod: e.target.value })}
-                        className="w-full h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-white/40 outline-none focus:border-white/30 transition-all font-light"
-                    />
-                </div>
-
-                <button
-                    onClick={nextStep}
-                    disabled={!formData.name || !formData.email || !hasSelectedMethods}
-                    className="w-full h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 disabled:hover:bg-[#c9a961] rounded-2xl text-[#1a4d3a] font-medium transition-colors mt-8"
-                >
-                    Продолжить
-                </button>
-            </div>
-        </div>
-    )
-
-    // Step 2 & 3: Schedule
-    const renderStep2 = () => (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-white text-2xl font-bold mb-2">Рабочие часы</h2>
-            <p className="text-white/70 text-sm mb-8">
-                Настройте базовое расписание работы. Это можно гибко менять позже для каждой недели отдельно.
-            </p>
-
-            <div className="space-y-6">
-                <div>
-                    <label className="block text-white text-sm mb-3">Рабочие дни</label>
-                    <div className="grid grid-cols-7 gap-2">
-                        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day, idx) => (
-                            <button
-                                key={day}
-                                onClick={() => toggleWorkDay(idx)}
-                                className={`h-12 rounded-xl text-sm font-medium transition-colors ${formData.workDays[idx]
-                                    ? "bg-[#c9a961] text-[#1a4d3a]"
-                                    : "bg-white/10 text-white/50 hover:bg-white/20 hover:text-white/80"
-                                    }`}
-                            >
-                                {day}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-white text-sm mb-2">Время начала</label>
-                        <input
-                            type="time"
-                            value={formData.startTime}
-                            onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                            className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white focus:border-white/40 outline-none"
-                            style={{ colorScheme: 'dark' }} // fixes time picker icon color on webkit
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-white text-sm mb-2">Время окончания</label>
-                        <input
-                            type="time"
-                            value={formData.endTime}
-                            onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                            className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white focus:border-white/40 outline-none"
-                            style={{ colorScheme: 'dark' }}
-                        />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-white text-sm mb-2">Длительность сеанса (мин)</label>
-                        <input
-                            type="number"
-                            min="15"
-                            step="5"
-                            value={formData.defaultSessionDuration}
-                            onChange={(e) => setFormData({ ...formData, defaultSessionDuration: parseInt(e.target.value) || 50 })}
-                            className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white focus:border-white/40 outline-none"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-white text-sm mb-2">Перерыв между (мин)</label>
-                        <input
-                            type="number"
-                            min="0"
-                            step="5"
-                            value={formData.sessionBreak}
-                            onChange={(e) => setFormData({ ...formData, sessionBreak: parseInt(e.target.value) || 0 })}
-                            className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-2xl text-white focus:border-white/40 outline-none"
-                        />
-                    </div>
-                </div>
-
-                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <label className="flex items-center gap-3 cursor-pointer group mb-4">
-                        <input
-                            type="checkbox"
-                            className="hidden"
-                            checked={formData.hasLunchBreak}
-                            onChange={(e) => setFormData({ ...formData, hasLunchBreak: e.target.checked })}
-                        />
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.hasLunchBreak ? 'bg-[#c9a961] border-[#c9a961]' : 'border-white/30 group-hover:border-white/60'}`}>
-                            {formData.hasLunchBreak && (
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                            )}
-                        </div>
-                        <span className={`text-sm ${formData.hasLunchBreak ? 'text-white font-medium' : 'text-white/70 group-hover:text-white/90'}`}>
-                            Есть обеденный перерыв
-                        </span>
-                    </label>
-
-                    {formData.hasLunchBreak && (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div>
-                                <label className="block text-white/70 text-xs mb-2">Начало обеда</label>
-                                <input
-                                    type="time"
-                                    value={formData.lunchStartTime}
-                                    onChange={(e) => setFormData({ ...formData, lunchStartTime: e.target.value })}
-                                    className="w-full h-10 px-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none"
-                                    style={{ colorScheme: 'dark' }}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-white/70 text-xs mb-2">Конец обеда</label>
-                                <input
-                                    type="time"
-                                    value={formData.lunchEndTime}
-                                    onChange={(e) => setFormData({ ...formData, lunchEndTime: e.target.value })}
-                                    className="w-full h-10 px-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none"
-                                    style={{ colorScheme: 'dark' }}
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex gap-4 pt-4">
-                    <button
-                        onClick={prevStep}
-                        className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors"
-                    >
-                        Назад
-                    </button>
-                    <button
-                        onClick={nextStep}
-                        disabled={!formData.workDays.some(d => d)} // requires at least one day
-                        className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 disabled:hover:bg-[#c9a961] rounded-2xl text-[#1a4d3a] font-medium transition-colors"
-                    >
-                        Продолжить
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-
-    // Step 4: Pricing
-    const renderStep4 = () => (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-white text-2xl font-bold mb-2">Стоимость и условия</h2>
-            <p className="text-white/70 text-sm mb-8">
-                Укажите базовую стоимость ваших услуг. Это увидят клиенты при онлайн записи.
-            </p>
-
-            <div className="space-y-6">
-                <div>
-                    <label className="block text-white text-sm mb-2">Стоимость (₽)</label>
-                    <div className="relative">
-                        <input
-                            type="number"
-                            min="0"
-                            step="100"
-                            value={formData.basePrice || ''}
-                            onChange={(e) => setFormData({ ...formData, basePrice: parseInt(e.target.value) || 0 })}
-                            placeholder="Например, 5000"
-                            className="w-full h-12 px-4 pr-10 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:bg-white/15 transition-all text-xl font-medium"
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 font-medium">₽</span>
-                    </div>
-                </div>
-
-                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <div className="flex items-center gap-2 mb-4">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a961" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                        <h3 className="text-white font-medium">Правила отмены</h3>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label className="block text-white/70 text-xs mb-2">Минимум часов до отмены</label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={formData.cancellationHours}
-                                onChange={(e) => setFormData({ ...formData, cancellationHours: parseInt(e.target.value) || 0 })}
-                                className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-xl text-white outline-none focus:border-white/40"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-white/70 text-xs mb-2">Процент оплаты (%)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={formData.cancellationFee}
-                                onChange={(e) => setFormData({ ...formData, cancellationFee: parseInt(e.target.value) || 0 })}
-                                className="w-full h-12 px-4 bg-white/10 border border-white/20 rounded-xl text-white outline-none focus:border-white/40"
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-white/70 text-xs mb-2">Текст правил для клиента</label>
-                        <textarea
-                            value={formData.cancellationText}
-                            onChange={(e) => setFormData({ ...formData, cancellationText: e.target.value })}
-                            placeholder="Отмена сессии возможна не позднее чем за 24 часа..."
-                            className="w-full h-24 p-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm placeholder:text-white/40 outline-none focus:border-white/40 resize-none"
-                        />
-                    </div>
-                </div>
-
-                <div className="flex gap-4 pt-4">
-                    <button onClick={prevStep} className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors">Назад</button>
-                    <button onClick={nextStep} className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-medium transition-colors">
-                        Продолжить
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-
-    // Step 5: Calendar Integration
-    const renderStep5 = () => (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-white text-2xl font-bold mb-2">Синхронизация календаря</h2>
-            <p className="text-white/70 text-sm mb-8">
-                Подключите ваш текущий календарь, чтобы мы могли отображать ваши личные события и не допускали накладок в расписании.
-            </p>
-
-            <div className="space-y-3">
-                {/* Google Calendar */}
-                <button
-                    type="button"
-                    onClick={handleGoogleConnect}
-                    className="w-full flex items-center justify-between p-4 bg-white rounded-2xl hover:scale-[1.02] transition-transform text-left"
-                >
-                    <div className="flex items-center gap-4">
-                        <Image src="/icons/google-calendar.svg" alt="Google Calendar" width={32} height={32} className="w-8 h-8" />
-                        <div>
-                            <span className="text-[#1a1a1a] font-medium block">Google Calendar</span>
-                            {googleConnected && (
-                                <span className="text-emerald-600 text-xs font-semibold">✓ Подключено</span>
-                            )}
-                        </div>
-                    </div>
-                    <span className={`text-sm font-medium px-4 py-2 rounded-xl ${
-                        googleConnected
-                            ? 'text-emerald-700 bg-emerald-50'
-                            : 'text-[#1a4d3a] bg-[#1a4d3a]/10'
-                    }`}>
-                        {googleConnected ? 'Подключено ✓' : 'Подключить'}
-                    </span>
-                </button>
-
-                {/* Yandex Calendar - inline form */}
-                <div className="w-full bg-white rounded-2xl overflow-hidden">
-                    <button
-                        type="button"
-                        onClick={() => { if (!yandexConnected) setShowYandexForm(v => !v) }}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"
-                    >
-                        <div className="flex items-center gap-4">
-                            <Image src="/icons/yandex-calendar.svg" alt="Yandex" width={32} height={32} className="w-8 h-8 rounded" />
-                            <div>
-                                <span className="text-[#1a1a1a] font-medium block">Яндекс Календарь</span>
-                                {yandexConnected
-                                    ? <span className="text-emerald-600 text-xs font-semibold">✓ Подключено</span>
-                                    : <span className="text-[#1a1a1a]/50 text-xs">Настройка через CalDAV</span>
-                                }
-                            </div>
-                        </div>
-                        <span className={`text-sm font-medium px-4 py-2 rounded-xl ${
-                            yandexConnected
-                                ? 'text-emerald-700 bg-emerald-50'
-                                : 'text-[#1a4d3a] bg-[#1a4d3a]/10'
-                        }`}>
-                            {yandexConnected ? 'Подключено ✓' : showYandexForm ? 'Скрыть' : 'Настроить'}
-                        </span>
-                    </button>
-
-                    {showYandexForm && !yandexConnected && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
-                            <p className="text-xs text-gray-500 pt-3">
-                                Создайте <a href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noreferrer" className="text-blue-600 underline font-medium">пароль приложения</a> типа «Календарь» в Яндекс ID и введите его ниже.
-                            </p>
-                            <input
-                                type="email"
-                                value={yandexLogin}
-                                onChange={e => setYandexLogin(e.target.value)}
-                                placeholder="user@yandex.ru"
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4d3a]/30"
-                            />
-                            <input
-                                type="password"
-                                value={yandexPassword}
-                                onChange={e => setYandexPassword(e.target.value)}
-                                placeholder="Пароль приложения"
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4d3a]/30"
-                            />
-                            {yandexError && (
-                                <p className="text-red-500 text-xs">{yandexError}</p>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleYandexConnect}
-                                disabled={yandexConnecting || !yandexLogin || !yandexPassword}
-                                className="w-full py-2.5 bg-[#1a4d3a] text-white rounded-xl text-sm font-medium disabled:opacity-50"
-                            >
-                                {yandexConnecting ? 'Подключаю...' : 'Подключить'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <p className="text-white/40 text-xs text-center">
-                    Вы сможете подключить или изменить календари позже в Настройках → Интеграции
-                </p>
-
-                <div className="flex gap-4 pt-2">
-                    <button onClick={prevStep} className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors">Назад</button>
-                    <button onClick={nextStep} className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] rounded-2xl text-[#1a4d3a] font-medium transition-colors">
-                        Далее (или пропустить)
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-
-    // Step 6: First clients (optional)
-    const renderStep6 = () => (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-white text-2xl font-bold mb-2">Первые клиенты</h2>
-            <p className="text-white/70 text-sm mb-6">
-                Вставьте клиентов списком — КОМПАС распознает имена, телефоны и email. Можно пропустить и добавить позже.
-            </p>
-
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-white/80 text-xs mb-2">
-                        Одна строка — один клиент. Формат: имя, телефон, email (в любом порядке)
-                    </label>
-                    <textarea
-                        value={clientsText}
-                        onChange={(e) => setClientsText(e.target.value)}
-                        rows={6}
-                        placeholder={"Анна Иванова, +79161234567, anna@example.com\nМихаил Петров; +79031112233\nОльга Смирнова"}
-                        className="w-full p-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/40 outline-none focus:border-white/40 focus:bg-white/15 transition-all text-sm font-mono resize-y"
-                    />
-                </div>
-
-                {parsedClients.length > 0 && (
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3 max-h-[180px] overflow-y-auto custom-scrollbar">
-                        <div className="text-xs font-semibold text-white/70 mb-2">
-                            Распознано: {validParsedClients.length} из {parsedClients.length}
-                        </div>
-                        <ul className="space-y-1.5">
-                            {parsedClients.slice(0, 8).map((p, i) => (
-                                <li key={i} className="flex items-center gap-2 text-xs">
-                                    <span className={`w-1.5 h-1.5 rounded-full ${p.valid ? 'bg-[#c9a961]' : 'bg-amber-400'}`} />
-                                    {p.valid ? (
-                                        <span className="text-white/90 truncate">
-                                            {p.name}
-                                            {p.phone && <span className="text-white/50"> · {p.phone}</span>}
-                                            {p.email && <span className="text-white/50"> · {p.email}</span>}
-                                        </span>
-                                    ) : (
-                                        <span className="text-amber-300/80 truncate">{p.raw} — {p.error}</span>
-                                    )}
-                                </li>
-                            ))}
-                            {parsedClients.length > 8 && (
-                                <li className="text-xs text-white/50 italic">и ещё {parsedClients.length - 8}…</li>
-                            )}
-                        </ul>
-                    </div>
-                )}
-
-                <div className="flex gap-4 pt-2">
-                    <button
-                        onClick={prevStep}
-                        className="h-[52px] px-6 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-medium transition-colors"
-                    >
-                        Назад
-                    </button>
-                    <button
-                        onClick={saveClientsAndContinue}
-                        disabled={isSavingClients}
-                        className="flex-1 h-[52px] bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-medium transition-colors"
-                    >
-                        {isSavingClients
-                            ? "Сохраняем..."
-                            : validParsedClients.length > 0
-                                ? `Добавить ${validParsedClients.length} и продолжить`
-                                : "Пропустить"}
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-
-    // Step 7: Completion
-    const renderStep7 = () => (
-        <div className="animate-in zoom-in-95 duration-500 text-center">
-            <div className="w-20 h-20 bg-[#c9a961] rounded-full mx-auto flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(201,169,97,0.3)]">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1a4d3a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-            </div>
-            <h2 className="text-white text-3xl font-bold mb-4">Всё готово!</h2>
-            <p className="text-white/80 text-base mb-6 max-w-sm mx-auto">
-                Ваш профиль психолога успешно настроен. Вы можете перейти в дневник, чтобы добавить первых клиентов и начать работу.
-            </p>
-
-            <div className="bg-white/5 border border-[#c9a961]/30 rounded-2xl p-5 mb-8 text-left flex gap-4 items-start relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#c9a961]/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-[#c9a961]/20 transition-colors"></div>
-                <div className="mt-1 relative z-10 w-10 h-10 rounded-xl bg-[#c9a961]/20 flex items-center justify-center shrink-0">
-                    <span className="text-xl">🎁</span>
-                </div>
-                <div className="relative z-10">
-                    <h3 className="text-white font-medium mb-1.5 text-lg">30 дней в подарок</h3>
-                    <p className="text-white/60 text-sm leading-relaxed">
-                        Мы активировали для вас бесплатный пробный период. Пользуйтесь всеми премиум-функциями КОМПАСа 30 дней абсолютно без ограничений.
-                    </p>
-                </div>
-            </div>
-
-            <button
-                onClick={submitData}
-                disabled={isSubmitting}
-                className="w-full h-[56px] text-lg bg-[#c9a961] hover:bg-[#d4b56d] disabled:opacity-50 rounded-2xl text-[#1a4d3a] font-semibold transition-colors shadow-lg shadow-black/20"
-            >
-                {isSubmitting ? "Открываем дневник..." : "Начать работу"}
-            </button>
-        </div>
-    )
 
     return (
-        <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center p-4 lg:p-8">
-            <div className="w-full max-w-[1000px] bg-white rounded-[40px] shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+        <main className="min-h-screen bg-[#faf8f5] p-4 lg:p-8">
+            <section className="mx-auto flex min-h-[640px] max-w-5xl overflow-hidden rounded-[40px] bg-white shadow-2xl">
+                <aside className="hidden w-[38%] bg-[#1a4d3a] p-10 text-white md:block">
+                    <div className="mb-10 text-xl font-medium tracking-[0.22em]">КОМПАС</div>
+                    <h1 className="mb-4 text-3xl font-bold leading-tight">Настройка практики без лишних шагов</h1>
+                    <p className="text-white/70">Профиль, расписание, документы, мессенджер и первый клиент — ровно то, что нужно для старта беты.</p>
+                    <div className="mt-10 space-y-3">
+                        {STEPS.map((item, index) => (
+                            <div key={item.key} className={`flex items-center gap-3 rounded-2xl px-3 py-2 ${index <= stepIndex ? "bg-white/14" : "bg-white/6 text-white/50"}`}>
+                                <span className="grid h-7 w-7 place-items-center rounded-full bg-[#c9a961] text-sm font-bold text-[#1a4d3a]">{index + 1}</span>
+                                <span className="text-sm font-medium">{item.title}</span>
+                            </div>
+                        ))}
+                    </div>
+                </aside>
 
-                {/* Left Side - Interactive Form */}
-                <div className="w-full md:w-[55%] bg-[#1a4d3a] p-8 lg:p-12 relative flex flex-col">
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-12">
-                        {/* Logo КОМПАС */}
-                        <div className="flex items-center gap-3">
-                            <Image src="/icon.png" alt="КОМПАС" width={32} height={32} className="w-8 h-8 rounded" />
-                            <span className="text-xl font-medium tracking-[0.2em] text-white">
-                                КОМПАС
-                            </span>
-                        </div>
+                <div className="flex flex-1 flex-col bg-[#1a4d3a] p-6 text-white md:bg-white md:text-[#16271d] lg:p-10">
+                    <div className="mb-8 flex gap-2">
+                        {STEPS.map((item, index) => (
+                            <div key={item.key} className={`h-1 flex-1 rounded-full ${index <= stepIndex ? "bg-[#c9a961]" : "bg-white/20 md:bg-[#e6dfd1]"}`} />
+                        ))}
+                    </div>
 
-                        {/* Skip Button (except Step 1 & final) */}
-                        {step > 1 && step < 7 && (
-                            <button
-                                onClick={skipOnboarding}
-                                className="text-white/50 hover:text-white transition-colors text-sm font-medium"
-                            >
-                                Пропустить настройку
-                            </button>
+                    <div className="flex-1">
+                        {current.key === "profile" && (
+                            <StepCard title="Профиль практики" subtitle="Email берём из учётной записи. Остальное можно изменить позже в настройках.">
+                                <Field label="Имя и фамилия">
+                                    <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="input" placeholder="Анна Иванова" />
+                                </Field>
+                                <Field label="Email">
+                                    <input value={formData.email} readOnly className="input opacity-70" placeholder="email из входа" />
+                                </Field>
+                                <Field label="Методы">
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {METHODS.map(method => (
+                                            <button key={method} type="button" onClick={() => toggleMethod(method)} className={`rounded-2xl border px-3 py-2 text-left text-sm ${formData.methods.includes(method) ? "border-[#c9a961] bg-[#c9a961]/18" : "border-white/20 bg-white/10 md:border-[#e6dfd1] md:bg-[#faf8f5]"}`}>
+                                                {method}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input value={formData.customMethod} onChange={e => setFormData({ ...formData, customMethod: e.target.value })} className="input mt-3" placeholder="Другой метод" />
+                                </Field>
+                            </StepCard>
+                        )}
+
+                        {current.key === "schedule" && (
+                            <StepCard title="Расписание и условия" subtitle="Эти поля реально сохраняются: часовой пояс, перерыв, обед и политика отмены.">
+                                <Field label="Часовой пояс">
+                                    <select value={formData.timezone} onChange={e => setFormData({ ...formData, timezone: e.target.value })} className="input">
+                                        <option value="Europe/Moscow">Москва</option>
+                                        <option value="Europe/Helsinki">Хельсинки</option>
+                                        <option value="Asia/Yekaterinburg">Екатеринбург</option>
+                                        <option value="Asia/Novosibirsk">Новосибирск</option>
+                                    </select>
+                                </Field>
+                                <Field label="Рабочие дни">
+                                    <div className="grid grid-cols-7 gap-2">
+                                        {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((day, idx) => (
+                                            <button key={day} type="button" onClick={() => toggleWorkDay(idx)} className={`h-11 rounded-xl text-sm font-semibold ${formData.workDays[idx] ? "bg-[#c9a961] text-[#1a4d3a]" : "bg-white/10 text-white/60 md:bg-[#faf8f5] md:text-[#7a827c]"}`}>{day}</button>
+                                        ))}
+                                    </div>
+                                </Field>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <Field label="Начало"><input type="time" value={formData.startTime} onChange={e => setFormData({ ...formData, startTime: e.target.value })} className="input" /></Field>
+                                    <Field label="Конец"><input type="time" value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} className="input" /></Field>
+                                    <Field label="Сессия, минут"><input type="number" min="15" step="5" value={formData.defaultSessionDuration} onChange={e => setFormData({ ...formData, defaultSessionDuration: Number(e.target.value) || 50 })} className="input" /></Field>
+                                    <Field label="Перерыв, минут"><input type="number" min="0" step="5" value={formData.sessionBreak} onChange={e => setFormData({ ...formData, sessionBreak: Number(e.target.value) || 0 })} className="input" /></Field>
+                                </div>
+                                <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/10 p-3 md:bg-[#faf8f5]">
+                                    <input type="checkbox" checked={formData.hasLunchBreak} onChange={e => setFormData({ ...formData, hasLunchBreak: e.target.checked })} />
+                                    <span>Есть обеденный перерыв</span>
+                                </label>
+                                {formData.hasLunchBreak && <div className="grid gap-4 sm:grid-cols-2"><Field label="Обед с"><input type="time" value={formData.lunchStartTime} onChange={e => setFormData({ ...formData, lunchStartTime: e.target.value })} className="input" /></Field><Field label="Обед до"><input type="time" value={formData.lunchEndTime} onChange={e => setFormData({ ...formData, lunchEndTime: e.target.value })} className="input" /></Field></div>}
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <Field label="Стоимость, ₽"><input type="number" min="0" step="100" value={formData.basePrice || ""} onChange={e => setFormData({ ...formData, basePrice: Number(e.target.value) || 0 })} className="input" /></Field>
+                                    <Field label="Отмена минимум за, часов"><input type="number" min="0" value={formData.cancellationHours} onChange={e => setFormData({ ...formData, cancellationHours: Number(e.target.value) || 0 })} className="input" /></Field>
+                                </div>
+                            </StepCard>
+                        )}
+
+                        {current.key === "documents" && (
+                            <StepCard title="Документы для клиентов" subtitle="Можно пропустить. Если заполнить — документ будет автоотправляться новым клиентам или при первой записи.">
+                                <Field label="Название"><input value={docDraft.title} onChange={e => setDocDraft({ ...docDraft, title: e.target.value })} className="input" /></Field>
+                                <Field label="Версия"><input value={docDraft.version} onChange={e => setDocDraft({ ...docDraft, version: e.target.value })} className="input" /></Field>
+                                <Field label="Текст документа"><textarea value={docDraft.content} onChange={e => setDocDraft({ ...docDraft, content: e.target.value })} rows={8} className="input min-h-40" placeholder="Вставьте оферту, договор или информированное согласие" /></Field>
+                                <label className="flex gap-3"><input type="checkbox" checked={docDraft.sendOnNewClient} onChange={e => setDocDraft({ ...docDraft, sendOnNewClient: e.target.checked })} />Отправлять новым клиентам</label>
+                                <label className="flex gap-3"><input type="checkbox" checked={docDraft.sendOnFirstSession} onChange={e => setDocDraft({ ...docDraft, sendOnFirstSession: e.target.checked })} />Отправлять при первой записи</label>
+                            </StepCard>
+                        )}
+
+                        {current.key === "messenger" && (
+                            <StepCard title="Мессенджер для уведомлений" subtitle="Подключение можно сделать сейчас или позже. Клиентские приглашения идут по лестнице MAX → Telegram → web.">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <button onClick={() => router.push("/diary/settings/integrations")} className="choice">Подключить MAX / Telegram</button>
+                                    <button onClick={nextStep} className="choice">Настрою позже</button>
+                                </div>
+                            </StepCard>
+                        )}
+
+                        {current.key === "firstClient" && (
+                            <StepCard title="Первый клиент" subtitle="Можно добавить вручную списком или перейти к импорту из календаря.">
+                                <textarea value={clientsText} onChange={e => setClientsText(e.target.value)} rows={7} className="input min-h-40 font-mono" placeholder={"Анна Иванова, +79161234567, anna@example.com\nМихаил Петров; +79031112233"} />
+                                {parsedClients.length > 0 && <p className="text-sm opacity-80">Распознано: {validParsedClients.length} из {parsedClients.length}</p>}
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <button onClick={() => router.push("/diary/clients?import=calendar")} className="choice">Импорт из календаря</button>
+                                    <button onClick={nextStep} className="choice">Продолжить вручную</button>
+                                </div>
+                            </StepCard>
+                        )}
+
+                        {current.key === "finish" && (
+                            <StepCard title="Готово к старту" subtitle="Сохраним профиль, документы и первых клиентов. Ничего лишнего — всё можно изменить позже.">
+                                {error && <p className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
+                                <button onClick={completeOnboarding} disabled={isSubmitting} className="h-14 w-full rounded-2xl bg-[#c9a961] font-bold text-[#1a4d3a] disabled:opacity-50">
+                                    {isSubmitting ? "Сохраняем…" : "Начать работу"}
+                                </button>
+                            </StepCard>
                         )}
                     </div>
 
-                    {/* Progress Indicator (Steps 1-6) */}
-                    {step < 7 && (
-                        <div className="flex gap-2 mb-8">
-                            {[1, 2, 4, 5, 6].map((s, idx) => {
-                                // Maps actual step number to UI indicators (since 2 and 3 are combined visually)
-                                const isActive = step >= s
-                                return (
-                                    <div key={idx} className={`h-1 flex-1 rounded-full bg-white transition-all duration-500 ${isActive ? 'opacity-100' : 'opacity-20'}`} />
-                                )
-                            })}
-                        </div>
-                    )}
-
-                    {/* Form Area */}
-                    <div className="flex-1 flex flex-col justify-center max-w-[400px] w-full mx-auto relative">
-                        {step === 1 && renderStep1()}
-                        {step === 2 && renderStep2()}
-                        {step === 3 && renderStep2()} {/* Safety mapping if state slips */}
-                        {step === 4 && renderStep4()}
-                        {step === 5 && renderStep5()}
-                        {step === 6 && renderStep6()}
-                        {step === 7 && renderStep7()}
+                    <div className="mt-8 flex gap-3">
+                        {stepIndex > 0 && current.key !== "finish" && <button onClick={prevStep} className="h-12 rounded-2xl bg-white/10 px-5 font-medium md:bg-[#faf8f5]">Назад</button>}
+                        {current.key !== "finish" && current.key !== "messenger" && current.key !== "firstClient" && (
+                            <button onClick={nextStep} disabled={current.key === "profile" && !hasProfile} className="h-12 flex-1 rounded-2xl bg-[#c9a961] font-semibold text-[#1a4d3a] disabled:opacity-50">Продолжить</button>
+                        )}
+                        {(current.key === "messenger" || current.key === "firstClient") && <button onClick={nextStep} className="h-12 flex-1 rounded-2xl bg-[#c9a961] font-semibold text-[#1a4d3a]">Далее</button>}
                     </div>
                 </div>
+            </section>
+            <style jsx>{`
+                .input { width: 100%; border-radius: 1rem; border: 1px solid rgba(255,255,255,.20); background: rgba(255,255,255,.10); padding: .75rem 1rem; color: inherit; outline: none; }
+                .choice { min-height: 4.5rem; border-radius: 1.25rem; border: 1px solid rgba(201,169,97,.35); background: rgba(201,169,97,.12); padding: 1rem; text-align: left; font-weight: 600; }
+                @media (min-width: 768px) { .input { border-color: #e6dfd1; background: #faf8f5; color: #16271d; } }
+            `}</style>
+        </main>
+    )
+}
 
-                {/* Right Side - Image/Illustration (matches auth style) */}
-                <div className="hidden md:block w-[45%] relative bg-[#f0ede5]">
-                    <Image
-                        src="/images/auth-side.jpg"
-                        alt="Onboarding Background"
-                        fill
-                        className="object-cover opacity-90"
-                        priority
-                    />
-                    {/* Dark gradient overlay to make text maybe? Or just pure image */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#1a4d3a]/60 to-transparent"></div>
-                    <div className="absolute bottom-12 left-10 right-10">
-                        <h3 className="text-2xl font-bold text-white mb-2 leading-tight shadow-md drop-shadow-lg">
-                            Организуйте свою практику экологично
-                        </h3>
-                        <p className="text-white/80 font-medium drop-shadow-md">
-                            Всё необходимое расписание, клиенты и статистика в одном месте.
-                        </p>
-                    </div>
-                </div>
-
+function StepCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+    return (
+        <div className="space-y-5">
+            <div>
+                <h2 className="text-2xl font-bold md:text-[#16271d]">{title}</h2>
+                <p className="mt-2 text-sm text-white/70 md:text-[#6b746d]">{subtitle}</p>
             </div>
-
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-            `}} />
+            <div className="space-y-4">{children}</div>
         </div>
     )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+    return <label className="block space-y-2"><span className="text-sm font-semibold text-white/80 md:text-[#4d5a52]">{label}</span>{children}</label>
 }

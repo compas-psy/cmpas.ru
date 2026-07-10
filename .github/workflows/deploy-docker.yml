@@ -141,6 +141,13 @@ jobs:
               if ! grep -q '^TELEGRAM_PROXY=' .env; then
                 echo "TELEGRAM_PROXY=" >> .env
               fi
+              # Ensure TELEGRAM_WEBHOOK_SECRET — authenticates incoming webhook
+              # updates (set as setWebhook secret_token, verified in the route).
+              # Generated once and kept stable so the header keeps matching.
+              if [ -z "$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2)" ]; then
+                sed -i '/^TELEGRAM_WEBHOOK_SECRET=/d' .env
+                echo "TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> .env
+              fi
             fi
 
             # Show AUTH_SECRET fingerprint (first 8 chars) for debugging
@@ -161,14 +168,26 @@ jobs:
                 -e 's|${MIERU_USERNAME}|${{ secrets.MIERU_USERNAME }}|g' \
                 -e 's|${MIERU_PASSWORD}|${{ secrets.MIERU_PASSWORD }}|g' \
                 deploy/singbox-config.template.json > deploy/singbox-config.json
+              # Validate the materialized config is real JSON (a broken file makes
+              # sing-box exit on boot → "ENOTFOUND singbox" from the app).
+              if command -v python3 >/dev/null 2>&1; then
+                python3 -c "import json,sys; json.load(open('deploy/singbox-config.json')); print('sing-box config: valid JSON')" || echo "ERROR: sing-box config is INVALID JSON"
+              fi
+              # Validate it against sing-box itself (catches schema/version issues
+              # like unsupported mieru fields) using the same image.
+              docker run --rm -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" ghcr.io/sagernet/sing-box:latest check -c /c.json \
+                && echo "sing-box config: check passed" \
+                || echo "WARNING: sing-box 'check' failed — sidecar will likely not start (see error above)"
               if grep -q '^TELEGRAM_PROXY=' .env; then
                 sed -i 's|^TELEGRAM_PROXY=.*|TELEGRAM_PROXY=http://singbox:1080|' .env
               else
                 echo "TELEGRAM_PROXY=http://singbox:1080" >> .env
               fi
               export COMPOSE_PROFILES=vpn
+              VPN_ENABLED=1
             else
               echo "Mieru credentials not set — VPN sidecar skipped, Telegram uses direct connection."
+              VPN_ENABLED=0
             fi
 
             # ============================================
@@ -225,9 +244,25 @@ jobs:
             fuser -k 25/tcp 2>/dev/null || true
             sleep 2
 
-            # Restart containers without building (since we just built them)
-            docker compose up -d --force-recreate
-            
+            # Restart containers without building (since we just built them).
+            # Explicitly include the vpn profile so the sidecar starts even if
+            # COMPOSE_PROFILES didn't propagate.
+            if [ "${VPN_ENABLED:-0}" = "1" ]; then
+              docker compose --profile vpn up -d --force-recreate
+            else
+              docker compose up -d --force-recreate
+            fi
+
+            # ── VPN sidecar diagnostics: why is singbox up or not? ──
+            if [ "${VPN_ENABLED:-0}" = "1" ]; then
+              sleep 3
+              echo "=== sing-box sidecar status ==="
+              docker ps -a --filter name=cmpas-singbox --format '{{.Names}} | {{.Status}} | {{.State}}' || true
+              echo "=== sing-box logs (last 80) ==="
+              docker logs cmpas-singbox --tail 80 2>&1 || echo "(no singbox container — it did not start)"
+              echo "=== end sing-box diagnostics ==="
+            fi
+
             # ============================================
             # FIX POSTGRES AUTH (PERMANENT!)
             # 
@@ -328,11 +363,12 @@ jobs:
             TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)
             TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2)
             TG_API_URL=${TG_API_URL:-https://api.telegram.org}
+            TG_WH_SECRET=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2)
             if [ -n "$TG_TOKEN" ]; then
-              echo "Registering Telegram webhook..."
+              echo "Registering Telegram webhook (with secret_token)..."
               TG_WEBHOOK_RESULT=$(curl -s -X POST "${TG_API_URL}/bot${TG_TOKEN}/setWebhook" \
                 -H "Content-Type: application/json" \
-                -d '{"url":"https://cmpas.ru/api/telegram/webhook","drop_pending_updates":false}' \
+                -d "{\"url\":\"https://cmpas.ru/api/telegram/webhook\",\"drop_pending_updates\":false,\"secret_token\":\"${TG_WH_SECRET}\"}" \
                 2>/dev/null || echo "curl failed")
               echo "Telegram webhook result: $TG_WEBHOOK_RESULT"
               TG_INFO_RESULT=$(curl -s "${TG_API_URL}/bot${TG_TOKEN}/getWebhookInfo" 2>/dev/null || echo "curl failed")

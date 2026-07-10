@@ -67,15 +67,18 @@ class NotificationCenterViewModel @Inject constructor(
         }
     }
 
-    /** Called when the sheet closes, so the psychologist gets to see what was
-     * unread while it was open — the badge only clears once they leave. */
-    fun markVisibleRead() {
+    fun markAllVisibleRead() {
         val unreadIds = _uiState.value.items.filter { it.unread }.map { it.id }
         if (unreadIds.isEmpty()) return
+        _uiState.update { state -> state.copy(items = state.items.map { item -> if (item.id in unreadIds) item.copy(unread = false) else item }) }
         viewModelScope.launch {
             runCatching { api.markNotificationsRead(MarkNotificationsReadRequest(unreadIds)) }
         }
     }
+
+    /** Called when the sheet closes, so the psychologist gets to see what was
+     * unread while it was open — the badge only clears once they leave. */
+    fun markVisibleRead() = markAllVisibleRead()
 }
 
 data class NotificationCenterUiState(

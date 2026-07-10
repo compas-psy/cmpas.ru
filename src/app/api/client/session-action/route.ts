@@ -3,10 +3,20 @@ import { db } from '@/lib/db';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { clientBookingLink, verifyClientActionToken } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
+import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
+
+function escapeHtml(value: string) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 function resultPage(title: string, text: string, tone: 'success' | 'danger' = 'success') {
     const accent = tone === 'success' ? '#1A4D3A' : '#D4183D';
-    return new NextResponse(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{margin:0;background:#faf8f5;color:#16271d;font-family:system-ui,-apple-system,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px}.card{max-width:520px;background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.8);border-radius:28px;padding:28px;box-shadow:0 22px 60px rgba(18,56,41,.12)}h1{font-size:28px;margin:0 0 10px;color:${accent}}p{font-size:17px;line-height:1.5;margin:0;color:#5b6b61}</style></head><body><main class="card"><h1>${title}</h1><p>${text}</p></main></body></html>`, {
+    return new NextResponse(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{margin:0;background:#faf8f5;color:#16271d;font-family:system-ui,-apple-system,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px}.card{max-width:520px;background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.8);border-radius:28px;padding:28px;box-shadow:0 22px 60px rgba(18,56,41,.12)}h1{font-size:28px;margin:0 0 10px;color:${accent}}p{font-size:17px;line-height:1.5;margin:0;color:#5b6b61}</style></head><body><main class="card"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p></main></body></html>`, {
         status: 200,
         headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
     });
@@ -49,6 +59,24 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'cancel') {
+        const settings = await db.psychologistSettings.findUnique({
+            where: { psychologistId: session.psychologistId },
+            select: { cancellationHours: true },
+        });
+        const policy = canClientCancel(session, settings);
+        if (!policy.allowed) {
+            const message = clientCancelBlockedMessage(policy.limitHours);
+            await createNotification({
+                psychologistId: session.psychologistId,
+                type: 'client_cancel_attempt',
+                title: `${session.client.name} пытался(ась) отменить сессию`,
+                subtitle: message,
+                sessionId: session.id,
+                clientId: session.clientId,
+            });
+            return resultPage('Отмена уже недоступна', message, 'danger');
+        }
+
         await db.diarySession.update({
             where: { id: session.id },
             data: { status: 'cancelled' },

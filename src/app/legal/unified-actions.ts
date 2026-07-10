@@ -1,10 +1,27 @@
 "use server"
 
+import { randomUUID } from "crypto"
 import { db } from "@/lib/db"
 import { getActiveLegalDocument, getActiveLegalDocuments, LEGAL_DOC_TYPES, REQUIRED_LEGAL_DOC_TYPES, type LegalDocType } from "@/lib/legal-documents"
 
-export async function acceptActiveDocuments(_userId: string, types: LegalDocType[] = REQUIRED_LEGAL_DOC_TYPES) {
-    await getActiveLegalDocuments(types)
+type ActiveDoc = Awaited<ReturnType<typeof getActiveLegalDocuments>>[number]
+
+async function writeAcceptance(userId: string, doc: ActiveDoc, source = "web") {
+    await db.$executeRaw`
+        INSERT INTO "LegalDocumentAcceptance" (id, "userId", "documentId", "acceptedAt", "ipAddress", source, "documentType", "documentVersion")
+        VALUES (${randomUUID()}, ${userId}, ${doc.id}, NOW(), 'unknown', ${source}, ${doc.type}, ${doc.version})
+        ON CONFLICT ("userId", "documentId") DO UPDATE
+        SET source = EXCLUDED.source,
+            "documentType" = COALESCE("LegalDocumentAcceptance"."documentType", EXCLUDED."documentType"),
+            "documentVersion" = COALESCE("LegalDocumentAcceptance"."documentVersion", EXCLUDED."documentVersion")
+    `
+}
+
+export async function acceptActiveDocuments(userId: string, types: LegalDocType[] = REQUIRED_LEGAL_DOC_TYPES) {
+    const docs = await getActiveLegalDocuments(types)
+    for (const doc of docs) {
+        await writeAcceptance(userId, doc)
+    }
     return { success: true }
 }
 
@@ -25,13 +42,9 @@ export async function checkUserAcceptance(userId: string, types: LegalDocType[] 
 
 export async function acceptDocumentsByIds(userId: string, documentIds: string[]) {
     const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES)
-    const activeIds = new Set(activeDocs.map((doc) => doc.id))
-    const ids = documentIds.filter((id) => activeIds.has(id))
-    if (ids.length) {
-        await db.legalDocumentAcceptance.createMany({
-            data: ids.map((documentId) => ({ userId, documentId, ipAddress: "web" })),
-            skipDuplicates: true,
-        })
+    const ids = new Set(documentIds)
+    for (const doc of activeDocs) {
+        if (ids.has(doc.id)) await writeAcceptance(userId, doc)
     }
     return { success: true }
 }
@@ -40,11 +53,7 @@ export async function toggleAdsConsent(userId: string, accept: boolean) {
     const doc = await getActiveLegalDocument("ADS")
     if (!doc) return { success: false, error: "No active ADS document found" }
     if (accept) {
-        await db.legalDocumentAcceptance.upsert({
-            where: { userId_documentId: { userId, documentId: doc.id } },
-            update: {},
-            create: { userId, documentId: doc.id, ipAddress: "web" },
-        })
+        await writeAcceptance(userId, doc)
     } else {
         await db.legalDocumentAcceptance.deleteMany({ where: { userId, documentId: doc.id } })
     }

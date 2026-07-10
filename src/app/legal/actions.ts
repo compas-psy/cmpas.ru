@@ -1,5 +1,6 @@
 "use server"
 
+import { randomUUID } from "crypto"
 import { db } from "@/lib/db"
 import { headers } from "next/headers"
 import {
@@ -10,6 +11,19 @@ import {
     type LegalDocType,
 } from "@/lib/legal-documents"
 
+type ActiveDoc = Awaited<ReturnType<typeof getActiveLegalDocuments>>[number]
+
+async function writeAcceptance(userId: string, doc: ActiveDoc, ipAddress: string, source = "web") {
+    await db.$executeRaw`
+        INSERT INTO "LegalDocumentAcceptance" (id, "userId", "documentId", "acceptedAt", "ipAddress", source, "documentType", "documentVersion")
+        VALUES (${randomUUID()}, ${userId}, ${doc.id}, NOW(), ${ipAddress}, ${source}, ${doc.type}, ${doc.version})
+        ON CONFLICT ("userId", "documentId") DO UPDATE
+        SET source = EXCLUDED.source,
+            "documentType" = COALESCE("LegalDocumentAcceptance"."documentType", EXCLUDED."documentType"),
+            "documentVersion" = COALESCE("LegalDocumentAcceptance"."documentVersion", EXCLUDED."documentVersion")
+    `
+}
+
 export async function acceptActiveDocuments(userId: string, types: LegalDocType[] = REQUIRED_LEGAL_DOC_TYPES) {
     try {
         const ipAddress = await currentIpAddress()
@@ -17,10 +31,9 @@ export async function acceptActiveDocuments(userId: string, types: LegalDocType[
 
         if (!activeDocs.length) return { success: true }
 
-        await db.legalDocumentAcceptance.createMany({
-            data: activeDocs.map((doc) => ({ userId, documentId: doc.id, ipAddress })),
-            skipDuplicates: true,
-        })
+        for (const doc of activeDocs) {
+            await writeAcceptance(userId, doc, ipAddress)
+        }
 
         return { success: true }
     } catch (error) {
@@ -65,14 +78,13 @@ export async function acceptDocumentsByIds(userId: string, documentIds: string[]
         const ipAddress = await currentIpAddress()
         const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES)
         const activeDocIds = new Set(activeDocs.map((doc) => doc.id))
-        const allowedIds = documentIds.filter((id) => activeDocIds.has(id))
+        const allowedDocs = activeDocs.filter((doc) => documentIds.includes(doc.id) && activeDocIds.has(doc.id))
 
-        if (!allowedIds.length) return { success: true }
+        if (!allowedDocs.length) return { success: true }
 
-        await db.legalDocumentAcceptance.createMany({
-            data: allowedIds.map((documentId) => ({ userId, documentId, ipAddress })),
-            skipDuplicates: true,
-        })
+        for (const doc of allowedDocs) {
+            await writeAcceptance(userId, doc, ipAddress)
+        }
 
         return { success: true }
     } catch (error) {
@@ -88,11 +100,7 @@ export async function toggleAdsConsent(userId: string, accept: boolean) {
 
         if (accept) {
             const ipAddress = await currentIpAddress()
-            await db.legalDocumentAcceptance.upsert({
-                where: { userId_documentId: { userId, documentId: activeAdsDoc.id } },
-                update: {},
-                create: { userId, documentId: activeAdsDoc.id, ipAddress },
-            })
+            await writeAcceptance(userId, activeAdsDoc, ipAddress)
         } else {
             await db.legalDocumentAcceptance.deleteMany({ where: { userId, documentId: activeAdsDoc.id } })
         }
