@@ -5,6 +5,7 @@ export async function register() {
         const { processMorningDigest, processWeeklyDigest } = await import('./lib/cron/digest');
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
+        const { processSessionAutoComplete } = await import('./lib/cron/complete-sessions');
 
         // Напоминания каждые 15 минут
         cron.schedule('*/15 * * * *', async () => {
@@ -51,6 +52,15 @@ export async function register() {
                 await processScheduledMessages();
             } catch (error) {
                 console.error('[CRON] Ошибка отложенных сообщений:', error);
+            }
+        });
+
+        // COMPLETE-1: автозавершение прошедших confirmed-сессий + нудж на заметку — каждые 20 минут
+        cron.schedule('*/20 * * * *', async () => {
+            try {
+                await processSessionAutoComplete();
+            } catch (error) {
+                console.error('[CRON] Ошибка автозавершения сессий:', error);
             }
         });
 
