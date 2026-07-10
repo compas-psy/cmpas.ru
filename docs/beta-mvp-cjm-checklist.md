@@ -1,18 +1,22 @@
 # Beta MVP CJM Checklist
 
-Этот чек-лист дополняет `docs/beta-mvp-execution-plan.md`: карта CJM задаёт полный целевой контур, ТЗ — конкретные задачи. Статусы ниже нужны, чтобы не потерять ни один путь психолога/клиента до beta MVP.
+Этот чек-лист дополняет `docs/beta-mvp-execution-plan.md`: карта CJM задаёт полный целевой контур, ТЗ — конкретные задачи. Статусы ниже отражают фактическое состояние кода, а не только наличие заготовок.
 
 ## CJM-1 · Регистрация и onboarding психолога
 
 - [x] Убран implicit accept документов на sign-in.
 - [x] Legal gate проверяется до onboarding в diary layout.
-- [x] Mobile/web acceptance получают audit snapshot: source, documentType, documentVersion.
-- [x] Android legal gate берёт актуальные версии через `/api/mobile/legal/status`.
-- [x] Android legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
+- [x] Android legal status берёт актуальные версии TERMS / PRIVACY / ADS с сервера.
+- [x] TERMS и PRIVACY — отдельные обязательные чекбоксы; ADS остаётся на первом экране, но необязателен.
+- [x] Gate возникает только при непринятых TERMS/PRIVACY; отсутствие ADS само по себе окно не открывает.
+- [x] Сохранение TERMS/PRIVACY отделено от best-effort сохранения ADS: ошибка рекламы не блокирует вход.
+- [x] Документы открываются во встроенном Android viewer; возврат ведёт обратно к согласиям с сохранёнными чекбоксами.
 - [x] Web legal gate требует отдельные explicit checkboxes для TERMS и PRIVACY; ADS optional.
 - [x] Onboarding без шага-фантома: профиль → расписание → документы → мессенджер → первый клиент → финиш.
 - [x] Onboarding сохраняет timezone, sessionBreak, lunch break и cancellationHours через `/api/user/profile`.
 - [x] Android bridge: если onboarding не завершён, dashboard показывает «Начните с настройки» без дублирования веб-визарда.
+- [ ] Применить и проверить audit-DDL для `LegalDocumentAcceptance.source/documentType/documentVersion` во всех окружениях и синхронизировать Prisma schema.
+- [ ] Заменить `{{ОГРНИП}}` и `{{ИНН}}` в публичных legal-документах реальными реквизитами; сверить web-тексты с утверждёнными DOCX.
 - [ ] Onboarding calendar import preview должен получить полноценный web UI, а не только endpoint/link.
 
 ## CJM-2 · Добавление клиента и подключение канала
@@ -24,88 +28,83 @@
 - [x] Добавлен warning при отсутствии `MAX_BOT_USERNAME`, а не молчаливая недоступность.
 - [x] Добавлены admin/cron endpoint протухания invite-токенов и admin conversion metrics.
 - [x] Android InviteSheet использует реальный `inviteLink`, QR, share, copy и MAX-first кнопки.
-- [x] Live-polling channel status уже есть в `ClientDetailViewModel` и отображается в invite sheet.
+- [x] Live-polling channel status отображается в invite sheet.
 - [ ] Deployment-smoke: проверить MAX env и MAX-first на `/connect/<token>` в продовом окружении.
 
 ## CJM-3 · Заметки после сессии
 
-- [x] Mobile sessions API уже принимает/возвращает `structuredNotes` и `notesPlain`.
+- [x] Mobile sessions API принимает/возвращает `structuredNotes` и `notesPlain`.
 - [x] `previousNotesSummary` строится из structured notes с fallback.
-- [x] AI teaser в заметке честно показывает `Скоро ✨ · Хочу первым` и пишет `/api/mobile/feature-interest`.
-- [x] Voice: Android записывает локальный m4a, показывает длительность, воспроизводит через player и честно сообщает, что расшифровка будет позже.
+- [x] AI teaser показывает `Скоро ✨ · Хочу первым` и пишет `/api/mobile/feature-interest`.
+- [ ] Voice: настоящая локальная m4a-запись и player откатаны ради восстановления Android build; сейчас остаётся только честный локальный черновик без аудиофайла.
 - [ ] Smoke: web structured note → Android edit → web read без потерь.
 
 ## CJM-4 · Управление днём
 
 - [x] Cron/admin endpoint автозавершения confirmed → completed.
-- [x] COMPLETE-1 QA-fix: confirmed → completed только после endTime + 15 минут, pending не трогаем.
-- [x] Dashboard и sessions list запускают settle для текущего психолога перед выдачей данных.
-- [x] Нудж `session_needs_note` после прошедшей сессии без заметки, бережный текст из ТЗ.
+- [x] COMPLETE-1: confirmed → completed только после endTime + 15 минут; pending не трогаем.
+- [x] Dashboard и sessions list пытаются выполнить settle, но не скрывают данные при ошибке maintenance.
+- [x] Нудж `session_needs_note` после прошедшей сессии без заметки.
 - [x] «Следующая сессия» берётся только из будущих pending/confirmed встреч.
-- [x] «Сессии без заметок» считается сразу по completed без 14-дневной задержки.
+- [x] «Сессии без заметок» считается по completed.
 - [x] Android-карточка прошедшей сессии: заметка + отметка оплаты.
 
 ## CJM-5 · Запись, перенос, отмена, оплата
 
 - [x] SEC-1 endpoint miniapp cancellation защищён `clientActionToken` и client ownership.
-- [x] Miniapp cancellation теперь соблюдает `cancellationHours` и пишет `client_cancel_attempt`.
-- [x] Signed action link `/api/client/session-action?a=cancel` теперь соблюдает `cancellationHours`.
-- [x] Telegram callback cancellation теперь соблюдает `cancellationHours`, пишет `client_cancel_attempt` и удаляет событие из календарей только при допустимой отмене.
-- [x] MAX callback cancellation теперь соблюдает `cancellationHours`, пишет `client_cancel_attempt` и удаляет событие из календарей только при допустимой отмене.
-- [x] `paymentStatus` уже поддерживается mobile API.
-- [x] Web payment GET/PATCH endpoint для session modal/calendar surfaces.
-- [x] Web session modal: кнопки `Не требуется / Ожидает / Оплачено`, с явным текстом «КОМПАС только фиксирует отметку».
-- [x] Reminder audit: клиентское `-1ч` напоминание есть в cron/settings; Android `-2ч` рассинхрон поиском по коду не обнаружен, `2 часа` остаётся только опцией web-настройки напоминания психологу.
-- [ ] Calendar right rail: продублировать быстрые кнопки оплаты вне modal.
+- [x] Miniapp, signed link, Telegram callback и MAX callback используют `cancellationHours` и `canClientCancel`.
+- [x] Поздняя попытка отмены пишет `client_cancel_attempt`, но не меняет сессию.
+- [x] `paymentStatus` поддерживается mobile API.
+- [x] Web payment GET/PATCH endpoint.
+- [x] Web session modal: `Не требуется / Ожидает / Оплачено`, с текстом «КОМПАС только фиксирует отметку».
+- [x] Reminder audit: клиентское `-1ч` напоминание есть; отдельный Android `-2ч` путь не обнаружен.
+- [ ] Smoke всех четырёх путей отмены на реальных Telegram/MAX сообщениях.
+- [ ] Calendar right rail: продублировать быстрые кнопки оплаты вне modal — optional UX.
 
 ## CJM-6 · Расписание с телефона
 
 - [x] `/api/mobile/blocks` пишет в серверный `DiaryBlock`.
-- [x] Endpoint поддерживает частичные блокировки `startTime/endTime` и диапазоны дат.
+- [x] Endpoint поддерживает частичные блокировки и диапазоны дат.
 - [x] Android API-модель поддерживает `startTime/endTime`.
 - [x] Серверные mobile endpoints `GET /availability` и `PATCH /availability/mode`.
-- [x] Android экран расписания показывает режим записи closed/preview/open.
-- [x] Android экран расписания показывает read-only неделю: правила + слоты.
-- [x] Быстрые действия: сегодня/завтра, отпуск на даты, закончить день раньше.
-- [x] Миграция старых локальных блокировок не требуется: в `LocalPracticeStore` нет локальной модели блокировок, только clients/sessions/notes.
+- [x] Android экран показывает режим записи, read-only неделю и быстрые блокировки.
+- [x] Миграция старых локальных блокировок не требуется: локальной модели блокировок не было.
 
 ## CJM-7 · Уведомления психолога
 
-- [x] `PracticeNotification` таблица уже есть в схеме/deploy fixes.
-- [x] Добавлены beta-типы уведомлений: `session_needs_note`, `client_cancel_attempt`, `invite_expired`, `session_unpaid`.
-- [x] Dashboard теперь читает persistent notification feed, а не пересобирает историю на лету.
-- [x] Документы: opened/acknowledged теперь пишут persistent notifications.
-- [x] Android notification sheet: группы «Сегодня/Ранее», deep-link tap, «Прочитать все», локальный read-state.
-- [ ] Все события пишут persistent notification.
-- [ ] FCM deep-links.
+- [x] `PracticeNotification` таблица существует.
+- [x] Добавлены beta-типы: `session_needs_note`, `client_cancel_attempt`, `invite_expired`, `session_unpaid`.
+- [x] Dashboard читает persistent notification feed.
+- [x] Документы opened/acknowledged пишут persistent notifications.
+- [x] Android notification sheet: «Сегодня/Ранее», переход к сущности, «Прочитать все».
+- [ ] Все продуктовые события пишут persistent notification.
+- [ ] FCM registration и проверенные deep-links.
 - [ ] Тихие часы 21:00–9:00 + утренняя сводка.
 
 ## CJM-8 · Перенос практики и журнал согласий
 
 - [x] Client document page: opened != accepted, согласие только checkbox + button.
 - [x] Server action валидирует checkbox.
-- [x] API журнала всех доставок документов: клиент, документ, версия, status, канал.
+- [x] API журнала доставок: клиент, документ, версия, status, канал.
 - [x] CSV export с BOM и `documentContentHash`.
-- [x] API поиска клиентов со старой версией документа и переотправки актуальной версии.
-- [x] Импорт календаря: будущие сессии с предпросмотром и дедупом.
-- [x] Web UI журнала документов: общий таб, фильтры «Без согласия» / «Принятые», CSV export.
-- [x] Web UI переотправки клиентам со старой версией: кнопка «Старые версии» проверяет клиентов и запускает resend актуального документа.
+- [x] Поиск клиентов со старой версией и resend актуальной версии.
+- [x] Импорт календаря: endpoints будущих сессий с предпросмотром и дедупом.
+- [x] Web UI журнала: фильтры и CSV export.
+- [x] Web UI «Старые версии» запускает resend.
+- [ ] Smoke реальной доставки после resend и записи результата в журнале.
 
-## Cross-cutting · Честные будущие функции
+## Cross-cutting
 
-- [x] DB migration `FeatureInterest`.
-- [x] Mobile endpoint `/api/mobile/feature-interest`.
-- [x] Admin counters `/api/admin/feature-interest`.
-- [x] Admin UI/table `/admin/feature-interest` for counters.
-- [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` для новых beta-DDL.
-- [x] Deploy script `npm run deploy:schema` применяет legacy schema-fixes, beta schema-fixes и Prisma migrations.
-- [x] CPO/QA audit зафиксирован в `docs/beta-mvp-cpo-qa-audit.md`.
-- [x] Next sprint plan зафиксирован в `docs/beta-mvp-next-sprint-plan.md`.
-- [ ] Web/Android reusable teaser component.
+- [x] `FeatureInterest`: migration, mobile endpoint, admin counters/UI.
+- [x] Deploy supplement `deploy/beta-mvp-schema-fixes.sql` и `npm run deploy:schema` добавлены.
+- [x] CPO/QA audit и next sprint plan зафиксированы.
+- [ ] Проверить, что deploy script реально применяется до запуска новой версии API.
+- [ ] Web/Android reusable AI teaser component.
 
 ## Перед релизом beta
 
-- [ ] `npm run lint` / `npx tsc`.
-- [ ] Android Build CI.
+- [ ] Зелёный `npm run lint` / `npx tsc` / `npm run build`.
+- [ ] Зелёный Android Build CI и доступный build log.
+- [ ] Legal smoke: открыть все 3 документа → вернуться → принять только ПС/ПК → войти; повторить с ADS.
 - [ ] Проверка старого APK на `/api/mobile/*` совместимость.
-- [ ] Smoke-test: новый психолог → legal → onboarding → первый клиент → invite → документ → первая сессия → заметка → оплата/уведомление.
+- [ ] Full smoke: legal → onboarding → клиент → invite → документ → сессия → заметка → оплата → уведомление → отмена.
