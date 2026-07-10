@@ -6,6 +6,9 @@ on:
     paths-ignore:
       - 'android/**'
       - '.github/workflows/android-build.yml'
+      - 'docs/**'
+      - '.agent/**'
+      - '**/*.md'
   workflow_dispatch:
 
 concurrency:
@@ -265,15 +268,6 @@ jobs:
 
             # ============================================
             # FIX POSTGRES AUTH (PERMANENT!)
-            # 
-            # Problem: pg_hba.conf uses scram-sha-256 for network
-            # connections, which causes intermittent auth failures
-            # when Prisma's connection pool reconnects.
-            #
-            # Solution: Since we removed the exposed 5432 port,
-            # postgres is only reachable from Docker network.
-            # We switch to 'trust' auth for all connections.
-            # This change persists in the volume.
             # ============================================
             echo "Waiting for postgres to be ready..."
             
@@ -290,46 +284,47 @@ jobs:
             fi
             
             echo "Postgres is ready. Patching pg_hba.conf for trust auth..."
-            
-            # Replace scram-sha-256 with trust for all host connections
-            # This is safe because postgres port is NOT exposed to the host
             docker exec -u postgres cmpas-postgres sh -c "sed -i 's/host all all all scram-sha-256/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
             docker exec -u postgres cmpas-postgres sh -c "sed -i 's/host all all all md5/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
-            
-            # Reload postgres config (no restart needed)
             docker exec -u postgres cmpas-postgres pg_ctl reload -D /var/lib/postgresql/data
             echo "pg_hba.conf patched: all Docker network connections now use trust auth."
             
-            # Verify pg_hba.conf
             echo "=== pg_hba.conf verification ==="
             docker exec cmpas-postgres grep -v '^#' /var/lib/postgresql/data/pg_hba.conf | grep -v '^$'
             
-            # Restart app so Prisma connects with trust auth (not the old scram-sha-256)
+            # Restart app so Prisma reconnects after pg_hba reload. The app startup
+            # script applies beta schema fixes and pending migrations before Next.js.
             echo "Restarting app to use patched pg_hba.conf..."
             docker compose restart app
             sleep 3
             
-            # Wait for app to be healthy
+            # Wait for app to be healthy and fail the deployment if it never starts.
             echo "Waiting for app to start..."
+            APP_HEALTHY=0
             for i in {1..30}; do
               if docker compose exec -T app wget -q --spider http://localhost:3000/ 2>/dev/null; then
                 echo "App is healthy!"
+                APP_HEALTHY=1
                 break
               fi
               echo "Waiting... ($i/30)"
               sleep 2
             done
+
+            if [ "$APP_HEALTHY" != "1" ]; then
+              echo "ERROR: App did not become healthy. Last container logs:"
+              docker logs cmpas-app --tail 200 2>&1 || true
+              exit 1
+            fi
             
-            # Run Database Migrations (safe - only applies new migrations)
-            echo "Applying idempotent schema fixes from deploy/schema-fixes.sql..."
+            # Historical fixes remain idempotent. Beta fixes and Prisma migrations
+            # have already run inside scripts/start-production.sh before Next.js.
+            echo "Applying historical schema fixes from deploy/schema-fixes.sql..."
             docker cp deploy/schema-fixes.sql cmpas-postgres:/tmp/schema-fixes.sql
-            docker exec cmpas-postgres psql -U postgres -d cmpas_db -f /tmp/schema-fixes.sql && echo "Schema fixes: OK" || echo "WARNING: Schema fixes had errors (non-fatal)"
-            
-            echo "Running prisma migrate deploy to apply pending migrations..."
-            docker compose exec -T app npx prisma migrate deploy || {
-              echo "WARNING: migrate deploy failed, trying db push as fallback..."
-              docker compose exec -T app npx prisma db push --accept-data-loss || echo "WARNING: db push also failed"
-            }
+            docker exec cmpas-postgres psql -v ON_ERROR_STOP=1 -U postgres -d cmpas_db -f /tmp/schema-fixes.sql
+
+            echo "Verifying Prisma migration status..."
+            docker compose exec -T app node node_modules/prisma/build/index.js migrate status
             
             # ============================================
             # POST-DEPLOY VERIFICATION
@@ -355,10 +350,6 @@ jobs:
             
             # ============================================
             # REGISTER TELEGRAM BOT WEBHOOK
-            # No code path ever called setWebhook — if it drifts (token
-            # rotation, URL change) the bot goes silent with no way to
-            # notice except a user reporting it. Re-register on every
-            # deploy so it self-heals, same pattern as the MAX webhook below.
             # ============================================
             TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)
             TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2)
@@ -399,4 +390,3 @@ jobs:
             docker image prune -f
 
             echo "Deployment complete!"
-
