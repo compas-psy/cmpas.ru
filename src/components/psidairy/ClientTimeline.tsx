@@ -5,7 +5,7 @@ import {
     Calendar,
     ChevronDown, ChevronUp, Search, Lock, UserCircle, BookOpen
 } from 'lucide-react';
-import { getDefinitionById, SmartBlock } from '@/lib/smart-notes/config';
+import { getDefinitionById, normalizeStructuredNotes, SmartBlock } from '@/lib/smart-notes/config';
 
 // ============================================================
 // Types
@@ -205,9 +205,11 @@ export function ClientTimeline({ sessions, onOpenSession }: {
 
     // Build timeline events from sessions
     const events = useMemo(() => {
-        let filtered = [...sessions].sort((a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+        // Tolerate the bare-array structuredNotes shape written by Android
+        // before NOTES-1's storage-format fix (DB has a mix of old rows).
+        let filtered = sessions
+            .map(s => ({ ...s, structuredNotes: normalizeStructuredNotes(s.structuredNotes) }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         // Filter
         if (filter === 'notes') {

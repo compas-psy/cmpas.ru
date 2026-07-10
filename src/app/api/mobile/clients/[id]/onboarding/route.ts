@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
-
-const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
-const MAX_BOT_USERNAME = process.env.MAX_BOT_USERNAME || '';
-
-function buildInviteLink(channel: 'telegram' | 'max', token: string) {
-    if (channel === 'telegram') return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=c_${token}`;
-    return MAX_BOT_USERNAME
-        ? `https://max.ru/join/${MAX_BOT_USERNAME}?start=c_${token}`
-        : `https://cmpas.ru/max-invite?token=${token}`;
-}
+import { createClientChannelInvite } from '@/lib/channel-binding';
 
 /**
  * GET /api/mobile/clients/[id]/onboarding
@@ -132,17 +122,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return NextResponse.json({ status: 'sent', channel });
         }
 
-        const token = randomBytes(24).toString('base64url');
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        await db.clientInviteToken.create({ data: { psychologistId: auth.userId, clientId, token, channel, expiresAt } });
+        // Canonical invite creation: hashed token storage + unified link building
+        // (see channel-binding.ts) — do not hand-roll token/link generation here,
+        // that previously stored raw tokens in plaintext and built a broken MAX URL.
+        const invite = await createClientChannelInvite({ psychologistId: auth.userId, clientId, channel });
         await db.scheduledClientMessage.create({
-            data: { psychologistId: auth.userId, clientId, sessionId: session?.id ?? null, channel, text, sendAt: expiresAt, status: 'pending' },
+            data: { psychologistId: auth.userId, clientId, sessionId: session?.id ?? null, channel, text, sendAt: invite.expiresAt, status: 'pending' },
         });
 
         return NextResponse.json({
             status: 'pending',
             channel,
-            inviteLink: buildInviteLink(channel, token),
+            inviteLink: invite.directLink,
             readyText: text,
             phone: client.phone ?? null,
         });

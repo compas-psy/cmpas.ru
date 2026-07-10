@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
+import { normalizeStructuredNotes } from '@/lib/smart-notes/config';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -55,7 +56,8 @@ export async function getAllNotes(opts?: { search?: string; clientId?: string })
 
     // Filter by search if needed
     let results = sessions.map((s: any) => {
-        const sn = s.structuredNotes as any;
+        // Tolerate the bare-array shape written by Android before NOTES-1's fix.
+        const sn = normalizeStructuredNotes(s.structuredNotes);
         const blocks = sn?.blocks || [];
         const blockTexts = blocks.map((b: any) =>
             Object.values(b.values || {}).filter(Boolean).join(' ')

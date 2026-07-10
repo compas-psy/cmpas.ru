@@ -57,9 +57,32 @@ const blockLabels: Record<string, string> = {
     short_note: 'Кратко',
 };
 
+/**
+ * structuredNotes has been written to the DB in two incompatible shapes:
+ * web writes `{ blocks: SmartBlock[] }`, Android/mobile-API writes a bare
+ * `SmartBlock[]`. Accept both when reading so notes from either platform
+ * are visible on the other (see NOTES-1) — including rows written before
+ * this fix (bare arrays already sitting in prod).
+ */
+export function structuredNotesArray(value: unknown): unknown[] | null {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object' && 'blocks' in value && Array.isArray((value as { blocks: unknown }).blocks)) {
+        return (value as { blocks: unknown[] }).blocks;
+    }
+    return null;
+}
+
+/** Canonical DB storage shape (matches every web read site): `{ blocks: [...] }`. */
+export function wrapStructuredNotesForStorage(value: unknown): unknown {
+    if (value === null) return null;
+    const arr = structuredNotesArray(value);
+    return arr ? { blocks: arr } : value;
+}
+
 export function notesPlainFromStructured(value: unknown): string | null {
-    if (!Array.isArray(value)) return null;
-    const parts = value.flatMap((block: any) => {
+    const arr = structuredNotesArray(value);
+    if (!arr) return null;
+    const parts = arr.flatMap((block: any) => {
         const label = blockLabels[block?.definitionId] || block?.definitionId || 'Заметка';
         const values = block?.values && typeof block.values === 'object' ? Object.values(block.values) : [];
         const text = values.map((item) => String(item || '').trim()).filter(Boolean).join('\n');
@@ -85,7 +108,8 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         videoLink: online ? (s.videoLink ?? onlineSessionLink) : null,
         notes: typeof s.notes === 'string' ? s.notes : notesPlain,
         notesPlain,
-        structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
+        // Android's contract is a bare array — unwrap the web `{blocks:[...]}` storage shape.
+        structuredNotes: structuredNotesArray(s.structuredNotes),
     };
 }
 

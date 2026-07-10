@@ -4,6 +4,7 @@ import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText, Chev
 import { toast } from 'sonner';
 import { SmartNotesEditor, SmartNotesData } from '@/components/psidairy/SmartNotesEditor';
 import { TimePicker } from '@/components/ui/date-picker';
+import { normalizeStructuredNotes } from '@/lib/smart-notes/config';
 
 type SessionModalProps = {
     isOpen: boolean;
@@ -50,9 +51,10 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     notes: editSession.notes || '',
                     status: editSession.status
                 });
-                // Load structured notes if exist
+                // Load structured notes if exist (tolerate the bare-array shape
+                // written by Android before NOTES-1's storage-format fix).
                 setSmartNotesData({
-                    blocks: editSession.structuredNotes?.blocks || [],
+                    blocks: normalizeStructuredNotes(editSession.structuredNotes)?.blocks || [],
                     privateNotes: editSession.privateNotes?.text || '',
                     clientSummary: editSession.clientSummary || '',
                 });

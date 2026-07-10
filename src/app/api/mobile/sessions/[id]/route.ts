@@ -5,7 +5,7 @@ import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/li
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
-import { formatSession, notesPlainFromStructured, toDatabasePaymentStatus } from '../route';
+import { formatSession, notesPlainFromStructured, toDatabasePaymentStatus, wrapStructuredNotesForStorage } from '../route';
 
 function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientSummary?: string | null; notes?: string | null } | null) {
     if (!session) return null;
@@ -15,7 +15,9 @@ function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientS
 function notePatch(body: any) {
     const data: Record<string, unknown> = {};
     if (body.notes !== undefined) data.notes = body.notes;
-    if (body.structuredNotes !== undefined) data.structuredNotes = body.structuredNotes;
+    // Android sends a bare array; store in the same {blocks:[...]} shape web writes,
+    // so notes are readable cross-platform (see NOTES-1 / structuredNotesArray).
+    if (body.structuredNotes !== undefined) data.structuredNotes = wrapStructuredNotesForStorage(body.structuredNotes);
     return data;
 }
 

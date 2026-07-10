@@ -279,3 +279,19 @@ export function sortBlocksByDefinition(blocks: SmartBlock[]): SmartBlock[] {
         return ai - bi;
     });
 }
+
+/**
+ * DiarySession.structuredNotes has been written in two shapes: web writes
+ * `{ blocks: SmartBlock[] }`, the mobile API (pre-NOTES-1 fix) wrote a bare
+ * `SmartBlock[]`. Normalize any stored value to the canonical `{ blocks }`
+ * shape so web reads never silently show zero blocks for Android-authored
+ * (or pre-fix) notes. Mirrors structuredNotesArray() in
+ * src/app/api/mobile/sessions/route.ts — keep the two in sync.
+ */
+export function normalizeStructuredNotes(value: unknown): { blocks: SmartBlock[] } | null {
+    if (Array.isArray(value)) return { blocks: value as SmartBlock[] };
+    if (value && typeof value === 'object' && 'blocks' in value && Array.isArray((value as { blocks: unknown }).blocks)) {
+        return { blocks: (value as { blocks: SmartBlock[] }).blocks };
+    }
+    return null;
+}

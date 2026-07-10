@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
+import { normalizeStructuredNotes } from '@/lib/smart-notes/config';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -40,7 +41,8 @@ export async function getSessionForNotes(sessionId: string) {
         format: session.format,
         status: session.status,
         notes: session.notes,
-        structuredNotes: session.structuredNotes as any,
+        // Tolerate the bare-array shape written by Android before NOTES-1's fix.
+        structuredNotes: normalizeStructuredNotes(session.structuredNotes),
         privateNotes: session.privateNotes as any,
         clientSummary: session.clientSummary,
     };
@@ -55,7 +57,7 @@ export async function saveSessionNotes(sessionId: string, data: {
     const psychologistId = await getPsychologistId();
     const updatePayload: any = {};
     if (data.notes !== undefined) updatePayload.notes = data.notes;
-    if (data.structuredNotes !== undefined) updatePayload.structuredNotes = data.structuredNotes;
+    if (data.structuredNotes !== undefined) updatePayload.structuredNotes = normalizeStructuredNotes(data.structuredNotes);
     if (data.privateNotes !== undefined) updatePayload.privateNotes = data.privateNotes;
     if (data.clientSummary !== undefined) updatePayload.clientSummary = data.clientSummary;
 
