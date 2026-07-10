@@ -8,13 +8,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+echo "[startup] Applying pending Prisma migrations..."
+$PRISMA_CLI migrate deploy
+
 echo "[startup] Applying idempotent beta schema fixes..."
 $PRISMA_CLI db execute \
   --schema prisma/schema.prisma \
   --file deploy/beta-mvp-schema-fixes.sql
-
-echo "[startup] Applying pending Prisma migrations..."
-$PRISMA_CLI migrate deploy
 
 echo "[startup] Schema is ready. Starting Next.js..."
 exec node server.js
