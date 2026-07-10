@@ -13,57 +13,25 @@ function clientIp(req: NextRequest) {
         || 'unknown';
 }
 
-async function writeBaseAcceptance(params: {
+function acceptanceUpsert(params: {
     userId: string;
     document: ActiveLegalDocument;
     ipAddress: string;
-}) {
-    const { userId, document, ipAddress } = params;
-    await db.$executeRaw(Prisma.sql`
-        INSERT INTO "LegalDocumentAcceptance"
-            (id, "userId", "documentId", "acceptedAt", "ipAddress")
-        VALUES
-            (${randomUUID()}, ${userId}, ${document.id}, NOW(), ${ipAddress})
-        ON CONFLICT ("userId", "documentId") DO UPDATE
-        SET "acceptedAt" = EXCLUDED."acceptedAt",
-            "ipAddress" = EXCLUDED."ipAddress"
-    `);
-}
-
-async function ensureAuditColumns() {
-    try {
-        await db.$executeRaw(Prisma.sql`
-            ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'web'
-        `);
-        await db.$executeRaw(Prisma.sql`
-            ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentType" TEXT
-        `);
-        await db.$executeRaw(Prisma.sql`
-            ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentVersion" TEXT
-        `);
-        return true;
-    } catch (error) {
-        // Acceptance uses the stable base columns and remains valid even if the
-        // deployment role cannot perform DDL. Migration/deploy must still fix
-        // audit fields before external beta.
-        console.error('[mobile/legal/accept] audit columns unavailable', error);
-        return false;
-    }
-}
-
-async function updateAuditSnapshot(params: {
-    userId: string;
-    document: ActiveLegalDocument;
     source: string;
 }) {
-    const { userId, document, source } = params;
-    await db.$executeRaw(Prisma.sql`
-        UPDATE "LegalDocumentAcceptance"
-        SET source = ${source},
-            "documentType" = ${document.type},
-            "documentVersion" = ${document.version}
-        WHERE "userId" = ${userId} AND "documentId" = ${document.id}
-    `);
+    const { userId, document, ipAddress, source } = params;
+    return Prisma.sql`
+        INSERT INTO "LegalDocumentAcceptance"
+            (id, "userId", "documentId", "acceptedAt", "ipAddress", "source", "documentType", "documentVersion")
+        VALUES
+            (${randomUUID()}, ${userId}, ${document.id}, NOW(), ${ipAddress}, ${source}, ${document.type}, ${document.version})
+        ON CONFLICT ("userId", "documentId") DO UPDATE
+        SET "acceptedAt" = EXCLUDED."acceptedAt",
+            "ipAddress" = EXCLUDED."ipAddress",
+            "source" = EXCLUDED."source",
+            "documentType" = EXCLUDED."documentType",
+            "documentVersion" = EXCLUDED."documentVersion"
+    `;
 }
 
 export async function POST(req: NextRequest) {
@@ -75,7 +43,9 @@ export async function POST(req: NextRequest) {
 
     try {
         const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
-        const requiredDocs = activeDocs.filter((doc) => REQUIRED_LEGAL_DOC_TYPES.some((type) => type === doc.type));
+        const requiredDocs = REQUIRED_LEGAL_DOC_TYPES
+            .map((type) => activeDocs.find((doc) => doc.type === type))
+            .filter((doc): doc is ActiveLegalDocument => Boolean(doc));
         const adsDoc = activeDocs.find((doc) => doc.type === 'ADS') ?? null;
 
         if (body.acceptTerms === true) {
@@ -84,22 +54,13 @@ export async function POST(req: NextRequest) {
             }
 
             await db.$transaction(
-                requiredDocs.map((document) => db.$executeRaw(Prisma.sql`
-                    INSERT INTO "LegalDocumentAcceptance"
-                        (id, "userId", "documentId", "acceptedAt", "ipAddress")
-                    VALUES
-                        (${randomUUID()}, ${auth.userId}, ${document.id}, NOW(), ${ipAddress})
-                    ON CONFLICT ("userId", "documentId") DO UPDATE
-                    SET "acceptedAt" = EXCLUDED."acceptedAt",
-                        "ipAddress" = EXCLUDED."ipAddress"
-                `)),
+                requiredDocs.map((document) => db.$executeRaw(acceptanceUpsert({
+                    userId: auth.userId,
+                    document,
+                    ipAddress,
+                    source: 'android',
+                }))),
             );
-
-            if (await ensureAuditColumns()) {
-                for (const document of requiredDocs) {
-                    await updateAuditSnapshot({ userId: auth.userId, document, source: 'android' });
-                }
-            }
         }
 
         let adsAccepted: boolean | null = null;
@@ -107,13 +68,17 @@ export async function POST(req: NextRequest) {
             if (!adsDoc) {
                 return NextResponse.json({ error: 'Advertising consent document is unavailable' }, { status: 503 });
             }
-            await writeBaseAcceptance({ userId: auth.userId, document: adsDoc, ipAddress });
-            if (await ensureAuditColumns()) {
-                await updateAuditSnapshot({ userId: auth.userId, document: adsDoc, source: 'android' });
-            }
+            await db.$executeRaw(acceptanceUpsert({
+                userId: auth.userId,
+                document: adsDoc,
+                ipAddress,
+                source: 'android',
+            }));
             adsAccepted = true;
         } else if (body.acceptAds === false && adsDoc) {
-            await db.legalDocumentAcceptance.deleteMany({ where: { userId: auth.userId, documentId: adsDoc.id } });
+            await db.legalDocumentAcceptance.deleteMany({
+                where: { userId: auth.userId, documentId: adsDoc.id },
+            });
             adsAccepted = false;
         }
 
