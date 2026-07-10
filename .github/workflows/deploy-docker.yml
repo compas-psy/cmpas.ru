@@ -109,7 +109,9 @@ jobs:
                 -e "s|\${MIERU_USERNAME}|${MIERU_USERNAME}|g" \
                 -e "s|\${MIERU_PASSWORD}|${MIERU_PASSWORD}|g" \
                 deploy/singbox-config.template.json > deploy/singbox-config.json
-              python3 -c "import json; json.load(open('deploy/singbox-config.json')); print('sing-box config: valid JSON')"
+              if command -v python3 >/dev/null 2>&1; then
+                python3 -c "import json; json.load(open('deploy/singbox-config.json')); print('sing-box config: valid JSON')"
+              fi
               docker run --rm -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" ghcr.io/sagernet/sing-box:latest check -c /c.json
               upsert_env TELEGRAM_PROXY 'http://singbox:1080'
               export COMPOSE_PROFILES=vpn
@@ -171,7 +173,7 @@ jobs:
             docker exec -u postgres cmpas-postgres pg_ctl reload -D /var/lib/postgresql/data
 
             echo 'Starting application after database readiness...'
-            docker compose up -d --force-recreate app
+            docker compose up -d --force-recreate --no-deps app
 
             echo 'Waiting for application health...'
             APP_HEALTHY=0
