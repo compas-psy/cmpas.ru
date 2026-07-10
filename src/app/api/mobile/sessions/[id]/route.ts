@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
@@ -20,17 +19,7 @@ function notePatch(body: any) {
     return data;
 }
 
-async function ensurePaymentStatusColumn() {
-    await db.$executeRaw(Prisma.sql`
-        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'not_required'
-    `);
-    await db.$executeRaw(Prisma.sql`
-        CREATE INDEX IF NOT EXISTS "DiarySession_paymentStatus_idx" ON "DiarySession"("paymentStatus")
-    `).catch(() => undefined);
-}
-
 async function readPaymentStatus(sessionId: string) {
-    await ensurePaymentStatusColumn().catch(() => undefined);
     const rows = await db.$queryRaw<Array<{ paymentStatus: string }>>`
         SELECT "paymentStatus" FROM "DiarySession" WHERE id = ${sessionId} LIMIT 1
     `.catch(() => []);
@@ -38,7 +27,6 @@ async function readPaymentStatus(sessionId: string) {
 }
 
 async function writePaymentStatus(sessionId: string, value: string) {
-    await ensurePaymentStatusColumn();
     await db.$executeRaw`
         UPDATE "DiarySession" SET "paymentStatus" = ${value}, "updatedAt" = NOW() WHERE id = ${sessionId}
     `;
