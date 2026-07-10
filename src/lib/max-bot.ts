@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import { format } from 'date-fns';
 import { createNotification } from '@/lib/notifications';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { canClientCancel, cancelRefusalText } from '@/lib/client-workflow';
 
 const MAX_API = 'https://botapi.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -370,12 +371,31 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
         const sessionId = payload.replace('cancel_session_', '').replace('cancel_', '');
         const session = await db.diarySession.findUnique({
             where: { id: sessionId },
-            include: { client: true, psychologist: true }
+            include: { client: true, psychologist: { include: { psychologistSettings: true } } }
         });
-        if (!session) {
+        // Ownership check (mirrors telegram-bot.ts's cancel handler) — a MAX
+        // webhook callback could otherwise cancel any client's session by
+        // guessing a sessionId, since callback.payload/user_id are unauthenticated.
+        if (!session || session.client.maxChatId !== mid) {
             await maxApi(`/answers/${callbackId}`, {});
-            return sendMaxMessage(userId, 'Сессия не найдена.');
+            return sendMaxMessage(userId, 'Сессия не найдена или у вас нет доступа.');
         }
+
+        const decision = canClientCancel(session, session.psychologist.psychologistSettings);
+        if (!decision.allowed) {
+            await maxApi(`/answers/${callbackId}`, {});
+            await sendMaxMessage(userId, cancelRefusalText(decision.hoursSetting));
+            await createNotification({
+                psychologistId: session.psychologistId,
+                type: 'client_cancel_attempt',
+                title: `${session.client.name} попытался(лась) отменить сессию поздно`,
+                subtitle: `${format(session.date, 'dd.MM.yyyy')} в ${session.time} — менее ${decision.hoursSetting} ч до начала`,
+                sessionId: session.id,
+                clientId: session.clientId,
+            });
+            return;
+        }
+
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
         await sendMaxMessage(userId, `❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 

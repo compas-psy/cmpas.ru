@@ -3,6 +3,7 @@ import type { Agent } from 'http';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { canClientCancel, cancelRefusalText } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
 import { telegramSendAgent } from '@/lib/telegram-proxy';
 
@@ -326,11 +327,25 @@ export function setupBot() {
 
         const session = await db.diarySession.findUnique({
             where: { id: sessionId },
-            include: { client: true, psychologist: true }
+            include: { client: true, psychologist: { include: { psychologistSettings: true } } }
         });
 
         if (!session || session.client.telegramChatId !== tgId) {
             return ctx.answerCbQuery('Сессия не найдена или у вас нет доступа.', { show_alert: true });
+        }
+
+        const decision = canClientCancel(session, session.psychologist.psychologistSettings);
+        if (!decision.allowed) {
+            await ctx.answerCbQuery(cancelRefusalText(decision.hoursSetting), { show_alert: true });
+            await createNotification({
+                psychologistId: session.psychologistId,
+                type: 'client_cancel_attempt',
+                title: `${session.client.name} попытался(лась) отменить сессию поздно`,
+                subtitle: `${format(session.date, 'dd.MM.yyyy')} в ${session.time} — менее ${decision.hoursSetting} ч до начала`,
+                sessionId: session.id,
+                clientId: session.clientId,
+            });
+            return;
         }
 
         await db.diarySession.update({

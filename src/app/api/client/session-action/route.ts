@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
-import { clientBookingLink, verifyClientActionToken } from '@/lib/client-workflow';
+import { canClientCancel, cancelRefusalText, clientBookingLink, verifyClientActionToken } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
 
 function resultPage(title: string, text: string, tone: 'success' | 'danger' = 'success') {
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     const session = await db.diarySession.findUnique({
         where: { id: sessionId },
-        include: { client: true },
+        include: { client: true, psychologist: { include: { psychologistSettings: true } } },
     });
     if (!session || !verifyClientActionToken(session.psychologistId, session.clientId, token)) {
         return resultPage('Ссылка недействительна', 'Сессия не найдена или ссылка устарела.', 'danger');
@@ -49,6 +49,19 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'cancel') {
+        const decision = canClientCancel(session, session.psychologist.psychologistSettings);
+        if (!decision.allowed) {
+            await createNotification({
+                psychologistId: session.psychologistId,
+                type: 'client_cancel_attempt',
+                title: `${session.client.name} попытался(лась) отменить сессию поздно`,
+                subtitle: `${session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} в ${session.time} — менее ${decision.hoursSetting} ч до начала`,
+                sessionId: session.id,
+                clientId: session.clientId,
+            });
+            return resultPage('Отмена недоступна', cancelRefusalText(decision.hoursSetting), 'danger');
+        }
+
         await db.diarySession.update({
             where: { id: session.id },
             data: { status: 'cancelled' },

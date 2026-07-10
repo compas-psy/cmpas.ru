@@ -3,7 +3,8 @@ import { db } from '@/lib/db';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { verifyClientActionToken } from '@/lib/client-workflow';
+import { canClientCancel, cancelRefusalText, verifyClientActionToken } from '@/lib/client-workflow';
+import { createNotification } from '@/lib/notifications';
 
 export async function POST(req: Request) {
     try {
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
 
         const session = await db.diarySession.findUnique({
             where: { id: sessionId },
-            include: { psychologist: true, client: true },
+            include: { psychologist: { include: { psychologistSettings: true } }, client: true },
         });
 
         if (!session || session.clientId !== clientId) {
@@ -26,6 +27,19 @@ export async function POST(req: Request) {
 
         if (!verifyClientActionToken(session.psychologistId, clientId, actionToken)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const decision = canClientCancel(session, session.psychologist.psychologistSettings);
+        if (!decision.allowed) {
+            await createNotification({
+                psychologistId: session.psychologistId,
+                type: 'client_cancel_attempt',
+                title: `${clientName || session.client?.name || 'Клиент'} попытался(лась) отменить сессию поздно`,
+                subtitle: `${format(new Date(session.date), 'd MMMM', { locale: ru })} в ${session.time} — менее ${decision.hoursSetting} ч до начала`,
+                sessionId: session.id,
+                clientId: session.clientId,
+            });
+            return NextResponse.json({ error: cancelRefusalText(decision.hoursSetting) }, { status: 409 });
         }
 
         const cancelled = await db.diarySession.update({

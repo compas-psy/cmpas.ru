@@ -54,6 +54,35 @@ export function clientBookingLink(psychologistId: string, clientId: string) {
     return `${publicBaseUrl()}/bot/book/${psychologistId}?c=${clientId}`;
 }
 
+export type CancelPolicyDecision =
+    | { allowed: true }
+    | { allowed: false; hoursSetting: number; hoursLeft: number };
+
+/**
+ * CANCEL-1: единая точка правды для отсечки N часов — все 4 клиентских пути
+ * отмены (TG-бот, MAX-бот, signed link, miniapp) обязаны звать эту функцию,
+ * а не проверять статус/время инлайн. 0 часов = без ограничений.
+ */
+export function canClientCancel(
+    session: { date: Date; time: string },
+    settings?: { cancellationHours?: number | null } | null,
+): CancelPolicyDecision {
+    const hoursSetting = settings?.cancellationHours ?? 24;
+    if (hoursSetting <= 0) return { allowed: true };
+
+    const [h, m] = session.time.split(':').map(Number);
+    const sessionStart = new Date(session.date);
+    sessionStart.setHours(h || 0, m || 0, 0, 0);
+
+    const hoursLeft = (sessionStart.getTime() - Date.now()) / 3_600_000;
+    if (hoursLeft >= hoursSetting) return { allowed: true };
+    return { allowed: false, hoursSetting, hoursLeft: Math.max(0, hoursLeft) };
+}
+
+export function cancelRefusalText(hoursSetting: number) {
+    return `До сессии меньше ${hoursSetting} ч — отмена уже не доступна онлайн. Напишите специалисту напрямую.`;
+}
+
 export function clientDocumentLink(deliveryId: string) {
     const token = documentDeliveryToken(deliveryId);
     return `${publicBaseUrl()}/client/documents/${deliveryId}?t=${token}`;
