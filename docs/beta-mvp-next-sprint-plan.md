@@ -2,118 +2,98 @@
 
 Основание: `ТЗ Бета.pdf`, `CJM Карта Беты.pdf`, `docs/beta-mvp-cpo-qa-audit.md`.
 
-## Цель следующего прохода
+## Текущий статус
 
-Довести beta candidate до состояния, где оставшиеся риски честно разделены на:
-
-1. **release blockers** — без них не выпускаем даже ограниченную бету;
-2. **beta blockers** — можно дать internal beta, но нельзя называть DoD закрытым;
-3. **post-beta hardening** — улучшения без блокировки первого ограниченного теста.
+Код содержит большую часть beta-функций, но выпуск блокируют отсутствие доказанного зелёного build, неполный smoke и несколько schema/legal рисков. Часть прежних галочек была завышена: настоящая Android m4a-запись откатана, а audit-поля legal acceptance ещё не подтверждены во всех окружениях.
 
 ## Срез A · Release blockers
 
-### A1. CI / build recovery
+### A1. Build recovery
 
-**Почему первым:** после больших правок onboarding, Android dashboard, documents page, voice, bot callbacks и session modal любой TypeScript/Kotlin compile error блокирует всё остальное.
+- получить доступный Android build log;
+- `npm run lint`, `npx tsc`, `npm run build`;
+- Android `assembleDebug`;
+- исправлять только конкретные compile errors, не добавлять новые крупные функции до зелёной сборки;
+- проверить, что workflow запускается на push в `main`, а не только виден в YAML.
 
-**Что сделать:**
-- `npm run lint` / `npx tsc` / `npm run build`;
-- Android Build CI;
-- исправить compile errors;
-- проверить, что `npm run deploy:schema` применяет `deploy/schema-fixes.sql`, `deploy/beta-mvp-schema-fixes.sql`, Prisma migrations.
+**DoD:** web и Android зелёные, лог доступен и привязан к commit SHA.
 
-**DoD:** web и Android build зелёные; последний commit имеет checks/statuses или отдельный лог ручной сборки.
+### A2. Legal gate smoke
 
-### A2. Smoke path беты
+Проверить два сценария:
 
-Сценарий:
+1. ПС/ПК не приняты, ADS не выбран: открыть все документы во встроенном viewer, вернуться с сохранёнными чекбоксами, принять ПС/ПК, попасть в приложение; отдельное ADS-окно не появляется.
+2. ПС/ПК не приняты, ADS выбран: обязательные документы сохраняются первым запросом, ADS вторым; ошибка ADS не блокирует вход.
 
-новый психолог → legal gate → onboarding → документ клиента → первый клиент → invite link/QR → client accepts document → session created → reminder/action link → completion + note nudge → structured note → voice m4a/player → payment mark in Android dashboard and web session modal → document journal CSV → resend outdated document → client cancel blocked/allowed through miniapp, signed link, Telegram callback, MAX callback.
+Дополнительно:
+- проверить актуальные URL `/legal/terms`, `/legal/privacy`, `/legal/consent/marketing`;
+- применить audit-DDL `source/documentType/documentVersion` и синхронизировать Prisma schema;
+- заменить `{{ОГРНИП}}/{{ИНН}}` реальными реквизитами до внешней beta.
 
-**DoD:** сценарий проходит без ручного SQL и без fake buttons.
+**DoD:** повторный `/api/mobile/legal/status` возвращает `requiresTermsAcceptance=false`; отсутствие ADS не открывает gate.
 
-### A3. Old APK compatibility
+### A3. Full beta smoke
 
-Проверить ответы:
+новый психолог → legal → onboarding → первый клиент → invite/QR → client document → session → completion/nudge → structured note → payment → journal CSV/resend → allowed/blocked cancellation in miniapp, signed link, Telegram and MAX.
 
-- `/api/mobile/dashboard` — новые поля optional;
-- `/api/mobile/sessions` и `/api/mobile/sessions/[id]` — `notes` fallback сохраняется;
-- `/api/mobile/legal/status` — старые клиенты не падают на новых полях.
+### A4. Old APK compatibility
 
-## Срез B · Product/legal blockers
+- `/api/mobile/dashboard`: новые поля optional;
+- `/api/mobile/sessions` и `/api/mobile/sessions/[id]`: старый `notes` fallback;
+- `/api/mobile/legal/status`: старые клиенты не падают на новых полях;
+- новые JSON responses не ломают старые `Response<Unit>` клиенты.
 
-### B1. Web PAY-1 UI
+## Срез B · Product/legal completion
 
-**Сейчас сделано:** backend web endpoint `GET/PATCH /api/diary/sessions/[id]/payment`, mobile PATCH, Android dashboard action, web `SessionModal` buttons `Не требуется / Ожидает / Оплачено` with explicit copy that KOMPAS only records payment status.
+### B1. Calendar import preview UI
 
-**Осталось:** optional right-rail duplication in the calendar screen, if we want payment actions without opening modal.
+Endpoints есть, но пользовательского preview с чекбоксами и видимой дедупликацией нет.
 
-**DoD:** отметка оплаты видна web ↔ Android, `SessionPaymentRequest` синхронизируется, КОМПАС нигде не выглядит принимающим деньги.
+### B2. Documents journal smoke
 
-### B2. CANCEL-1 all paths audit
+Проверить реальную доставку после «Старые версии», новый delivery и появление строки в журнале/CSV.
 
-**Сейчас сделано:** miniapp, signed action link, Telegram callback и MAX callback используют единую `canClientCancel`-политику, учитывают `cancellationHours`, пишут `client_cancel_attempt` при поздней отмене и не меняют статус сессии, если отмена уже недоступна.
+### B3. Payment surfaces
 
-**Осталось:** smoke-test действующих сообщений/старых inline-кнопок в Telegram/MAX на реальном окружении.
+Session modal и Android action готовы. Calendar right rail — optional duplication, не release blocker при рабочем modal.
 
-**DoD:** все четыре пути — Telegram, MAX, signed link, miniapp — используют одну политику и проходят smoke.
+### B4. Cancellation smoke
 
-### B3. Documents journal final UI
+Кодовые пути сведены к `canClientCancel`; нужны реальные проверки старых и новых Telegram/MAX inline-кнопок.
 
-**Сейчас сделано:** таб журнала, фильтр «Без согласия/Принятые», CSV с BOM и contentHash, кнопка «Старые версии» в карточке документа: проверяет клиентов со старой версией и запускает resend актуальной версии.
+## Срез C · Android completion
 
-**Осталось:** smoke-test реальной доставки после resend и проверка записи в журнале.
+### C1. Voice
 
-**DoD:** психолог видит старые версии и запускает resend без API-клиента.
+Настоящий `MediaRecorder`/m4a/player откатан ради build recovery. Сейчас остаётся только честный локальный черновик.
 
-## Срез C · Android core blockers
+**Следующий шаг после зелёного build:** вернуть запись отдельным маленьким PR с device test, permission test и lifecycle test.
 
-### C1. VOICE-1 honest voice
+### C2. Notifications
 
-**Сейчас сделано:** `RECORD_AUDIO`, `MediaRecorder` m4a, локальное хранение, `MediaPlayer`, duration `N:SS`, graceful permission denial, AI teaser под карточкой.
+- проверить FCM registration;
+- deep-links в сессию/клиента;
+- тихие часы 21:00–9:00;
+- утренняя сводка;
+- убедиться, что все важные события пишут persistent notification.
 
-**Осталось:** Android build + device smoke; серверная синхронизация аудио не входит в текущий beta DoD и должна быть отдельным решением по ПДн/безопасности.
+## Срез D · Quality/growth
 
-**DoD:** на экране заметки можно записать, остановить, прослушать m4a; нет ложного текста о расшифровке.
+- reusable AI teaser для web/Android;
+- deployment smoke MAX-first;
+- schema drift audit: Prisma schema ↔ migrations ↔ deploy SQL;
+- финальная юридическая сверка web-текстов с утверждёнными DOCX.
 
-### C2. Notification center hardening
+## Последний выполненный legal-fix
 
-**Сейчас сделано:** persistent feed, groups today/earlier, mark all visible read, beta types.
-
-**Осталось:** FCM token registration, deep-links, quiet hours 21:00–9:00, morning digest.
-
-**DoD:** push открывает нужную сессию/клиента; ночью не пушит, утром даёт сводку.
-
-## Срез D · Growth/quality blockers
-
-### D1. Calendar import preview UI
-
-**Сейчас:** endpoints есть.
-
-**Осталось:** web UI preview with checkboxes + dedupe visibility.
-
-**DoD:** из onboarding и клиентов можно выбрать будущие события и создать клиентов + sessions.
-
-### D2. Reusable AI teaser
-
-**Сейчас:** отдельные места работают.
-
-**Осталось:** единый web/Android component style.
-
-**DoD:** все AI-зоны используют один паттерн `Скоро ✨ / Хочу первым / Вы в списке ✓`.
-
-## Выполнено в этом проходе
-
-- COMPLETE-1: 15-minute grace window before auto-complete.
-- ONB-1: no phantom step, preserves timezone/sessionBreak/lunch/cancellation, adds document/messenger/first client steps.
-- Android onboarding bridge: `needsOnboarding` card.
-- JOURNAL-1: web journal tab + consent filters + CSV with contentHash.
-- DOCVER-1: outdated version check + resend button in documents UI.
-- PAY-1: backend GET/PATCH + web session modal controls + Android dashboard action.
-- NOTIF-1 UX: Android explicit «Прочитать все» and local read-state update.
-- VOICE-1: local m4a recording + player, with honest AI teaser.
-- CANCEL-1: miniapp, signed link, Telegram callback and MAX callback all route through `canClientCancel`.
+- обязательные ПС/ПК и optional ADS разделены на разные запросы;
+- backend сначала сохраняет acceptance в базовые колонки, а audit snapshot обогащает best-effort;
+- ADS остаётся на первом экране, но не влияет на enabled кнопки и вход;
+- отдельный автоматический ADS popup после принятых ПС/ПК отключён;
+- документы открываются внутри Android WebView с кнопкой «Назад к согласиям»;
+- чекбоксы сохраняются при просмотре;
+- Retrofit получает явный `MobileLegalAcceptResponse`, а не `Unit`.
 
 ## Release recommendation
 
-До зелёного CI и smoke это **не beta release**. После CI + smoke, но до FCM/right-rail payment duplication — допустим **internal beta candidate** с ограничениями в release notes.
+До зелёных build и smoke — **не выпускать внешнюю beta**. После A1–A4 допустим internal beta candidate. FCM/quiet hours и voice можно завершать следующим небольшим срезом, не смешивая их с аварийным восстановлением сборки.
