@@ -7,7 +7,6 @@ WORKDIR /app
 # Install dependencies only when needed
 FROM base AS deps
 
-
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
@@ -20,7 +19,6 @@ COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
 # Set dummy DATABASE_URL for build time only (Prisma validation)
@@ -51,10 +49,11 @@ RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
 # Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/deploy ./deploy
+COPY --from=builder --chown=nextjs:nodejs --chmod=755 /app/scripts/start-production.sh ./scripts/start-production.sh
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
@@ -65,4 +64,4 @@ EXPOSE 3000
 
 ENV PORT 3000
 
-CMD ["node", "server.js"]
+CMD ["./scripts/start-production.sh"]
