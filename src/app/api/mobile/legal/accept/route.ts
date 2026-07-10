@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         if (ids.size > 0) {
             const ipAddress = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for') || 'unknown';
             await db.legalDocumentAcceptance.createMany({
-                data: [...ids].map((documentId) => ({ userId: auth.userId, documentId, ipAddress })),
+                data: [...ids].map((documentId) => ({ userId: auth.userId, documentId, ipAddress, source: 'android' })),
                 skipDuplicates: true,
             });
         }

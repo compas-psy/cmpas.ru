@@ -358,3 +358,8 @@ CREATE TABLE IF NOT EXISTS "PracticeNotification" (
 );
 CREATE INDEX IF NOT EXISTS "PracticeNotification_psychologistId_createdAt_idx" ON "PracticeNotification"("psychologistId", "createdAt");
 CREATE INDEX IF NOT EXISTS "PracticeNotification_psychologistId_readAt_idx" ON "PracticeNotification"("psychologistId", "readAt");
+
+-- ============================================================
+-- LEGAL-1 (beta-3): track web vs android legal-doc acceptance
+-- ============================================================
+ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'web';

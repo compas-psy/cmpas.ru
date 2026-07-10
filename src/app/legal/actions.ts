@@ -18,7 +18,7 @@ export async function acceptActiveDocuments(userId: string, types: LegalDocType[
         if (!activeDocs.length) return { success: true }
 
         await db.legalDocumentAcceptance.createMany({
-            data: activeDocs.map((doc) => ({ userId, documentId: doc.id, ipAddress })),
+            data: activeDocs.map((doc) => ({ userId, documentId: doc.id, ipAddress, source: "web" })),
             skipDuplicates: true,
         })
 
@@ -70,7 +70,7 @@ export async function acceptDocumentsByIds(userId: string, documentIds: string[]
         if (!allowedIds.length) return { success: true }
 
         await db.legalDocumentAcceptance.createMany({
-            data: allowedIds.map((documentId) => ({ userId, documentId, ipAddress })),
+            data: allowedIds.map((documentId) => ({ userId, documentId, ipAddress, source: "web" })),
             skipDuplicates: true,
         })
 
@@ -91,7 +91,7 @@ export async function toggleAdsConsent(userId: string, accept: boolean) {
             await db.legalDocumentAcceptance.upsert({
                 where: { userId_documentId: { userId, documentId: activeAdsDoc.id } },
                 update: {},
-                create: { userId, documentId: activeAdsDoc.id, ipAddress },
+                create: { userId, documentId: activeAdsDoc.id, ipAddress, source: "web" },
             })
         } else {
             await db.legalDocumentAcceptance.deleteMany({ where: { userId, documentId: activeAdsDoc.id } })

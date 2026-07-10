@@ -142,6 +142,7 @@ model LegalDocumentAcceptance {
   documentId String
   acceptedAt DateTime @default(now())
   ipAddress  String?
+  source     String   @default("web") // "web" | "android"
 
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)

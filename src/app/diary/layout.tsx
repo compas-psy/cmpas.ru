@@ -126,14 +126,19 @@ export default async function DiaryLayout({
         );
     }
 
-    if (!dbUser?.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
-        redirect('/onboarding');
+    if (!dbUser) {
+        redirect('/auth');
     }
 
-    // Check if user has accepted the latest mandatory documents
+    // Legal gate runs before onboarding: a psychologist must accept TERMS+PRIVACY
+    // (and see any version bump) before ever reaching the onboarding wizard.
     const acceptanceCheck = await checkUserAcceptance(dbUser.id, ["TERMS", "PRIVACY"]);
     if (acceptanceCheck.success && acceptanceCheck.needsAcceptance && acceptanceCheck.needsAcceptance.length > 0) {
         redirect('/legal-acceptance');
+    }
+
+    if (!dbUser?.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
+        redirect('/onboarding');
     }
 
     // Trial & subscription check
