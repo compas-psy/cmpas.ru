@@ -83,6 +83,40 @@ export function cancelRefusalText(hoursSetting: number) {
     return `До сессии меньше ${hoursSetting} ч — отмена уже не доступна онлайн. Напишите специалисту напрямую.`;
 }
 
+// PAY-1: DiarySession.paymentStatus predates the Prisma model definition
+// (added via raw migration, see deploy/schema-fixes.sql) — read/write it via
+// $queryRaw/$executeRaw everywhere, shared here so mobile API and the web
+// dashboard agree on the same values instead of drifting.
+export type PaymentStatus = 'not_required' | 'unpaid' | 'paid';
+
+export function toDatabasePaymentStatus(value: unknown): PaymentStatus | null {
+    const raw = String(value || '').toLowerCase();
+    if (raw === 'paid') return 'paid';
+    if (raw === 'unpaid') return 'unpaid';
+    if (raw === 'not_required') return 'not_required';
+    return null;
+}
+
+export async function readSessionPaymentStatus(sessionId: string): Promise<PaymentStatus> {
+    const rows = await db.$queryRaw<Array<{ paymentStatus: string }>>`
+        SELECT "paymentStatus" FROM "DiarySession" WHERE id = ${sessionId} LIMIT 1
+    `;
+    return (rows[0]?.paymentStatus as PaymentStatus) || 'not_required';
+}
+
+export async function writeSessionPaymentStatus(sessionId: string, value: PaymentStatus) {
+    await db.$executeRaw`
+        UPDATE "DiarySession" SET "paymentStatus" = ${value}, "updatedAt" = NOW() WHERE id = ${sessionId}
+    `;
+    if (value === 'paid') {
+        await db.$executeRaw`
+            UPDATE "SessionPaymentRequest"
+            SET status = 'paid', "markedPaidAt" = COALESCE("markedPaidAt", NOW()), "updatedAt" = NOW()
+            WHERE "sessionId" = ${sessionId}
+        `;
+    }
+}
+
 export function clientDocumentLink(deliveryId: string) {
     const token = documentDeliveryToken(deliveryId);
     return `${publicBaseUrl()}/client/documents/${deliveryId}?t=${token}`;

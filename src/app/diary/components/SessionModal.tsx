@@ -32,6 +32,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
         privateNotes: '',
         clientSummary: '',
     });
+    const [paymentStatus, setPaymentStatus] = useState<'not_required' | 'unpaid' | 'paid'>('not_required');
     const [loading, setLoading] = useState(false);
     const [availableSlots, setAvailableSlots] = useState<{ time: string; format: string; addressId: string | null }[]>([]);
     const [loadingSlots, setLoadingSlots] = useState(false);
@@ -58,6 +59,11 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     privateNotes: editSession.privateNotes?.text || '',
                     clientSummary: editSession.clientSummary || '',
                 });
+                // paymentStatus lives in a raw-SQL column (predates the Prisma
+                // model field), so it isn't included in editSession — fetch separately.
+                import('../actions/sessions').then(({ getSessionPaymentStatus }) =>
+                    getSessionPaymentStatus(editSession.id).then(setPaymentStatus).catch(() => {})
+                );
             } else {
                 const dateStr = initialDate ? initialDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
                 setFormData({
@@ -123,6 +129,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                     structuredNotes: { blocks: smartNotesData.blocks },
                     privateNotes: { text: smartNotesData.privateNotes },
                     clientSummary: smartNotesData.clientSummary || undefined,
+                    paymentStatus,
                 });
                 toast.success('Запись обновлена');
             } else {
@@ -303,6 +310,36 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                     <p className="text-xs text-muted-foreground ml-1">Запись создастся вне расписания</p>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Payment status */}
+                    {editSession && (
+                        <div>
+                            <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90">Оплата</label>
+                            <div className="flex gap-2">
+                                {([
+                                    { v: 'not_required', l: 'Не требуется' },
+                                    { v: 'unpaid', l: 'Не оплачена' },
+                                    { v: 'paid', l: 'Оплачена' },
+                                ] as const).map(opt => (
+                                    <button
+                                        key={opt.v}
+                                        type="button"
+                                        onClick={() => setPaymentStatus(opt.v)}
+                                        className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[40px] ${paymentStatus === opt.v
+                                            ? opt.v === 'unpaid'
+                                                ? 'bg-amber-500 text-white shadow-sm'
+                                                : opt.v === 'paid'
+                                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                                    : 'bg-primary text-primary-foreground shadow-sm'
+                                            : 'border border-border hover:bg-muted text-foreground'
+                                            }`}
+                                    >
+                                        {opt.l}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
 

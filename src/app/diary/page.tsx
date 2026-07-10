@@ -94,6 +94,7 @@ export default function DiaryCalendarPage() {
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [prevWeek, setPrevWeek] = useState({ sessions: 0, clients: 0 });
     const [userId, setUserId] = useState('');
+    const [unpaidSessionIds, setUnpaidSessionIds] = useState<string[]>([]);
     const filterRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = useCallback(async () => {
@@ -107,6 +108,10 @@ export default function DiaryCalendarPage() {
             setSessions(data.map(s => ({ ...s, date: new Date(s.date).toISOString() })));
         } catch { /* empty */ }
         setLoading(false);
+        try {
+            const { getUnpaidPastSessionIds } = await import('./actions/sessions');
+            setUnpaidSessionIds(await getUnpaidPastSessionIds());
+        } catch { /* empty */ }
     }, [currentDate]);
 
     const fetchClients = useCallback(async () => {
@@ -226,7 +231,8 @@ export default function DiaryCalendarPage() {
         return Math.floor((now.getTime() - d.getTime()) / 86400000) <= 14 && !s.notes && !s.structuredNotes;
     });
     const noConsentClients = clients.filter(c => !c.consentDate).slice(0, 5);
-    const attentionCount = pendingSessions.length + missingSessions.length + noConsentClients.length;
+    const unpaidSessions = sessions.filter(s => unpaidSessionIds.includes(s.id));
+    const attentionCount = pendingSessions.length + missingSessions.length + noConsentClients.length + unpaidSessions.length;
 
     const weekSessions = sessions.filter(s => {
         const d = new Date(s.date);
@@ -697,17 +703,27 @@ export default function DiaryCalendarPage() {
                                     <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100/50 transition-colors">
                                         <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><FileText className="w-3.5 h-3.5" /></div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Домашние задания не заполнены</div>
+                                            <div className="text-[12px] font-bold text-foreground">Сессии без заметок</div>
                                             <div className="text-[11px] text-muted-foreground">{missingSessions.length} записи</div>
                                         </div>
                                         <button onClick={() => missingSessions[0] && setEditingSession(missingSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>
                                     </div>
                                 )}
-                                {pendingSessions.length > 0 && (
+                                {unpaidSessions.length > 0 && (
                                     <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-orange-50 hover:bg-orange-100/50 transition-colors">
                                         <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-500 flex items-center justify-center shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[12px] font-bold text-foreground">Оплата сессий не отмечена</div>
+                                            <div className="text-[11px] text-muted-foreground">{unpaidSessions.length} сессий</div>
+                                        </div>
+                                        <button onClick={() => unpaidSessions[0] && setEditingSession(unpaidSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>
+                                    </div>
+                                )}
+                                {pendingSessions.length > 0 && (
+                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-red-50 hover:bg-red-100/50 transition-colors">
+                                        <div className="w-7 h-7 rounded-lg bg-red-100 text-red-500 flex items-center justify-center shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[12px] font-bold text-foreground">Записи не подтверждены</div>
                                             <div className="text-[11px] text-muted-foreground">{pendingSessions.length} сессий</div>
                                         </div>
                                         <button onClick={() => pendingSessions[0] && setEditingSession(pendingSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>

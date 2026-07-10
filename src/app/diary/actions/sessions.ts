@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
-import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
+import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction, readSessionPaymentStatus, toDatabasePaymentStatus, writeSessionPaymentStatus } from '@/lib/client-workflow';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -196,6 +196,7 @@ export async function updateSession(id: string, data: {
     structuredNotes?: any;
     privateNotes?: any;
     clientSummary?: string;
+    paymentStatus?: string;
 }) {
     const psychologistId = await getPsychologistId();
 
@@ -212,6 +213,11 @@ export async function updateSession(id: string, data: {
         data: updatePayload,
     });
 
+    if (data.paymentStatus !== undefined) {
+        const normalized = toDatabasePaymentStatus(data.paymentStatus);
+        if (normalized) await writeSessionPaymentStatus(id, normalized);
+    }
+
     // If cancelled, delete from calendars
     if (data.status === 'cancelled') {
         autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
@@ -219,6 +225,32 @@ export async function updateSession(id: string, data: {
 
     revalidatePath('/diary');
     return session;
+}
+
+export async function setSessionPaymentStatus(id: string, paymentStatus: 'not_required' | 'unpaid' | 'paid') {
+    await getPsychologistId();
+    const normalized = toDatabasePaymentStatus(paymentStatus);
+    if (!normalized) throw new Error('Invalid paymentStatus');
+    await writeSessionPaymentStatus(id, normalized);
+    revalidatePath('/diary');
+    return { success: true };
+}
+
+export async function getSessionPaymentStatus(id: string) {
+    await getPsychologistId();
+    return readSessionPaymentStatus(id);
+}
+
+/** PAY-1: past completed sessions still marked unpaid — for the "Требует внимания" widget. */
+export async function getUnpaidPastSessionIds(): Promise<string[]> {
+    const psychologistId = await getPsychologistId();
+    const rows = await db.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "DiarySession"
+        WHERE "psychologistId" = ${psychologistId} AND status = 'completed' AND "paymentStatus" = 'unpaid'
+        ORDER BY date DESC
+        LIMIT 50
+    `;
+    return rows.map(r => r.id);
 }
 
 export async function deleteSession(id: string) {
