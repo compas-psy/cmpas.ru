@@ -28,365 +28,215 @@ jobs:
           port: 22
           command_timeout: 45m
           script: |
-            cd /var/www/cmpas.ru
-            
-            # Stop execution on any error
             set -e
+            cd /var/www/cmpas.ru
 
-            # UPDATE CODE
             git stash 2>/dev/null || true
             git pull origin main
-            
-            # ============================================
-            # .env FILE MANAGEMENT (CRITICAL!)
-            # NEVER overwrite .env if it already exists.
-            # AUTH_SECRET MUST stay the same across deploys,
-            # otherwise all user sessions are invalidated.
-            # ============================================
-            if [ ! -f .env ]; then
-              echo "No .env found — creating with fresh AUTH_SECRET..."
-              GENERATED_AUTH_SECRET=$(openssl rand -base64 32)
-              cat <<EOF > .env
-            DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db
-            YANDEX_CLIENT_ID=${{ secrets.YANDEX_CLIENT_ID || '1b261cbc153045beb7d707389fc27515' }}
-            YANDEX_CLIENT_SECRET=${{ secrets.YANDEX_CLIENT_SECRET || 'b3b7316b0f72442485f441c63ba59cba' }}
-            AUTH_SECRET=${GENERATED_AUTH_SECRET}
-            EMAIL_SERVER_HOST=mailer
-            EMAIL_SERVER_PORT=25
-            EMAIL_FROM=noreply@cmpas.ru
-            AUTH_TRUST_HOST=true
-            AUTH_URL=https://cmpas.ru
-            TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN || '7728157706:AAEZMpN66PSXd7GkyIhKK4Fz4vTi5lxJYI8' }}
-            TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}
-            MAX_BOT_TOKEN=${{ secrets.MAX_BOT_TOKEN }}
-            MAX_BOT_USERNAME=${{ secrets.MAX_BOT_USERNAME || '' }}
-            GOOGLE_CALENDAR_CLIENT_ID=649610920409-i5orvlp14u9qo882fqd6caji868o603c.apps.googleusercontent.com
-            GOOGLE_CALENDAR_CLIENT_SECRET=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
-            DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}
-            TINKOFF_TERMINAL_KEY=1775405621806DEMO
-            TINKOFF_PASSWORD=MwTygrFgyCLUQcFu
-            EOF
-              echo ".env created with new AUTH_SECRET."
-            else
-              echo ".env already exists — preserving AUTH_SECRET."
-              
-              # Validate that AUTH_SECRET is present and not a placeholder
-              CURRENT_SECRET=$(grep "^AUTH_SECRET=" .env | cut -d= -f2)
-              if [ -z "$CURRENT_SECRET" ]; then
-                echo "WARNING: AUTH_SECRET missing from .env! Adding one..."
-                GENERATED_AUTH_SECRET=$(openssl rand -base64 32)
-                echo "AUTH_SECRET=${GENERATED_AUTH_SECRET}" >> .env
-              elif echo "$CURRENT_SECRET" | grep -qi "changeme\|placeholder\|secret-to-be-changed"; then
-                echo "WARNING: AUTH_SECRET is a placeholder! Replacing with a real secret..."
-                GENERATED_AUTH_SECRET=$(openssl rand -base64 32)
-                sed -i "s|^AUTH_SECRET=.*|AUTH_SECRET=${GENERATED_AUTH_SECRET}|" .env
-                echo "AUTH_SECRET replaced. NOTE: Existing sessions will be invalidated (one-time fix)."
-              fi
-              
-              # Fix empty credentials (from previous broken deploys)
-              if [ -z "$(grep '^YANDEX_CLIENT_ID=' .env | cut -d= -f2)" ]; then
-                echo "WARNING: YANDEX_CLIENT_ID is empty! Setting fallback..."
-                sed -i "s|^YANDEX_CLIENT_ID=.*|YANDEX_CLIENT_ID=${{ secrets.YANDEX_CLIENT_ID || '1b261cbc153045beb7d707389fc27515' }}|" .env
-              fi
-              if [ -z "$(grep '^YANDEX_CLIENT_SECRET=' .env | cut -d= -f2)" ]; then
-                echo "WARNING: YANDEX_CLIENT_SECRET is empty! Setting fallback..."
-                sed -i "s|^YANDEX_CLIENT_SECRET=.*|YANDEX_CLIENT_SECRET=${{ secrets.YANDEX_CLIENT_SECRET || 'b3b7316b0f72442485f441c63ba59cba' }}|" .env
-              fi
-              if [ -z "$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)" ]; then
-                sed -i "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN || '7728157706:AAEZMpN66PSXd7GkyIhKK4Fz4vTi5lxJYI8' }}|" .env
-              fi
-              if [ -z "$(grep '^TELEGRAM_CHAT_ID=' .env | cut -d= -f2)" ]; then
-                sed -i "s|^TELEGRAM_CHAT_ID=.*|TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID || '182398258' }}|" .env
-              fi
-              # Always update MAX_BOT_TOKEN from the GitHub secret (token may be regenerated)
-              if grep -q '^MAX_BOT_TOKEN=' .env; then
-                sed -i 's|^MAX_BOT_TOKEN=.*|MAX_BOT_TOKEN=${{ secrets.MAX_BOT_TOKEN }}|' .env
-              else
-                echo "MAX_BOT_TOKEN=${{ secrets.MAX_BOT_TOKEN }}" >> .env
-              fi
-              # Always update MAX_BOT_USERNAME from the GitHub secret, once set
-              # (used to build https://max.ru/<username>?start=... deep links)
-              if [ -n "${{ secrets.MAX_BOT_USERNAME }}" ]; then
-                if grep -q '^MAX_BOT_USERNAME=' .env; then
-                  sed -i 's|^MAX_BOT_USERNAME=.*|MAX_BOT_USERNAME=${{ secrets.MAX_BOT_USERNAME }}|' .env
-                else
-                  echo "MAX_BOT_USERNAME=${{ secrets.MAX_BOT_USERNAME }}" >> .env
-                fi
-              elif ! grep -q '^MAX_BOT_USERNAME=' .env; then
-                echo "MAX_BOT_USERNAME=" >> .env
-              fi
 
-              # Update non-secret env vars that may have changed
-              # (these don't affect sessions, safe to update)
-              sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db|' .env
-              sed -i 's|^EMAIL_SERVER_HOST=.*|EMAIL_SERVER_HOST=mailer|' .env
-              sed -i 's|^EMAIL_SERVER_PORT=.*|EMAIL_SERVER_PORT=25|' .env
-              sed -i 's|^EMAIL_FROM=.*|EMAIL_FROM=noreply@cmpas.ru|' .env
-              sed -i 's|^AUTH_TRUST_HOST=.*|AUTH_TRUST_HOST=true|' .env
-              sed -i 's|^AUTH_URL=.*|AUTH_URL=https://cmpas.ru|' .env
-              
-              # Ensure DADATA_API_KEY exists
-              if ! grep -q '^DADATA_API_KEY=' .env; then
-                echo "DADATA_API_KEY=${{ secrets.DADATA_API_KEY || 'a976d243bf1e28529e4d7d1d4adc87a155ca9d57' }}" >> .env
+            touch .env
+
+            upsert_env() {
+              KEY="$1"
+              VALUE="$2"
+              ESCAPED_VALUE=$(printf '%s' "$VALUE" | sed 's/[&|]/\\&/g')
+              if grep -q "^${KEY}=" .env; then
+                sed -i "s|^${KEY}=.*|${KEY}=${ESCAPED_VALUE}|" .env
+              else
+                printf '%s=%s\n' "$KEY" "$VALUE" >> .env
               fi
-              # Ensure Tinkoff credentials exist
-              if ! grep -q '^TINKOFF_TERMINAL_KEY=' .env; then
-                echo "TINKOFF_TERMINAL_KEY=1775405621806DEMO" >> .env
+            }
+
+            ensure_env() {
+              KEY="$1"
+              DEFAULT_VALUE="$2"
+              CURRENT_VALUE=$(grep "^${KEY}=" .env | cut -d= -f2- || true)
+              if [ -z "$CURRENT_VALUE" ]; then
+                upsert_env "$KEY" "$DEFAULT_VALUE"
               fi
-              if ! grep -q '^TINKOFF_PASSWORD=' .env; then
-                echo "TINKOFF_PASSWORD=MwTygrFgyCLUQcFu" >> .env
-              fi
-              # Ensure Telegram API URL (proxy/mirror for Russia)
-              if ! grep -q '^TELEGRAM_API_URL=' .env; then
-                echo "TELEGRAM_API_URL=https://api.telegram.org" >> .env
-              fi
-              # Ensure TELEGRAM_PROXY (optional HTTPS proxy for Telegram)
-              if ! grep -q '^TELEGRAM_PROXY=' .env; then
-                echo "TELEGRAM_PROXY=" >> .env
-              fi
-              # Ensure TELEGRAM_WEBHOOK_SECRET — authenticates incoming webhook
-              # updates (set as setWebhook secret_token, verified in the route).
-              # Generated once and kept stable so the header keeps matching.
-              if [ -z "$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2)" ]; then
-                sed -i '/^TELEGRAM_WEBHOOK_SECRET=/d' .env
-                echo "TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> .env
-              fi
+            }
+
+            ensure_env DATABASE_URL 'postgresql://postgres:postgres@postgres:5432/cmpas_db'
+            ensure_env EMAIL_SERVER_HOST 'mailer'
+            ensure_env EMAIL_SERVER_PORT '25'
+            ensure_env EMAIL_FROM 'noreply@cmpas.ru'
+            ensure_env AUTH_TRUST_HOST 'true'
+            ensure_env AUTH_URL 'https://cmpas.ru'
+            ensure_env TELEGRAM_API_URL 'https://api.telegram.org'
+            ensure_env TELEGRAM_PROXY ''
+            ensure_env MAX_BOT_USERNAME ''
+
+            CURRENT_SECRET=$(grep '^AUTH_SECRET=' .env | cut -d= -f2- || true)
+            if [ -z "$CURRENT_SECRET" ] || echo "$CURRENT_SECRET" | grep -qi 'changeme\|placeholder\|secret-to-be-changed'; then
+              upsert_env AUTH_SECRET "$(openssl rand -base64 32)"
+              echo 'AUTH_SECRET generated or replaced.'
             fi
 
-            # Show AUTH_SECRET fingerprint (first 8 chars) for debugging
-            echo "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2 | cut -c1-8)..."
+            YANDEX_CLIENT_ID='${{ secrets.YANDEX_CLIENT_ID }}'
+            YANDEX_CLIENT_SECRET='${{ secrets.YANDEX_CLIENT_SECRET }}'
+            TELEGRAM_BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}'
+            TELEGRAM_CHAT_ID='${{ secrets.TELEGRAM_CHAT_ID }}'
+            MAX_BOT_TOKEN='${{ secrets.MAX_BOT_TOKEN }}'
+            MAX_BOT_USERNAME='${{ secrets.MAX_BOT_USERNAME }}'
+            DADATA_API_KEY='${{ secrets.DADATA_API_KEY }}'
 
-            # ============================================
-            # MIERU VPN SIDECAR (server2server Telegram proxy)
-            # Only materialized/started if all 4 secrets are set. The app
-            # only actually routes Telegram calls through it when the
-            # telegram_vpn_proxy admin flag is switched on (/admin/features) —
-            # this just makes the tunnel available, it doesn't force its use.
-            # ============================================
-            if [ -n "${{ secrets.MIERU_SERVER }}" ] && [ -n "${{ secrets.MIERU_PORT }}" ] && [ -n "${{ secrets.MIERU_USERNAME }}" ] && [ -n "${{ secrets.MIERU_PASSWORD }}" ]; then
-              echo "Mieru credentials present — materializing sing-box config..."
+            [ -n "$YANDEX_CLIENT_ID" ] && upsert_env YANDEX_CLIENT_ID "$YANDEX_CLIENT_ID"
+            [ -n "$YANDEX_CLIENT_SECRET" ] && upsert_env YANDEX_CLIENT_SECRET "$YANDEX_CLIENT_SECRET"
+            [ -n "$TELEGRAM_BOT_TOKEN" ] && upsert_env TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN"
+            [ -n "$TELEGRAM_CHAT_ID" ] && upsert_env TELEGRAM_CHAT_ID "$TELEGRAM_CHAT_ID"
+            [ -n "$MAX_BOT_TOKEN" ] && upsert_env MAX_BOT_TOKEN "$MAX_BOT_TOKEN"
+            [ -n "$MAX_BOT_USERNAME" ] && upsert_env MAX_BOT_USERNAME "$MAX_BOT_USERNAME"
+            [ -n "$DADATA_API_KEY" ] && upsert_env DADATA_API_KEY "$DADATA_API_KEY"
+
+            TELEGRAM_WEBHOOK_SECRET=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2- || true)
+            if [ -z "$TELEGRAM_WEBHOOK_SECRET" ]; then
+              upsert_env TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 32)"
+            fi
+
+            echo "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2- | cut -c1-8)..."
+
+            MIERU_SERVER='${{ secrets.MIERU_SERVER }}'
+            MIERU_PORT='${{ secrets.MIERU_PORT }}'
+            MIERU_USERNAME='${{ secrets.MIERU_USERNAME }}'
+            MIERU_PASSWORD='${{ secrets.MIERU_PASSWORD }}'
+            VPN_ENABLED=0
+
+            if [ -n "$MIERU_SERVER" ] && [ -n "$MIERU_PORT" ] && [ -n "$MIERU_USERNAME" ] && [ -n "$MIERU_PASSWORD" ]; then
+              echo 'Mieru credentials present — materializing sing-box config...'
               sed \
-                -e 's|${MIERU_SERVER}|${{ secrets.MIERU_SERVER }}|g' \
-                -e 's|${MIERU_PORT}|${{ secrets.MIERU_PORT }}|g' \
-                -e 's|${MIERU_USERNAME}|${{ secrets.MIERU_USERNAME }}|g' \
-                -e 's|${MIERU_PASSWORD}|${{ secrets.MIERU_PASSWORD }}|g' \
+                -e "s|\${MIERU_SERVER}|${MIERU_SERVER}|g" \
+                -e "s|\${MIERU_PORT}|${MIERU_PORT}|g" \
+                -e "s|\${MIERU_USERNAME}|${MIERU_USERNAME}|g" \
+                -e "s|\${MIERU_PASSWORD}|${MIERU_PASSWORD}|g" \
                 deploy/singbox-config.template.json > deploy/singbox-config.json
-              # Validate the materialized config is real JSON (a broken file makes
-              # sing-box exit on boot → "ENOTFOUND singbox" from the app).
-              if command -v python3 >/dev/null 2>&1; then
-                python3 -c "import json,sys; json.load(open('deploy/singbox-config.json')); print('sing-box config: valid JSON')" || echo "ERROR: sing-box config is INVALID JSON"
-              fi
-              # Validate it against sing-box itself (catches schema/version issues
-              # like unsupported mieru fields) using the same image.
-              docker run --rm -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" ghcr.io/sagernet/sing-box:latest check -c /c.json \
-                && echo "sing-box config: check passed" \
-                || echo "WARNING: sing-box 'check' failed — sidecar will likely not start (see error above)"
-              if grep -q '^TELEGRAM_PROXY=' .env; then
-                sed -i 's|^TELEGRAM_PROXY=.*|TELEGRAM_PROXY=http://singbox:1080|' .env
-              else
-                echo "TELEGRAM_PROXY=http://singbox:1080" >> .env
-              fi
+              python3 -c "import json; json.load(open('deploy/singbox-config.json')); print('sing-box config: valid JSON')"
+              docker run --rm -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" ghcr.io/sagernet/sing-box:latest check -c /c.json
+              upsert_env TELEGRAM_PROXY 'http://singbox:1080'
               export COMPOSE_PROFILES=vpn
               VPN_ENABLED=1
             else
-              echo "Mieru credentials not set — VPN sidecar skipped, Telegram uses direct connection."
-              VPN_ENABLED=0
+              echo 'Mieru credentials not set — Telegram uses direct connection.'
+              upsert_env TELEGRAM_PROXY ''
             fi
 
-            # ============================================
-            # DATABASE BACKUP (CRITICAL - DO NOT SKIP!)
-            # ============================================
-            BACKUP_DIR="/var/backups/cmpas"
+            BACKUP_DIR='/var/backups/cmpas'
             mkdir -p "$BACKUP_DIR"
-            BACKUP_FILE="$BACKUP_DIR/db_backup_$(date +%Y%m%d_%H%M%S).sql"
-            
-            echo "Creating database backup: $BACKUP_FILE"
-            docker exec cmpas-postgres pg_dump -U postgres -d cmpas_db > "$BACKUP_FILE" 2>/dev/null || echo "Warning: Could not create backup (database may be new)"
-            
-            # Keep only last 10 backups
-            ls -t "$BACKUP_DIR"/db_backup_*.sql 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
-            
-            echo "Backup complete. Recent backups:"
-            ls -la "$BACKUP_DIR" | tail -5
-            # ============================================
-            
-            # ============================================
-            # BUILD CONTAINERS FIRST (Zero Downtime Strategy)
-            # ============================================
-            echo "Pre-building docker images..."
+            if docker ps --format '{{.Names}}' | grep -qx 'cmpas-postgres'; then
+              BACKUP_FILE="$BACKUP_DIR/db_backup_$(date +%Y%m%d_%H%M%S).sql"
+              echo "Creating database backup: $BACKUP_FILE"
+              docker exec cmpas-postgres pg_dump -U postgres -d cmpas_db > "$BACKUP_FILE"
+              ls -t "$BACKUP_DIR"/db_backup_*.sql 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+              echo 'Applying schema safety nets before replacing containers...'
+              docker cp deploy/schema-fixes.sql cmpas-postgres:/tmp/schema-fixes.sql
+              docker exec cmpas-postgres psql -v ON_ERROR_STOP=1 -U postgres -d cmpas_db -f /tmp/schema-fixes.sql
+              docker cp deploy/beta-mvp-schema-fixes.sql cmpas-postgres:/tmp/beta-mvp-schema-fixes.sql
+              docker exec cmpas-postgres psql -v ON_ERROR_STOP=1 -U postgres -d cmpas_db -f /tmp/beta-mvp-schema-fixes.sql
+            else
+              echo 'Running postgres not found — backup and pre-start repair skipped.'
+            fi
+
+            echo 'Pre-building Docker images...'
             docker compose build
 
-            # ============================================
-            # PRE-MIGRATION: apply critical schema changes to the
-            # CURRENTLY RUNNING postgres BEFORE stopping containers.
-            # This ensures the new app version starts with the correct schema.
-            # ============================================
-            echo "Applying pre-migration schema fixes to running postgres..."
-            docker exec cmpas-postgres psql -U postgres -d cmpas_db -c "
-              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"trialEndsAt\" TIMESTAMP(3);
-              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
-              ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"fcmToken\" TEXT;
-              ALTER TABLE \"DiaryClient\" ADD COLUMN IF NOT EXISTS \"maxChatId\" TEXT;
-            " 2>/dev/null && echo "Pre-migration: OK" || echo "Pre-migration: skipped (postgres not running yet)"
-
-            # CRITICAL: NEVER use "docker compose down -v" - this deletes database!
-            # Only stop containers, preserve volumes
             docker compose down --timeout 30 || true
-
-            # Prune only dangling (unused) images — NOT full cache (full prune slows next build)
             docker image prune -f || true
 
-            # ============================================
-            # DISABLE MAIL SERVICES (conflicts with Docker mailer on port 25)
-            # ============================================
             systemctl stop exim4 postfix sendmail 2>/dev/null || true
             systemctl disable exim4 postfix sendmail 2>/dev/null || true
-            
-            # Ensure port 25 is free right before docker compose up
-            # (Building took time, so we must kill the port RIGHT before starting)
             fuser -k 25/tcp 2>/dev/null || true
             sleep 2
 
-            # Restart containers without building (since we just built them).
-            # Explicitly include the vpn profile so the sidecar starts even if
-            # COMPOSE_PROFILES didn't propagate.
-            if [ "${VPN_ENABLED:-0}" = "1" ]; then
-              docker compose --profile vpn up -d --force-recreate
+            if [ "$VPN_ENABLED" = '1' ]; then
+              docker compose --profile vpn up -d postgres mailer singbox
             else
-              docker compose up -d --force-recreate
+              docker compose up -d postgres mailer
             fi
 
-            # ── VPN sidecar diagnostics: why is singbox up or not? ──
-            if [ "${VPN_ENABLED:-0}" = "1" ]; then
-              sleep 3
-              echo "=== sing-box sidecar status ==="
-              docker ps -a --filter name=cmpas-singbox --format '{{.Names}} | {{.Status}} | {{.State}}' || true
-              echo "=== sing-box logs (last 80) ==="
-              docker logs cmpas-singbox --tail 80 2>&1 || echo "(no singbox container — it did not start)"
-              echo "=== end sing-box diagnostics ==="
-            fi
-
-            # ============================================
-            # FIX POSTGRES AUTH (PERMANENT!)
-            # ============================================
-            echo "Waiting for postgres to be ready..."
-            
+            echo 'Waiting for postgres...'
             RETRIES=30
-            until docker exec cmpas-postgres pg_isready -U postgres || [ $RETRIES -eq 0 ]; do
-              echo "Postgres is unavailable - sleeping... ($RETRIES retries left)"
+            until docker exec cmpas-postgres pg_isready -U postgres -d cmpas_db >/dev/null 2>&1 || [ "$RETRIES" -eq 0 ]; do
               RETRIES=$((RETRIES-1))
               sleep 2
             done
-            
-            if [ $RETRIES -eq 0 ]; then
-              echo "Error: Postgres failed to start within timeout."
+            if [ "$RETRIES" -eq 0 ]; then
+              echo 'ERROR: Postgres failed to start.'
+              docker logs cmpas-postgres --tail 200 2>&1 || true
               exit 1
             fi
-            
-            echo "Postgres is ready. Patching pg_hba.conf for trust auth..."
+
+            echo 'Patching pg_hba.conf for Docker-network trust auth...'
             docker exec -u postgres cmpas-postgres sh -c "sed -i 's/host all all all scram-sha-256/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
             docker exec -u postgres cmpas-postgres sh -c "sed -i 's/host all all all md5/host all all all trust/' /var/lib/postgresql/data/pg_hba.conf"
             docker exec -u postgres cmpas-postgres pg_ctl reload -D /var/lib/postgresql/data
-            echo "pg_hba.conf patched: all Docker network connections now use trust auth."
-            
-            echo "=== pg_hba.conf verification ==="
-            docker exec cmpas-postgres grep -v '^#' /var/lib/postgresql/data/pg_hba.conf | grep -v '^$'
-            
-            # Restart app so Prisma reconnects after pg_hba reload. The app startup
-            # script applies beta schema fixes and pending migrations before Next.js.
-            echo "Restarting app to use patched pg_hba.conf..."
-            docker compose restart app
-            sleep 3
-            
-            # Wait for app to be healthy and fail the deployment if it never starts.
-            echo "Waiting for app to start..."
+
+            echo 'Starting application after database readiness...'
+            docker compose up -d --force-recreate app
+
+            echo 'Waiting for application health...'
             APP_HEALTHY=0
-            for i in {1..30}; do
-              if docker compose exec -T app wget -q --spider http://localhost:3000/ 2>/dev/null; then
-                echo "App is healthy!"
+            for i in $(seq 1 45); do
+              if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/auth/session').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"; then
                 APP_HEALTHY=1
+                echo 'Application is healthy.'
                 break
               fi
-              echo "Waiting... ($i/30)"
               sleep 2
             done
 
-            if [ "$APP_HEALTHY" != "1" ]; then
-              echo "ERROR: App did not become healthy. Last container logs:"
-              docker logs cmpas-app --tail 200 2>&1 || true
+            if [ "$APP_HEALTHY" != '1' ]; then
+              echo 'ERROR: Application did not become healthy.'
+              docker ps -a --filter name=cmpas-app --format '{{.Names}} | {{.Status}}'
+              docker logs cmpas-app --tail 300 2>&1 || true
               exit 1
             fi
-            
-            # Historical fixes remain idempotent. Beta fixes and Prisma migrations
-            # have already run inside scripts/start-production.sh before Next.js.
-            echo "Applying historical schema fixes from deploy/schema-fixes.sql..."
-            docker cp deploy/schema-fixes.sql cmpas-postgres:/tmp/schema-fixes.sql
-            docker exec cmpas-postgres psql -v ON_ERROR_STOP=1 -U postgres -d cmpas_db -f /tmp/schema-fixes.sql
 
-            echo "Verifying Prisma migration status..."
-            docker compose exec -T app node node_modules/prisma/build/index.js migrate status
-            
-            # ============================================
-            # POST-DEPLOY VERIFICATION
-            # ============================================
-            echo "=== POST-DEPLOY CHECKS ==="
-            echo "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2 | cut -c1-8)..."
-            
-            # Verify DB connectivity from app container
-            echo "Testing DB connectivity from app..."
-            if docker compose exec -T app node -e "
-              const { PrismaClient } = require('@prisma/client');
-              const p = new PrismaClient();
-              p.\$queryRaw\`SELECT 1\`.then(() => { console.log('DB OK'); process.exit(0); }).catch(e => { console.error('DB FAIL:', e.message); process.exit(1); });
-            " 2>/dev/null; then
-              echo "Database connectivity: OK"
+            echo 'Running strict runtime schema verification...'
+            docker compose exec -T app node scripts/verify-production-schema.js
+
+            echo 'Checking Prisma migration history...'
+            if docker compose exec -T app node node_modules/prisma/build/index.js migrate status; then
+              echo 'Prisma migration history: clean.'
             else
-              echo "WARNING: Database connectivity test failed"
+              echo 'WARNING: Runtime schema is valid, but Prisma migration history requires maintenance.'
             fi
-            
-            # Verify auth endpoint
+
+            echo 'Testing database connectivity from app...'
+            docker compose exec -T app node -e "const {PrismaClient}=require('@prisma/client'); const p=new PrismaClient(); p.\$queryRaw\`SELECT 1\`.then(()=>p.\$disconnect()).then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})"
+
             AUTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/auth/session)
             echo "Auth endpoint status: $AUTH_STATUS"
-            
-            # ============================================
-            # REGISTER TELEGRAM BOT WEBHOOK
-            # ============================================
-            TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2)
-            TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2)
+            if [ "$AUTH_STATUS" -ge 500 ] || [ "$AUTH_STATUS" = '000' ]; then
+              echo 'ERROR: Auth endpoint is unhealthy.'
+              exit 1
+            fi
+
+            TG_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2- || true)
+            TG_API_URL=$(grep '^TELEGRAM_API_URL=' .env | cut -d= -f2- || true)
             TG_API_URL=${TG_API_URL:-https://api.telegram.org}
-            TG_WH_SECRET=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2)
+            TG_WH_SECRET=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env | cut -d= -f2- || true)
             if [ -n "$TG_TOKEN" ]; then
-              echo "Registering Telegram webhook (with secret_token)..."
-              TG_WEBHOOK_RESULT=$(curl -s -X POST "${TG_API_URL}/bot${TG_TOKEN}/setWebhook" \
-                -H "Content-Type: application/json" \
-                -d "{\"url\":\"https://cmpas.ru/api/telegram/webhook\",\"drop_pending_updates\":false,\"secret_token\":\"${TG_WH_SECRET}\"}" \
-                2>/dev/null || echo "curl failed")
-              echo "Telegram webhook result: $TG_WEBHOOK_RESULT"
-              TG_INFO_RESULT=$(curl -s "${TG_API_URL}/bot${TG_TOKEN}/getWebhookInfo" 2>/dev/null || echo "curl failed")
-              echo "Telegram webhook info: $TG_INFO_RESULT"
-            else
-              echo "TELEGRAM_BOT_TOKEN not found, skipping webhook registration."
+              echo 'Registering Telegram webhook...'
+              curl -fsS -X POST "${TG_API_URL}/bot${TG_TOKEN}/setWebhook" \
+                -H 'Content-Type: application/json' \
+                -d "{\"url\":\"https://cmpas.ru/api/telegram/webhook\",\"drop_pending_updates\":false,\"secret_token\":\"${TG_WH_SECRET}\"}" || echo 'WARNING: Telegram webhook registration failed.'
             fi
 
-            # ============================================
-            # REGISTER MAX BOT WEBHOOK
-            # ============================================
-            MAX_TOKEN=$(grep '^MAX_BOT_TOKEN=' .env | cut -d= -f2)
+            MAX_TOKEN=$(grep '^MAX_BOT_TOKEN=' .env | cut -d= -f2- || true)
             if [ -n "$MAX_TOKEN" ]; then
-              echo "Registering MAX webhook (bare Authorization header)..."
-              curl -s -X DELETE "https://botapi.max.ru/subscriptions" \
-                -H "Authorization: ${MAX_TOKEN}" 2>/dev/null || true
-              MAX_WEBHOOK_RESULT=$(curl -s -X POST "https://botapi.max.ru/subscriptions" \
+              echo 'Registering MAX webhook...'
+              curl -sS -X DELETE 'https://botapi.max.ru/subscriptions' -H "Authorization: ${MAX_TOKEN}" || true
+              curl -fsS -X POST 'https://botapi.max.ru/subscriptions' \
                 -H "Authorization: ${MAX_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -d '{"url":"https://cmpas.ru/api/max/webhook","update_types":["bot_started","message_created","message_callback"]}' \
-                2>/dev/null || echo "curl failed")
-              echo "MAX webhook result: $MAX_WEBHOOK_RESULT"
-            else
-              echo "MAX_BOT_TOKEN not found, skipping webhook registration."
+                -H 'Content-Type: application/json' \
+                -d '{"url":"https://cmpas.ru/api/max/webhook","update_types":["bot_started","message_created","message_callback"]}' || echo 'WARNING: MAX webhook registration failed.'
             fi
 
-            # Cleanup old images
-            docker image prune -f
+            if [ "$VPN_ENABLED" = '1' ]; then
+              echo '=== sing-box diagnostics ==='
+              docker ps -a --filter name=cmpas-singbox --format '{{.Names}} | {{.Status}} | {{.State}}' || true
+              docker logs cmpas-singbox --tail 80 2>&1 || true
+            fi
 
-            echo "Deployment complete!"
+            docker image prune -f
+            echo 'Deployment complete.'
