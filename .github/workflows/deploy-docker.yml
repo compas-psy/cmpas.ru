@@ -1,6 +1,14 @@
 name: Deploy with Docker
 
 on:
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - 'android/**'
+      - '.github/workflows/android-build.yml'
+      - 'docs/**'
+      - '.agent/**'
+      - '**/*.md'
   push:
     branches: ["main"]
     paths-ignore:
@@ -16,7 +24,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: deploy-production
+  group: deploy-production-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -63,21 +71,21 @@ jobs:
           retention-days: 14
 
       - name: Publish preflight failure issue
-        if: failure()
+        if: failure() && github.event_name == 'push'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const path = 'preflight.log';
             const raw = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'preflight.log was not created';
-            const tail = raw.slice(-60000);
+            const tail = raw.slice(-60000).replaceAll('```', '---');
             const title = `[deploy-failure] Web preflight ${context.sha.slice(0, 7)}`;
             const body = [
               `Commit: ${context.sha}`,
               `Workflow: ${context.workflow}`,
               '',
               '```text',
-              tail.replace(/```/g, '``\\`'),
+              tail,
               '```',
             ].join('\n');
             await github.rest.issues.create({
@@ -89,6 +97,7 @@ jobs:
 
   deploy:
     name: Atomic production deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -166,14 +175,14 @@ jobs:
             }
             const logPath = findLog('deploy-diagnostics');
             const raw = logPath ? fs.readFileSync(logPath, 'utf8') : 'Remote deploy log could not be downloaded.';
-            const tail = raw.slice(-60000);
+            const tail = raw.slice(-60000).replaceAll('```', '---');
             const title = `[deploy-failure] Production deploy ${context.sha.slice(0, 7)}`;
             const body = [
               `Commit: ${context.sha}`,
               `Workflow: ${context.workflow}`,
               '',
               '```text',
-              tail.replace(/```/g, '``\\`'),
+              tail,
               '```',
             ].join('\n');
             await github.rest.issues.create({
