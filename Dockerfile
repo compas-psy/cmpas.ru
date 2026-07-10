@@ -38,18 +38,18 @@ COPY --from=builder /app/public ./public
 RUN mkdir -p ./public/uploads/client-documents && chown -R nextjs:nodejs ./public
 
 RUN mkdir .next
-RUN chown nodejs:nodejs .next
+RUN chown nextjs:nodejs .next
 
-COPY --from=builder --chown=nodejs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nodejs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nodejs:nodejs /app/deploy ./deploy
-COPY --from=builder --chown=nodejs:nodejs /app/scripts/start-production.sh ./scripts/start-production.sh
-COPY --from=builder --chown=nodejs:nodejs /app/scripts/verify-production-schema.js ./scripts/verify-production-schema.js
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/deploy ./deploy
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/start-production.sh ./scripts/start-production.sh
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/verify-production-schema.js ./scripts/verify-production-schema.js
 RUN chmod 755 ./scripts/start-production.sh
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 
 USER nextjs
 
