@@ -1,64 +1,119 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-import { getActiveLegalDocument, getActiveLegalDocuments, LEGAL_DOC_TYPES } from '@/lib/legal-documents';
+import { getActiveLegalDocuments, LEGAL_DOC_TYPES, REQUIRED_LEGAL_DOC_TYPES } from '@/lib/legal-documents';
+
+type ActiveLegalDocument = Awaited<ReturnType<typeof getActiveLegalDocuments>>[number];
+
+function clientIp(req: NextRequest) {
+    return req.headers.get('x-real-ip')
+        || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || 'unknown';
+}
+
+async function writeBaseAcceptance(params: {
+    userId: string;
+    document: ActiveLegalDocument;
+    ipAddress: string;
+}) {
+    const { userId, document, ipAddress } = params;
+    await db.$executeRaw(Prisma.sql`
+        INSERT INTO "LegalDocumentAcceptance"
+            (id, "userId", "documentId", "acceptedAt", "ipAddress")
+        VALUES
+            (${randomUUID()}, ${userId}, ${document.id}, NOW(), ${ipAddress})
+        ON CONFLICT ("userId", "documentId") DO UPDATE
+        SET "acceptedAt" = EXCLUDED."acceptedAt",
+            "ipAddress" = EXCLUDED."ipAddress"
+    `);
+}
+
+async function updateAuditSnapshot(params: {
+    userId: string;
+    document: ActiveLegalDocument;
+    source: string;
+}) {
+    const { userId, document, source } = params;
+    try {
+        await db.$executeRaw(Prisma.sql`
+            ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'web'
+        `);
+        await db.$executeRaw(Prisma.sql`
+            ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentType" TEXT
+        `);
+        await db.$executeRaw(Prisma.sql`
+            ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentVersion" TEXT
+        `);
+        await db.$executeRaw(Prisma.sql`
+            UPDATE "LegalDocumentAcceptance"
+            SET source = ${source},
+                "documentType" = ${document.type},
+                "documentVersion" = ${document.version}
+            WHERE "userId" = ${userId} AND "documentId" = ${document.id}
+        `);
+    } catch (error) {
+        // The acceptance itself is already safely stored in the base table.
+        // Audit enrichment must never make required legal acceptance fail.
+        console.error('[mobile/legal/accept] audit snapshot skipped', error);
+    }
+}
 
 export async function POST(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
     if (!auth) return unauthorizedResponse();
 
-    try {
-        const body = await req.json().catch(() => ({}));
-        const ids = new Set<string>();
-        const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
-        const docsById = new Map(activeDocs.map((doc) => [doc.id, doc]));
-        const activeDocIds = new Set(activeDocs.map((doc) => doc.id));
+    const body = await req.json().catch(() => ({}));
+    const ipAddress = clientIp(req);
 
-        if (Array.isArray(body.documentIds)) {
-            for (const value of body.documentIds) {
-                if (typeof value === 'string' && activeDocIds.has(value)) ids.add(value);
-            }
-        }
+    try {
+        const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
+        const requiredDocs = activeDocs.filter((doc) => REQUIRED_LEGAL_DOC_TYPES.includes(doc.type as any));
+        const adsDoc = activeDocs.find((doc) => doc.type === 'ADS') ?? null;
 
         if (body.acceptTerms === true) {
-            for (const doc of activeDocs) {
-                if (doc.type === 'TERMS' || doc.type === 'PRIVACY') ids.add(doc.id);
+            if (requiredDocs.length !== REQUIRED_LEGAL_DOC_TYPES.length) {
+                return NextResponse.json({ error: 'Required legal documents are unavailable' }, { status: 503 });
             }
-        }
 
-        if (body.acceptAds === true) {
-            const ads = await getActiveLegalDocument('ADS');
-            if (ads) {
-                ids.add(ads.id);
-                docsById.set(ads.id, ads);
-            }
-        }
-
-        if (ids.size > 0) {
-            const ipAddress = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for') || 'unknown';
-            for (const documentId of ids) {
-                const doc = docsById.get(documentId);
-                if (!doc) continue;
-                await db.$executeRaw`
-                    INSERT INTO "LegalDocumentAcceptance" (id, "userId", "documentId", "acceptedAt", "ipAddress", source, "documentType", "documentVersion")
-                    VALUES (${randomUUID()}, ${auth.userId}, ${documentId}, NOW(), ${ipAddress}, 'android', ${doc.type}, ${doc.version})
+            await db.$transaction(
+                requiredDocs.map((document) => db.$executeRaw(Prisma.sql`
+                    INSERT INTO "LegalDocumentAcceptance"
+                        (id, "userId", "documentId", "acceptedAt", "ipAddress")
+                    VALUES
+                        (${randomUUID()}, ${auth.userId}, ${document.id}, NOW(), ${ipAddress})
                     ON CONFLICT ("userId", "documentId") DO UPDATE
-                    SET source = EXCLUDED.source,
-                        "documentType" = COALESCE("LegalDocumentAcceptance"."documentType", EXCLUDED."documentType"),
-                        "documentVersion" = COALESCE("LegalDocumentAcceptance"."documentVersion", EXCLUDED."documentVersion")
-                `;
-            }
+                    SET "acceptedAt" = EXCLUDED."acceptedAt",
+                        "ipAddress" = EXCLUDED."ipAddress"
+                `)),
+            );
+
+            await Promise.all(requiredDocs.map((document) => updateAuditSnapshot({
+                userId: auth.userId,
+                document,
+                source: 'android',
+            })));
         }
 
-        if (body.acceptAds === false) {
-            const ads = await getActiveLegalDocument('ADS');
-            if (ads) {
-                await db.legalDocumentAcceptance.deleteMany({ where: { userId: auth.userId, documentId: ads.id } });
+        let adsAccepted: boolean | null = null;
+        if (body.acceptAds === true) {
+            if (!adsDoc) {
+                return NextResponse.json({ error: 'Advertising consent document is unavailable' }, { status: 503 });
             }
+            await writeBaseAcceptance({ userId: auth.userId, document: adsDoc, ipAddress });
+            await updateAuditSnapshot({ userId: auth.userId, document: adsDoc, source: 'android' });
+            adsAccepted = true;
+        } else if (body.acceptAds === false && adsDoc) {
+            await db.legalDocumentAcceptance.deleteMany({ where: { userId: auth.userId, documentId: adsDoc.id } });
+            adsAccepted = false;
         }
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({
+            success: true,
+            requiredAccepted: body.acceptTerms === true,
+            adsAccepted,
+        });
     } catch (error) {
         console.error('mobile legal accept failed', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
