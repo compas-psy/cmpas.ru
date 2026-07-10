@@ -60,8 +60,8 @@ private fun RequiredTermsDialog(
     var acceptedAds by rememberSaveable(state.ads?.id) { mutableStateOf(state.ads?.accepted == true) }
     var openedDocument by remember { mutableStateOf<OpenedLegalDocument?>(null) }
 
-    val termsAccepted = state.terms == null || state.terms.accepted || acceptedTerms
-    val privacyAccepted = state.privacy == null || state.privacy.accepted || acceptedPrivacy
+    val termsAccepted = state.terms?.let { it.accepted || acceptedTerms } ?: true
+    val privacyAccepted = state.privacy?.let { it.accepted || acceptedPrivacy } ?: true
     val canContinue = !state.isSaving && termsAccepted && privacyAccepted
 
     AlertDialog(
