@@ -14,8 +14,6 @@ import ru.cmpas.app.domain.model.MobileLegalDoc
 import ru.cmpas.app.domain.model.MobileLegalStatus
 import javax.inject.Inject
 
-private const val ADS_PROMPT_INTERVAL_MS = 14L * 24L * 60L * 60L * 1000L
-
 @HiltViewModel
 class LegalGateViewModel @Inject constructor(
     private val api: CompasApi,
@@ -37,18 +35,15 @@ class LegalGateViewModel @Inject constructor(
                     return@launch
                 }
 
-                val lastPrompt = preferences.getLastAdsPromptAt()
-                val shouldShowAds = !status.requiresTermsAcceptance &&
-                    !status.adsAccepted &&
-                    status.ads != null &&
-                    System.currentTimeMillis() - lastPrompt >= ADS_PROMPT_INTERVAL_MS
-
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         status = status,
                         termsRequired = status.requiresTermsAcceptance,
-                        showAdsPrompt = shouldShowAds,
+                        // Рекламное согласие показывается только рядом с обязательными
+                        // документами. Отдельный блокирующий popup после принятия ПС/ПК
+                        // не показываем: дособерём согласие позднее в настройках.
+                        showAdsPrompt = false,
                         error = null,
                     )
                 }
@@ -63,20 +58,43 @@ class LegalGateViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
             try {
-                val response = api.acceptLegal(
+                // 1. Сначала сохраняем только обязательные ПС и ПК.
+                // Рекламное согласие не должно влиять на доступ к приложению.
+                val requiredResponse = api.acceptLegal(
                     MobileLegalAcceptBody(
                         acceptTerms = true,
-                        acceptAds = if (includeAds) true else null,
+                        acceptAds = null,
                         documentIds = status.requiredDocumentIds,
                     ),
                 )
-                if (!response.isSuccessful) throw IllegalStateException()
+                if (!requiredResponse.isSuccessful) throw IllegalStateException()
+
                 status.terms?.let { preferences.saveTermsVersion(it.version) }
-                if (includeAds) status.ads?.let { preferences.saveAdsVersion(it.version) } else preferences.markAdsPromptShown()
-                _uiState.update { it.copy(isSaving = false, termsRequired = false, showAdsPrompt = false) }
+
+                // 2. Рекламное согласие — отдельный best-effort запрос.
+                // Даже если он временно не сохранится, ПС/ПК уже приняты и gate закрывается.
+                if (includeAds) {
+                    val adsResponse = runCatching {
+                        api.acceptLegal(MobileLegalAcceptBody(acceptAds = true))
+                    }.getOrNull()
+                    if (adsResponse?.isSuccessful == true) {
+                        status.ads?.let { preferences.saveAdsVersion(it.version) }
+                    }
+                }
+
+                // Не показываем сразу второй рекламный popup независимо от выбора.
+                preferences.markAdsPromptShown()
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        termsRequired = false,
+                        showAdsPrompt = false,
+                        error = null,
+                    )
+                }
                 loadStatus()
             } catch (_: Exception) {
-                _uiState.update { it.copy(isSaving = false, error = "Не удалось сохранить принятие") }
+                _uiState.update { it.copy(isSaving = false, error = "Не удалось сохранить принятие ПС и политики конфиденциальности") }
             }
         }
     }
