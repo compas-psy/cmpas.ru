@@ -36,21 +36,6 @@ function isBlankStructuredNotes(value: unknown) {
     });
 }
 
-async function ensureSessionMaintenanceColumns() {
-    await db.$executeRaw(Prisma.sql`
-        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "postSessionNudged" BOOLEAN NOT NULL DEFAULT false
-    `);
-    await db.$executeRaw(Prisma.sql`
-        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "clientMoodRating" INTEGER
-    `);
-    await db.$executeRaw(Prisma.sql`
-        ALTER TABLE "DiarySession" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'not_required'
-    `);
-    await db.$executeRaw(Prisma.sql`
-        CREATE INDEX IF NOT EXISTS "DiarySession_paymentStatus_idx" ON "DiarySession"("paymentStatus")
-    `).catch(() => undefined);
-}
-
 async function notificationExists(params: { psychologistId: string; sessionId: string; type: string }) {
     const count = await db.practiceNotification.count({
         where: { psychologistId: params.psychologistId, sessionId: params.sessionId, type: params.type },
@@ -98,8 +83,6 @@ async function maybeNotifyUnpaidSession(session: any) {
 }
 
 export async function settlePastSessionsForPsychologist(psychologistId: string, now = new Date()) {
-    await ensureSessionMaintenanceColumns();
-
     const dayEnd = new Date(now);
     dayEnd.setHours(23, 59, 59, 999);
 
@@ -137,7 +120,6 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
 }
 
 export async function settlePastSessionsForAllPsychologists(now = new Date()) {
-    await ensureSessionMaintenanceColumns();
     const users = await db.diarySession.findMany({
         where: { status: { in: ['confirmed', 'completed'] }, date: { lte: now } },
         select: { psychologistId: true },
