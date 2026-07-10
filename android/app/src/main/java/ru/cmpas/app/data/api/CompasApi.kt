@@ -116,7 +116,7 @@ interface CompasApi {
     suspend fun getLegalStatus(): Response<MobileLegalStatus>
 
     @POST("legal/accept")
-    suspend fun acceptLegal(@Body body: MobileLegalAcceptBody): Response<Unit>
+    suspend fun acceptLegal(@Body body: MobileLegalAcceptBody): Response<MobileLegalAcceptResponse>
 
     @POST("feature-interest")
     suspend fun markFeatureInterest(@Body body: FeatureInterestRequest): Response<FeatureInterestResponse>
