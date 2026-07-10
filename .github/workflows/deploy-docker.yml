@@ -58,6 +58,7 @@ jobs:
             npx prisma validate
             npx prisma generate
             npm run build
+            touch .env
             docker compose config --quiet
           } 2>&1 | tee preflight.log
 
