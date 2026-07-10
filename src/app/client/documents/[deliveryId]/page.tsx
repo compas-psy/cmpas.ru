@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getDocumentDelivery } from '@/lib/client-workflow';
-import { acknowledgeSpecialistDocument } from './actions';
+import { AcknowledgeForm } from './AcknowledgeForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,17 +73,7 @@ export default async function ClientDocumentPage({ params, searchParams }: { par
                         </p>
                     </div>
                 ) : (
-                    <form action={acknowledgeSpecialistDocument} className="rounded-2xl border border-[#e6dfd1] bg-[#faf8f5] p-5 text-sm leading-6">
-                        <input type="hidden" name="deliveryId" value={delivery.id} />
-                        <input type="hidden" name="token" value={token || ''} />
-                        <p className="font-semibold text-[#1f2a24]">Подтверждение требуется отдельным действием</p>
-                        <p className="mt-1 text-[#5d665f]">
-                            Открытие документа фиксируется только как просмотр{openedText ? <>: <b>{openedText}</b></> : null}. Согласие будет зафиксировано после нажатия кнопки ниже.
-                        </p>
-                        <button type="submit" className="mt-4 w-full rounded-2xl bg-[#1a4d3a] px-5 py-3 text-sm font-bold text-white transition-opacity hover:opacity-95 active:scale-[0.99]">
-                            Я ознакомлен(а) и принимаю условия
-                        </button>
-                    </form>
+                    <AcknowledgeForm deliveryId={delivery.id} token={token || ''} openedText={openedText} />
                 )}
             </div>
         </main>
