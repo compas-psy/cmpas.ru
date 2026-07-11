@@ -1,5 +1,13 @@
 package ru.cmpas.app.presentation.notes
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.media.MediaRecorder
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,14 +28,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SmartNoteBlock
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
+import java.io.File
+import kotlin.math.max
 
 enum class NoteMode(val label: String) { SHORT("Кратко"), BLOCKS("По блокам"), VOICE("Голосом") }
 
@@ -39,6 +51,7 @@ fun PostSessionNoteScreen(
     viewModel: PostSessionNoteViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var mode by rememberSaveable { mutableStateOf(NoteMode.BLOCKS) }
@@ -53,9 +66,113 @@ fun PostSessionNoteScreen(
     var newTag by remember { mutableStateOf("") }
     var isRecording by rememberSaveable { mutableStateOf(false) }
     var hasVoiceDraft by rememberSaveable { mutableStateOf(false) }
+    var voiceFilePath by rememberSaveable { mutableStateOf<String?>(null) }
+    var voiceDurationMs by rememberSaveable { mutableStateOf(0L) }
+    var voiceStartedAt by remember { mutableStateOf(0L) }
+    var micDenied by rememberSaveable { mutableStateOf(false) }
+    var isPlayingVoice by rememberSaveable { mutableStateOf(false) }
+    var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var restored by remember { mutableStateOf(false) }
 
-    LaunchedEffect(sessionId) { viewModel.loadNote(sessionId) }
+    fun startVoiceRecording() {
+        runCatching {
+            val output = newVoiceFile(context, sessionId)
+            @Suppress("DEPRECATION")
+            val nextRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else MediaRecorder()
+            nextRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            nextRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            nextRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            nextRecorder.setOutputFile(output.absolutePath)
+            nextRecorder.prepare()
+            nextRecorder.start()
+            recorder = nextRecorder
+            voiceFilePath = output.absolutePath
+            voiceStartedAt = System.currentTimeMillis()
+            voiceDurationMs = 0L
+            hasVoiceDraft = false
+            micDenied = false
+            isRecording = true
+        }.onFailure {
+            runCatching { recorder?.release() }
+            recorder = null
+            isRecording = false
+            micDenied = true
+        }
+    }
+
+    fun stopVoiceRecording() {
+        val started = voiceStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis()
+        runCatching { recorder?.stop() }
+        runCatching { recorder?.release() }
+        recorder = null
+        isRecording = false
+        voiceDurationMs = max(1_000L, System.currentTimeMillis() - started)
+        hasVoiceDraft = voiceFilePath?.let { File(it).exists() } == true
+    }
+
+    fun stopVoicePlayback() {
+        runCatching { player?.stop() }
+        runCatching { player?.release() }
+        player = null
+        isPlayingVoice = false
+    }
+
+    fun playVoiceDraft() {
+        val path = voiceFilePath ?: return
+        val file = File(path)
+        if (!file.exists()) return
+        if (isPlayingVoice) {
+            stopVoicePlayback()
+            return
+        }
+        runCatching {
+            val nextPlayer = MediaPlayer()
+            nextPlayer.setDataSource(file.absolutePath)
+            nextPlayer.setOnCompletionListener {
+                it.release()
+                if (player === it) player = null
+                isPlayingVoice = false
+            }
+            nextPlayer.prepare()
+            nextPlayer.start()
+            player = nextPlayer
+            isPlayingVoice = true
+        }
+    }
+
+    val requestMicPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startVoiceRecording() else micDenied = true
+    }
+
+    fun toggleVoiceRecording() {
+        if (isRecording) {
+            stopVoiceRecording()
+            return
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startVoiceRecording()
+        } else {
+            requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { if (isRecording) recorder?.stop() }
+            runCatching { recorder?.release() }
+            runCatching { player?.release() }
+        }
+    }
+
+    LaunchedEffect(sessionId) {
+        viewModel.loadNote(sessionId)
+        latestVoiceFile(context, sessionId)?.let { file ->
+            voiceFilePath = file.absolutePath
+            voiceDurationMs = voiceDurationMs(file.absolutePath)
+            hasVoiceDraft = true
+        }
+    }
     LaunchedEffect(uiState.structuredNotes, uiState.savedText) {
         if (restored) return@LaunchedEffect
         val structured = uiState.structuredNotes
@@ -67,7 +184,12 @@ fun PostSessionNoteScreen(
             intervention = structured.blockText("intervention", "technique")
             dynamics = structured.blockText("dynamics", "changes")
             nextStep = structured.blockText("next_step", "focus")
-            mode = if (shortText.isNotBlank() && listOf(request, observation, intervention, dynamics, nextStep).all { it.isBlank() }) NoteMode.SHORT else NoteMode.BLOCKS
+            if (structured.any { it.definitionId == "voice_note" }) {
+                mode = NoteMode.VOICE
+                hasVoiceDraft = hasVoiceDraft || structured.blockText("voice_note", "text").isNotBlank()
+            } else {
+                mode = if (shortText.isNotBlank() && listOf(request, observation, intervention, dynamics, nextStep).all { it.isBlank() }) NoteMode.SHORT else NoteMode.BLOCKS
+            }
             restored = true
         } else if (saved.isNotBlank()) {
             shortText = saved
@@ -79,6 +201,8 @@ fun PostSessionNoteScreen(
             restored = true
         }
     }
+
+    fun voiceNoteText(): String = "🎤 Голосовая заметка (${formatVoiceDuration(voiceDurationMs)})"
 
     fun showMessage(message: String) {
         scope.launch { snackbarHostState.showSnackbar(message) }
@@ -96,7 +220,7 @@ fun PostSessionNoteScreen(
                 appendBlock("Динамика", dynamics)
                 appendBlock("Следующий шаг", nextStep)
             }
-            NoteMode.VOICE -> append(if (hasVoiceDraft) "🎤 Голосовая заметка (локальный черновик). Расшифровка появится в следующих версиях." else shortText.trim())
+            NoteMode.VOICE -> append(if (hasVoiceDraft) voiceNoteText() else shortText.trim())
         }
     }.trim()
 
@@ -108,7 +232,7 @@ fun PostSessionNoteScreen(
         intervention = intervention,
         dynamics = dynamics,
         nextStep = nextStep,
-        hasVoiceDraft = hasVoiceDraft,
+        voiceText = if (hasVoiceDraft) voiceNoteText() else shortText,
     )
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
@@ -152,10 +276,11 @@ fun PostSessionNoteScreen(
                         VoiceCapture(
                             recording = isRecording,
                             hasDraft = hasVoiceDraft,
-                            onToggle = {
-                                if (isRecording) hasVoiceDraft = true
-                                isRecording = !isRecording
-                            },
+                            durationMs = voiceDurationMs,
+                            permissionDenied = micDenied,
+                            playing = isPlayingVoice,
+                            onToggle = { toggleVoiceRecording() },
+                            onPlay = { playVoiceDraft() },
                         )
                     }
                 }
@@ -208,7 +333,7 @@ fun PostSessionNoteScreen(
             PrimaryButton(
                 text = if (uiState.isSaving) "Сохраняю…" else "Сохранить заметку",
                 icon = Icons.Outlined.Check,
-                enabled = !uiState.isSaving,
+                enabled = !uiState.isSaving && !isRecording,
                 modifier = Modifier.weight(1.55f),
                 onClick = {
                     viewModel.saveNote(sessionId, buildText(), buildStructured()) { success, _ -> if (success) onSaved() }
@@ -282,7 +407,15 @@ private fun NoteField(
 }
 
 @Composable
-private fun VoiceCapture(recording: Boolean, hasDraft: Boolean, onToggle: () -> Unit) {
+private fun VoiceCapture(
+    recording: Boolean,
+    hasDraft: Boolean,
+    durationMs: Long,
+    permissionDenied: Boolean,
+    playing: Boolean,
+    onToggle: () -> Unit,
+    onPlay: () -> Unit,
+) {
     val transition = rememberInfiniteTransition(label = "voice")
     val wave by transition.animateFloat(
         initialValue = 0.35f,
@@ -312,11 +445,23 @@ private fun VoiceCapture(recording: Boolean, hasDraft: Boolean, onToggle: () -> 
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                when { recording -> "Идёт запись — нажмите, чтобы остановить"; hasDraft -> "Голосовой черновик сохранён"; else -> "Запишите голосом" },
+                when {
+                    recording -> "Идёт запись — нажмите, чтобы остановить"
+                    hasDraft -> "Голосовая заметка записана · ${formatVoiceDuration(durationMs)}"
+                    else -> "Запишите голосом"
+                },
                 style = tBody,
                 color = CompasFg,
             )
             Text("Расшифровка появится в следующих версиях", style = tMeta, color = CompasMutedFg)
+            if (permissionDenied) {
+                Spacer(Modifier.height(10.dp))
+                Text("Чтобы записать голосовую заметку, разрешите доступ к микрофону.", style = tMeta, color = CompasDestructive)
+            }
+            if (hasDraft) {
+                Spacer(Modifier.height(14.dp))
+                GhostButton(if (playing) "Остановить" else "Прослушать", onPlay, Modifier.fillMaxWidth(), if (playing) Icons.Outlined.Stop else Icons.Outlined.PlayArrow)
+            }
         }
     }
 }
@@ -423,7 +568,7 @@ private fun buildStructuredNotes(
     intervention: String,
     dynamics: String,
     nextStep: String,
-    hasVoiceDraft: Boolean,
+    voiceText: String,
 ): List<SmartNoteBlock> {
     val createdAt = java.time.Instant.now().toString()
     fun block(definitionId: String, key: String, text: String): SmartNoteBlock? =
@@ -444,9 +589,7 @@ private fun buildStructuredNotes(
             block("dynamics", "changes", dynamics),
             block("next_step", "focus", nextStep),
         )
-        NoteMode.VOICE -> listOfNotNull(
-            block("voice_note", "text", if (hasVoiceDraft) "🎤 Голосовая заметка (локальный черновик)" else shortText),
-        )
+        NoteMode.VOICE -> listOfNotNull(block("voice_note", "text", voiceText))
     }
 }
 
@@ -454,4 +597,32 @@ private fun Session.durationMinutes(): Long {
     val start = runCatching { java.time.LocalTime.parse(startTime) }.getOrNull()
     val end = runCatching { java.time.LocalTime.parse(endTime) }.getOrNull()
     return if (start != null && end != null) java.time.Duration.between(start, end).toMinutes() else 50
+}
+
+private fun safeSessionId(id: String): String = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
+
+private fun voiceDirectory(context: Context): File = File(context.filesDir, "voice-notes").apply { mkdirs() }
+
+private fun newVoiceFile(context: Context, sessionId: String): File =
+    File(voiceDirectory(context), "${safeSessionId(sessionId)}-${System.currentTimeMillis()}.m4a")
+
+private fun latestVoiceFile(context: Context, sessionId: String): File? =
+    voiceDirectory(context).listFiles { file ->
+        file.isFile && file.name.startsWith(safeSessionId(sessionId)) && file.extension == "m4a"
+    }?.maxByOrNull { it.lastModified() }
+
+private fun voiceDurationMs(path: String): Long = runCatching {
+    val mp = MediaPlayer()
+    mp.setDataSource(path)
+    mp.prepare()
+    val duration = mp.duration.toLong()
+    mp.release()
+    duration
+}.getOrDefault(0L)
+
+private fun formatVoiceDuration(durationMs: Long): String {
+    val seconds = max(1L, durationMs / 1_000L)
+    val minutes = seconds / 60
+    val rest = seconds % 60
+    return "$minutes:${rest.toString().padStart(2, '0')}"
 }
