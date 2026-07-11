@@ -10,11 +10,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,8 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -84,50 +86,41 @@ private fun RequiredTermsDialog(
                 )
 
                 state.terms?.let { doc ->
-                    LegalDocRow(
-                        doc = doc,
-                        title = "Пользовательское соглашение",
-                        subtitle = "Версия ${doc.version}",
-                        onOpen = { openedDocument = OpenedLegalDocument(doc, "Пользовательское соглашение") },
-                    )
                     ConsentCheckRow(
                         checked = doc.accepted || acceptedTerms,
                         enabled = !doc.accepted,
-                        title = "Я принимаю пользовательское соглашение",
+                        prefix = "Я принимаю ",
+                        linkText = "пользовательское соглашение",
+                        suffix = "",
                         subtitle = if (doc.accepted) "Уже принято · версия ${doc.version}" else "Обязательно для использования сервиса · версия ${doc.version}",
                         onChange = { acceptedTerms = it },
+                        onOpenDocument = { openedDocument = OpenedLegalDocument(doc, "Пользовательское соглашение") },
                     )
                 }
 
                 state.privacy?.let { doc ->
-                    LegalDocRow(
-                        doc = doc,
-                        title = "Политика конфиденциальности",
-                        subtitle = "Версия ${doc.version}",
-                        onOpen = { openedDocument = OpenedLegalDocument(doc, "Политика конфиденциальности") },
-                    )
                     ConsentCheckRow(
                         checked = doc.accepted || acceptedPrivacy,
                         enabled = !doc.accepted,
-                        title = "Я принимаю политику конфиденциальности",
+                        prefix = "Я принимаю ",
+                        linkText = "политику конфиденциальности",
+                        suffix = "",
                         subtitle = if (doc.accepted) "Уже принято · версия ${doc.version}" else "Обязательно для обработки персональных данных · версия ${doc.version}",
                         onChange = { acceptedPrivacy = it },
+                        onOpenDocument = { openedDocument = OpenedLegalDocument(doc, "Политика конфиденциальности") },
                     )
                 }
 
                 state.ads?.let { doc ->
-                    LegalDocRow(
-                        doc = doc,
-                        title = "Согласие на рекламу",
-                        subtitle = "Необязательно · версия ${doc.version}",
-                        onOpen = { openedDocument = OpenedLegalDocument(doc, "Согласие на рекламу") },
-                    )
                     ConsentCheckRow(
                         checked = doc.accepted || acceptedAds,
                         enabled = !doc.accepted,
-                        title = "Получать полезные материалы и предложения CMPAS",
+                        prefix = "Согласен(на) получать ",
+                        linkText = "рекламные сообщения",
+                        suffix = " от CMPAS",
                         subtitle = if (doc.accepted) "Согласие уже дано · версия ${doc.version}" else "Необязательно. Можно отказаться сейчас и дать согласие позже.",
                         onChange = { acceptedAds = it },
+                        onOpenDocument = { openedDocument = OpenedLegalDocument(doc, "Согласие на рекламу") },
                     )
                 }
 
@@ -148,45 +141,33 @@ private fun RequiredTermsDialog(
     }
 }
 
-@Composable
-private fun LegalDocRow(
-    doc: MobileLegalDoc,
-    title: String,
-    subtitle: String,
-    onOpen: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Sage50)
-            .clickable(onClick = onOpen)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = if (doc.type == "PRIVACY") Icons.Outlined.PrivacyTip else Icons.Outlined.Description,
-            contentDescription = null,
-            tint = Forest700,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, style = tMeta, color = CompasMutedFg)
-        }
-        Text("Открыть", style = tMeta.copy(textDecoration = TextDecoration.Underline), color = Forest700)
-    }
-}
-
+// Checkbox + inline clickable link in one compact row (no separate "Открыть"
+// row above it) — the document name itself is the link, tapping it opens
+// LegalDocumentViewer. Matches the reference pattern: linked words inline in
+// a flowing consent sentence rather than a standalone link button.
 @Composable
 private fun ConsentCheckRow(
     checked: Boolean,
     enabled: Boolean = true,
-    title: String,
+    prefix: String,
+    linkText: String,
+    suffix: String,
     subtitle: String,
     onChange: (Boolean) -> Unit,
+    onOpenDocument: () -> Unit,
 ) {
+    val annotatedText = remember(prefix, linkText, suffix) {
+        buildAnnotatedString {
+            append(prefix)
+            pushStringAnnotation(tag = "doc", annotation = "open")
+            withStyle(SpanStyle(color = Forest700, fontWeight = FontWeight.SemiBold, textDecoration = TextDecoration.Underline)) {
+                append(linkText)
+            }
+            pop()
+            append(suffix)
+        }
+    }
+
     Row(
         Modifier
             .fillMaxWidth()
@@ -194,12 +175,19 @@ private fun ConsentCheckRow(
             .background(Color.White.copy(alpha = .72f))
             .then(if (enabled) Modifier.clickable { onChange(!checked) } else Modifier)
             .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Checkbox(checked = checked, enabled = enabled, onCheckedChange = onChange)
         Spacer(Modifier.width(4.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = tBody, color = CompasFg)
+        Column(Modifier.weight(1f).padding(top = 12.dp)) {
+            ClickableText(
+                text = annotatedText,
+                style = tBody.copy(color = CompasFg),
+                onClick = { offset ->
+                    annotatedText.getStringAnnotations(tag = "doc", start = offset, end = offset)
+                        .firstOrNull()?.let { onOpenDocument() }
+                },
+            )
             Text(subtitle, style = tMeta, color = CompasMutedFg)
         }
     }

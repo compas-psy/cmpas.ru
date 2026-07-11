@@ -34,6 +34,15 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 --home /home/nextjs nextjs
 RUN mkdir -p /home/nextjs && chown -R nextjs:nodejs /home/nextjs
 
+# MAX API certificate trust (see deploy/certs/README.md): MAX is moving its API
+# infra to Mincifry-issued TLS certs, which aren't in Node's/Debian's default
+# root store. Any .crt/.pem dropped in deploy/certs/ gets trusted system-wide
+# and by Node's fetch/https. No-op when the folder only has the README (default
+# state) — update-ca-certificates just skips non-certificate files.
+COPY deploy/certs/ /usr/local/share/ca-certificates/max-ru/
+RUN update-ca-certificates || true
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
 COPY --from=builder /app/public ./public
 RUN mkdir -p ./public/uploads/client-documents && chown -R nextjs:nodejs ./public
 

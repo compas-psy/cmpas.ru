@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { createNotification } from '@/lib/notifications';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
+import { consumeClientChannelInvite } from '@/lib/channel-binding';
 
 const MAX_API = 'https://botapi.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -105,6 +106,55 @@ async function handleStart(userId: number, payload: string | undefined) {
             `Добро пожаловать в КОМПАС, ${psy.name || 'Специалист'}!\n\nВыберите действие:`,
             [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '🔗 Ссылка на запись', url: `${APP_URL}/bot/book/${psy.id}` }]]
         );
+    }
+
+    // Invite token (c_<token>) — psychologist invited this client via CONNECT-1.
+    // Mirrors telegram-bot.ts's handling exactly: use the canonical
+    // consumeClientChannelInvite, never re-derive/compare the raw token here.
+    if (payload?.startsWith('c_')) {
+        const token = payload.slice(2);
+        try {
+            const client = await consumeClientChannelInvite({
+                token,
+                channel: 'max',
+                providerUserId: mid,
+                providerChatId: mid,
+                username: undefined,
+            });
+
+            await sendMaxMessage(userId,
+                `Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`,
+            );
+
+            try {
+                const queued = await db.scheduledClientMessage.findMany({
+                    where: { clientId: client.id, channel: 'max', status: 'pending' },
+                    orderBy: { createdAt: 'asc' },
+                });
+                for (const m of queued) {
+                    try {
+                        await sendMaxMessage(userId, m.text);
+                        await db.scheduledClientMessage.update({
+                            where: { id: m.id },
+                            data: { status: 'sent', sentAt: new Date() },
+                        });
+                    } catch (e) {
+                        console.error('[MAX Bot] queued onboarding delivery failed:', e);
+                    }
+                }
+            } catch (e) {
+                console.error('[MAX Bot] queued onboarding lookup failed:', e);
+            }
+            return;
+        } catch (e) {
+            const code = e instanceof Error ? e.message : '';
+            const message = code === 'INVITE_ALREADY_USED'
+                ? 'Эта ссылка уже была использована. Попросите специалиста отправить новую.'
+                : code === 'INVITE_EXPIRED'
+                    ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
+                    : 'Ссылка недействительна. Попросите специалиста отправить новую.';
+            return sendMaxMessage(userId, message);
+        }
     }
 
     if (payload?.startsWith('psy_')) {

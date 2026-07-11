@@ -137,11 +137,14 @@ model LegalDocument {
 }
 
 model LegalDocumentAcceptance {
-  id         String   @id @default(cuid())
-  userId     String
-  documentId String
-  acceptedAt DateTime @default(now())
-  ipAddress  String?
+  id              String   @id @default(cuid())
+  userId          String
+  documentId      String
+  acceptedAt      DateTime @default(now())
+  ipAddress       String?
+  source          String   @default("web") // "web" | "android"
+  documentType    String? // snapshot of LegalDocument.type at acceptance time
+  documentVersion String? // snapshot of LegalDocument.version at acceptance time
 
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
@@ -149,6 +152,8 @@ model LegalDocumentAcceptance {
   @@unique([userId, documentId])
   @@index([userId])
   @@index([documentId])
+  @@index([userId, source])
+  @@index([documentType])
 }
 
 // Visitor Analytics for LAL Audience Building
