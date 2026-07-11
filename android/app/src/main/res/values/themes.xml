@@ -7,7 +7,7 @@
     </style>
     <style name="Theme.Compas.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#1D4735</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_tree</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_tree</item>
         <item name="postSplashScreenTheme">@style/Theme.Compas</item>
     </style>
 
