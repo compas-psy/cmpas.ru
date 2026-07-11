@@ -83,6 +83,12 @@ fun PostSessionNoteScreen(
             nextRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             nextRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             nextRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            // Speech, not music: mono/16kHz/32kbps AAC is clearly intelligible for a
+            // spoken clinical note and ~4-6x smaller than the unconfigured defaults
+            // (which default to a stereo, music-oriented bitrate on most devices).
+            nextRecorder.setAudioChannels(1)
+            nextRecorder.setAudioSamplingRate(16_000)
+            nextRecorder.setAudioEncodingBitRate(32_000)
             nextRecorder.setOutputFile(output.absolutePath)
             nextRecorder.prepare()
             nextRecorder.start()
@@ -109,6 +115,19 @@ fun PostSessionNoteScreen(
         isRecording = false
         voiceDurationMs = max(1_000L, System.currentTimeMillis() - started)
         hasVoiceDraft = voiceFilePath?.let { File(it).exists() } == true
+        // Only one take is ever surfaced per session (latestVoiceFile picks the
+        // newest by timestamp) — without this, every re-recording silently leaves
+        // the previous take orphaned on disk forever. Clean up only after
+        // confirming the new take actually saved, so a failed re-record never
+        // costs the user their previous good one.
+        if (hasVoiceDraft) {
+            val keepPath = voiceFilePath
+            runCatching {
+                voiceDirectory(context).listFiles { file ->
+                    file.isFile && file.name.startsWith(safeSessionId(sessionId)) && file.extension == "m4a" && file.absolutePath != keepPath
+                }?.forEach { it.delete() }
+            }
+        }
     }
 
     fun stopVoicePlayback() {

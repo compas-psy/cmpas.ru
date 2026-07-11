@@ -81,3 +81,22 @@ export async function deleteLegalDoc(id: string) {
         return { success: false, error: "Failed to delete document. May have tracking dependencies." }
     }
 }
+
+/**
+ * QA-only: clear the current admin's own LegalDocumentAcceptance rows so the
+ * /legal-acceptance gate can be re-tested without bumping a document version
+ * (which would force EVERY user to re-consent). Deliberately self-only —
+ * no id/email parameter — so this can't be used to reset another user's
+ * acceptance without direct DB access.
+ */
+export async function resetMyLegalAcceptance() {
+    const session = await auth()
+    const role = (session?.user as any)?.role
+    if (!session?.user?.id || (role !== "ADMIN" && role !== "SUPERADMIN")) {
+        throw new Error("Unauthorized")
+    }
+    await db.legalDocumentAcceptance.deleteMany({ where: { userId: session.user.id } })
+    revalidatePath("/admin/legal")
+    revalidatePath("/diary")
+    return { success: true }
+}

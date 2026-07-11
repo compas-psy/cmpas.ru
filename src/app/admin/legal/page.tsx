@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getAdminLegalDocs, setActiveLegalDoc, createLegalDoc, deleteLegalDoc } from "./actions"
-import { Shield, FileText, Plus, Upload, Trash2, CheckCircle2 } from "lucide-react"
+import { getAdminLegalDocs, setActiveLegalDoc, createLegalDoc, deleteLegalDoc, resetMyLegalAcceptance } from "./actions"
+import { Shield, FileText, Plus, Upload, Trash2, CheckCircle2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
 type LegalDoc = {
@@ -58,6 +58,20 @@ export default function AdminLegalPage() {
             loadDocs()
         } else {
             toast.error(res.error)
+        }
+    }
+
+    const [resetting, setResetting] = useState(false)
+    const handleResetMine = async () => {
+        if (!confirm("Сбросить ваше согласие на все документы? Вы сразу увидите экран /legal-acceptance заново — это только для тестирования, других пользователей это не затронет.")) return
+        setResetting(true)
+        try {
+            await resetMyLegalAcceptance()
+            toast.success("Согласие сброшено. Откройте /legal-acceptance, чтобы увидеть экран.")
+        } catch (error: any) {
+            toast.error(error?.message || "Не удалось сбросить согласие")
+        } finally {
+            setResetting(false)
         }
     }
 
@@ -181,7 +195,17 @@ export default function AdminLegalPage() {
 
     return (
         <div className="p-8 max-w-5xl mx-auto space-y-6">
-            <h1 className="text-3xl font-bold mb-8">Юридические документы</h1>
+            <div className="flex items-center justify-between mb-8">
+                <h1 className="text-3xl font-bold">Юридические документы</h1>
+                <button
+                    onClick={handleResetMine}
+                    disabled={resetting}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    title="Удаляет ваши записи о согласии, чтобы можно было заново увидеть /legal-acceptance"
+                >
+                    <RotateCcw className="w-4 h-4" /> Сбросить моё согласие (тест)
+                </button>
+            </div>
 
             {isAdding && (
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8 relative animate-in fade-in slide-in-from-top-4">
