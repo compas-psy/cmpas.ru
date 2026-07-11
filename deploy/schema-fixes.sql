@@ -358,3 +358,12 @@ CREATE TABLE IF NOT EXISTS "PracticeNotification" (
 );
 CREATE INDEX IF NOT EXISTS "PracticeNotification_psychologistId_createdAt_idx" ON "PracticeNotification"("psychologistId", "createdAt");
 CREATE INDEX IF NOT EXISTS "PracticeNotification_psychologistId_readAt_idx" ON "PracticeNotification"("psychologistId", "readAt");
+
+-- ============================================================
+-- LEGAL-1: audit fields on LegalDocumentAcceptance (source, snapshot type/version)
+-- ============================================================
+ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'web';
+ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentType" TEXT;
+ALTER TABLE "LegalDocumentAcceptance" ADD COLUMN IF NOT EXISTS "documentVersion" TEXT;
+CREATE INDEX IF NOT EXISTS "LegalDocumentAcceptance_userId_source_idx" ON "LegalDocumentAcceptance"("userId", "source");
+CREATE INDEX IF NOT EXISTS "LegalDocumentAcceptance_documentType_idx" ON "LegalDocumentAcceptance"("documentType");

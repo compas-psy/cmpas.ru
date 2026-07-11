@@ -64,50 +64,54 @@ export default async function LegalAcceptancePage({ searchParams }: { searchPara
                 <form action={handleAccept} className="text-left">
                     <div className="flex flex-col gap-3 mb-6">
                         {requiredDocs.map((doc) => (
-                            <div key={doc.id} className="p-4 rounded-xl bg-gray-50 border border-gray-100">
-                                <div className="flex justify-between items-start gap-4">
-                                    <div>
-                                        <span className="font-medium text-[#1a1a1a] block">{legalDocTitle(doc.type)}</span>
-                                        <span className="text-xs text-[#1a1a1a]/50">Версия {doc.version}</span>
-                                    </div>
-                                    <a href={normalizeLegalDocUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#c9a961] hover:text-[#b49652] transition-colors underline underline-offset-4 whitespace-nowrap">
-                                        Читать
-                                    </a>
-                                </div>
-                                <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-[#e6dfd1] bg-white p-3 text-sm text-[#1a1a1a]/80">
-                                    <input
-                                        required
-                                        type="checkbox"
-                                        name={`accept_${doc.id}`}
-                                        value="yes"
-                                        className="mt-0.5 h-5 w-5 rounded border-[#c9a961] accent-[#1a4d3a]"
-                                    />
-                                    <span>Я принимаю документ «{legalDocTitle(doc.type)}» версии {doc.version}.</span>
-                                </label>
-                            </div>
+                            <label
+                                key={doc.id}
+                                className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e6dfd1] bg-gray-50 p-4 text-sm text-[#1a1a1a]/80"
+                            >
+                                <input
+                                    required
+                                    type="checkbox"
+                                    name={`accept_${doc.id}`}
+                                    value="yes"
+                                    className="mt-0.5 h-5 w-5 shrink-0 rounded border-[#c9a961] accent-[#1a4d3a]"
+                                />
+                                <span>
+                                    Я принимаю{' '}
+                                    <a
+                                        href={normalizeLegalDocUrl(doc.url)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-[#1a4d3a] underline underline-offset-2 hover:text-[#c9a961]"
+                                    >
+                                        {legalDocTitle(doc.type)}
+                                    </a>{' '}
+                                    <span className="text-[#1a1a1a]/40">(версия {doc.version})</span>
+                                </span>
+                            </label>
                         ))}
 
                         {showAds && adsDoc ? (
-                            <div className="p-4 rounded-xl bg-[#faf8f5] border border-[#e6dfd1]">
-                                <div className="flex justify-between items-start gap-4">
-                                    <div>
-                                        <span className="font-medium text-[#1a1a1a] block">{legalDocTitle(adsDoc.type)}</span>
-                                        <span className="text-xs text-[#1a1a1a]/50">Необязательно · версия {adsDoc.version}</span>
-                                    </div>
-                                    <a href={normalizeLegalDocUrl(adsDoc.url)} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#c9a961] hover:text-[#b49652] transition-colors underline underline-offset-4 whitespace-nowrap">
-                                        Читать
-                                    </a>
-                                </div>
-                                <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-[#e6dfd1] bg-white p-3 text-sm text-[#1a1a1a]/80">
-                                    <input
-                                        type="checkbox"
-                                        name="accept_ads"
-                                        value="yes"
-                                        className="mt-0.5 h-5 w-5 rounded border-[#c9a961] accent-[#1a4d3a]"
-                                    />
-                                    <span>Я согласен(на) получать рекламные и информационные сообщения CMPAS.</span>
-                                </label>
-                            </div>
+                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e6dfd1] bg-[#faf8f5] p-4 text-sm text-[#1a1a1a]/80">
+                                <input
+                                    type="checkbox"
+                                    name="accept_ads"
+                                    value="yes"
+                                    className="mt-0.5 h-5 w-5 shrink-0 rounded border-[#c9a961] accent-[#1a4d3a]"
+                                />
+                                <span>
+                                    Согласен(на) получать{' '}
+                                    <a
+                                        href={normalizeLegalDocUrl(adsDoc.url)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-[#1a4d3a] underline underline-offset-2 hover:text-[#c9a961]"
+                                    >
+                                        рекламные и информационные сообщения
+                                    </a>{' '}
+                                    от CMPAS{' '}
+                                    <span className="text-[#1a1a1a]/40">(необязательно, версия {adsDoc.version})</span>
+                                </span>
+                            </label>
                         ) : null}
                     </div>
 
