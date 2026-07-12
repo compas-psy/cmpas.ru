@@ -16,3 +16,18 @@ val CompasShapes = Shapes(
     large = RoundedCornerShape(24.dp),
     extraLarge = RoundedCornerShape(32.dp),
 )
+
+/**
+ * Raw radius/spacing constants — SPEC/01-design-system.md §3 (`object R`).
+ * Named `CompasRadius`, not `R`: a top-level `object R` would collide with
+ * Android's auto-generated resource class (`ru.cmpas.app.R`) in any file
+ * that also needs `R.drawable`/`R.font`/`R.string`.
+ */
+object CompasRadius {
+    val sm = 8.dp
+    val md = 12.dp
+    val lg = 16.dp
+    val xl = 20.dp
+    val xxl = 24.dp
+    val full = 999.dp
+}

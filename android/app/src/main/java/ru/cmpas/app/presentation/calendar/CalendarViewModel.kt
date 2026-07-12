@@ -49,6 +49,10 @@ class CalendarViewModel @Inject constructor(
         loadSessions()
     }
 
+    fun setFormatFilter(format: SessionFormat?) {
+        _uiState.update { it.copy(formatFilter = format) }
+    }
+
     fun refresh() = loadSessions(showLoader = false)
 
     fun loadSessions(showLoader: Boolean = true) {
@@ -136,4 +140,5 @@ data class CalendarUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val viewMode: CalendarViewMode = CalendarViewMode.DAY,
     val sessions: List<Session> = emptyList(),
+    val formatFilter: SessionFormat? = null,
 )

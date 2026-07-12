@@ -40,7 +40,7 @@ fun CompasBottomSheet(
     onClose: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(30.dp)
     val scrimInteraction = remember { MutableInteractionSource() }
     val visible = remember { MutableTransitionState(false).apply { targetState = true } }
     val configuration = LocalConfiguration.current

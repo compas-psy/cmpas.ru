@@ -236,9 +236,12 @@ fun ClientDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 PrimaryButton(
-                    text = "Добавить запись",
+                    text = if (upcoming != null) "Записать сессию" else "Добавить запись",
                     icon = Icons.Outlined.CalendarMonth,
-                    onClick = onScheduleClick,
+                    // SPEC/02-screens.md §4: sticky "Записать сессию" opens the existing
+                    // upcoming session (SessionDetail), not a blank booking form — that's
+                    // only the right fallback when the client has no upcoming session yet.
+                    onClick = { upcoming?.let { onSessionClick(it.id) } ?: onScheduleClick() },
                     modifier = Modifier.weight(1f),
                 )
                 GhostButton(
