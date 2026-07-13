@@ -14,6 +14,7 @@ deployable HTML/CSS.
 moments-promo/
 ├── index.html            # the page
 ├── styles.css            # all styles (palette, layout, animations, responsive)
+├── app.js                # programmatic canvas breathing engine (phone/cards/demo)
 ├── assets/
 │   └── kompas-tree.svg   # brand mark (white tree)
 └── momenty-latest.apk    # ← drop the real signed APK here (not in repo yet)
@@ -23,8 +24,10 @@ moments-promo/
 
 - Graphite-blue base (`#0B0D12`) with the single terracotta accent (`#C98A6B`),
   reserved for the primary "Скачать" action.
-- Live CSS breathing background (4s expand / 6s release), pulsing auras, ripple
-  rings, floating phone mockup — all programmatic, no video/images.
+- Live breathing background (4s expand / 6s release): a programmatic canvas
+  engine (`app.js`) drives the phone, catalog cards, and demo stage with drifting,
+  wobbling per-family blobs; CSS handles the page ambient blobs, price/binaural
+  auras, ripple rings, and the floating phone — all programmatic, no video/images.
 - Full copy, catalog (9 moments / 5 families), binaural + night blocks, price,
   and manual-install steps, verbatim from the prototype.
 - `prefers-reduced-motion` disables all animation.

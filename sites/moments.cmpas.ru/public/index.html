@@ -56,7 +56,7 @@
         <p class="lede">«Проснулся среди ночи». «Рабочий день закончен». «Перед сложным разговором». Не медитации вообще — голос, написанный под конкретный момент вашего дня.</p>
         <p class="sub">Экран дышит вместе с голосом. В наушниках — бинауральная глубина.</p>
         <div class="hero-actions">
-          <a href="momenty-latest.apk" download class="btn btn-primary">
+          <a href="https://moments.cmpas.ru/momenty-latest.apk" download class="btn btn-primary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5" stroke="#12151C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="#12151C" stroke-width="2" stroke-linecap="round"/></svg>
             Скачать .apk
           </a>
@@ -70,8 +70,7 @@
       <!-- live breathing phone -->
       <div class="phone-wrap">
         <div class="phone" aria-hidden="true">
-          <div class="glow-a"></div>
-          <div class="glow-b"></div>
+          <canvas class="breathe-canvas" data-breathe="phone"></canvas>
           <div class="rings"><span></span><span></span><span></span></div>
           <div class="scrim"></div>
           <div class="ui">
@@ -96,28 +95,28 @@
       <p class="intro">Каждая написана под момент, а не «для расслабления вообще». Девять на старте — новые добавляются каждый месяц.</p>
       <div class="cat-grid">
         <div class="cat span2 sleep">
-          <div class="aura"></div>
+          <canvas class="breathe-canvas" data-breathe="sleep"></canvas>
           <div class="fam">Сон</div>
           <div class="list"><span>Ночь без внутренних совещаний</span><span>Проснулся среди ночи</span><span>Тревожно в темноте</span></div>
         </div>
         <div class="cat span2 exit">
-          <div class="aura"></div>
+          <canvas class="breathe-canvas" data-breathe="day"></canvas>
           <div class="fam">Выход из дня</div>
           <div class="list"><span>Рабочий день закончен</span><span>Воскресенье, около семи</span></div>
         </div>
         <div class="cat span2 calm">
-          <div class="aura"></div>
+          <canvas class="breathe-canvas" data-breathe="anx"></canvas>
           <div class="fam">Тревога и перегрузка</div>
           <div class="list"><span>Не нужно решать всё сейчас</span><span>Прокручиваю мысли</span></div>
         </div>
         <div class="cat span3 talk">
-          <div class="aura lower"></div>
+          <canvas class="breathe-canvas" data-breathe="talk"></canvas>
           <div class="fam">Разговоры и решения</div>
           <div class="one">Перед сложным разговором</div>
           <div class="desc">Собраться за десять минут до — и войти спокойным.</div>
         </div>
         <div class="cat span3 anchor">
-          <div class="aura lower"></div>
+          <canvas class="breathe-canvas" data-breathe="support"></canvas>
           <div class="fam">Опора</div>
           <div class="one">Внутренняя опора</div>
           <div class="desc">Когда почва уходит — вернуться к себе.</div>
@@ -136,8 +135,7 @@
           <p class="note">Живой, программный, у каждого момента — свой оттенок.<br><span>Справа — настоящая анимация, не видео.</span></p>
         </div>
         <div class="breathe-stage" aria-hidden="true">
-          <div class="glow-a"></div>
-          <div class="glow-b"></div>
+          <canvas class="breathe-canvas" data-breathe="demo"></canvas>
           <div class="rings"><span></span><span></span><span></span></div>
           <div class="legend"><span>4 сек — вдох</span><span class="sep">·</span><span>6 сек — выдох</span></div>
         </div>
@@ -179,7 +177,7 @@
           <div class="facts">
             <span>Все моменты и новые каждый месяц</span><span class="dot">·</span><span>Бинауральный фон</span><span class="dot">·</span><span>Таймер сна и ночной режим</span>
           </div>
-          <a href="momenty-latest.apk" download class="btn btn-primary">Начать 7 бесплатных дней</a>
+          <a href="https://moments.cmpas.ru/momenty-latest.apk" download class="btn btn-primary">Начать 7 бесплатных дней</a>
           <div class="fine">Никаких «скидка сгорит через час». Не понравится — просто удалите.</div>
         </div>
       </div>
@@ -225,5 +223,6 @@
   </div>
 </div>
 
+<script src="app.js"></script>
 </body>
 </html>
