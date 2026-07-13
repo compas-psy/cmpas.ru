@@ -1,0 +1,55 @@
+name: Deploy moments.cmpas.ru (static)
+
+# Deploys the МОМЕНТЫ promo page (a fully static site) to its OWN nginx docroot
+# on the same VPS as cmpas.ru. It never touches the Docker stack, the database,
+# or the cmpas.ru vhost — it only rsyncs static files into
+# /var/www/moments.cmpas.ru. Reuses the existing SSH secrets.
+#
+# One-time server setup (nginx vhost + certbot) is documented in
+# sites/moments.cmpas.ru/deploy/SETUP.md.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'sites/moments.cmpas.ru/public/**'
+      - '.github/workflows/deploy-moments.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-moments-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Rsync static site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Ensure remote docroot exists
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'mkdir -p /var/www/moments.cmpas.ru'
+
+      - name: Rsync site
+        # --delete keeps the docroot in sync with the repo, but we exclude *.apk
+        # so the signed release binary (managed out-of-band) is never removed.
+        run: |
+          rsync -az --delete --exclude '*.apk' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            sites/moments.cmpas.ru/public/ \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/moments.cmpas.ru/"
+
+      - name: Cleanup key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
