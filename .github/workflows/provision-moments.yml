@@ -1,0 +1,92 @@
+name: Provision moments.cmpas.ru (nginx + TLS)
+
+# ONE-TIME (idempotent) server provisioning for the МОМЕНТЫ static site:
+# installs a SEPARATE nginx vhost and issues its OWN Let's Encrypt cert.
+#
+# This is the only workflow that touches nginx. It is deliberately split from the
+# routine content deploy (deploy-moments.yml) so that day-to-day page edits never
+# go near the web server. It runs automatically only when the vhost/config under
+# sites/moments.cmpas.ru/deploy/** changes, or on demand (Run workflow button).
+#
+# SAFETY — why this cannot break cmpas.ru or cmpas.ru/diary:
+#   * It only CREATES files for moments (sites-available/moments.cmpas.ru and its
+#     symlink). It never reads or edits the cmpas.ru vhost.
+#   * It enables the new vhost, runs `nginx -t`, and ONLY reloads if the test
+#     passes. If the test fails it REMOVES the symlink again, so sites-enabled is
+#     left containing only configs that pass `nginx -t` — a later cmpas.ru deploy
+#     or cert renewal can't inherit a broken file from us.
+#   * `systemctl reload nginx` is graceful (no dropped connections), never restart.
+#   * certbot is scoped to -d moments.cmpas.ru, so it edits only the moments
+#     server block; the cmpas.ru certificate is untouched. A certbot failure
+#     leaves the site on HTTP and cmpas.ru unaffected.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'sites/moments.cmpas.ru/deploy/**'
+      - '.github/workflows/provision-moments.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: provision-moments
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Install vhost + issue TLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload vhost config
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            sites/moments.cmpas.ru/deploy/moments.cmpas.ru.nginx.conf \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/moments.cmpas.ru.nginx.conf"
+
+      - name: Provision nginx vhost + TLS (safe, idempotent)
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          mkdir -p /var/www/moments.cmpas.ru
+
+          # 1) Install the vhost into sites-available (never touches other vhosts).
+          install -m 644 /tmp/moments.cmpas.ru.nginx.conf /etc/nginx/sites-available/moments.cmpas.ru
+
+          # 2) Enable it, then validate the FULL config. If invalid, roll back the
+          #    enable so sites-enabled only ever holds configs that pass nginx -t.
+          ln -sf /etc/nginx/sites-available/moments.cmpas.ru /etc/nginx/sites-enabled/moments.cmpas.ru
+          if nginx -t; then
+            systemctl reload nginx
+            echo "OK: moments vhost enabled and nginx reloaded (cmpas.ru untouched)."
+          else
+            rm -f /etc/nginx/sites-enabled/moments.cmpas.ru
+            echo "ERROR: nginx -t failed. Rolled back moments enable. nginx NOT reloaded; cmpas.ru unchanged." >&2
+            exit 1
+          fi
+
+          # 3) Issue TLS only if not already present. Scoped to moments only.
+          if [ ! -e /etc/letsencrypt/live/moments.cmpas.ru/fullchain.pem ]; then
+            certbot --nginx -d moments.cmpas.ru --non-interactive --agree-tos \
+              -m admin@cmpas.ru --redirect \
+              && echo "OK: TLS issued for moments.cmpas.ru." \
+              || echo "WARNING: certbot failed — site serves over HTTP for now. Re-run this workflow to retry TLS. cmpas.ru unaffected."
+          else
+            echo "TLS already present for moments.cmpas.ru; skipping certbot."
+          fi
+          REMOTE
+
+      - name: Cleanup key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

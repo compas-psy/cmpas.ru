@@ -6,6 +6,9 @@ on:
     paths-ignore:
       - 'android/**'
       - '.github/workflows/android-build.yml'
+      - 'sites/**'
+      - '.github/workflows/deploy-moments.yml'
+      - '.github/workflows/provision-moments.yml'
       - 'docs/**'
       - '.agent/**'
       - '**/*.md'
@@ -14,6 +17,9 @@ on:
     paths-ignore:
       - 'android/**'
       - '.github/workflows/android-build.yml'
+      - 'sites/**'
+      - '.github/workflows/deploy-moments.yml'
+      - '.github/workflows/provision-moments.yml'
       - 'docs/**'
       - '.agent/**'
       - '**/*.md'
