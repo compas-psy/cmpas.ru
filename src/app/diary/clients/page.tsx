@@ -306,8 +306,9 @@ export default function ClientsPage() {
                                 </div>
                             </div>
                             <button onClick={async () => {
-                                const url = `https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`;
                                 try {
+                                    const { getClientBookingLink } = await import('../actions/clients');
+                                    const url = await getClientBookingLink(selectedClient.id);
                                     await navigator.clipboard.writeText(url);
                                     toast.success('Ссылка скопирована. Открываем мессенджер...');
 
@@ -582,8 +583,10 @@ export default function ClientsPage() {
                                         className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]">
                                         <CalendarClock className="w-4 h-4" /> Запланировать
                                     </button>
-                                    <button onClick={() => {
-                                        navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
+                                    <button onClick={async () => {
+                                        const { getClientBookingLink } = await import('../actions/clients');
+                                        const url = await getClientBookingLink(selectedClient.id);
+                                        navigator.clipboard.writeText(url);
                                         toast.success('Ссылка скопирована');
                                     }} className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-[13px] font-semibold hover:bg-sage-50 transition-all">
                                         <ClipboardList className="w-4 h-4" /> Написать
