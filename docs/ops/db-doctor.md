@@ -1,9 +1,31 @@
-# Состояние миграций на боевой базе
+# Состояние базы на боевом сервере
 
-Снято прогоном 32032822259. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32033118134. Файл перезаписывается каждой диагностикой.
 
 ```
-
+Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
+### Журнал миграций существует?
+f
+### Записей в журнале
+ERROR:  relation "_prisma_migrations" does not exist
+LINE 1: SELECT count(*) FROM _prisma_migrations;
+                             ^
+### Незавершённых миграций
+ERROR:  relation "_prisma_migrations" does not exist
+LINE 1: SELECT count(*) FROM _prisma_migrations WHERE finished_at IS...
+                             ^
+### Последние 20 записей журнала
+ERROR:  relation "_prisma_migrations" does not exist
+LINE 1: ...'  rolled_back=' || rolled_back_at::text,'') FROM _prisma_mi...
+                                                             ^
+### Колонки, которые добавляли откаченные PR (должны отсутствовать)
+### Таблицы, которые добавляли откаченные PR (должны отсутствовать)
+### Всего таблиц в базе
+42
+### Строк в главных таблицах
+User=14
+DiaryClient=20
+DiarySession=41
 ```
 
 ## Миграции, лежащие в репозитории
