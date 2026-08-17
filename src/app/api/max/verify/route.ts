@@ -5,7 +5,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 
-const LINK_SECRET = process.env.MAX_LINK_SECRET || process.env.AUTH_SECRET || 'fallback-secret';
+// Подписывающий секрет обязателен. Значения по умолчанию быть не может:
+// код репозитория публичен, и любая захардкоженная строка здесь означает,
+// что кто угодно может подделать ссылку привязки MAX к чужому кабинету.
+const LINK_SECRET = process.env.MAX_LINK_SECRET || process.env.AUTH_SECRET;
+if (!LINK_SECRET) {
+    throw new Error('MAX_LINK_SECRET или AUTH_SECRET обязателен: подписывать ссылки привязки MAX нечем.');
+}
 
 export async function POST(request: NextRequest) {
     const { mid, exp, sig } = await request.json();
