@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.Response
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.domain.model.DashboardDataV2
 import ru.cmpas.app.domain.model.MobileLegalAcceptBody
 import ru.cmpas.app.domain.model.MobileLegalStatus
 import ru.cmpas.app.domain.model.User
@@ -28,11 +30,13 @@ class SettingsViewModel @Inject constructor(
             try {
                 val profileResponse = api.getProfile()
                 val legalResponse = api.getLegalStatus()
+                val dashboardResponse = runCatching { api.getDashboard() }.getOrNull()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         user = if (profileResponse.isSuccessful) profileResponse.body() else it.user,
                         legalStatus = if (legalResponse.isSuccessful) legalResponse.body() else it.legalStatus,
+                        bookingLink = mergeBookingLink(dashboardResponse, it.bookingLink),
                         error = if (!legalResponse.isSuccessful) "Не удалось загрузить документы" else null,
                     )
                 }
@@ -74,10 +78,15 @@ class SettingsViewModel @Inject constructor(
     }
 }
 
+/** Keeps the previously known booking link if the dashboard call failed or came back empty. */
+internal fun mergeBookingLink(dashboardResponse: Response<DashboardDataV2>?, previous: String?): String? =
+    dashboardResponse?.takeIf { it.isSuccessful }?.body()?.bookingLink ?: previous
+
 data class SettingsUiState(
     val isLoading: Boolean = false,
     val isSavingLegal: Boolean = false,
     val user: User? = null,
     val legalStatus: MobileLegalStatus? = null,
+    val bookingLink: String? = null,
     val error: String? = null,
 )

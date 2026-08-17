@@ -12,6 +12,13 @@ on:
       - 'docs/**'
       - '.agent/**'
       - '**/*.md'
+      - '.github/workflows/backup-db.yml'
+      - '.backup/**'
+      - '.github/workflows/db-doctor.yml'
+      - '.github/workflows/db-baseline.yml'
+      - 'scripts/db-doctor.sh'
+      - 'scripts/db-baseline.sh'
+      - 'docs/ops/**'
   push:
     branches: ["main"]
     paths-ignore:
@@ -23,6 +30,13 @@ on:
       - 'docs/**'
       - '.agent/**'
       - '**/*.md'
+      - '.github/workflows/backup-db.yml'
+      - '.backup/**'
+      - '.github/workflows/db-doctor.yml'
+      - '.github/workflows/db-baseline.yml'
+      - 'scripts/db-doctor.sh'
+      - 'scripts/db-baseline.sh'
+      - 'docs/ops/**'
   workflow_dispatch:
 
 permissions:

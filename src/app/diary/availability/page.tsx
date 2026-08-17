@@ -34,6 +34,7 @@ import {
     getAvailableDates,
     getAvailableTimes,
 } from '@/app/bot/actions';
+import { ShareButton } from '@/components/psidairy/ShareSheet';
 
 type ScheduleRule = {
     id: string; name: string; priority: number; isActive: boolean;
@@ -90,6 +91,41 @@ function addMinutes(time: string, mins: number): string {
     const nh = Math.floor(total / 60);
     const nm = total % 60;
     return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+}
+
+function BookingLinkCard({ psychologistId, isPrivate }: { psychologistId: string; isPrivate: boolean }) {
+    const bookingUrl = `https://cmpas.ru/bot/book/${psychologistId}`;
+    return (
+        <div className={`bg-card border border-border rounded-2xl shadow-card p-5 ${isPrivate ? 'opacity-60' : ''}`}>
+            <div className="flex items-center gap-2 mb-3">
+                <CalendarCheck className="w-4 h-4 text-primary" />
+                <div>
+                    <h3 className="text-[14px] font-bold text-foreground">Ссылка на самозапись</h3>
+                    <p className="text-[11px] text-muted-foreground">
+                        {isPrivate ? 'Недоступна в приватном режиме' : 'Поделитесь ссылкой с клиентами'}
+                    </p>
+                </div>
+            </div>
+            {isPrivate ? (
+                <div className="flex items-center gap-2 bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5">
+                    <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-[12px] text-muted-foreground">Включите режим «Просмотр» или «Запись» чтобы активировать ссылку</span>
+                </div>
+            ) : (
+                <>
+                    <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
+                        <span className="flex-1 text-[13px] font-medium text-foreground truncate">cmpas.ru/bot/book/{psychologistId}</span>
+                    </div>
+                    <ShareButton
+                        url={bookingUrl}
+                        text="Запишитесь на сессию:"
+                        icon={<Copy className="w-3.5 h-3.5" />}
+                        className="w-full flex items-center justify-center gap-1.5 mt-3 px-3 py-2.5 rounded-xl text-[12px] font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    />
+                </>
+            )}
+        </div>
+    );
 }
 
 export default function AvailabilityPage() {
@@ -539,6 +575,13 @@ export default function AvailabilityPage() {
                 </div>
             </div>
 
+            {/* Booking link — visible on phones too; on desktop it's already in the sidebar below */}
+            {psychologistId && (
+                <div className="lg:hidden">
+                    <BookingLinkCard psychologistId={psychologistId} isPrivate={settings.scheduleMode === 'private'} />
+                </div>
+            )}
+
             {/* Schedule Mode Indicator */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
@@ -840,53 +883,7 @@ export default function AvailabilityPage() {
                     </div>
 
                     {/* Card 2: Booking Link */}
-                    {psychologistId && (() => {
-                        const bookingUrl = `https://cmpas.ru/bot/book/${psychologistId}`;
-                        const isPrivate = settings.scheduleMode === 'private';
-                        return (
-                        <div className={`bg-card border border-border rounded-2xl shadow-card p-5 ${isPrivate ? 'opacity-60' : ''}`}>
-                            <div className="flex items-center gap-2 mb-3">
-                                <CalendarCheck className="w-4 h-4 text-primary" />
-                                <div>
-                                    <h3 className="text-[14px] font-bold text-foreground">Ссылка на самозапись</h3>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        {isPrivate ? 'Недоступна в приватном режиме' : 'Поделитесь ссылкой с клиентами'}
-                                    </p>
-                                </div>
-                            </div>
-                            {isPrivate ? (
-                                <div className="flex items-center gap-2 bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5">
-                                    <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
-                                    <span className="text-[12px] text-muted-foreground">Включите режим «Просмотр» или «Запись» чтобы активировать ссылку</span>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
-                                        <span className="flex-1 text-[13px] font-medium text-foreground truncate">cmpas.ru/bot/book/{psychologistId}</span>
-                                        <button onClick={() => { navigator.clipboard.writeText(bookingUrl); toast.success('Ссылка скопирована'); }}
-                                            className="p-1.5 hover:bg-primary/10 rounded-lg text-muted-foreground hover:text-primary transition-colors shrink-0" title="Копировать">
-                                            <Copy className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-3">
-                                        <button onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(bookingUrl)}&text=${encodeURIComponent('Запишитесь на сессию:')}`, '_blank'); }}
-                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-[#2AABEE]/10 text-[#2AABEE] hover:bg-[#2AABEE]/20 transition-colors">
-                                            Telegram
-                                        </button>
-                                        <button onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent('Запишитесь на сессию: ' + bookingUrl)}`, '_blank'); }}
-                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors">
-                                            WhatsApp
-                                        </button>
-                                        <button onClick={() => { navigator.clipboard.writeText(bookingUrl); toast.success('Ссылка скопирована'); }}
-                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-muted/50 text-foreground hover:bg-muted transition-colors">
-                                            <Copy className="w-3 h-3" /> Копировать
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                        );
-                    })()}
+                    {psychologistId && <BookingLinkCard psychologistId={psychologistId} isPrivate={settings.scheduleMode === 'private'} />}
 
                     {/* Card 3: Statistics placeholder */}
                     <div className="bg-card border border-border rounded-2xl shadow-card p-5">

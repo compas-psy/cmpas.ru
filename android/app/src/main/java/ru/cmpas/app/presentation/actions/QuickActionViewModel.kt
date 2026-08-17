@@ -118,7 +118,6 @@ class QuickActionViewModel @Inject constructor(
                 when (type) {
                     "repeat-slot" -> saveRepeatedSlot(selectedClient, date, time, secondary, comment)
                     "payment" -> throw IllegalStateException("Откройте конкретную сессию и отметьте оплату там — так статус синхронизируется с вебом")
-                    "booking-link" -> "Ссылка записи подготовлена для ${selectedClient?.name ?: "клиента"}"
                     else -> "Сохранено"
                 }
             }.onSuccess { message ->
