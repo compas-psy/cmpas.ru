@@ -1,16 +1,17 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32033803184. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32035789907. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
 ### Журнал миграций существует?
 t
 ### Записей в журнале
-28
+29
 ### Незавершённых миграций
 0
 ### Последние 20 записей журнала
+20260817120000_analytics_f0_f1  finished=2026-08-17 13:33:19.477871+00
 20260710120000_legal_acceptance_schema_sync  finished=2026-08-17 13:10:59.984689+00
 20260709_legal_acceptance_audit_fields  finished=2026-08-17 13:10:55.588199+00
 20260709_feature_interest  finished=2026-08-17 13:10:51.733131+00
@@ -30,11 +31,15 @@ t
 20260404_add_max_chat_id  finished=2026-08-17 13:10:01.363918+00
 20260323_add_sync_from_to_calendar_integration  finished=2026-08-17 13:09:58.112921+00
 20260315_add_legal_documents  finished=2026-08-17 13:09:54.676037+00
-20260308_user_consent  finished=2026-08-17 13:09:51.31993+00
 ### Колонки, которые добавляли откаченные PR (должны отсутствовать)
+User.analyticsConsentAt
+Payment.terminal
 ### Таблицы, которые добавляли откаченные PR (должны отсутствовать)
+Subscription
+events
+events_rejected
 ### Всего таблиц в базе
-43
+46
 ### Строк в главных таблицах
 User=14
 DiaryClient=20
@@ -72,4 +77,5 @@ DiarySession=41
 20260709_feature_interest
 20260709_legal_acceptance_audit_fields
 20260710120000_legal_acceptance_schema_sync
+20260817120000_analytics_f0_f1
 ```
