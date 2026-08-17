@@ -8,6 +8,7 @@ import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { ClientTimeline } from '@/components/psidairy/ClientTimeline';
+import { ShareButton } from '@/components/psidairy/ShareSheet';
 
 type QuestionnaireData = {
     fullName?: string; dateOfBirth?: string; age?: number; gender?: string;
@@ -305,40 +306,14 @@ export default function ClientsPage() {
                                     {selectedClient.gender && <div>👤 {selectedClient.gender === 'male' ? 'Мужской' : 'Женский'}</div>}
                                 </div>
                             </div>
-                            <button onClick={async () => {
-                                const url = `https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`;
-                                try {
-                                    await navigator.clipboard.writeText(url);
-                                    toast.success('Ссылка скопирована. Открываем мессенджер...');
-
-                                    // Deep link priority: Telegram native share logic OR wa.me
-                                    if (selectedClient.phone) {
-                                        const phone = selectedClient.phone.replace(/[^\d]/g, '');
-                                        const text = encodeURIComponent('Здравствуйте! Ваша персональная ссылка для управления записями на сессии: ' + url);
-
-                                        // Give priority to native sharing if on mobile, else fallback to wa.me
-                                        if (navigator.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
-                                            try {
-                                                await navigator.share({
-                                                    title: 'Ссылка для записи',
-                                                    text: 'Персональная ссылка на сессии',
-                                                    url: url
-                                                });
-                                                return; // if native share succeeds, don't open whatsapp directly
-                                            } catch (e) {
-                                                console.log('Share API failed, falling back');
-                                            }
-                                        }
-
-                                        window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
-                                    }
-                                } catch (e) {
-                                    toast.error('Не удалось скопировать ссылку');
-                                }
-                            }}
-                                className="w-full flex items-center justify-center gap-2 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium active:scale-[0.98]">
-                                <ClipboardList className="w-4 h-4" /> Копировать и отправить
-                            </button>
+                            <ShareButton
+                                url={`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`}
+                                text="Здравствуйте! Ваша персональная ссылка для управления записями на сессии:"
+                                title="Поделиться ссылкой"
+                                label="Поделиться"
+                                icon={<ClipboardList className="w-4 h-4" />}
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-secondary text-secondary-foreground rounded-xl font-medium active:scale-[0.98]"
+                            />
                             {selectedClient.status === 'active' ? (
                                 <button onClick={() => handleArchive(selectedClient.id)}
                                     className="w-full flex items-center justify-center gap-2 py-3 bg-muted text-foreground rounded-xl font-medium active:scale-[0.98]">
@@ -582,12 +557,14 @@ export default function ClientsPage() {
                                         className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]">
                                         <CalendarClock className="w-4 h-4" /> Запланировать
                                     </button>
-                                    <button onClick={() => {
-                                        navigator.clipboard.writeText(`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`);
-                                        toast.success('Ссылка скопирована');
-                                    }} className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-[13px] font-semibold hover:bg-sage-50 transition-all">
-                                        <ClipboardList className="w-4 h-4" /> Написать
-                                    </button>
+                                    <ShareButton
+                                        url={`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`}
+                                        text="Здравствуйте! Ваша персональная ссылка для управления записями на сессии:"
+                                        title="Поделиться ссылкой"
+                                        label="Поделиться"
+                                        icon={<ClipboardList className="w-4 h-4" />}
+                                        className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-[13px] font-semibold hover:bg-sage-50 transition-all"
+                                    />
                                     <button onClick={() => setDesktopTab('documents')}
                                         className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-[13px] font-semibold hover:bg-sage-50 transition-all">
                                         <FileText className="w-4 h-4" /> Документы

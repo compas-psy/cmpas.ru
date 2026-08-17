@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
+import { ShareButton } from '@/components/psidairy/ShareSheet';
 
 type Session = {
     id: string;
@@ -305,41 +306,6 @@ export default function DiaryCalendarPage() {
         return <BookOpen className="w-4 h-4 text-forest-600" />;
     };
 
-    const handleShareLink = async () => {
-        if (!userId) { toast.error('Не удалось получить ссылку'); return; }
-        const bookUrl = `https://cmpas.ru/bot/book/${userId}`;
-        
-        // Try Web Share API first (mobile)
-        if (typeof navigator !== 'undefined' && navigator.share) {
-            try {
-                await navigator.share({ title: 'Записаться на сессию', url: bookUrl });
-                return;
-            } catch { /* user cancelled or not supported */ }
-        }
-        
-        // Fallback: clipboard
-        try {
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(bookUrl);
-            } else {
-                // Textarea fallback for non-secure contexts
-                const ta = document.createElement('textarea');
-                ta.value = bookUrl;
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-            }
-            toast.success('Ссылка скопирована! Отправьте её клиенту в мессенджере');
-        } catch {
-            // Last resort: show the link
-            toast.info(`Ссылка для записи: ${bookUrl}`, { duration: 10000 });
-        }
-    };
-
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -365,10 +331,13 @@ export default function DiaryCalendarPage() {
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                     {userId && (
-                        <button onClick={handleShareLink}
-                            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-sage-100 hover:bg-sage-200 text-forest-700 text-[12px] font-semibold transition-colors active:scale-95">
-                            <Share2 className="w-3.5 h-3.5" /> Отправить ссылку клиенту
-                        </button>
+                        <ShareButton
+                            url={`https://cmpas.ru/bot/book/${userId}`}
+                            text="Запишитесь на сессию:"
+                            label="Отправить ссылку клиенту"
+                            icon={<Share2 className="w-3.5 h-3.5" />}
+                            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-sage-100 hover:bg-sage-200 text-forest-700 text-[12px] font-semibold transition-colors active:scale-95"
+                        />
                     )}
                 </div>
 
