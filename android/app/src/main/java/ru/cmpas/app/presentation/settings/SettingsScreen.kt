@@ -1,5 +1,7 @@
 package ru.cmpas.app.presentation.settings
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -134,7 +137,7 @@ fun SettingsScreen(
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                     SettingRow(Icons.Outlined.EventBusy, "Расписание", "Блокировки, выходные и режим записи") { onScheduleClick() }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.Link, "Ссылка для записи", "cmpas.ru/book/ilya-martynov") { activeSheet = ProfileSheet.BOOKING }
+                    SettingRow(Icons.Outlined.Link, "Ссылка для записи", uiState.bookingLink?.removePrefix("https://")?.removePrefix("http://") ?: "Загружаем…") { activeSheet = ProfileSheet.BOOKING }
                     ThinDivider()
                     SettingRow(Icons.Outlined.Description, "Документы", documentsSubtitle(uiState)) { activeSheet = ProfileSheet.DOCUMENTS }
                     ThinDivider()
@@ -267,15 +270,18 @@ private fun ProfileInfoSheet(
         DocumentsSheet(state, onClose, onRefresh, onAcceptRequired, onAdsChange)
         return
     }
+    if (sheet == ProfileSheet.BOOKING) {
+        BookingLinkSheet(state.bookingLink, onClose)
+        return
+    }
 
     val (title, subtitle, body) = when (sheet) {
         ProfileSheet.PROFILE -> Triple("Профессиональный профиль", "Данные, которые видит клиент", "Имя, специализация и описание практики будут редактироваться в следующем шаге настройки профиля.")
         ProfileSheet.TELEGRAM -> Triple("Telegram", "Канал подключён", "Бот может отправлять клиентам сервисные сообщения после того, как клиент открыл его и подтвердил связь.")
         ProfileSheet.MAX -> Triple("MAX", "Подключение канала", "После подключения клиенты смогут получать уведомления в MAX. До этого приложение подготовит текст для ручной отправки.")
-        ProfileSheet.BOOKING -> Triple("Ссылка для записи", "Самозапись клиентов", "По ссылке клиент увидит свободные окна, выберет формат встречи и подтвердит необходимые документы.")
         ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
         ProfileSheet.HELP -> Triple("Помощь и поддержка", "КОМПАС Android 1.0.5", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
-        ProfileSheet.DOCUMENTS -> Triple("Документы", "", "")
+        ProfileSheet.DOCUMENTS, ProfileSheet.BOOKING -> Triple("", "", "")
     }
     CompasBottomSheet(onClose = onClose) {
         SheetHead(title, subtitle)
@@ -284,6 +290,62 @@ private fun ProfileInfoSheet(
         Spacer(Modifier.height(16.dp))
         PrimaryButton("Готово", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Check)
     }
+}
+
+@Composable
+private fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Ссылка для записи", "Самозапись клиентов")
+        Spacer(Modifier.height(16.dp))
+        if (bookingLink == null) {
+            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Forest700)
+            }
+        } else {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                QrCodeImage(content = bookingLink)
+            }
+            Spacer(Modifier.height(14.dp))
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                padding = 14.dp,
+                onClick = {
+                    clipboard.setText(AnnotatedString(bookingLink))
+                    copied = true
+                },
+            ) {
+                Eyebrow(if (copied) "Скопировано" else "Нажмите, чтобы скопировать")
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Link, null, Modifier.size(18.dp), tint = Forest700)
+                    Spacer(Modifier.width(8.dp))
+                    Text(bookingLink.removePrefix("https://").removePrefix("http://"), style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            PrimaryButton(
+                text = "Поделиться",
+                icon = Icons.Outlined.Share,
+                onClick = { shareBookingLink(context, bookingLink) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        GhostButton("Закрыть", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
+    }
+}
+
+private fun shareBookingLink(context: Context, link: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "Ссылка для записи")
+        putExtra(Intent.EXTRA_TEXT, link)
+    }
+    runCatching { context.startActivity(Intent.createChooser(intent, "Отправить через")) }
 }
 
 @Composable

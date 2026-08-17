@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "deploy:schema": "bash scripts/apply-deploy-schema.sh"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^6.10.1",
     "prisma": "5.22.0",
+    "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-datepicker": "^9.1.0",
     "react-dom": "19.2.3",
@@ -47,11 +49,13 @@
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
