@@ -25,8 +25,18 @@ import {
     saveConsent
 } from '../../actions';
 import type { TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
+import { readReturnState, serializeReturnState, returnStateStorageKey } from '@/lib/booking/return-state';
 
 registerLocale('ru', ru);
+
+// Mechanic B "подбор времени" preference labels — also used by the S1-R
+// "С возвращением" banner (CJM_booking_v1.md §2 этап 3-бис) to name what a
+// returning visitor was looking at.
+const PREFERENCE_LABELS: Record<TimePreference, string> = {
+    weekday_evening: 'Будни, после 18:00',
+    weekend_morning: 'Утро выходных',
+    any: 'Не важно — покажите ближайшее',
+};
 
 export default function ClientBookingPage() {
     const params = useParams();
@@ -86,6 +96,12 @@ export default function ClientBookingPage() {
     const [suggestLoading, setSuggestLoading] = useState(false);
     const [waitlistForm, setWaitlistForm] = useState({ name: '', contact: '' });
     const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+
+    // State S1-R "ушёл подумать и вернулся" (CJM_booking_v1.md §2 этап 3-бис).
+    // rememberDevice gates writes only — reads and "не запоминать меня" both
+    // work regardless, since the whole point is to be able to opt out.
+    const [isReturningVisit, setIsReturningVisit] = useState(false);
+    const [rememberDevice, setRememberDevice] = useState(true);
 
     // Fetch initial data
     useEffect(() => {
@@ -229,6 +245,20 @@ export default function ClientBookingPage() {
         }
     }, [psychologistId]);
 
+    // State S1-R (CJM_booking_v1.md §2 этап 3-бис): a return by the same
+    // link within 30 days restores only the time preference — recomputed
+    // fresh against the live schedule, never replayed from what was cached.
+    // Purely a localStorage read; nothing here can send a message.
+    useEffect(() => {
+        if (!psy?.timeSuggestEnabled || scheduleMode === 'private' || typeof window === 'undefined') return;
+        const stored = readReturnState(localStorage.getItem(returnStateStorageKey(psychologistId)), new Date());
+        if (stored) {
+            setIsReturningVisit(true);
+            handlePreferenceSelect(stored.preference);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [psy, scheduleMode, psychologistId]);
+
     // Handle Date selection and fetch times
     const handleDateChange = async (date: Date | null) => {
         if (!date) return;
@@ -271,6 +301,9 @@ export default function ClientBookingPage() {
     const handlePreferenceSelect = async (pref: TimePreference) => {
         setPreference(pref);
         setSuggestLoading(true);
+        if (rememberDevice && typeof window !== 'undefined') {
+            localStorage.setItem(returnStateStorageKey(psychologistId), serializeReturnState(pref, new Date()));
+        }
         try {
             const times = await getSuggestedTimes(psychologistId, pref, clientId || null);
             setSuggestedTimes(times);
@@ -280,6 +313,23 @@ export default function ClientBookingPage() {
         } finally {
             setSuggestLoading(false);
         }
+    };
+
+    // State S1-R: "начать заново" сбрасывает предпочтение, ничего не отправляя.
+    const handleStartOver = () => {
+        setIsReturningVisit(false);
+        setPreference(null);
+        setSuggestedTimes(null);
+    };
+
+    // State S1-R: "не запоминать меня на этом устройстве" — стирает
+    // сохранённое состояние немедленно, без подтверждающей модалки.
+    const handleForgetDevice = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(returnStateStorageKey(psychologistId));
+        }
+        setRememberDevice(false);
+        setIsReturningVisit(false);
     };
 
     const handleSuggestedTimeSelect = (candidate: SuggestedTimeCandidate) => {
@@ -559,13 +609,28 @@ export default function ClientBookingPage() {
                 {/* Mechanic B "подбор времени" (CJM_booking_v1.md этап 2) */}
                 {psy?.timeSuggestEnabled && !showFullCalendar && (
                     <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm">
-                        <h3 className="font-medium mb-3 text-foreground">Когда вам удобнее?</h3>
+                        {isReturningVisit ? (
+                            <div className="mb-3">
+                                <h3 className="font-medium text-foreground">С возвращением</h3>
+                                {preference && (
+                                    <p className="text-muted-foreground text-sm mt-1">
+                                        Вы смотрели: {PREFERENCE_LABELS[preference]}
+                                    </p>
+                                )}
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                                    <button type="button" onClick={handleStartOver} className="text-xs text-muted-foreground underline">
+                                        Начать заново
+                                    </button>
+                                    <button type="button" onClick={handleForgetDevice} className="text-xs text-muted-foreground underline">
+                                        Не запоминать меня на этом устройстве
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <h3 className="font-medium mb-3 text-foreground">Когда вам удобнее?</h3>
+                        )}
                         <div className="grid grid-cols-1 gap-2 mb-3">
-                            {([
-                                ['weekday_evening', 'Будни, после 18:00'],
-                                ['weekend_morning', 'Утро выходных'],
-                                ['any', 'Не важно — покажите ближайшее'],
-                            ] as [TimePreference, string][]).map(([value, label]) => (
+                            {(Object.entries(PREFERENCE_LABELS) as [TimePreference, string][]).map(([value, label]) => (
                                 <button
                                     key={value}
                                     type="button"
