@@ -22,6 +22,7 @@ async function notifyUser(
 }
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
+import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 
 export async function getPsychologist(id: string) {
     const user = await db.user.findUnique({
@@ -30,7 +31,7 @@ export async function getPsychologist(id: string) {
             name: true,
             image: true,
             psychologistSettings: {
-                select: { fullName: true, scheduleMode: true }
+                select: { fullName: true, scheduleMode: true, timeSuggestEnabled: true }
             }
         }
     });
@@ -40,7 +41,8 @@ export async function getPsychologist(id: string) {
     return {
         ...user,
         name: user.psychologistSettings?.fullName || user.name || 'Специалист',
-        scheduleMode: user.psychologistSettings?.scheduleMode || 'private'
+        scheduleMode: user.psychologistSettings?.scheduleMode || 'private',
+        timeSuggestEnabled: user.psychologistSettings?.timeSuggestEnabled ?? false
     };
 }
 
@@ -417,6 +419,56 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
     });
 
     return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
+}
+
+/**
+ * Mechanic B "подбор времени" (product/practice/CJM_booking_v1.md этап 2):
+ * a preference question and 2-3 matching slots instead of a bare grid.
+ * Scans the current and next month via the existing per-date helpers, then
+ * hands the flat candidate list to the pure pickSuggestedTimes.
+ */
+export async function getSuggestedTimes(
+    psychologistId: string,
+    preference: TimePreference,
+    clientId: string | null = null
+): Promise<SuggestedTimeCandidate[]> {
+    const now = new Date();
+    const candidates: SuggestedTimeCandidate[] = [];
+
+    for (const monthOffset of [0, 1]) {
+        const scanDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+        const dates = await getAvailableDates(psychologistId, scanDate.getFullYear(), scanDate.getMonth(), false, clientId);
+
+        for (const dateStr of dates) {
+            const times = await getAvailableTimes(psychologistId, dateStr, false, undefined, clientId);
+            for (const slot of times) {
+                if (slot.isOwnBooking) continue;
+                candidates.push({ date: dateStr, time: slot.time, format: slot.format, addressId: slot.addressId });
+            }
+        }
+
+        if (candidates.length >= 8) break; // enough runway to choose from
+    }
+
+    return pickSuggestedTimes(candidates, preference);
+}
+
+/**
+ * Empty-schedule fallback for Mechanic B (CJM_booking_v1.md §2 этап 8):
+ * capture only, no matching/notification engine — see WaitlistEntry in
+ * prisma/schema.prisma.
+ */
+export async function submitWaitlistInterest(psychologistId: string, name: string, contact: string, preference?: string) {
+    const trimmedName = name.trim().slice(0, 200);
+    const trimmedContact = contact.trim().slice(0, 200);
+    if (!trimmedName || !trimmedContact) {
+        return { success: false, error: 'Укажите имя и контакт' };
+    }
+
+    await db.waitlistEntry.create({
+        data: { psychologistId, name: trimmedName, contact: trimmedContact, preference: preference || null },
+    });
+    return { success: true };
 }
 
 export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {

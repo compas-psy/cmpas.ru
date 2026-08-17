@@ -14,6 +14,8 @@ import {
     getPsychologist,
     getAvailableDates,
     getAvailableTimes,
+    getSuggestedTimes,
+    submitWaitlistInterest,
     bookSession,
     getClientByTelegram,
     getScheduleMode,
@@ -22,6 +24,7 @@ import {
     checkConsentRequired,
     saveConsent
 } from '../../actions';
+import type { TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 
 registerLocale('ru', ru);
 
@@ -73,6 +76,16 @@ export default function ClientBookingPage() {
     // Auto-navigate to first available month
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [scheduleMode, setScheduleMode] = useState<string>('booking');
+
+    // Mechanic B "подбор времени" (CJM_booking_v1.md этап 2) — behind
+    // psy.timeSuggestEnabled. showFullCalendar is the "показать все" escape
+    // hatch back to the plain grid below, which stays untouched either way.
+    const [showFullCalendar, setShowFullCalendar] = useState(false);
+    const [preference, setPreference] = useState<TimePreference | null>(null);
+    const [suggestedTimes, setSuggestedTimes] = useState<SuggestedTimeCandidate[] | null>(null);
+    const [suggestLoading, setSuggestLoading] = useState(false);
+    const [waitlistForm, setWaitlistForm] = useState({ name: '', contact: '' });
+    const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
 
     // Fetch initial data
     useEffect(() => {
@@ -252,6 +265,44 @@ export default function ClientBookingPage() {
             setSelectedFormat(null);
         } else {
             setSelectedFormat(slot.format as 'online' | 'offline');
+        }
+    };
+
+    const handlePreferenceSelect = async (pref: TimePreference) => {
+        setPreference(pref);
+        setSuggestLoading(true);
+        try {
+            const times = await getSuggestedTimes(psychologistId, pref, clientId || null);
+            setSuggestedTimes(times);
+        } catch {
+            toast.error('Не удалось подобрать время');
+            setSuggestedTimes([]);
+        } finally {
+            setSuggestLoading(false);
+        }
+    };
+
+    const handleSuggestedTimeSelect = (candidate: SuggestedTimeCandidate) => {
+        const [y, m, d] = candidate.date.split('-').map(Number);
+        setSelectedDate(new Date(y, m - 1, d));
+        handleTimeSlotSelect({ time: candidate.time, format: candidate.format, addressId: candidate.addressId });
+    };
+
+    const handleWaitlistSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!waitlistForm.name.trim() || !waitlistForm.contact.trim()) {
+            toast.error('Укажите имя и контакт');
+            return;
+        }
+        try {
+            const result = await submitWaitlistInterest(psychologistId, waitlistForm.name, waitlistForm.contact, preference || undefined);
+            if (result.success) {
+                setWaitlistSubmitted(true);
+            } else {
+                toast.error(result.error || 'Не удалось отправить');
+            }
+        } catch {
+            toast.error('Не удалось отправить');
         }
     };
 
@@ -505,7 +556,91 @@ export default function ClientBookingPage() {
                     </div>
                 )}
 
+                {/* Mechanic B "подбор времени" (CJM_booking_v1.md этап 2) */}
+                {psy?.timeSuggestEnabled && !showFullCalendar && (
+                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm">
+                        <h3 className="font-medium mb-3 text-foreground">Когда вам удобнее?</h3>
+                        <div className="grid grid-cols-1 gap-2 mb-3">
+                            {([
+                                ['weekday_evening', 'Будни, после 18:00'],
+                                ['weekend_morning', 'Утро выходных'],
+                                ['any', 'Не важно — покажите ближайшее'],
+                            ] as [TimePreference, string][]).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => handlePreferenceSelect(value)}
+                                    className={`py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${preference === value
+                                        ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e]'
+                                        : 'border-border text-foreground hover:bg-muted/40'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {suggestLoading && <p className="text-muted-foreground text-sm text-center py-2">Подбираем время…</p>}
+
+                        {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
+                            <div className="space-y-2">
+                                {suggestedTimes.map(candidate => {
+                                    const isPicked = selectedTimeSlot?.time === candidate.time
+                                        && selectedDate && format(selectedDate, 'yyyy-MM-dd') === candidate.date;
+                                    return (
+                                        <button
+                                            key={`${candidate.date}-${candidate.time}`}
+                                            type="button"
+                                            onClick={() => handleSuggestedTimeSelect(candidate)}
+                                            className={`w-full py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${isPicked
+                                                ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e]'
+                                                : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10'
+                                                }`}
+                                        >
+                                            {format(new Date(candidate.date + 'T00:00:00'), 'd MMMM', { locale: ru })}, {candidate.time}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && !waitlistSubmitted && (
+                            <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-border/50">
+                                <p className="text-muted-foreground text-sm">Сейчас свободного времени нет. Оставьте контакт — предложим первое освободившееся.</p>
+                                <input
+                                    type="text" placeholder="Как к вам обращаться"
+                                    value={waitlistForm.name}
+                                    onChange={e => setWaitlistForm(f => ({ ...f, name: e.target.value }))}
+                                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+                                />
+                                <input
+                                    type="text" placeholder="Телефон или Telegram"
+                                    value={waitlistForm.contact}
+                                    onChange={e => setWaitlistForm(f => ({ ...f, contact: e.target.value }))}
+                                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+                                />
+                                <button type="submit" className="w-full py-2.5 rounded-xl border-2 border-[#1e3a2f] dark:border-[#b89a4e] text-[#1e3a2f] dark:text-[#b89a4e] font-medium text-sm haptic-light">
+                                    Записать в лист ожидания
+                                </button>
+                            </form>
+                        )}
+
+                        {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && waitlistSubmitted && (
+                            <p className="text-sm text-center py-2 text-foreground">Спасибо! Мы свяжемся, как только время освободится.</p>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={() => setShowFullCalendar(true)}
+                            className="w-full text-center text-xs text-muted-foreground underline mt-3"
+                        >
+                            Показать все времена
+                        </button>
+                    </div>
+                )}
+
                 {/* Calendar */}
+                {(!psy?.timeSuggestEnabled || showFullCalendar) && (
                 <div className="mb-6">
                     <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm p-2 flex justify-center">
                         <DatePicker
@@ -530,9 +665,10 @@ export default function ClientBookingPage() {
                         />
                     </div>
                 </div>
+                )}
 
                 {/* Time selection */}
-                {selectedDate && (
+                {selectedDate && (!psy?.timeSuggestEnabled || showFullCalendar) && (
                     <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
                         <h3 className="font-medium mb-3 text-foreground">Свободное время:</h3>
                         {availableTimes.length === 0 ? (
