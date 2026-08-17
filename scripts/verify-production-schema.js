@@ -92,6 +92,31 @@ async function reportMigrationHistory() {
     }
 }
 
+
+// Сверка колонок ловит отсутствующее поле, но не ловит всё.
+// Этот прогон делает то же, что делает продукт при входе: настоящий запрос
+// через сгенерированный клиент, который выбирает ВСЕ поля модели.
+// 17.08.2026 упало именно это, а проверка /api/auth/session отвечала 200,
+// потому что анонимной сессии таблица пользователей не нужна.
+async function smokeReadCoreTables() {
+    const checks = [
+        ['User', () => prisma.user.findFirst()],
+        ['DiaryClient', () => prisma.diaryClient.findFirst()],
+        ['DiarySession', () => prisma.diarySession.findFirst()],
+    ];
+    for (const [label, run] of checks) {
+        try {
+            await run();
+            console.log(`[schema] Чтение ${label} через клиент Prisma прошло.`);
+        } catch (error) {
+            console.error(`[schema] Чтение ${label} через клиент Prisma упало: ${error.message}`);
+            console.error('[schema] Именно так выглядит расхождение базы и приложения на входе в кабинет.');
+            return false;
+        }
+    }
+    return true;
+}
+
 async function main() {
     const rows = await readColumns();
     const actual = new Map();
@@ -130,6 +155,13 @@ async function main() {
     }
 
     console.log(`[schema] Все ${Object.keys(expected).length} таблиц и их колонки на месте.`);
+
+    if (!(await smokeReadCoreTables())) {
+        await reportMigrationHistory();
+        process.exitCode = 1;
+        return;
+    }
+
     await reportMigrationHistory();
 }
 
