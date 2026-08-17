@@ -49,9 +49,14 @@ model User {
   subscriptionEndsAt DateTime?
   subscriptionPlan   String? // 'practice' | 'practice_plus'
   payments           Payment[]
+  subscription       Subscription?
 
   // Legal Documents (152-FZ, Advertising)
   legalAcceptances LegalDocumentAcceptance[]
+
+  // Analytics consent (charter/12_ANALYTICS.md §2) — null means not given.
+  // Rule: no device_id is written to analytics events before this is set.
+  analyticsConsentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -715,12 +720,31 @@ model Payment {
   status           String   @default("pending") // pending | paid | failed | cancelled
   paymentUrl       String? // Tinkoff redirect URL
   months           Int      @default(1)
+  terminal         String   @default("site") // "site" | "app" — which TerminalKey processed this payment
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([status])
+}
+
+// MRR tracking, separate from individual Payment rows (charter/13_TRACKING_PLAN.md §5).
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String
+  plan              String // 'practice' | 'practice_plus'
+  status            String   @default("trial") // trial | active | grace | churned
+  terminal          String   @default("site") // "site" | "app"
+  startedAt         DateTime @default(now())
+  currentPeriodEnd  DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
   @@index([status])
 }
 
@@ -838,4 +862,35 @@ model PracticeNotification {
 
   @@index([psychologistId, createdAt])
   @@index([psychologistId, readAt])
+}
+
+// ── Analytics ingest (charter/12_ANALYTICS.md, charter/13_TRACKING_PLAN.md §6) ──
+// Behind ANALYTICS_INGEST_ENABLED flag, default off. Validated against
+// analytics/schema/events.yaml before being written here; anything that fails
+// validation goes to AnalyticsEventRejected instead. No free-text fields ever.
+model AnalyticsEvent {
+  id            String   @id @default(cuid())
+  event         String
+  ts            DateTime
+  product       String
+  accountId     String
+  deviceId      String? // null until analyticsConsentAt is set for the account
+  props         Json
+  schemaVersion Int
+  createdAt     DateTime @default(now())
+
+  @@map("events")
+  @@index([event])
+  @@index([accountId])
+  @@index([ts])
+}
+
+model AnalyticsEventRejected {
+  id        String   @id @default(cuid())
+  reason    String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@map("events_rejected")
+  @@index([createdAt])
 }

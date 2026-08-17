@@ -1,0 +1,82 @@
+# Event registry for POST /ingest (charter/12_ANALYTICS.md §3, charter/13_TRACKING_PLAN.md §6).
+#
+# An event not listed here, or a prop not listed under its event, is rejected
+# by src/lib/analytics/schema.ts and lands in events_rejected — never in
+# events. No event may carry free text (charter/12_ANALYTICS.md, правило 2).
+#
+# Every event implicitly has the envelope fields: event, ts, product,
+# account_id, device_id, schema_version — those are validated separately,
+# not listed per-event below.
+
+version: 1
+
+products:
+  - practice
+  - zapiski
+  - moments
+
+events:
+  # Identity (charter/12_ANALYTICS.md §2) — links a pre-login device to an
+  # account, written once at the moment of login.
+  identity_linked:
+    required: []
+    optional: []
+
+  # Consent gate (this order's rule: no device_id before consent).
+  consent_updated:
+    required: [granted]
+    optional: []
+    props:
+      granted: boolean
+
+  # Billing — Т-Банк (charter/13_TRACKING_PLAN.md §6). Never carries
+  # rebillId, tinkoffPaymentId, or a terminal password.
+  payment_initiated:
+    required: [terminal, plan, amount, months]
+    optional: []
+    props:
+      terminal: string
+      plan: string
+      amount: number
+      months: number
+
+  payment_succeeded:
+    required: [terminal, plan, amount, months]
+    optional: []
+    props:
+      terminal: string
+      plan: string
+      amount: number
+      months: number
+
+  payment_failed:
+    required: [terminal, plan, reason]
+    optional: []
+    props:
+      terminal: string
+      plan: string
+      reason: string
+
+  subscription_started:
+    required: [terminal, plan, months]
+    optional: []
+    props:
+      terminal: string
+      plan: string
+      months: number
+
+  subscription_renewed:
+    required: [terminal, plan, months]
+    optional: []
+    props:
+      terminal: string
+      plan: string
+      months: number
+
+  subscription_churned:
+    required: [terminal, plan, months]
+    optional: []
+    props:
+      terminal: string
+      plan: string
+      months: number
