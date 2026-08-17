@@ -1,0 +1,91 @@
+name: Резервная копия базы
+
+# Зачем это нужно.
+# Выкладка на боевой сервер запускается автоматически при слиянии в main
+# (deploy-docker.yml) и включает `prisma migrate deploy` — то есть меняет живую
+# базу. Эта кнопка снимает копию базы ДО такого изменения и сразу проверяет,
+# что копия читается. Без проверки копия не считается копией.
+#
+# Что это НЕ заменяет: копия лежит на том же сервере. Она спасает от нашей
+# собственной ошибки в выкладке, но не спасает от гибели сервера.
+# Полноценный бэкап 3-2-1 с выгрузкой в хранилище — отдельная задача.
+
+on:
+  workflow_dispatch:
+    inputs:
+      metka:
+        description: 'Пометка: зачем снимаем копию'
+        required: false
+        default: 'перед выкладкой'
+  # Второй способ запуска — для агентов, у которых есть право писать в репозиторий,
+  # но нет права нажимать кнопки в Actions. Изменил файл .backup/request — снялась копия.
+  # Содержимое файла попадает в журнал как пометка.
+  push:
+    branches: ['main']
+    paths: ['.backup/request']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-db
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    name: Снять и проверить копию
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Копия базы на сервере
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          METKA: ${{ inputs.metka || github.event.head_commit.message }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 25m
+          envs: METKA
+          script: |
+            set -euo pipefail
+
+            DIR=/var/backups/cmpas
+            STAMP=$(date +%F_%H%M%S)
+            FILE="$DIR/cmpas_db_${STAMP}.dump"
+
+            mkdir -p "$DIR"
+
+            echo "=== Снимаю копию базы. Пометка: ${METKA:-без пометки} ==="
+            docker exec cmpas-postgres pg_dump -U postgres -d cmpas_db -Fc > "$FILE"
+
+            BYTES=$(stat -c %s "$FILE")
+            echo "Файл:    $FILE"
+            echo "Размер:  $(du -h "$FILE" | cut -f1) (${BYTES} байт)"
+
+            if [ "$BYTES" -lt 10240 ]; then
+              echo "ОШИБКА: копия меньше 10 КБ — так не бывает, копия недействительна."
+              rm -f "$FILE"
+              exit 1
+            fi
+
+            echo "=== Проверяю, что копия читается ==="
+            docker run --rm -v "$DIR":/b:ro postgres:15-alpine \
+              pg_restore --list "/b/$(basename "$FILE")" > /tmp/cmpas_toc.txt
+            echo "Объектов внутри копии: $(wc -l < /tmp/cmpas_toc.txt)"
+
+            echo "=== Сколько строк сейчас в главных таблицах ==="
+            echo "(запишите эти числа — после выкладки они должны не уменьшиться)"
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -tA -c "
+              SELECT 'Пользователи (специалисты): ' || count(*) FROM \"User\"
+              UNION ALL SELECT 'Клиенты: '  || count(*) FROM \"DiaryClient\"
+              UNION ALL SELECT 'Сессии: '   || count(*) FROM \"DiarySession\"
+              UNION ALL SELECT 'Платежи: '  || count(*) FROM \"Payment\";"
+
+            echo "=== Оставляю последние 14 копий, остальные удаляю ==="
+            ls -1t "$DIR"/cmpas_db_*.dump | tail -n +15 | xargs -r rm -f
+            ls -lht "$DIR" | head -20
+
+            echo ""
+            echo "ГОТОВО. Копия снята и прочитана. Можно выкатывать."
