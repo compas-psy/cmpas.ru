@@ -1,7 +1,6 @@
 type SessionLike = {
     date: Date | string;
     time?: string | null;
-    duration?: number | null;
 };
 
 type CancellationSettingsLike = {
@@ -35,16 +34,4 @@ export function canClientCancel(session: SessionLike, settings: CancellationSett
 
 export function clientCancelBlockedMessage(limitHours: number) {
     return `До сессии меньше ${limitHours} ч. — отмена уже не доступна онлайн. Если будет удобно, напишите специалисту напрямую.`;
-}
-
-/**
- * CJM_booking_v1.md §1.3: "ссылка на перенос живёт до конца сессии и после
- * этого мертва". A confirm/cancel link found in an old notification shouldn't
- * still work once the session it points to is long over.
- */
-export function isClientLinkExpired(session: SessionLike, now = new Date()) {
-    const startsAt = sessionStartAt(session);
-    const durationMinutes = session.duration ?? 50;
-    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
-    return now.getTime() > endsAt.getTime();
 }

@@ -3,7 +3,6 @@ import { clientActionToken, clientBookingLink, publicBaseUrl } from '@/lib/clien
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
-import { build24hReminderText } from './reminder-text';
 
 async function sendNotification(
     tgChatId: string | null | undefined,
@@ -66,20 +65,18 @@ export async function processReminders() {
             const client = session.client;
             if (!client) continue;
 
+            const psychologistName = session.psychologist?.name || 'Ваш психолог';
             const onlineLink = session.psychologist?.psychologistSettings?.onlineSessionLink;
+            const linkText = session.format === 'online' && onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
             const telegramId = client.telegramClient?.telegramUserId || client.telegramChatId;
             const maxId = client.telegramClient?.telegramUserId?.startsWith('max_') ? client.telegramClient.telegramUserId : client.maxChatId;
             const telegramTarget = maxId && telegramId === maxId ? null : telegramId;
 
             if (telegramTarget || maxId) {
-                const message = build24hReminderText({
-                    clientName: client.name,
-                    time: session.time,
-                    format: session.format,
-                    addressName: session.address?.name,
-                    onlineLink,
-                    confirmationRequired: session.status === 'pending',
-                });
+                const confirmationText = session.status === 'pending'
+                    ? '\n\nПожалуйста, подтвердите встречу кнопкой ниже.'
+                    : '\n\nВстреча уже подтверждена.';
+                const message = `Напоминание о сессии\n\nЗдравствуйте, ${client.name}! Завтра в ${session.time} у вас встреча с психологом (${psychologistName}).\nФормат: ${session.format === 'online' ? 'Онлайн' : `В кабинете: ${session.address?.name || 'адрес уточнит специалист'}`}.${linkText}${confirmationText}`;
                 await sendNotification(
                     telegramTarget,
                     maxId,
