@@ -131,7 +131,9 @@ export function ShareSheet({ isOpen, onClose, url, text, title = 'Поделит
 }
 
 type ShareButtonProps = {
-    url: string;
+    /** A ready URL, or a function resolving one — called only when the sheet is opened,
+     * so call sites that fetch a signed link don't hit the server for every item rendered. */
+    url: string | (() => Promise<string>);
     text: string;
     label?: string;
     title?: string;
@@ -142,13 +144,32 @@ type ShareButtonProps = {
 /** Trigger + sheet in one, for call sites that just need a "Поделиться" button. */
 export function ShareButton({ url, text, label = 'Поделиться', title, className, icon }: ShareButtonProps) {
     const [open, setOpen] = useState(false);
+    const [resolvedUrl, setResolvedUrl] = useState<string | null>(typeof url === 'string' ? url : null);
+    const [loading, setLoading] = useState(false);
+
+    const handleClick = async () => {
+        if (typeof url === 'string') {
+            setOpen(true);
+            return;
+        }
+        setLoading(true);
+        try {
+            setResolvedUrl(await url());
+            setOpen(true);
+        } catch {
+            toast.error('Не удалось получить ссылку');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <>
-            <button onClick={() => setOpen(true)} className={className}>
+            <button onClick={handleClick} disabled={loading} className={className}>
                 {icon}
                 {label}
             </button>
-            <ShareSheet isOpen={open} onClose={() => setOpen(false)} url={url} text={text} title={title} />
+            {resolvedUrl && <ShareSheet isOpen={open} onClose={() => setOpen(false)} url={resolvedUrl} text={text} title={title} />}
         </>
     );
 }

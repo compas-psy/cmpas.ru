@@ -6,6 +6,13 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
+import { resolvePersonalClientToken } from '@/lib/client-workflow';
+
+/** Decodes the `?c=` booking-link param: signed token (current) or a legacy
+ * raw clientId (accepted for a grace window — see resolvePersonalClientToken). */
+export async function resolveClientLinkParam(token: string | null | undefined) {
+    return resolvePersonalClientToken(token);
+}
 
 /** Send to Telegram and/or MAX depending on which IDs are set. Runs both in
  * parallel so a slow/failed Telegram send (e.g. flaky VPN) never delays or

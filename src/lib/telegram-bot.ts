@@ -7,6 +7,7 @@ import { createNotification } from '@/lib/notifications';
 import { telegramSendAgent } from '@/lib/telegram-proxy';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
+import { personalClientToken } from '@/lib/client-workflow';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -59,7 +60,7 @@ async function showPsyMenu(ctx: Context, psy: any) {
 
 async function showClientMenu(ctx: Context, psychologistId: string, clientName: string = 'Клиент', clientId?: string) {
     const bookUrl = clientId
-        ? `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?c=${clientId}&v=${Date.now()}`
+        ? `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?c=${personalClientToken(clientId)}&v=${Date.now()}`
         : `${TELEGRAM_APP_URL}/bot/book/${psychologistId}?v=${Date.now()}`;
 
     await ctx.reply(`Добро пожаловать, ${clientName}!\nИспользуйте меню для управления записями.`,
@@ -223,7 +224,7 @@ export function setupBot() {
             });
             if (sessions.length === 0) return ctx.reply('У вас нет предстоящих записей.');
             for (const s of sessions) {
-                const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?c=${s.clientId}&v=${Date.now()}`;
+                const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?c=${personalClientToken(s.clientId)}&v=${Date.now()}`;
                 const msg = `📅 <b>Сессия с психологом ${s.psychologist.name}</b>\n\n⏰ Дата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 Формат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}`;
                 await ctx.reply(msg, {
                     parse_mode: 'HTML',
@@ -321,7 +322,7 @@ export function setupBot() {
         const tgId = ctx.from?.id.toString();
         const session = await db.diarySession.findUnique({ where: { id: sessionId }, include: { client: true } });
         if (!session || session.client.telegramChatId !== tgId) return ctx.answerCbQuery('Сессия не найдена.', { show_alert: true });
-        const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${session.psychologistId}?c=${session.clientId}&v=${Date.now()}`;
+        const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${session.psychologistId}?c=${personalClientToken(session.clientId)}&v=${Date.now()}`;
         await ctx.editMessageText('🔄 Чтобы перенести сессию, выберите новое время:', {
             reply_markup: { inline_keyboard: [[{ text: '📅 Выбрать новое время', web_app: { url: bookUrl } }]] }
         });
@@ -365,8 +366,9 @@ export function setupBot() {
                 matchedClient = await db.diaryClient.findFirst({ where: { psychologistId: psy.id, name: { contains: query, mode: 'insensitive' } } });
             }
 
-            const clientQueryParam = matchedClient ? `?c=${matchedClient.id}` : '';
-            const clientQueryParamWithV = matchedClient ? `?c=${matchedClient.id}&v=${Date.now()}` : `?v=${Date.now()}`;
+            const clientToken = matchedClient ? personalClientToken(matchedClient.id) : null;
+            const clientQueryParam = clientToken ? `?c=${clientToken}` : '';
+            const clientQueryParamWithV = clientToken ? `?c=${clientToken}&v=${Date.now()}` : `?v=${Date.now()}`;
             const linkParam = matchedClient ? `psy_${psy.id}_c_${matchedClient.id}` : `psy_${psy.id}`;
             const results: any[] = [];
 

@@ -20,7 +20,8 @@ import {
     getClientUpcomingSessions,
     getAddressById,
     checkConsentRequired,
-    saveConsent
+    saveConsent,
+    resolveClientLinkParam
 } from '../../actions';
 
 registerLocale('ru', ru);
@@ -112,9 +113,13 @@ export default function ClientBookingPage() {
                     const urlParams = new URLSearchParams(window.location.search);
                     const c = urlParams.get('c');
                     if (c) {
-                        currentClientId = c;
-                        setClientId(c);
-                    } else {
+                        const resolved = await resolveClientLinkParam(c);
+                        if (resolved) {
+                            currentClientId = resolved.clientId;
+                            setClientId(resolved.clientId);
+                        }
+                    }
+                    if (!currentClientId) {
                         const savedClientId = localStorage.getItem('compas_clientId');
                         if (savedClientId) {
                             currentClientId = savedClientId;
