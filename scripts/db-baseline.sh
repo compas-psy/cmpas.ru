@@ -45,8 +45,11 @@ count=0
 for dir in prisma/migrations/*/; do
   name=$(basename "$dir")
   [ "$name" = 'migration_lock.toml' ] && continue
+  # < /dev/null обязателен: скрипт приходит на сервер через stdin, а docker
+  # compose run без этого съедает остаток скрипта и всё, что идёт после цикла,
+  # молча не выполняется. Первый прогон 17.08 на этом и оборвался.
   docker compose run --rm --no-deps app \
-    node node_modules/prisma/build/index.js migrate resolve --applied "$name"
+    node node_modules/prisma/build/index.js migrate resolve --applied "$name" < /dev/null
   count=$((count + 1))
 done
 log "Отмечено миграций: $count"
@@ -58,6 +61,6 @@ docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
   "SELECT 'незавершённых=' || count(*) FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL;"
 
 log "Проверяю, что база по-прежнему соответствует схеме приложения."
-docker compose run --rm --no-deps app node scripts/verify-production-schema.js
+docker compose run --rm --no-deps app node scripts/verify-production-schema.js < /dev/null
 
 log "Готово. Данные не изменялись, заведён только журнал миграций."
