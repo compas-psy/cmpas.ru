@@ -1,0 +1,75 @@
+name: Завести журнал миграций
+
+# Одноразовая операция. В боевой базе нет таблицы _prisma_migrations, поэтому
+# prisma migrate deploy падает на каждой выкладке и не применяет ничего.
+# Этот прогон отмечает существующие миграции применёнными, не выполняя их.
+# Данные не трогаются. Повторный запуск безвреден: если журнал уже есть,
+# скрипт выходит, ничего не делая.
+#
+# Запуск: изменение файла .backup/baseline в main либо кнопка в Actions.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    paths: ['.backup/baseline']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: db-baseline
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    name: Завести журнал миграций
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Выполнить на сервере и записать отчёт
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/baseline_key
+          chmod 600 ~/.ssh/baseline_key
+          set +e
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -i ~/.ssh/baseline_key "$SSH_USER@$SSH_HOST" 'bash -s' \
+              < scripts/db-baseline.sh > /tmp/baseline.out 2>&1
+          echo "EXIT_CODE=$?" >> /tmp/baseline.out
+          set -e
+          rm -f ~/.ssh/baseline_key
+          mkdir -p docs/ops
+          {
+            echo "# Заведение журнала миграций"
+            echo
+            echo "Прогон ${{ github.run_id }}."
+            echo
+            echo '```'
+            cat /tmp/baseline.out
+            echo '```'
+          } > docs/ops/db-baseline.md
+
+      - name: Закоммитить отчёт
+        if: always()
+        run: |
+          git config user.name 'simpas-doctor'
+          git config user.email 'bot@users.noreply.github.com'
+          git add docs/ops/db-baseline.md
+          git diff --cached --quiet || git commit -m "Журнал миграций: отчёт о заведении"
+          git push origin HEAD:main || echo "нечего пушить"
+
+      - name: Провалить прогон, если скрипт завершился с ошибкой
+        run: |
+          grep -q 'EXIT_CODE=0' /tmp/baseline.out || {
+            echo "Скрипт на сервере завершился с ошибкой, см. docs/ops/db-baseline.md";
+            exit 1;
+          }

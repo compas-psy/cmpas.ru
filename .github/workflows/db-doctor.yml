@@ -1,0 +1,71 @@
+name: Диагностика базы
+
+# Зачем это нужно.
+# 17.08.2026 выкладка сломала вход, и разобраться было нечем: журналы Actions
+# из рабочей среды агента не читаются. Этот прогон снимает состояние журнала
+# миграций на сервере и **кладёт отчёт обратно в репозиторий** — туда, куда
+# агент точно может посмотреть. Ничего не меняет: только читает.
+#
+# Запуск: изменить файл .backup/doctor в main, либо кнопкой в Actions.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    paths: ['.backup/doctor']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: db-doctor
+  cancel-in-progress: false
+
+jobs:
+  doctor:
+    name: Снять состояние миграций
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Опросить сервер и записать отчёт
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/doctor_key
+          chmod 600 ~/.ssh/doctor_key
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -i ~/.ssh/doctor_key "$SSH_USER@$SSH_HOST" 'bash -s' \
+              < scripts/db-doctor.sh > /tmp/doctor.out 2>&1 || true
+          rm -f ~/.ssh/doctor_key
+          mkdir -p docs/ops
+          {
+            echo "# Состояние базы на боевом сервере"
+            echo
+            echo "Снято прогоном ${{ github.run_id }}. Файл перезаписывается каждой диагностикой."
+            echo
+            echo '```'
+            cat /tmp/doctor.out
+            echo '```'
+            echo
+            echo "## Миграции, лежащие в репозитории"
+            echo
+            echo '```'
+            ls -1 prisma/migrations | grep -v migration_lock || true
+            echo '```'
+          } > docs/ops/db-doctor.md
+
+      - name: Закоммитить отчёт
+        if: always()
+        run: |
+          git config user.name 'simpas-doctor'
+          git config user.email 'bot@users.noreply.github.com'
+          git add docs/ops/db-doctor.md
+          git diff --cached --quiet || git commit -m "Диагностика базы: состояние журнала миграций"
+          git push origin HEAD:main || echo "нечего пушить"

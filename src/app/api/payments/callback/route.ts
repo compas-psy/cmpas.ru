@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyNotificationToken, TinkoffNotification } from '@/lib/tinkoff';
+import { verifyNotificationToken, resolveTerminal, TinkoffNotification } from '@/lib/tinkoff';
+import { isTrackingEnabled } from '@/lib/analytics/flags';
+import { recordSubscriptionPayment } from '@/lib/analytics/subscription';
 
 function parseBody(body: string, contentType: string): Record<string, unknown> {
     // Tinkoff sends application/x-www-form-urlencoded (sometimes JSON)
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { OrderId, Status, PaymentId, Amount, RebillId } = notification;
+    const terminalConfig = resolveTerminal(notification.TerminalKey);
 
     // Find payment
     const payment = await db.payment.findUnique({ where: { orderId: String(OrderId) } });
@@ -64,6 +67,7 @@ export async function POST(request: NextRequest) {
         data: {
             status: newStatus,
             tinkoffPaymentId: String(PaymentId),
+            ...(terminalConfig ? { terminal: terminalConfig.terminal } : {}),
             ...(RebillId ? { rebillId: String(RebillId) } : {}),
         },
     });
@@ -89,6 +93,15 @@ export async function POST(request: NextRequest) {
         });
 
         console.log(`[Tinkoff] Subscription activated: user=${payment.userId}, until=${subscriptionEndsAt.toISOString()}, rebillId=${RebillId}`);
+
+        if (isTrackingEnabled()) {
+            await recordSubscriptionPayment(db, {
+                userId: payment.userId,
+                plan: payment.plan,
+                months: payment.months,
+                terminal: terminalConfig?.terminal ?? payment.terminal,
+            });
+        }
     }
 
     // Tinkoff requires plain text "OK" response
