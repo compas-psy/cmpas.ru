@@ -180,11 +180,13 @@ fi
 wait_for_postgres
 log 'PostgreSQL is ready.'
 
-log 'Attempting Prisma migrations. Legacy migration-history drift is non-fatal only if strict schema verification passes later.'
+log 'Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.'
+migrations_failed=0
 if docker compose run --rm --no-deps app node node_modules/prisma/build/index.js migrate deploy; then
   log 'Prisma migrations applied.'
 else
-  log 'WARNING: Prisma migrate deploy failed; continuing to idempotent beta repair and strict verification.'
+  migrations_failed=1
+  log 'WARNING: Prisma migrate deploy failed. Deploy continues only because strict schema verification now checks EVERY column the app expects; if anything is missing the deploy stops before the app is recreated.'
 fi
 
 log 'Applying beta schema safety net.'
@@ -192,7 +194,13 @@ docker cp deploy/beta-mvp-schema-fixes.sql cmpas-postgres:/tmp/beta-mvp-schema-f
 docker exec cmpas-postgres psql -v ON_ERROR_STOP=1 -U postgres -d cmpas_db -f /tmp/beta-mvp-schema-fixes.sql
 
 log 'Running strict schema verification against the new image.'
-docker compose run --rm --no-deps app node scripts/verify-production-schema.js
+if ! docker compose run --rm --no-deps app node scripts/verify-production-schema.js; then
+  log 'ERROR: database does not match the schema the new application expects. Not touching the running app.'
+  if [ "$migrations_failed" = '1' ]; then
+    log 'ERROR: prisma migrate deploy had already failed above — that is the likely cause.'
+  fi
+  exit 1
+fi
 
 log 'Recreating only the application container.'
 if ! docker compose up -d --no-deps --force-recreate app; then

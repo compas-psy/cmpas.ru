@@ -1,7 +1,13 @@
 /* eslint-disable no-console */
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient, Prisma } = require('@prisma/client');
 
 const prisma = new PrismaClient();
+
+// Список ниже — исторический якорь: колонки, которые ломались раньше.
+// Он НЕ является проверкой достаточности: новые поля в него никто не дописывает,
+// и именно поэтому 17.08.2026 выкладка с неприменившейся миграцией отрапортовала
+// успех, а вход в кабинет упал. Настоящая проверка — schemaColumnsFromPrisma(),
+// она сверяет с базой каждое поле, которое Prisma ожидает увидеть.
 
 const REQUIRED_COLUMNS = {
     User: ['id', 'trialEndsAt', 'maxChatId', 'fcmToken'],
@@ -34,20 +40,28 @@ const REQUIRED_COLUMNS = {
     ],
 };
 
+// Каждая скалярная колонка, которую ожидает сгенерированный Prisma-клиент.
+// Берётся из самой схемы, а не из списка, который надо не забыть дописать.
+function schemaColumnsFromPrisma() {
+    const expected = {};
+    for (const model of Prisma.dmmf.datamodel.models) {
+        const table = model.dbName || model.name;
+        const columns = [];
+        for (const field of model.fields) {
+            if (field.kind === 'object') continue; // связь, не колонка
+            if (field.relationName) continue;
+            columns.push(field.dbName || field.name);
+        }
+        expected[table] = columns;
+    }
+    return expected;
+}
+
 async function readColumns() {
     return prisma.$queryRawUnsafe(`
         SELECT table_name AS "tableName", column_name AS "columnName"
         FROM information_schema.columns
         WHERE table_schema = 'public'
-          AND table_name IN (
-            'User',
-            'DiaryClient',
-            'DiarySession',
-            'LegalDocument',
-            'LegalDocumentAcceptance',
-            'FeatureInterest',
-            'PracticeNotification'
-          )
     `);
 }
 
@@ -88,7 +102,14 @@ async function main() {
     }
 
     const missing = [];
+    const expected = { ...schemaColumnsFromPrisma() };
+    // исторический якорь поверх схемы — на случай, если поле убрали из схемы,
+    // но продукт всё ещё на него рассчитывает
     for (const [table, columns] of Object.entries(REQUIRED_COLUMNS)) {
+        expected[table] = Array.from(new Set([...(expected[table] || []), ...columns]));
+    }
+
+    for (const [table, columns] of Object.entries(expected)) {
         const tableColumns = actual.get(table);
         if (!tableColumns) {
             missing.push(`${table} (table missing)`);
@@ -100,13 +121,15 @@ async function main() {
     }
 
     if (missing.length > 0) {
-        console.error('[schema] Required production schema is incomplete:');
+        console.error('[schema] База не соответствует схеме, которую ожидает приложение.');
+        console.error('[schema] Чаще всего это значит, что миграция не применилась, а выкладка пошла дальше.');
         for (const item of missing) console.error(`  - ${item}`);
+        await reportMigrationHistory();
         process.exitCode = 1;
         return;
     }
 
-    console.log('[schema] Required production tables and columns are present.');
+    console.log(`[schema] Все ${Object.keys(expected).length} таблиц и их колонки на месте.`);
     await reportMigrationHistory();
 }
 
