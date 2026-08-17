@@ -5,12 +5,41 @@
  * Auth: Token = SHA256(sorted param values concatenated + Password)
  * Test terminal: 1775405621806DEMO / MwTygrFgyCLUQcFu
  * Prod terminal: set TINKOFF_TERMINAL_KEY and TINKOFF_PASSWORD in env
+ *
+ * Two terminals (charter/13_TRACKING_PLAN.md §1): site and app each have
+ * their own TerminalKey/password. TINKOFF_APP_TERMINAL_KEY/PASSWORD are
+ * optional — until they're configured, only the site terminal is known and
+ * behavior is unchanged from before.
  */
 import { createHash } from 'crypto';
 
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY || '1775405621806DEMO';
 const PASSWORD = process.env.TINKOFF_PASSWORD || 'MwTygrFgyCLUQcFu';
 const TINKOFF_API = 'https://securepay.tinkoff.ru/v2';
+
+export type Terminal = 'site' | 'app';
+
+interface TerminalConfig {
+    terminal: Terminal;
+    terminalKey: string;
+    password: string;
+}
+
+function terminals(): TerminalConfig[] {
+    const list: TerminalConfig[] = [{ terminal: 'site', terminalKey: TERMINAL_KEY, password: PASSWORD }];
+    const appKey = process.env.TINKOFF_APP_TERMINAL_KEY;
+    const appPassword = process.env.TINKOFF_APP_PASSWORD;
+    if (appKey && appPassword) {
+        list.push({ terminal: 'app', terminalKey: appKey, password: appPassword });
+    }
+    return list;
+}
+
+/** Resolve which terminal a given TerminalKey belongs to, if any. */
+export function resolveTerminal(terminalKey: string | undefined): TerminalConfig | null {
+    if (!terminalKey) return null;
+    return terminals().find(t => t.terminalKey === terminalKey) ?? null;
+}
 
 export const PLANS = {
     practice: {
@@ -32,8 +61,8 @@ export type PlanKey = keyof typeof PLANS;
  * Algorithm: sort all params by key, concatenate values (not keys), SHA256
  * Special: exclude Token, Receipt, DATA from signing; add Password to params first
  */
-export function generateToken(params: Record<string, unknown>): string {
-    const signable: Record<string, string> = { Password: PASSWORD };
+export function generateToken(params: Record<string, unknown>, password: string = PASSWORD): string {
+    const signable: Record<string, string> = { Password: password };
 
     for (const [k, v] of Object.entries(params)) {
         if (k === 'Token') continue;
@@ -126,9 +155,15 @@ export interface TinkoffNotification {
     [key: string]: unknown;
 }
 
-/** Verify token from Tinkoff webhook notification */
+/**
+ * Verify token from a Tinkoff webhook notification, signing with the password
+ * of the terminal identified by the notification's own TerminalKey. Rejects
+ * notifications from a TerminalKey we don't recognize.
+ */
 export function verifyNotificationToken(notification: TinkoffNotification): boolean {
+    const config = resolveTerminal(notification.TerminalKey);
+    if (!config) return false;
     const params: Record<string, unknown> = { ...notification };
-    const expectedToken = generateToken(params as any);
+    const expectedToken = generateToken(params as any, config.password);
     return expectedToken === notification.Token;
 }
