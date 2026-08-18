@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, MapPin, Video, Calendar, Clock, X, Shield } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,6 +22,8 @@ import {
     checkConsentRequired,
     saveConsent
 } from '../../actions';
+import { trackBookingStep } from '../../analytics-actions';
+import { BookingChannel, BookingLinkType, BookingFunnelStep } from '@/lib/analytics/booking-funnel-types';
 
 registerLocale('ru', ru);
 
@@ -74,9 +76,25 @@ export default function ClientBookingPage() {
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [scheduleMode, setScheduleMode] = useState<string>('booking');
 
+    // Booking funnel analytics (O-260817-11) — channel/link type are fixed
+    // for the whole visit, resolved once the page mounts; each step fires
+    // at most once per visit.
+    const funnelContextRef = useRef<{ channel: BookingChannel; linkType: BookingLinkType } | null>(null);
+    const trackedStepsRef = useRef<Set<string>>(new Set());
+    const trackStep = useCallback((step: BookingFunnelStep, knownClient: boolean) => {
+        const ctx = funnelContextRef.current;
+        if (!ctx || trackedStepsRef.current.has(step)) return;
+        trackedStepsRef.current.add(step);
+        trackBookingStep(psychologistId, step, { channel: ctx.channel, linkType: ctx.linkType, knownClient });
+    }, [psychologistId]);
+
     // Fetch initial data
     useEffect(() => {
         const tg = (window as any).Telegram?.WebApp;
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const channel: BookingChannel = tg ? 'telegram' : urlParams?.get('via') === 'max' ? 'max' : 'browser';
+        const linkType: BookingLinkType = urlParams?.get('c') ? 'personal' : 'general';
+        funnelContextRef.current = { channel, linkType };
         if (tg) {
             tg.ready();
             tg.expand();
@@ -102,6 +120,7 @@ export default function ClientBookingPage() {
 
                 // If private mode, don't load dates
                 if (user?.scheduleMode === 'private') {
+                    trackStep('booking_link_opened', false);
                     setLoading(false);
                     return;
                 }
@@ -165,8 +184,10 @@ export default function ClientBookingPage() {
                         setConsentRequired(consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
+                        trackStep('booking_link_opened', !!client);
                     } catch {
                         setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
+                        trackStep('booking_link_opened', false);
                     }
                 } else if (currentClientId && user) {
                     // Client loaded from URL, but without Telegram context (e.g. opened in browser)
@@ -192,8 +213,10 @@ export default function ClientBookingPage() {
                         setConsentRequired((client as any)?.consentVersion ? false : consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
+                        trackStep('booking_link_opened', !!client);
                     } catch (e) {
                         console.error(e);
+                        trackStep('booking_link_opened', false);
                     }
                 } else {
                     // Unknown client without TG and without client ID
@@ -203,6 +226,7 @@ export default function ClientBookingPage() {
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
                     } catch { }
+                    trackStep('booking_link_opened', false);
                 }
             } catch (err) {
                 toast.error('Не удалось загрузить данные специалиста');
@@ -214,7 +238,7 @@ export default function ClientBookingPage() {
         if (psychologistId) {
             init();
         }
-    }, [psychologistId]);
+    }, [psychologistId, trackStep]);
 
     // Handle Date selection and fetch times
     const handleDateChange = async (date: Date | null) => {
@@ -253,6 +277,7 @@ export default function ClientBookingPage() {
         } else {
             setSelectedFormat(slot.format as 'online' | 'offline');
         }
+        trackStep('booking_time_selected', isKnownClient);
     };
 
     const handleBookingAttempt = async (e: React.FormEvent) => {
@@ -269,6 +294,7 @@ export default function ClientBookingPage() {
         // If consent is required, show modal first
         if (consentRequired && !consentAccepted) {
             setShowConsentModal(true);
+            trackStep('booking_consent_shown', isKnownClient);
             return;
         }
 
@@ -320,6 +346,8 @@ export default function ClientBookingPage() {
             if (res && res.clientId && typeof window !== 'undefined') {
                 localStorage.setItem('compas_clientId', res.clientId);
             }
+
+            trackStep('booking_completed', isKnownClient);
 
             // Get address details for success screen
             let addressName: string | null = null;
@@ -597,7 +625,7 @@ export default function ClientBookingPage() {
                             type="text"
                             required
                             value={form.name}
-                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                            onChange={e => { setForm(f => ({ ...f, name: e.target.value })); trackStep('booking_form_started', isKnownClient); }}
                             className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-foreground transition-all"
                             placeholder="Ваше имя"
                             readOnly={isKnownClient}
@@ -613,7 +641,7 @@ export default function ClientBookingPage() {
                         <PhoneInput
                             country={'ru'}
                             value={form.phone}
-                            onChange={phone => setForm(f => ({ ...f, phone }))}
+                            onChange={phone => { setForm(f => ({ ...f, phone })); trackStep('booking_form_started', isKnownClient); }}
                             inputProps={{
                                 required: true,
                             }}
@@ -651,7 +679,7 @@ export default function ClientBookingPage() {
                             Нажимая кнопку «Записаться», вы принимаете условия{' '}
                             <button
                                 type="button"
-                                onClick={() => setShowConsentModal(true)}
+                                onClick={() => { setShowConsentModal(true); trackStep('booking_consent_shown', isKnownClient); }}
                                 className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
                             >
                                 согласия на обработку персональных данных

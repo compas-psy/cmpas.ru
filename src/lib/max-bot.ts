@@ -18,6 +18,16 @@ const MAX_API = 'https://botapi.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 
+// MAX has no client-side bridge like window.Telegram.WebApp, so the booking
+// page (src/app/bot/book/[psychologistId]/page.tsx) can't detect a MAX open
+// on its own — every link MAX sends carries this marker instead
+// (O-260817-11, booking funnel channel field).
+function maxBookUrl(psychologistId: string, clientId?: string | null): string {
+    const params = new URLSearchParams({ via: 'max' });
+    if (clientId) params.set('c', clientId);
+    return `${APP_URL}/bot/book/${psychologistId}?${params.toString()}`;
+}
+
 export type MaxUpdate = {
     update_id: number;
     update_type: string;
@@ -104,7 +114,7 @@ async function handleStart(userId: number, payload: string | undefined) {
     if (psy) {
         return sendMaxMessage(userId,
             `Добро пожаловать в КОМПАС, ${psy.name || 'Специалист'}!\n\nВыберите действие:`,
-            [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '🔗 Ссылка на запись', url: `${APP_URL}/bot/book/${psy.id}` }]]
+            [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '🔗 Ссылка на запись', url: maxBookUrl(psy.id) }]]
         );
     }
 
@@ -186,7 +196,7 @@ async function handleStart(userId: number, payload: string | undefined) {
                 }
             }
             const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
-            const bookUrl = linkClientId ? `${APP_URL}/bot/book/${psychologistId}?c=${linkClientId}` : `${APP_URL}/bot/book/${psychologistId}`;
+            const bookUrl = maxBookUrl(psychologistId, linkClientId);
             return sendMaxMessage(userId, `Добро пожаловать! Вы можете записаться к специалисту ${psyName}.`, [[{ text: '📅 Записаться', url: bookUrl }]]);
         }
     }
@@ -194,14 +204,14 @@ async function handleStart(userId: number, payload: string | undefined) {
     const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } });
     if (client) {
         return sendMaxMessage(userId, `Добро пожаловать, ${client.name}!`, [
-            [{ text: '📅 Записаться', url: `${APP_URL}/bot/book/${client.psychologistId}?c=${client.id}` }],
+            [{ text: '📅 Записаться', url: maxBookUrl(client.psychologistId, client.id) }],
             [{ text: '🗓 Мои сессии', url: `${APP_URL}/bot/client` }],
         ]);
     }
 
     const tgClient = await db.telegramClient.findUnique({ where: { telegramUserId: mid } });
     if (tgClient?.psychologistId) {
-        const bookUrl = tgClient.diaryClientId ? `${APP_URL}/bot/book/${tgClient.psychologistId}?c=${tgClient.diaryClientId}` : `${APP_URL}/bot/book/${tgClient.psychologistId}`;
+        const bookUrl = maxBookUrl(tgClient.psychologistId, tgClient.diaryClientId);
         return sendMaxMessage(userId, `Добро пожаловать, ${tgClient.fullName || 'Клиент'}!`, [
             [{ text: '📅 Записаться', url: bookUrl }],
             [{ text: '🗓 Мои сессии', url: `${APP_URL}/bot/client` }],
@@ -277,7 +287,7 @@ async function handleShareLink(userId: number) {
     const mid = maxId(userId);
     const psy = await db.user.findFirst({ where: { maxChatId: mid } });
     if (!psy) return sendMaxMessage(userId, 'Эта команда доступна только для психологов.');
-    const bookUrl = `${APP_URL}/bot/book/${psy.id}`;
+    const bookUrl = maxBookUrl(psy.id);
     return sendMaxMessage(userId, `🔗 Ссылка для записи клиентов:\n\n${bookUrl}\n\nОтправьте эту ссылку клиенту — он сможет выбрать удобное время.`, [[{ text: '📅 Открыть страницу записи', url: bookUrl }]]);
 }
 
@@ -355,7 +365,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
             await maxApi(`/answers/${callbackId}`, {});
             return sendMaxMessage(userId, 'Сессия не найдена или у вас нет доступа.');
         }
-        const bookUrl = `${APP_URL}/bot/book/${session.psychologistId}?c=${session.clientId}`;
+        const bookUrl = maxBookUrl(session.psychologistId, session.clientId);
         await sendMaxMessage(userId, '🔄 Чтобы перенести сессию, выберите новое время:', [[{ text: '📅 Выбрать новое время', url: bookUrl }]]);
     }
 
@@ -410,7 +420,7 @@ export async function handleMaxUpdate(update: MaxUpdate) {
                 if (psy) {
                     await sendMaxMessage(userId, 'Выберите действие:', [
                         [{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }],
-                        [{ text: '🔗 Ссылка для клиента', url: `${APP_URL}/bot/book/${psy.id}` }],
+                        [{ text: '🔗 Ссылка для клиента', url: maxBookUrl(psy.id) }],
                         [{ text: '🗓 Мои сессии', payload: '/sessions' }],
                     ]);
                 } else {

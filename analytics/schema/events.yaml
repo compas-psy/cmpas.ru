@@ -7,6 +7,10 @@
 # Every event implicitly has the envelope fields: event, ts, product,
 # account_id, device_id, schema_version — those are validated separately,
 # not listed per-event below.
+#
+# `question` is required on every event (charter/12_ANALYTICS.md, правило 3:
+# «событие без вопроса не заводится») — src/lib/analytics/schema.ts refuses
+# to load the registry if any event is missing one.
 
 version: 1
 
@@ -19,11 +23,13 @@ events:
   # Identity (charter/12_ANALYTICS.md §2) — links a pre-login device to an
   # account, written once at the moment of login.
   identity_linked:
+    question: "Сколько устройств доводится до входа в аккаунт?"
     required: []
     optional: []
 
   # Consent gate (this order's rule: no device_id before consent).
   consent_updated:
+    question: "Растёт ли доля аккаунтов, давших согласие на аналитику?"
     required: [granted]
     optional: []
     props:
@@ -32,6 +38,7 @@ events:
   # Billing — Т-Банк (charter/13_TRACKING_PLAN.md §6). Never carries
   # rebillId, tinkoffPaymentId, or a terminal password.
   payment_initiated:
+    question: "Сколько попыток оплаты начинается и на каком терминале?"
     required: [terminal, plan, amount, months]
     optional: []
     props:
@@ -41,6 +48,7 @@ events:
       months: number
 
   payment_succeeded:
+    question: "Сколько оплат проходит успешно и на какую сумму?"
     required: [terminal, plan, amount, months]
     optional: []
     props:
@@ -50,6 +58,7 @@ events:
       months: number
 
   payment_failed:
+    question: "На какой причине чаще всего срывается оплата?"
     required: [terminal, plan, reason]
     optional: []
     props:
@@ -58,6 +67,7 @@ events:
       reason: string
 
   subscription_started:
+    question: "Сколько новых подписок открывается и по какому плану?"
     required: [terminal, plan, months]
     optional: []
     props:
@@ -66,6 +76,7 @@ events:
       months: number
 
   subscription_renewed:
+    question: "Какая доля подписок продлевается?"
     required: [terminal, plan, months]
     optional: []
     props:
@@ -74,9 +85,75 @@ events:
       months: number
 
   subscription_churned:
+    question: "Сколько подписок уходит в отток и когда?"
     required: [terminal, plan, months]
     optional: []
     props:
       terminal: string
       plan: string
       months: number
+
+  # Booking funnel (O-260817-11 · state/15_ORDERS.md, product/dashboard/TZ_management_dashboard.md §7).
+  # Five steps of the client-facing booking path. No name, phone, client id
+  # or other free text — only channel/link/step shape. account_id is the
+  # psychologist's User.id: clients don't have accounts in cmpas.ru, and the
+  # funnel is measured per specialist, same as every billing event above.
+  booking_link_opened:
+    question: "Сколько человек открывает ссылку записи и каким каналом?"
+    required: [channel, link_type, known_client, step]
+    optional: []
+    props:
+      channel: string
+      link_type: string
+      known_client: boolean
+      step: number
+
+  booking_time_selected:
+    question: "Какая доля открывших ссылку доходит до выбора времени?"
+    required: [channel, link_type, known_client, step]
+    optional: []
+    props:
+      channel: string
+      link_type: string
+      known_client: boolean
+      step: number
+
+  booking_form_started:
+    question: "Какая доля выбравших время доходит до формы?"
+    required: [channel, link_type, known_client, step]
+    optional: []
+    props:
+      channel: string
+      link_type: string
+      known_client: boolean
+      step: number
+
+  booking_consent_shown:
+    question: "Скольким показывается экран согласия перед записью?"
+    required: [channel, link_type, known_client, step]
+    optional: []
+    props:
+      channel: string
+      link_type: string
+      known_client: boolean
+      step: number
+
+  booking_completed:
+    question: "Какая доля дошедших до формы завершает запись?"
+    required: [channel, link_type, known_client, step]
+    optional: []
+    props:
+      channel: string
+      link_type: string
+      known_client: boolean
+      step: number
+
+  # Direct measure of whether the booking path works at all (order's own
+  # words: "восстановить задним числом невозможно, поэтому пишется с
+  # первого дня"). Fired on session creation, not on a funnel step.
+  booking_created_by:
+    question: "Работает ли путь самозаписи — кто чаще создаёт запись, клиент или специалист?"
+    required: [created_by]
+    optional: []
+    props:
+      created_by: string

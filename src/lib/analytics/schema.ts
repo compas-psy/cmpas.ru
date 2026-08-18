@@ -9,6 +9,7 @@ import path from 'path';
 import { load } from 'js-yaml';
 
 export interface EventDef {
+    question?: string;
     required: string[];
     optional: string[];
     props?: Record<string, 'string' | 'number' | 'boolean'>;
@@ -22,10 +23,24 @@ export interface EventRegistry {
 
 let cached: EventRegistry | null = null;
 
+// charter/12_ANALYTICS.md, правило 3: «событие без вопроса не заводится».
+// A registry event with no `question` fails to load rather than being
+// silently accepted — the same shape of guarantee `validateEvent` gives
+// per-request, applied to the registry file itself.
+export function assertEventsHaveQuestions(events: Record<string, EventDef>): void {
+    for (const [name, def] of Object.entries(events)) {
+        if (typeof def.question !== 'string' || !def.question.trim()) {
+            throw new Error(`analytics/schema/events.yaml: event "${name}" is missing a question (charter/12_ANALYTICS.md, правило 3)`);
+        }
+    }
+}
+
 export function loadRegistry(): EventRegistry {
     if (!cached) {
         const file = path.join(process.cwd(), 'analytics/schema/events.yaml');
-        cached = load(fs.readFileSync(file, 'utf8')) as EventRegistry;
+        const parsed = load(fs.readFileSync(file, 'utf8')) as EventRegistry;
+        assertEventsHaveQuestions(parsed.events);
+        cached = parsed;
     }
     return cached;
 }
