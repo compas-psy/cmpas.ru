@@ -1,16 +1,17 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32125060398. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32126098644. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
 ### Журнал миграций существует?
 t
 ### Записей в журнале
-31
+32
 ### Незавершённых миграций
 0
 ### Последние 20 записей журнала
+20260818100000_infra_pulse  finished=2026-08-18 10:13:47.754507+00
 20260818090000_ingest_anonymous  finished=2026-08-18 10:03:09.310097+00
 20260817140000_booking_a_b  finished=2026-08-18 10:03:09.281124+00
 20260817120000_analytics_f0_f1  finished=2026-08-17 13:33:19.477871+00
@@ -30,7 +31,6 @@ t
 20260405_add_subscription_payments  finished=2026-08-17 13:10:11.214714+00
 20260405_add_max_chat_id_to_diary_client  finished=2026-08-17 13:10:07.654003+00
 20260404_add_trial_ends_at  finished=2026-08-17 13:10:04.578802+00
-20260404_add_max_chat_id  finished=2026-08-17 13:10:01.363918+00
 ### Колонки, которые добавляли откаченные PR (должны отсутствовать)
 PsychologistSettings.privateRemindersEnabled
 PsychologistSettings.timeSuggestEnabled
@@ -42,80 +42,30 @@ WaitlistEntry
 events
 events_rejected
 ### Всего таблиц в базе
-48
+50
 ### Строк в главных таблицах
 User=14
 DiaryClient=20
 DiarySession=41
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   62G   23G  73% /
-/dev/vda2        89G   62G   23G  73% /
+/dev/vda2        89G   63G   22G  75% /
+/dev/vda2        89G   63G   22G  75% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2155        1497          56        4651        5785
+Mem:            7941        2254         432          57        5618        5686
 Swap:            511           1         510
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          6         6         47.39GB   47.39GB (100%)
-Containers      6         6         3.67MB    0B (0%)
-Local Volumes   155       7         210.7MB   4.07MB (1%)
-Build Cache     835       0         51.91GB   50.91GB
+Images          6         6         49.1GB    49.1GB (100%)
+Containers      6         6         28.47MB   0B (0%)
+Local Volumes   155       7         211MB     4.07MB (1%)
+Build Cache     840       0         52.66GB   52.41GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-#34 DONE 0.3s
-
-#35 exporting to image
-#35 exporting layers
-#35 exporting layers 17.6s done
-#35 exporting manifest sha256:8e6389c324768b2e7043563a8e7f719153df772172102cdb78f4147d67b3358d 0.0s done
-#35 exporting config sha256:64c7a7aba7f6d3425d2d4be9b1c2ac716b616e5c190d45001aea95b787b7f8f1 0.0s done
-#35 exporting attestation manifest sha256:e1e80c084903b811ed9dbfce0bc00974d7411e8b8d990e0f24061caa2d0cd97a 0.0s done
-#35 exporting manifest list sha256:04b763f7408439f87f4c790c675a66a068c4cb3bde9806c0715bfa7707dab3c1 0.0s done
-#35 naming to docker.io/library/cmpasru-app:latest done
-#35 unpacking to docker.io/library/cmpasru-app:latest
-#35 unpacking to docker.io/library/cmpasru-app:latest 6.6s done
-#35 DONE 24.4s
-
-#36 resolving provenance for metadata file
-#36 DONE 0.0s
- Image cmpasru-app Built 
-time="2026-08-18T13:03:05+03:00" level=warning msg="No services to build"
- Container cmpas-mailer Running 
- Container cmpas-postgres Running 
-[deploy] PostgreSQL is ready.
-[deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
-time="2026-08-18T13:03:05+03:00" level=warning msg="No services to build"
-time="2026-08-18T13:03:05+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-1ff9cb0bad40 Creating 
- Container cmpasru-app-run-1ff9cb0bad40 Created 
-Prisma schema loaded from prisma/schema.prisma
-Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
-
-31 migrations found in prisma/migrations
-
-Applying migration `20260817140000_booking_a_b`
-Applying migration `20260818090000_ingest_anonymous`
-
-The following migration(s) have been applied:
-
-migrations/
-  └─ 20260817140000_booking_a_b/
-    └─ migration.sql
-  └─ 20260818090000_ingest_anonymous/
-    └─ migration.sql
-      
-All migrations have been successfully applied.
-[deploy] Prisma migrations applied.
-[deploy] Applying beta schema safety net.
-psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "User" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
 ALTER TABLE
@@ -126,8 +76,8 @@ ALTER TABLE
 UPDATE 23
 psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
 CREATE INDEX
-CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
+CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
@@ -151,48 +101,98 @@ ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
 ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
 ALTER TABLE
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
 CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
 CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
 [deploy] Running strict schema verification against the new image.
-time="2026-08-18T13:03:10+03:00" level=warning msg="No services to build"
-time="2026-08-18T13:03:10+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-d8a2383237ca Creating 
- Container cmpasru-app-run-d8a2383237ca Created 
-[schema] Все 43 таблиц и их колонки на месте.
+time="2026-08-18T13:13:49+03:00" level=warning msg="No services to build"
+time="2026-08-18T13:13:49+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-e0dfc91f1fa1 Creating 
+ Container cmpasru-app-run-e0dfc91f1fa1 Created 
+[schema] Все 45 таблиц и их колонки на месте.
 [schema] Чтение User через клиент Prisma прошло.
 [schema] Чтение DiaryClient через клиент Prisma прошло.
 [schema] Чтение DiarySession через клиент Prisma прошло.
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Recreating only the application container.
-time="2026-08-18T13:03:12+03:00" level=warning msg="No services to build"
+time="2026-08-18T13:13:51+03:00" level=warning msg="No services to build"
  Container cmpas-app Recreate 
  Container cmpas-app Recreated 
  Container cmpas-app Starting 
  Container cmpas-app Started 
-[deploy] New application is healthy.
-[schema] Все 43 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Auth endpoint status: 200
-curl: (28) Failed to connect to api.telegram.org port 443 after 133108 ms: Couldn't connect to server
-[deploy] WARNING: Telegram webhook registration failed.
-[deploy] Deployment completed successfully.
+[deploy] ERROR: new application did not become healthy.
+cmpas-app | Up 2 minutes
+npm warn exec The following package was not found and will be installed: tsx@4.23.12
+[infra-pulse] starting, intervalMs=300000
+[infra-pulse] server stats failed: Error: ENOENT: no such file or directory, open '/hostfs/proc/stat'
+    at readFileSync (node:fs:448:20)
+    at readServerStats (/app/src/lib/infra-pulse/collector.ts:32:40)
+    at collectOnce (/app/src/lib/infra-pulse/collector.ts:103:9)
+    at runCollectorOnce (/app/src/lib/infra-pulse/collector.ts:144:27)
+    at tick (/app/scripts/infra-pulse-collector.ts:40:15)
+    at loop (/app/scripts/infra-pulse-collector.ts:48:15)
+    at <anonymous> (/app/scripts/infra-pulse-collector.ts:64:6)
+    at Object.<anonymous> (/app/scripts/infra-pulse-collector.ts:64:11)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Object.transformer (/root/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-C557imBs.cjs:9:3619) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/hostfs/proc/stat'
+}
+[infra-pulse] container stats failed: Error: connect ENOENT /var/run/docker.sock
+    at PipeConnectWrap.afterConnect [as oncomplete] (node:net:1611:16) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'connect',
+  address: '/var/run/docker.sock'
+}
+[deploy] Rolling back app to previous image sha256:04b763f7408439f87f4c790c675a66a068c4cb3bde9806c0715bfa7707dab3c1.
+Error response from daemon: No such image: sha256:04b763f7408439f87f4c790c675a66a068c4cb3bde9806c0715bfa7707dab3c1
+time="2026-08-18T13:15:54+03:00" level=warning msg="No services to build"
+ Container cmpas-app Creating 
+ Container cmpas-app Created 
+ Container cmpas-app Starting 
+ Container cmpas-app Started 
+[deploy] ERROR: rollback container is not healthy.
+npm warn exec The following package was not found and will be installed: tsx@4.23.12
+[infra-pulse] starting, intervalMs=300000
+[infra-pulse] server stats failed: Error: ENOENT: no such file or directory, open '/hostfs/proc/stat'
+    at readFileSync (node:fs:448:20)
+    at readServerStats (/app/src/lib/infra-pulse/collector.ts:32:40)
+    at collectOnce (/app/src/lib/infra-pulse/collector.ts:103:9)
+    at runCollectorOnce (/app/src/lib/infra-pulse/collector.ts:144:27)
+    at tick (/app/scripts/infra-pulse-collector.ts:40:15)
+    at loop (/app/scripts/infra-pulse-collector.ts:48:15)
+    at <anonymous> (/app/scripts/infra-pulse-collector.ts:64:6)
+    at Object.<anonymous> (/app/scripts/infra-pulse-collector.ts:64:11)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Object.transformer (/root/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-C557imBs.cjs:9:3619) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/hostfs/proc/stat'
+}
+[infra-pulse] container stats failed: Error: connect ENOENT /var/run/docker.sock
+    at PipeConnectWrap.afterConnect [as oncomplete] (node:net:1611:16) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'connect',
+  address: '/var/run/docker.sock'
+}
 ### Состояние контейнеров
 cmpas-app | Up 3 minutes
 zapiski-api | Up 19 hours (healthy)
 zapiski-postgres | Up 8 days (healthy)
 cmpas-mailer | Up 10 days (healthy)
 cmpas-postgres | Up 10 days (healthy)
-cmpas-singbox | Restarting (1) 22 seconds ago
+cmpas-singbox | Restarting (1) 27 seconds ago
 ```
 
 ## Миграции, лежащие в репозитории
@@ -229,4 +229,5 @@ cmpas-singbox | Restarting (1) 22 seconds ago
 20260817120000_analytics_f0_f1
 20260817140000_booking_a_b
 20260818090000_ingest_anonymous
+20260818100000_infra_pulse
 ```
