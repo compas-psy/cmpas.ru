@@ -984,6 +984,7 @@ model DeployLog {
 
   @@index([startedAt])
   @@index([result])
+}
 
 // Consent basis for a device that has no account (O-260817-13): МОМЕНТЫ has
 // none at all, ЗАПИСКИ has no production login yet. Independent of
