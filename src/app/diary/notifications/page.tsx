@@ -8,27 +8,16 @@ type NotifSettings = {
     newBookingEnabled: boolean;
     newBookingTemplate: string;
     reminderEnabled: boolean;
-    reminderMinutesBefore: number;
-    reminderTemplate: string;
     clientRescheduleEnabled: boolean;
     clientCancelEnabled: boolean;
     morningDigestEnabled: boolean;
     weeklyDigestEnabled: boolean;
     clientReminder25hEnabled: boolean;
-    clientReminder25hTemplate: string;
     clientReminder1hEnabled: boolean;
-    clientReminder1hTemplate: string;
     clientPsyCancelEnabled: boolean;
     clientPsyCancelTemplate: string;
     clientMoodCheckEnabled: boolean;
 };
-
-const REMINDER_INTERVALS = [
-    { value: 15, label: '15 минут' },
-    { value: 30, label: '30 минут' },
-    { value: 60, label: '1 час' },
-    { value: 120, label: '2 часа' },
-];
 
 function Toggle({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
     return (
@@ -171,24 +160,9 @@ export default function NotificationsPage() {
                         testType="newBooking" onTest={handleTest}
                     />
                     <NotifRow
-                        label="Напоминание" desc="Перед началом сессии"
+                        label="Напоминание" desc="За день до сессии — включает и отключает эту рассылку, время и текст фиксированы"
                         enabled={settings.reminderEnabled} onToggle={v => update('reminderEnabled', v)}
-                        template={settings.reminderTemplate} onTemplateChange={v => update('reminderTemplate', v)}
-                        testType="reminder" onTest={handleTest}
-                    >
-                        {settings.reminderEnabled && (
-                            <div className="flex items-center gap-3">
-                                <label className="text-xs font-semibold text-muted-foreground">За сколько напомнить:</label>
-                                <select
-                                    value={settings.reminderMinutesBefore}
-                                    onChange={e => update('reminderMinutesBefore', parseInt(e.target.value))}
-                                    className="px-3 py-1.5 border border-border rounded-lg bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/50"
-                                >
-                                    {REMINDER_INTERVALS.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
-                                </select>
-                            </div>
-                        )}
-                    </NotifRow>
+                    />
                     <NotifRow
                         label="Клиент перенёс" desc="Когда клиент переносит сессию"
                         enabled={settings.clientRescheduleEnabled} onToggle={v => update('clientRescheduleEnabled', v)}
@@ -231,16 +205,12 @@ export default function NotificationsPage() {
                 </h2>
                 <div className="space-y-3">
                     <NotifRow
-                        label="Напоминание за 25 часов" desc="За день до сессии"
+                        label="Напоминание за 25 часов" desc="За день до сессии — включает и отключает эту рассылку, текст фиксирован"
                         enabled={settings.clientReminder25hEnabled} onToggle={v => update('clientReminder25hEnabled', v)}
-                        template={settings.clientReminder25hTemplate} onTemplateChange={v => update('clientReminder25hTemplate', v)}
-                        testType="clientReminder25h" onTest={handleTest}
                     />
                     <NotifRow
-                        label="Напоминание за 1 час" desc="За час до начала"
+                        label="Напоминание за 1 час" desc="За час до начала — включает и отключает эту рассылку, текст фиксирован"
                         enabled={settings.clientReminder1hEnabled} onToggle={v => update('clientReminder1hEnabled', v)}
-                        template={settings.clientReminder1hTemplate} onTemplateChange={v => update('clientReminder1hTemplate', v)}
-                        testType="clientReminder1h" onTest={handleTest}
                     />
                     <NotifRow
                         label="Отмена психологом" desc="Когда психолог отменяет сессию"

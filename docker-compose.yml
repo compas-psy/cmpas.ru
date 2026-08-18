@@ -47,6 +47,36 @@ services:
       - ./deploy/singbox-config.json:/etc/sing-box/config.json:ro
     command: ["run", "-c", "/etc/sing-box/config.json"]
 
+  # Рассылка напоминаний о сессиях (O-260817-16, CJM_booking_v2.md §1
+  # «восьмое, невидимое»): отдельный процесс, не внутри сайта — `app`'s
+  # node-cron больше не отправляет напоминания вовсе (src/instrumentation.ts,
+  # src/lib/reminders/outbox.ts). Опрашивает ReminderOutbox и забирает всё,
+  # что должно было уйти и не ушло; claim через FOR UPDATE SKIP LOCKED —
+  # запусти этот сервис в двух копиях, и они разберут пачку между собой, а
+  # не отправят одно и то же сообщение дважды.
+  #
+  # Не запускается в обычном `docker compose up` — тот же приём, что у
+  # singbox выше: `docker compose --profile reminders up`. Включение — это
+  # `/human`-решение (устав §6.1), а не то, что эта ветка делает сама.
+  reminders-worker:
+    container_name: cmpas-reminders-worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: reminders-worker
+    restart: always
+    profiles: ["reminders"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db
+      - AUTH_URL=https://cmpas.ru
+      - TELEGRAM_PROXY=${TELEGRAM_PROXY:-}
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:15-alpine
     container_name: cmpas-postgres
