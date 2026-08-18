@@ -74,6 +74,11 @@ jobs:
           chmod 600 ~/.ssh/tk_key
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
               -i ~/.ssh/tk_key "$SSH_USER@$SSH_HOST" 'bash -s' > /tmp/server.out 2>&1 <<EOF || true
+          # Node НЕ использует системное хранилище доверенных сертификатов —
+          # у него собственный встроенный набор. Установка корня Минцифры
+          # починила curl, но не Node: без этой строки запрос по-прежнему
+          # не уходит.
+          export NODE_EXTRA_CA_CERTS=/etc/ssl/ru-ca/russian-trusted.pem
           export TK_SITE='${{ secrets.TINKOFF_TEST_TERMINAL_KEY }}'
           export TK_SITE_PWD='${{ secrets.TINKOFF_TEST_PASSWORD }}'
           export TK_APP='${{ secrets.TINKOFF_TEST_APP_TERMINAL_KEY }}'
