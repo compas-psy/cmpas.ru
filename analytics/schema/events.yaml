@@ -7,6 +7,21 @@
 # Every event implicitly has the envelope fields: event, ts, product,
 # account_id, device_id, schema_version — those are validated separately,
 # not listed per-event below.
+#
+# O-260817-17: this file is the single registry every product submits
+# through (charter/12_ANALYTICS.md §3 treats the receiver as shared —
+# "второй сервер не строим", decided for МОМЕНТЫ in O-260817-14). Each
+# event below carries `product`, which of the three products may send it;
+# submitting a real event under the wrong product is rejected exactly like
+# submitting an unknown event (src/lib/analytics/schema.ts). ЗАПИСКИ and
+# МОМЕНТЫ keep their own copy of these event names/props in their own
+# repos for their client code (packages/core/src/analytics/schema.ts in
+# zapiski, AnalyticsSchema.kt in compas-voice) — this file must stay a
+# superset of both, checked by tests/registry-sync.test.ts, not by eye.
+# ЗАПИСКИ today posts to its own backend (POST /api/v1/analytics/events,
+# O-260817-05), not to this /ingest — its events are consolidated here
+# regardless, per this order's instruction; retargeting its transport is a
+# separate decision this order does not make.
 
 version: 1
 
@@ -19,11 +34,13 @@ events:
   # Identity (charter/12_ANALYTICS.md §2) — links a pre-login device to an
   # account, written once at the moment of login.
   identity_linked:
+    product: practice
     required: []
     optional: []
 
   # Consent gate (this order's rule: no device_id before consent).
   consent_updated:
+    product: practice
     required: [granted]
     optional: []
     props:
@@ -32,6 +49,7 @@ events:
   # Billing — Т-Банк (charter/13_TRACKING_PLAN.md §6). Never carries
   # rebillId, tinkoffPaymentId, or a terminal password.
   payment_initiated:
+    product: practice
     required: [terminal, plan, amount, months]
     optional: []
     props:
@@ -41,6 +59,7 @@ events:
       months: number
 
   payment_succeeded:
+    product: practice
     required: [terminal, plan, amount, months]
     optional: []
     props:
@@ -50,6 +69,7 @@ events:
       months: number
 
   payment_failed:
+    product: practice
     required: [terminal, plan, reason]
     optional: []
     props:
@@ -58,6 +78,7 @@ events:
       reason: string
 
   subscription_started:
+    product: practice
     required: [terminal, plan, months]
     optional: []
     props:
@@ -66,6 +87,7 @@ events:
       months: number
 
   subscription_renewed:
+    product: practice
     required: [terminal, plan, months]
     optional: []
     props:
@@ -74,9 +96,93 @@ events:
       months: number
 
   subscription_churned:
+    product: practice
     required: [terminal, plan, months]
     optional: []
     props:
       terminal: string
       plan: string
       months: number
+
+  # ЗАПИСКИ (source of truth for the client: zapiski's own
+  # packages/core/src/analytics/schema.ts). Snapshot taken 18.08.2026.
+  # `length_bucket`/`query_length_bucket`/`format` are enums client-side
+  # (packages/core/src/analytics/schema.ts:27-50); this registry's type
+  # language has no enum, so they're recorded as `string` here — the
+  # narrower value set is enforced by the zapiski client, not re-enforced
+  # server-side. Named in the PR, not silent.
+  note_saved:
+    product: zapiski
+    question: "Люди действительно сохраняют заметки — и как часто пишут длинные?"
+    required: []
+    optional: [length_bucket, encrypted]
+    props:
+      length_bucket: string
+      encrypted: boolean
+
+  note_searched:
+    product: zapiski
+    question: "Работает ли поиск как основной способ найти заметку?"
+    required: []
+    optional: [query_length_bucket, results_count]
+    props:
+      query_length_bucket: string
+      results_count: number
+
+  sync_completed:
+    product: zapiski
+    question: "Синк вообще случается, и с каким объёмом изменений?"
+    required: []
+    optional: [pushed, pulled, conflicts]
+    props:
+      pushed: number
+      pulled: number
+      conflicts: number
+
+  export_requested:
+    product: zapiski
+    question: "Каким форматом экспорта пользуются и насколько массово?"
+    required: []
+    optional: [format, notes_count]
+    props:
+      format: string
+      notes_count: number
+
+  # МОМЕНТЫ (source of truth for the client: compas-voice's own
+  # AnalyticsSchema.kt). Snapshot taken 18.08.2026. `completion_pct` is
+  # `integer` client-side; this registry's type language has no integer,
+  # recorded as `number` (a JS/TS number check already accepts it).
+  app_installed:
+    product: moments
+    question: "Сколько холодных запусков — и сколько из них доходят до первой практики в тот же день (агрегация на витрине)?"
+    required: []
+    optional: []
+
+  practice_started:
+    product: moments
+    question: "Практика запущена (тап «Начать» в шите) — какая и из какой группы?"
+    required: []
+    optional: [practice_id, group, is_sleep]
+    props:
+      practice_id: string
+      group: string
+      is_sleep: boolean
+
+  practice_finished:
+    product: moments
+    question: "Практика завершена (доиграла, угасла или закрыта вручную) — насколько досмотрена?"
+    required: []
+    optional: [practice_id, group, is_sleep, completion_pct]
+    props:
+      practice_id: string
+      group: string
+      is_sleep: boolean
+      completion_pct: number
+
+  crossed_to_product:
+    product: moments
+    question: "Переходят ли из МОМЕНТОВ в другой продукт СИМПАС? (нет UI-точки на 18.08.2026, схема готова заранее)"
+    required: []
+    optional: [target_product]
+    props:
+      target_product: string
