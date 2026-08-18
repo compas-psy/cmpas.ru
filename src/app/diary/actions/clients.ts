@@ -6,11 +6,20 @@ import { revalidatePath } from 'next/cache';
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract-name';
+import { clientBookingLink } from '@/lib/client-workflow';
 
 async function getPsychologistId() {
     const session = await auth();
     if (!session?.user?.id) throw new Error('Unauthorized');
     return session.user.id;
+}
+
+/** Signed, time-limited personal booking link for one client — safe to share, not forgeable. */
+export async function getClientBookingLink(clientId: string) {
+    const psychologistId = await getPsychologistId();
+    const client = await db.diaryClient.findFirst({ where: { id: clientId, psychologistId }, select: { id: true } });
+    if (!client) throw new Error('Клиент не найден');
+    return clientBookingLink(psychologistId, client.id);
 }
 
 export async function getClients(search?: string, statusFilter?: string) {

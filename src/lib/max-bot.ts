@@ -13,7 +13,7 @@ import { createNotification } from '@/lib/notifications';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
-import { clientActionToken } from '@/lib/client-workflow';
+import { clientActionToken, personalClientToken } from '@/lib/client-workflow';
 
 const MAX_API = 'https://botapi.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -187,7 +187,7 @@ async function handleStart(userId: number, payload: string | undefined) {
                 }
             }
             const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
-            const bookUrl = linkClientId ? `${APP_URL}/bot/book/${psychologistId}?c=${linkClientId}` : `${APP_URL}/bot/book/${psychologistId}`;
+            const bookUrl = linkClientId ? `${APP_URL}/bot/book/${psychologistId}?c=${personalClientToken(linkClientId)}` : `${APP_URL}/bot/book/${psychologistId}`;
             return sendMaxMessage(userId, `Добро пожаловать! Вы можете записаться к специалисту ${psyName}.`, [[{ text: '📅 Записаться', url: bookUrl }]]);
         }
     }
@@ -195,14 +195,14 @@ async function handleStart(userId: number, payload: string | undefined) {
     const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } });
     if (client) {
         return sendMaxMessage(userId, `Добро пожаловать, ${client.name}!`, [
-            [{ text: '📅 Записаться', url: `${APP_URL}/bot/book/${client.psychologistId}?c=${client.id}` }],
+            [{ text: '📅 Записаться', url: `${APP_URL}/bot/book/${client.psychologistId}?c=${personalClientToken(client.id)}` }],
             [{ text: '🗓 Мои сессии', url: `${APP_URL}/bot/client` }],
         ]);
     }
 
     const tgClient = await db.telegramClient.findUnique({ where: { telegramUserId: mid } });
     if (tgClient?.psychologistId) {
-        const bookUrl = tgClient.diaryClientId ? `${APP_URL}/bot/book/${tgClient.psychologistId}?c=${tgClient.diaryClientId}` : `${APP_URL}/bot/book/${tgClient.psychologistId}`;
+        const bookUrl = tgClient.diaryClientId ? `${APP_URL}/bot/book/${tgClient.psychologistId}?c=${personalClientToken(tgClient.diaryClientId)}` : `${APP_URL}/bot/book/${tgClient.psychologistId}`;
         return sendMaxMessage(userId, `Добро пожаловать, ${tgClient.fullName || 'Клиент'}!`, [
             [{ text: '📅 Записаться', url: bookUrl }],
             [{ text: '🗓 Мои сессии', url: `${APP_URL}/bot/client` }],
