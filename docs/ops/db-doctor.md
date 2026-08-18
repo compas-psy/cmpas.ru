@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32126098644. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32127447920. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -49,150 +49,120 @@ DiaryClient=20
 DiarySession=41
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   63G   22G  75% /
-/dev/vda2        89G   63G   22G  75% /
+/dev/vda2        89G   64G   21G  76% /
+/dev/vda2        89G   64G   21G  76% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2254         432          57        5618        5686
-Swap:            511           1         510
+Mem:            7941        3524         219          56        4560        4416
+Swap:            511           4         507
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          6         6         49.1GB    49.1GB (100%)
+Images          6         6         49.22GB   49.22GB (100%)
 Containers      6         6         28.47MB   0B (0%)
 Local Volumes   155       7         211MB     4.07MB (1%)
-Build Cache     840       0         52.66GB   52.41GB
+Build Cache     843       15        52.78GB   50.85GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:13: NOTICE:  column "documentVersion" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-UPDATE 23
-psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
-CREATE TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
-CREATE INDEX
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
-CREATE TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
-[deploy] Running strict schema verification against the new image.
-time="2026-08-18T13:13:49+03:00" level=warning msg="No services to build"
-time="2026-08-18T13:13:49+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-e0dfc91f1fa1 Creating 
- Container cmpasru-app-run-e0dfc91f1fa1 Created 
-[schema] Все 45 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Recreating only the application container.
-time="2026-08-18T13:13:51+03:00" level=warning msg="No services to build"
- Container cmpas-app Recreate 
- Container cmpas-app Recreated 
- Container cmpas-app Starting 
- Container cmpas-app Started 
-[deploy] ERROR: new application did not become healthy.
-cmpas-app | Up 2 minutes
-npm warn exec The following package was not found and will be installed: tsx@4.23.12
-[infra-pulse] starting, intervalMs=300000
-[infra-pulse] server stats failed: Error: ENOENT: no such file or directory, open '/hostfs/proc/stat'
-    at readFileSync (node:fs:448:20)
-    at readServerStats (/app/src/lib/infra-pulse/collector.ts:32:40)
-    at collectOnce (/app/src/lib/infra-pulse/collector.ts:103:9)
-    at runCollectorOnce (/app/src/lib/infra-pulse/collector.ts:144:27)
-    at tick (/app/scripts/infra-pulse-collector.ts:40:15)
-    at loop (/app/scripts/infra-pulse-collector.ts:48:15)
-    at <anonymous> (/app/scripts/infra-pulse-collector.ts:64:6)
-    at Object.<anonymous> (/app/scripts/infra-pulse-collector.ts:64:11)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Object.transformer (/root/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-C557imBs.cjs:9:3619) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: '/hostfs/proc/stat'
-}
-[infra-pulse] container stats failed: Error: connect ENOENT /var/run/docker.sock
-    at PipeConnectWrap.afterConnect [as oncomplete] (node:net:1611:16) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'connect',
-  address: '/var/run/docker.sock'
-}
-[deploy] Rolling back app to previous image sha256:04b763f7408439f87f4c790c675a66a068c4cb3bde9806c0715bfa7707dab3c1.
-Error response from daemon: No such image: sha256:04b763f7408439f87f4c790c675a66a068c4cb3bde9806c0715bfa7707dab3c1
-time="2026-08-18T13:15:54+03:00" level=warning msg="No services to build"
- Container cmpas-app Creating 
- Container cmpas-app Created 
- Container cmpas-app Starting 
- Container cmpas-app Started 
-[deploy] ERROR: rollback container is not healthy.
-npm warn exec The following package was not found and will be installed: tsx@4.23.12
-[infra-pulse] starting, intervalMs=300000
-[infra-pulse] server stats failed: Error: ENOENT: no such file or directory, open '/hostfs/proc/stat'
-    at readFileSync (node:fs:448:20)
-    at readServerStats (/app/src/lib/infra-pulse/collector.ts:32:40)
-    at collectOnce (/app/src/lib/infra-pulse/collector.ts:103:9)
-    at runCollectorOnce (/app/src/lib/infra-pulse/collector.ts:144:27)
-    at tick (/app/scripts/infra-pulse-collector.ts:40:15)
-    at loop (/app/scripts/infra-pulse-collector.ts:48:15)
-    at <anonymous> (/app/scripts/infra-pulse-collector.ts:64:6)
-    at Object.<anonymous> (/app/scripts/infra-pulse-collector.ts:64:11)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Object.transformer (/root/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-C557imBs.cjs:9:3619) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: '/hostfs/proc/stat'
-}
-[infra-pulse] container stats failed: Error: connect ENOENT /var/run/docker.sock
-    at PipeConnectWrap.afterConnect [as oncomplete] (node:net:1611:16) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'connect',
-  address: '/var/run/docker.sock'
-}
+[deploy] AUTH_SECRET fingerprint: IKXOHxDD...
+[deploy] Preparing sing-box configuration.
+[31mFATAL[0m[0000] decode config at /c.json: outbounds[0]: unknown outbound type: mieru
+[deploy] WARNING: sing-box configuration check failed; deploying without VPN sidecar.
+[deploy] Creating database backup: /var/backups/cmpas/db_backup_20260818_133415.sql
+[deploy] Validating Docker Compose configuration.
+[deploy] Building the new application image while the old app remains online.
+ Image cmpasru-app Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 500B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.73kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:20-slim
+#3 DONE 1.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 170B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 [base 1/3] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+#6 resolve docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 0.1s done
+#6 DONE 0.1s
+
+#5 [internal] load build context
+#5 transferring context: 64.61kB 0.2s done
+#5 DONE 0.2s
+
+#7 [deps 3/3] RUN npm install --legacy-peer-deps
+#7 CACHED
+
+#8 [base 2/3] RUN apt-get update -y && apt-get install -y openssl ca-certificates
+#8 CACHED
+
+#9 [base 3/3] WORKDIR /app
+#9 CACHED
+
+#10 [deps 1/3] WORKDIR /app
+#10 CACHED
+
+#11 [deps 2/3] COPY package.json package-lock.json* ./
+#11 CACHED
+
+#12 [builder 2/5] COPY --from=deps /app/node_modules ./node_modules
+#12 CACHED
+
+#13 [builder 3/5] COPY . .
+#13 DONE 0.6s
+
+#14 [builder 4/5] RUN npx prisma generate
+#14 2.495 Prisma schema loaded from prisma/schema.prisma
+#14 7.643 
+#14 7.643 ✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 1.38s
+#14 7.643 
+#14 7.643 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+#14 7.643 
+#14 7.643 Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
+#14 7.643 
+#14 7.820 npm notice
+#14 7.820 npm notice New major version of npm available! 10.8.2 -> 12.0.2
+#14 7.820 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+#14 7.820 npm notice To update run: npm install -g npm@12.0.2
+#14 7.820 npm notice
+#14 DONE 7.9s
+
+#15 [builder 5/5] RUN npm run build
+#15 1.154 
+#15 1.154 > cmpas.ru@0.1.0 build
+#15 1.154 > next build
+#15 1.154 
+#15 4.255 ▲ Next.js 16.1.1 (Turbopack)
+#15 4.257 
+#15 4.473   Creating an optimized production build ...
 ### Состояние контейнеров
-cmpas-app | Up 3 minutes
+cmpas-app | Up 19 minutes
 zapiski-api | Up 19 hours (healthy)
 zapiski-postgres | Up 8 days (healthy)
 cmpas-mailer | Up 10 days (healthy)
 cmpas-postgres | Up 10 days (healthy)
-cmpas-singbox | Restarting (1) 27 seconds ago
+cmpas-singbox | Restarting (1) 31 seconds ago
+### Достижим ли Т-Банк с сервера
+-- имя разрешается в:
+178.130.128.34  securepay.tinkoff.ru
+-- curl с хоста:
+curl: (60) SSL certificate problem: self-signed certificate in certificate chain
+More details here: https://curl.se/docs/sslcerts.html
+
+-- curl из контейнера приложения:
+sh: 1: curl: not found
+-- версия node на хосте:
+v20.19.6
 ```
 
 ## Миграции, лежащие в репозитории
