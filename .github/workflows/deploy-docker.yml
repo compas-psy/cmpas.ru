@@ -134,6 +134,17 @@ jobs:
       MIERU_PORT: ${{ secrets.MIERU_PORT }}
       MIERU_USERNAME: ${{ secrets.MIERU_USERNAME }}
       MIERU_PASSWORD: ${{ secrets.MIERU_PASSWORD }}
+      # Эквайринг Т-Банк: два раздельных терминала — сайт и приложение.
+      TINKOFF_TERMINAL_KEY: ${{ secrets.TINKOFF_TERMINAL_KEY }}
+      TINKOFF_PASSWORD: ${{ secrets.TINKOFF_PASSWORD }}
+      TINKOFF_APP_TERMINAL_KEY: ${{ secrets.TINKOFF_APP_TERMINAL_KEY }}
+      TINKOFF_APP_PASSWORD: ${{ secrets.TINKOFF_APP_PASSWORD }}
+      # Почта из админки. Вход по ссылке идёт не сюда, а через контейнер mailer.
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
     steps:
       - name: Deploy via SSH
         id: deploy
@@ -144,7 +155,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           command_timeout: 45m
-          envs: YANDEX_CLIENT_ID,YANDEX_CLIENT_SECRET,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,MAX_BOT_TOKEN,MAX_BOT_USERNAME,DADATA_API_KEY,MIERU_SERVER,MIERU_PORT,MIERU_USERNAME,MIERU_PASSWORD
+          envs: YANDEX_CLIENT_ID,YANDEX_CLIENT_SECRET,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,MAX_BOT_TOKEN,MAX_BOT_USERNAME,DADATA_API_KEY,MIERU_SERVER,MIERU_PORT,MIERU_USERNAME,MIERU_PASSWORD,TINKOFF_TERMINAL_KEY,TINKOFF_PASSWORD,TINKOFF_APP_TERMINAL_KEY,TINKOFF_APP_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM
           script: |
             set -e
             cd /var/www/cmpas.ru
