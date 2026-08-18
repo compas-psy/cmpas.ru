@@ -1,0 +1,33 @@
+# Самопроверка эквайринга Т-Банк (тестовый терминал)
+
+Прогон: 2026-08-18T10:30:53.790Z
+
+## Что подставлено
+
+- терминал сайта: TINK…EY (длина 25)
+- пароль сайта: задан
+- терминал приложения: 1775…MO (длина 17)
+- пароль приложения: задан
+
+## 1. Алгоритм подписи
+
+- **НЕ сходится** с эталонным примером: получили `44a2c8230d1154e7e67c36eceb381690a6c5ee4e969353d79e319fceca64285f`, ожидали `0024a00af7c350a3a67ca168ce06502aa72772456662e38696d48b56ee9c97d9`
+
+## 2. Создание платежа на терминале сайта
+
+- **отказ:** fetch failed
+
+## 4. Терминал приложения
+
+
+---
+
+**САМОПРОВЕРКА УПАЛА С ОШИБКОЙ**
+
+```
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:14976:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async post (/home/runner/work/cmpas.ru/cmpas.ru/scripts/tinkoff-selftest.ts:25:17)
+    at async main (/home/runner/work/cmpas.ru/cmpas.ru/scripts/tinkoff-selftest.ts:113:19)
+```
