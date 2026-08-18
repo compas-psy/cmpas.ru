@@ -36,6 +36,12 @@ next-env.d.ts
 # vps keys
 gh_deploy_key
 gh_deploy_key.pub
+antigravity_key
+antigravity_key.pub
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
 
 /src/generated/prisma
 
