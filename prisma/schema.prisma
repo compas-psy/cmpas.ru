@@ -522,6 +522,13 @@ model PsychologistSettings {
   bookingBufferHours     Int     @default(24) // Запись минимум за N часов
   bookingHorizonDays     Int     @default(14) // Максимальный горизонт записи в днях
 
+  // CJM_booking_v1.md §1.3 "Тихая запись": confirm/cancel links from reminders
+  // stop working once the session is over. Off by default — see O-260817-03.
+  privateRemindersEnabled Boolean @default(false)
+  // CJM_booking_v1.md §1.2 "Подбор времени": a preference question and 2-3
+  // suggested slots instead of an empty-looking grid. Off by default.
+  timeSuggestEnabled      Boolean @default(false)
+
   methods   String[] @default([])
   basePrice Int?
 
@@ -862,6 +869,20 @@ model PracticeNotification {
 
   @@index([psychologistId, createdAt])
   @@index([psychologistId, readAt])
+}
+
+// CJM_booking_v1.md §2 этап 8: capture only, shown when the suggested-times
+// screen (Mechanic B) finds nothing. No matching/notification engine yet —
+// that's a later mechanic (product/practice/CJM_booking_v1.md §4 "Порядок").
+model WaitlistEntry {
+  id             String   @id @default(cuid())
+  psychologistId String
+  name           String
+  contact        String
+  preference     String? // same preference tag as getSuggestedTimes, if any
+  createdAt      DateTime @default(now())
+
+  @@index([psychologistId, createdAt])
 }
 
 // ── Analytics ingest (charter/12_ANALYTICS.md, charter/13_TRACKING_PLAN.md §6) ──
