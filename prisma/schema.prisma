@@ -309,9 +309,10 @@ model DiaryClient {
   maxChatId String? // For MAX messenger notifications
 
   // Consent (152-FZ)
-  consentVersion String? // Version of consent text agreed to
-  consentHash    String? // SHA-256: tgUserId + version + timestamp
-  consentDate    DateTime? // When consent was given
+  consentVersion  String? // Version of consent text agreed to
+  consentHash     String? // SHA-256: tgUserId + version + timestamp
+  consentDate     DateTime? // When consent was given
+  consentRevokedAt DateTime? // Client-initiated revocation; consentVersion/Hash/Date are kept as history, not cleared
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

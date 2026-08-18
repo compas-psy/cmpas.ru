@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Video, MapPin, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Video, MapPin, X, Calendar as CalendarIcon, ShieldOff } from 'lucide-react';
+import { toast } from 'sonner';
 import { CancelSessionDialog } from '@/components/psidairy/CancelSessionDialog';
 
 function ClientCalendar() {
@@ -13,6 +14,9 @@ function ClientCalendar() {
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [sessionToCancel, setSessionToCancel] = useState<any>(null);
     const [selectedSession, setSelectedSession] = useState<any>(null);
+    const [consentRevokedAt, setConsentRevokedAt] = useState<string | null>(null);
+    const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
+    const [revoking, setRevoking] = useState(false);
 
     useEffect(() => {
         // @ts-ignore
@@ -51,7 +55,9 @@ function ClientCalendar() {
             const response = await fetch(`/api/user/diary/bot/client/sessions?${params.toString()}`);
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const data = await response.json();
-            setSessions(Array.isArray(data) ? data : []);
+            const list = Array.isArray(data) ? data : [];
+            setSessions(list);
+            setConsentRevokedAt(list[0]?.clientConsentRevokedAt ?? null);
         } catch (e) {
             console.error('Failed to fetch sessions', e);
         } finally {
@@ -72,6 +78,35 @@ function ClientCalendar() {
     }, {} as Record<string, any[]>);
 
     const sortedDates = Object.keys(groupedSessions).sort();
+
+    // Working revoke button (legal/CLIENT_CONSENT_BASIS.md §3, CJM_booking_v2.md §7
+    // point 4). Every session in the list belongs to the same (clientId,
+    // psychologistId) pair — /api/user/diary/bot/client/sessions resolves a
+    // single clientId per page load — so the first row carries what's needed.
+    const handleRevokeConsent = async () => {
+        const first = sessions[0];
+        if (!first) return;
+        setRevoking(true);
+        try {
+            const res = await fetch('/api/user/diary/bot/client/consent-revoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: first.clientId,
+                    psychologistId: first.psychologistId,
+                    clientToken: first.clientToken,
+                }),
+            });
+            if (!res.ok) throw new Error('Failed to revoke consent');
+            setConsentRevokedAt(new Date().toISOString());
+            setShowRevokeConfirm(false);
+            toast.success('Согласие отозвано. Ваши предстоящие встречи не отменены.');
+        } catch (e) {
+            toast.error('Не удалось отозвать согласие, попробуйте ещё раз');
+        } finally {
+            setRevoking(false);
+        }
+    };
 
     const getDateLabel = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -106,6 +141,25 @@ function ClientCalendar() {
                     <span className="font-bold text-foreground">Нажмите на карточку сессии</span>, чтобы отменить или перенести её.
                 </p>
             </div>
+
+            {/* Consent management (legal/CLIENT_CONSENT_BASIS.md §3) */}
+            {sessions[0] && (
+                <div className="px-4 pt-4">
+                    {consentRevokedAt ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 border border-border/50 rounded-xl px-3.5 py-2.5">
+                            <ShieldOff className="w-3.5 h-3.5 flex-shrink-0" />
+                            Согласие на обработку данных отозвано {format(new Date(consentRevokedAt), 'd MMMM', { locale: ru })}. Новая запись через эту страницу недоступна, пока согласие не будет дано заново.
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setShowRevokeConfirm(true)}
+                            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                        >
+                            Отозвать согласие на обработку данных
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div className="px-4 pt-6 space-y-6">
                 {sortedDates.map(dateStr => (
@@ -262,6 +316,38 @@ function ClientCalendar() {
                     clientId={sessionToCancel.clientId}
                     clientToken={sessionToCancel.clientToken}
                 />
+            )}
+
+            {showRevokeConfirm && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
+                    <div className="bg-card rounded-t-3xl sm:rounded-3xl w-full max-w-md border border-border shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+                        <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-border/50">
+                            <h3 className="text-lg font-bold text-foreground">Отозвать согласие?</h3>
+                            <button onClick={() => setShowRevokeConfirm(false)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                                <X className="w-5 h-5 text-muted-foreground" />
+                            </button>
+                        </div>
+                        <div className="px-6 py-5 text-sm text-foreground/90 leading-relaxed space-y-2">
+                            <p>Специалист будет уведомлён. Ваши уже запланированные встречи не отменяются — сервисные напоминания о них продолжат приходить.</p>
+                            <p className="text-muted-foreground">Записаться снова через эту страницу можно будет только после того, как вы дадите согласие заново.</p>
+                        </div>
+                        <div className="px-6 pb-6 grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setShowRevokeConfirm(false)}
+                                className="py-3 rounded-xl border-2 font-bold transition-colors text-sm hover:bg-muted haptic-light border-border text-foreground bg-transparent"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                onClick={handleRevokeConsent}
+                                disabled={revoking}
+                                className="py-3 rounded-xl border-2 font-bold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light disabled:opacity-50"
+                            >
+                                {revoking ? 'Отзываем...' : 'Отозвать'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Instruction Footer */}
