@@ -1,0 +1,69 @@
+name: Доверие корню Минцифры
+
+# Одноразовая операция по решению учредителя от 18.08.2026.
+# Ставит корень Государственного удостоверяющего центра в доверенные системы
+# сервера — без него сервер отвергает сертификат платёжного шлюза Т-Банк и
+# приём платежей не работает. Отчёт с отпечатками кладётся в репозиторий.
+#
+# Запуск: изменение .backup/ru-ca либо кнопка.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    paths: ['.backup/ru-ca']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ru-ca
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Установить корень и проверить шлюз
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Выполнить на сервере
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/ruca_key
+          chmod 600 ~/.ssh/ruca_key
+          set +e
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -i ~/.ssh/ruca_key "$SSH_USER@$SSH_HOST" 'bash -s' \
+              < scripts/install-ru-ca.sh > /tmp/ruca.out 2>&1
+          echo "EXIT_CODE=$?" >> /tmp/ruca.out
+          set -e
+          rm -f ~/.ssh/ruca_key
+          mkdir -p docs/ops
+          {
+            echo "# Доверие корню Минцифры"
+            echo
+            echo "Прогон ${{ github.run_id }}."
+            echo
+            echo '```'
+            cat /tmp/ruca.out
+            echo '```'
+          } > docs/ops/ru-ca.md
+
+      - name: Закоммитить отчёт
+        if: always()
+        run: |
+          git config user.name 'simpas-doctor'
+          git config user.email 'bot@users.noreply.github.com'
+          git add docs/ops/ru-ca.md
+          git diff --cached --quiet || git commit -m "Доверие корню Минцифры: отчёт"
+          git push origin HEAD:main || echo "нечего пушить"
+
+      - name: Провалить прогон при ошибке
+        run: grep -q 'EXIT_CODE=0' /tmp/ruca.out || { echo "см. docs/ops/ru-ca.md"; exit 1; }
