@@ -44,7 +44,28 @@ update-ca-certificates
 
 log "Складываю связку для контейнера приложения."
 mkdir -p "$BUNDLE_DIR"
-cat "$tmp/root.crt" "$tmp/sub.crt" > "$BUNDLE_DIR/russian-trusted.pem"
+# Между сертификатами обязательно должен быть перевод строки: если файл не
+# заканчивается им, строка -----END----- склеивается с -----BEGIN----- и Node
+# отвергает связку целиком с «bad end line». Awk добавляет его сам.
+awk 1 "$tmp/root.crt" "$tmp/sub.crt" > "$BUNDLE_DIR/russian-trusted.pem"
+
+# Проверяем, что связка читается, а не просто создана.
+if ! openssl storeutl -noout -certs "$BUNDLE_DIR/russian-trusted.pem" >/dev/null 2>&1; then
+  count=$(grep -c 'BEGIN CERTIFICATE' "$BUNDLE_DIR/russian-trusted.pem" || echo 0)
+  log "ВНИМАНИЕ: не удалось разобрать связку штатной проверкой, сертификатов в файле: $count"
+fi
+log "Связка собрана, сертификатов внутри: $(grep -c 'BEGIN CERTIFICATE' "$BUNDLE_DIR/russian-trusted.pem")"
+
+log "Проверяю связку глазами Node:"
+NODE_EXTRA_CA_CERTS="$BUNDLE_DIR/russian-trusted.pem" node -e "
+  const https=require('https');
+  const r=https.request({host:'securepay.tinkoff.ru',path:'/v2/GetState',method:'POST',timeout:15000},res=>{
+    console.log('[ru-ca] Node получил код ' + res.statusCode); process.exit(0);
+  });
+  r.on('error',e=>{ console.log('[ru-ca] Node не смог: ' + e.message); process.exit(1); });
+  r.on('timeout',()=>{ console.log('[ru-ca] Node: таймаут'); process.exit(1); });
+  r.end('{}');
+" || log "ВНИМАНИЕ: Node по-прежнему не доверяет цепочке" 
 chmod 0644 "$BUNDLE_DIR/russian-trusted.pem"
 
 log "Проверяю платёжный шлюз с хоста:"
