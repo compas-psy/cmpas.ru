@@ -35,6 +35,18 @@ q "SELECT 'User=' || count(*) FROM \"User\";"
 q "SELECT 'DiaryClient=' || count(*) FROM \"DiaryClient\";"
 q "SELECT 'DiarySession=' || count(*) FROM \"DiarySession\";"
 
+echo "### Место на диске"
+df -h / /var 2>/dev/null | head -5
+
+echo "### Память"
+free -m 2>/dev/null | head -3
+
+echo "### Что занимает docker"
+docker system df 2>&1 | head -8
+
+echo "### Убитые по нехватке памяти за сутки"
+(journalctl -k --since "24 hours ago" 2>/dev/null | grep -ci "out of memory\|oom-kill" || dmesg 2>/dev/null | grep -ci "out of memory\|oom-kill" || echo "не удалось прочитать")
+
 echo "### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)"
 tail -n 120 /tmp/cmpas-deploy.log 2>/dev/null || echo "журнала нет"
 
