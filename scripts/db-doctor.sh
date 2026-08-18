@@ -72,8 +72,8 @@ grep -rl "Russian Trusted" /etc/ssl/certs/ 2>/dev/null | head -3 || echo "рос
 
 echo "### Платежи: последние записи"
 docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
-  "SELECT id || ' | ' || coalesce(status,'?') || ' | ' || coalesce(amount::text,'?') || ' | ' || coalesce(terminal,'нет колонки') || ' | ' || created_at
-   FROM \"Payment\" ORDER BY \"createdAt\" DESC LIMIT 5;" 2>&1 | head -8
+  "SELECT coalesce(\"orderId\",'-') || ' | ' || coalesce(status,'?') || ' | ' || coalesce(amount::text,'?') || ' | ' || coalesce(terminal,'-') || ' | ' || \"createdAt\"
+   FROM \"Payment\" ORDER BY \"createdAt\" DESC LIMIT 6;" 2>&1 | head -10
 docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
   "SELECT 'всего платежей=' || count(*) FROM \"Payment\";" 2>&1 | head -2
 
