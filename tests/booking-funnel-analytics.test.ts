@@ -98,6 +98,10 @@ function makeDb() {
         analyticsEvent: { create: (async ({ data }: { data: EventRecord }) => { events.push(data); return data; }) as Db['analyticsEvent']['create'] },
         analyticsEventRejected: { create: (async () => ({})) as Db['analyticsEventRejected']['create'] },
         user: { findUnique: (async () => ({ id: 'psy_1', analyticsConsentAt: new Date() })) as Db['user']['findUnique'] },
+        // Unused here — booking funnel events are always account_id-based
+        // (device_id: null), never device-consent gated — present only to
+        // satisfy the shared ingest Db type.
+        analyticsDeviceConsent: {} as Db['analyticsDeviceConsent'],
     } as Db;
     return { db, events };
 }

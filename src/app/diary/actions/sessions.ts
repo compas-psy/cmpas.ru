@@ -8,6 +8,7 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 import { trackBookingCreatedBy } from '@/lib/analytics/booking-funnel';
+import { rescheduleSessionAtomic } from '@/lib/session-reschedule';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -234,68 +235,7 @@ export async function deleteSession(id: string) {
 
 export async function rescheduleSession(id: string, newDate: string, newTime: string) {
     const psychologistId = await getPsychologistId();
-
-    const existing = await db.diarySession.findUnique({ where: { id } });
-    if (!existing || existing.psychologistId !== psychologistId) {
-        throw new Error('Сессия не найдена');
-    }
-
-    const duration = existing.duration || 50;
-    const [h, m] = newTime.split(':').map(Number);
-    const endMinutes = h * 60 + m + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-
-    const dateObj = new Date(newDate);
-    const dayStart = new Date(dateObj);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dateObj);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    // Проверка пересечений (исключая текущую сессию)
-    const daySessionsOnTarget = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            id: { not: id },
-            date: { gte: dayStart, lte: dayEnd },
-            status: { not: 'cancelled' },
-        },
-    });
-
-    const newStartMins = h * 60 + m;
-    const newEndMins = newStartMins + duration;
-
-    for (const sess of daySessionsOnTarget) {
-        const [sH, sM] = sess.time.split(':').map(Number);
-        const sStartMins = sH * 60 + sM;
-        const sEndMins = sStartMins + (sess.duration || 50);
-        if (newStartMins < sEndMins && newEndMins > sStartMins) {
-            throw new Error('Это время уже занято другой сессией');
-        }
-    }
-
-    // Delete old event from calendars
-    autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
-
-    const session = await db.diarySession.update({
-        where: { id },
-        data: {
-            date: dateObj,
-            time: newTime,
-            endTime,
-            notified24h: false,
-            notified1h: false,
-        },
-    });
-
-    // Create new event in calendars with updated data
-    const fullSession = await db.diarySession.findUnique({
-        where: { id },
-        include: { client: { select: { name: true } } },
-    });
-    if (fullSession) {
-        autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
-    }
-
+    const session = await rescheduleSessionAtomic(psychologistId, id, new Date(newDate), newTime);
     revalidatePath('/diary');
     return session;
 }

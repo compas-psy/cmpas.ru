@@ -10,7 +10,7 @@ import { isIngestEnabled } from './flags';
 import { processIngestEvent, IngestResult } from './ingest';
 import { BookingFunnelStep, BookingFunnelContext, BookingCreatedBy } from './booking-funnel-types';
 
-type Db = Pick<PrismaClient, 'analyticsEvent' | 'analyticsEventRejected' | 'user'>;
+type Db = Pick<PrismaClient, 'analyticsEvent' | 'analyticsEventRejected' | 'user' | 'analyticsDeviceConsent'>;
 
 const STEP_NUMBER: Record<BookingFunnelStep, number> = {
     booking_link_opened: 1,

@@ -34,3 +34,9 @@ echo "### Строк в главных таблицах"
 q "SELECT 'User=' || count(*) FROM \"User\";"
 q "SELECT 'DiaryClient=' || count(*) FROM \"DiaryClient\";"
 q "SELECT 'DiarySession=' || count(*) FROM \"DiarySession\";"
+
+echo "### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)"
+tail -n 120 /tmp/cmpas-deploy.log 2>/dev/null || echo "журнала нет"
+
+echo "### Состояние контейнеров"
+docker ps -a --format '{{.Names}} | {{.Status}}' 2>&1 | head -20

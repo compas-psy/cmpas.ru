@@ -63,9 +63,15 @@ export function validateEvent(raw: RawEvent, registry: EventRegistry = loadRegis
     if (typeof raw.product !== 'string' || !registry.products.includes(raw.product)) {
         return { valid: false, reason: `unknown product: ${String(raw.product)}` };
     }
-    if (typeof raw.account_id !== 'string' || !raw.account_id) return { valid: false, reason: 'missing account_id' };
+    if (raw.account_id !== null && raw.account_id !== undefined && typeof raw.account_id !== 'string') {
+        return { valid: false, reason: 'account_id must be a string or null' };
+    }
     if (raw.device_id !== null && raw.device_id !== undefined && typeof raw.device_id !== 'string') {
         return { valid: false, reason: 'device_id must be a string or null' };
+    }
+    // O-260817-13: a device without an account may send device_id alone.
+    if (!raw.account_id && !raw.device_id) {
+        return { valid: false, reason: 'missing account_id and device_id — at least one is required' };
     }
     if (typeof raw.schema_version !== 'number') return { valid: false, reason: 'missing schema_version' };
     if (raw.props !== undefined && (typeof raw.props !== 'object' || raw.props === null || Array.isArray(raw.props))) {
