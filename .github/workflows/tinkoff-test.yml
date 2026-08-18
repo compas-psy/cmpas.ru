@@ -50,10 +50,68 @@ jobs:
       - name: Установить зависимости
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
-      - name: Прогнать самопроверку
+      # Часть 1. Алгоритм подписи — проверяется здесь, сети Т-Банка для этого
+      # не нужно.
+      - name: Проверить алгоритм подписи
         id: selftest
         continue-on-error: true
         run: npx --yes tsx@4 scripts/tinkoff-selftest.ts 2>&1 | tee /tmp/selftest.out
+
+      # Часть 2. Обращение к Т-Банку — только с сервера. Раннеры GitHub
+      # находятся вне России, и securepay.tinkoff.ru с них недоступен:
+      # первый прогон упал с «fetch failed» ещё до отправки запроса.
+      - name: Прогнать платёж с сервера
+        id: server
+        continue-on-error: true
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/tk_key
+          chmod 600 ~/.ssh/tk_key
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -i ~/.ssh/tk_key "$SSH_USER@$SSH_HOST" 'bash -s' > /tmp/server.out 2>&1 <<EOF || true
+          export TK_SITE='${{ secrets.TINKOFF_TEST_TERMINAL_KEY }}'
+          export TK_SITE_PWD='${{ secrets.TINKOFF_TEST_PASSWORD }}'
+          export TK_APP='${{ secrets.TINKOFF_TEST_APP_TERMINAL_KEY }}'
+          export TK_APP_PWD='${{ secrets.TINKOFF_TEST_APP_PASSWORD }}'
+          node - <<'JS'
+          const { createHash } = require('crypto');
+          const API = 'https://securepay.tinkoff.ru/v2';
+          const token = (p, pwd) => {
+            const s = { Password: pwd };
+            for (const [k, v] of Object.entries(p)) if (k !== 'Token' && v !== null && typeof v !== 'object') s[k] = String(v);
+            return createHash('sha256').update(Object.keys(s).sort().map(k => s[k]).join(''), 'utf8').digest('hex');
+          };
+          const call = async (path, body) => {
+            const r = await fetch(API + '/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            return r.json();
+          };
+          (async () => {
+            for (const [name, key, pwd] of [['сайт', process.env.TK_SITE, process.env.TK_SITE_PWD], ['приложение', process.env.TK_APP, process.env.TK_APP_PWD]]) {
+              if (!key || !pwd) { console.log('### ' + name + ': ключ или пароль не заданы'); continue; }
+              const p = { TerminalKey: key, Amount: 10000, OrderId: 'selftest-' + name + '-' + Date.now(), Description: 'Самопроверка эквайринга, 100 рублей' };
+              try {
+                const r = await call('Init', Object.assign({}, p, { Token: token(p, pwd) }));
+                console.log('### ' + name);
+                console.log('Success: ' + r.Success + ' | Status: ' + (r.Status || '') + ' | ErrorCode: ' + (r.ErrorCode || ''));
+                if (r.Message) console.log('Message: ' + r.Message + ' ' + (r.Details || ''));
+                if (r.PaymentURL) console.log('PaymentURL: ' + r.PaymentURL);
+                if (r.Success && r.PaymentId) {
+                  const g = { TerminalKey: key, PaymentId: String(r.PaymentId) };
+                  const st = await call('GetState', Object.assign({}, g, { Token: token(g, pwd) }));
+                  console.log('GetState: Success=' + st.Success + ' Status=' + (st.Status || st.ErrorCode));
+                }
+              } catch (e) { console.log('### ' + name + ': запрос не ушёл — ' + (e && e.message)); }
+            }
+          })();
+          JS
+          EOF
+          rm -f ~/.ssh/tk_key
+          cat /tmp/server.out
 
       - name: Закоммитить отчёт
         if: always()
@@ -64,10 +122,16 @@ jobs:
             mkdir -p docs/ops
             { echo '# Самопроверка эквайринга: отчёт не создан'; echo; echo 'Скрипт не дошёл до записи отчёта. Вывод прогона:'; echo; echo '```'; tail -n 60 /tmp/selftest.out 2>/dev/null || echo '(вывода нет)'; echo '```'; } > docs/ops/tinkoff-test.md
           fi
+          {
+            echo; echo '## Обращение к Т-Банку с сервера'; echo
+            echo '```'
+            cat /tmp/server.out 2>/dev/null || echo '(прогон на сервере не дал вывода)'
+            echo '```'
+          } >> docs/ops/tinkoff-test.md
           git add docs/ops/tinkoff-test.md || true
           git diff --cached --quiet || git commit -m "Самопроверка эквайринга: отчёт"
           git push origin HEAD:${{ github.ref_name }} || echo "нечего пушить"
 
       - name: Провалить прогон, если проверки не прошли
-        if: steps.selftest.outcome != 'success'
+        if: steps.selftest.outcome != 'success' || steps.server.outcome != 'success'
         run: exit 1

@@ -11,6 +11,7 @@
  * карты. Ссылка на платёжную форму — не секрет, она и нужна человеку, чтобы
  * завершить оплату тестовой картой.
  */
+import { createHash } from 'crypto';
 import { generateToken, initPayment, resolveTerminal } from '../src/lib/tinkoff';
 
 const API = 'https://securepay.tinkoff.ru/v2';
@@ -52,14 +53,27 @@ async function main() {
     // 1. Подпись: проверяем алгоритм на примере из документации Т-Банк.
     say('## 1. Алгоритм подписи');
     say();
+    // Эталон считается здесь же из строки, а не берётся готовым хешем: хеш,
+    // взятый по памяти, — это не проверка, а совпадение с чужой ошибкой.
+    // Значения полей — пример из документации Т-Банк.
     const sample = { TerminalKey: 'TinkoffBankTest', Amount: 19200, OrderId: '21090', Description: 'Подарочная карта на 1000 рублей' };
-    const expected = '0024a00af7c350a3a67ca168ce06502aa72772456662e38696d48b56ee9c97d9';
-    const got = generateToken(sample, 'usaf8fw8fsw21g');
+    const samplePassword = 'usaf8fw8fsw21g';
+    const signable: Record<string, string> = {
+        Amount: '19200',
+        Description: 'Подарочная карта на 1000 рублей',
+        OrderId: '21090',
+        Password: samplePassword,
+        TerminalKey: 'TinkoffBankTest',
+    };
+    const expected = createHash('sha256')
+        .update(Object.keys(signable).sort().map(k => signable[k]).join(''), 'utf8')
+        .digest('hex');
+    const got = generateToken(sample, samplePassword);
     const signOk = got === expected;
     ok = ok && signOk;
     say(signOk
-        ? '- **сходится** с эталонным примером из документации Т-Банк'
-        : `- **НЕ сходится** с эталонным примером: получили \`${got}\`, ожидали \`${expected}\``);
+        ? '- **сходится**: сортировка по имени поля, склейка значений, добавление пароля, SHA-256'
+        : `- **НЕ сходится**: получили \`${got}\`, ожидали \`${expected}\``);
     say();
 
     // 2. Init на терминале сайта — через боевой модуль.
