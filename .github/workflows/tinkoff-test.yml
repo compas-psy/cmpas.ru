@@ -98,7 +98,18 @@ jobs:
           (async () => {
             for (const [name, key, pwd] of [['сайт', process.env.TK_SITE, process.env.TK_SITE_PWD], ['приложение', process.env.TK_APP, process.env.TK_APP_PWD]]) {
               if (!key || !pwd) { console.log('### ' + name + ': ключ или пароль не заданы'); continue; }
-              const p = { TerminalKey: key, Amount: 10000, OrderId: 'selftest-' + name + '-' + Date.now(), Description: 'Самопроверка эквайринга, 100 рублей' };
+              // NotificationURL обязателен, иначе банк не пришлёт уведомление об
+              // оплате и замкнуть цикл нечем. SuccessURL/FailURL — чтобы человек
+              // после оплаты вернулся на сайт, а не остался на форме банка.
+              const p = {
+                TerminalKey: key,
+                Amount: 10000,
+                OrderId: 'selftest-' + name + '-' + Date.now(),
+                Description: 'Тестовый платёж КОМПАС, 100 рублей',
+                NotificationURL: 'https://cmpas.ru/api/payments/callback',
+                SuccessURL: 'https://cmpas.ru/diary?payment=success',
+                FailURL: 'https://cmpas.ru/diary?payment=fail',
+              };
               try {
                 const r = await call('Init', Object.assign({}, p, { Token: token(p, pwd) }));
                 console.log('### ' + name);
