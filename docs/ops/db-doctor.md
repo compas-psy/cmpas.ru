@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32127447920. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32127563661. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -49,109 +49,150 @@ DiaryClient=20
 DiarySession=41
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   64G   21G  76% /
-/dev/vda2        89G   64G   21G  76% /
+/dev/vda2        89G   63G   22G  75% /
+/dev/vda2        89G   63G   22G  75% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        3524         219          56        4560        4416
-Swap:            511           4         507
+Mem:            7941        2523         955          55        4823        5417
+Swap:            511          62         449
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          6         6         49.22GB   49.22GB (100%)
-Containers      6         6         28.47MB   0B (0%)
+Images          6         6         48.36GB   48.36GB (100%)
+Containers      6         6         3.67MB    0B (0%)
 Local Volumes   155       7         211MB     4.07MB (1%)
-Build Cache     843       15        52.78GB   50.85GB
+Build Cache     853       0         53.35GB   52.35GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-[deploy] AUTH_SECRET fingerprint: IKXOHxDD...
-[deploy] Preparing sing-box configuration.
-[31mFATAL[0m[0000] decode config at /c.json: outbounds[0]: unknown outbound type: mieru
-[deploy] WARNING: sing-box configuration check failed; deploying without VPN sidecar.
-[deploy] Creating database backup: /var/backups/cmpas/db_backup_20260818_133415.sql
-[deploy] Validating Docker Compose configuration.
-[deploy] Building the new application image while the old app remains online.
- Image cmpasru-app Building 
-#1 [internal] load local bake definitions
-#1 reading from stdin 500B done
-#1 DONE 0.0s
+#30 [runner 16/20] COPY --from=builder --chown=nextjs:nodejs /app/scripts/verify-production-schema.js ./scripts/verify-production-schema.js
+#30 DONE 0.1s
 
-#2 [internal] load build definition from Dockerfile
-#2 transferring dockerfile: 3.73kB done
-#2 DONE 0.0s
+#31 [runner 17/20] RUN chmod 755 ./scripts/start-production.sh
+#31 DONE 0.5s
 
-#3 [internal] load metadata for docker.io/library/node:20-slim
-#3 DONE 1.0s
+#32 [runner 18/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+#32 DONE 0.3s
 
-#4 [internal] load .dockerignore
-#4 transferring context: 170B done
-#4 DONE 0.0s
+#33 [runner 19/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+#33 DONE 0.3s
 
-#5 [internal] load build context
-#5 DONE 0.0s
+#34 [runner 20/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+#34 DONE 0.7s
 
-#6 [base 1/3] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
-#6 resolve docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 0.1s done
-#6 DONE 0.1s
+#35 exporting to image
+#35 exporting layers
+#35 exporting layers 17.9s done
+#35 exporting manifest sha256:490ba95b2e7794a63728d8cb31f2a02c19c99d6429e8af0c97714204b7673f43 0.0s done
+#35 exporting config sha256:fe2ef4b459d973ea33551cd608e236619ada6d68e3632e2bb807bbdab814e1b5 0.0s done
+#35 exporting attestation manifest sha256:6e5526a39ae510d802165f30d87c2e394921b74de9a5778f577ddde6ccd02031 0.0s done
+#35 exporting manifest list sha256:63070c70c6c5b02969b70bdff6328c3e196997f929226e44bd90250822ca177b 0.0s done
+#35 naming to docker.io/library/cmpasru-app:latest done
+#35 unpacking to docker.io/library/cmpasru-app:latest
+#35 unpacking to docker.io/library/cmpasru-app:latest 7.2s done
+#35 DONE 25.3s
 
-#5 [internal] load build context
-#5 transferring context: 64.61kB 0.2s done
-#5 DONE 0.2s
+#36 resolving provenance for metadata file
+#36 DONE 0.0s
+ Image cmpasru-app Built 
+time="2026-08-18T13:36:01+03:00" level=warning msg="No services to build"
+ Container cmpas-mailer Running 
+ Container cmpas-postgres Running 
+[deploy] PostgreSQL is ready.
+[deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
+time="2026-08-18T13:36:02+03:00" level=warning msg="No services to build"
+time="2026-08-18T13:36:02+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-aecab386018c Creating 
+ Container cmpasru-app-run-aecab386018c Created 
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
 
-#7 [deps 3/3] RUN npm install --legacy-peer-deps
-#7 CACHED
+32 migrations found in prisma/migrations
 
-#8 [base 2/3] RUN apt-get update -y && apt-get install -y openssl ca-certificates
-#8 CACHED
 
-#9 [base 3/3] WORKDIR /app
-#9 CACHED
-
-#10 [deps 1/3] WORKDIR /app
-#10 CACHED
-
-#11 [deps 2/3] COPY package.json package-lock.json* ./
-#11 CACHED
-
-#12 [builder 2/5] COPY --from=deps /app/node_modules ./node_modules
-#12 CACHED
-
-#13 [builder 3/5] COPY . .
-#13 DONE 0.6s
-
-#14 [builder 4/5] RUN npx prisma generate
-#14 2.495 Prisma schema loaded from prisma/schema.prisma
-#14 7.643 
-#14 7.643 ✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 1.38s
-#14 7.643 
-#14 7.643 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
-#14 7.643 
-#14 7.643 Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
-#14 7.643 
-#14 7.820 npm notice
-#14 7.820 npm notice New major version of npm available! 10.8.2 -> 12.0.2
-#14 7.820 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
-#14 7.820 npm notice To update run: npm install -g npm@12.0.2
-#14 7.820 npm notice
-#14 DONE 7.9s
-
-#15 [builder 5/5] RUN npm run build
-#15 1.154 
-#15 1.154 > cmpas.ru@0.1.0 build
-#15 1.154 > next build
-#15 1.154 
-#15 4.255 ▲ Next.js 16.1.1 (Turbopack)
-#15 4.257 
-#15 4.473   Creating an optimized production build ...
+No pending migrations to apply.
+[deploy] Prisma migrations applied.
+[deploy] Applying beta schema safety net.
+psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "User" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:13: NOTICE:  column "documentVersion" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+UPDATE 23
+psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
+CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
+CREATE INDEX
+CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
+[deploy] Running strict schema verification against the new image.
+time="2026-08-18T13:36:06+03:00" level=warning msg="No services to build"
+time="2026-08-18T13:36:07+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-e345b4936dbb Creating 
+ Container cmpasru-app-run-e345b4936dbb Created 
+[schema] Все 45 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Recreating only the application container.
+time="2026-08-18T13:36:10+03:00" level=warning msg="No services to build"
+ Container cmpas-app Recreate 
+ Container cmpas-app Recreated 
+ Container cmpas-app Starting 
+ Container cmpas-app Started 
+[deploy] New application is healthy.
+[schema] Все 45 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Auth endpoint status: 200
 ### Состояние контейнеров
-cmpas-app | Up 19 minutes
+cmpas-app | Up 19 seconds
 zapiski-api | Up 19 hours (healthy)
 zapiski-postgres | Up 8 days (healthy)
 cmpas-mailer | Up 10 days (healthy)
 cmpas-postgres | Up 10 days (healthy)
-cmpas-singbox | Restarting (1) 31 seconds ago
+cmpas-singbox | Restarting (1) 54 seconds ago
 ### Достижим ли Т-Банк с сервера
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
@@ -163,6 +204,11 @@ More details here: https://curl.se/docs/sslcerts.html
 sh: 1: curl: not found
 -- версия node на хосте:
 v20.19.6
+### Кто выдал сертификат Т-Банка
+subject=CN = *.tinkoff.ru, C = RU, L = Moscow, ST = 77 \D0\B3.\D0\9C\D0\BE\D1\81\D0\BA\D0\B2\D0\B0, O = TBank, OGRN = 1027739642281, 1.2.643.100.4 = 7710140679
+issuer=C = RU, O = The Ministry of Digital Development and Communications, CN = Russian Trusted Sub CA
+-- есть ли в системе российский корневой центр:
+российского корня в доверенных нет
 ```
 
 ## Миграции, лежащие в репозитории
