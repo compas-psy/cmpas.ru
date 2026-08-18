@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32123975376. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32124112990. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -44,6 +44,24 @@ events_rejected
 User=14
 DiaryClient=20
 DiarySession=41
+### Место на диске
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda2        89G   61G   24G  73% /
+/dev/vda2        89G   61G   24G  73% /
+### Память
+               total        used        free      shared  buff/cache   available
+Mem:            7941        2199        2226          56        3878        5741
+Swap:            511           1         510
+### Что занимает docker
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          6         6         46.8GB    46.8GB (100%)
+Containers      6         6         3.719MB   0B (0%)
+Local Volumes   155       7         210.7MB   4.07MB (1%)
+Build Cache     822       0         51.22GB   50.22GB
+### Убитые по нехватке памяти за сутки
+0
+0
+не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
 #1 DONE 0.0s
 
@@ -171,7 +189,7 @@ cmpas-app | Up 20 hours
 zapiski-postgres | Up 8 days (healthy)
 cmpas-mailer | Up 10 days (healthy)
 cmpas-postgres | Up 10 days (healthy)
-cmpas-singbox | Restarting (1) 39 seconds ago
+cmpas-singbox | Restarting (1) 2 seconds ago
 ```
 
 ## Миграции, лежащие в репозитории
