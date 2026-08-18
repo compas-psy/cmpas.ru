@@ -57,6 +57,33 @@ wait_for_app() {
   done
 }
 
+deploy_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Deploy history (O-260817-12, "выкладки" card). This script already has
+# full DB write access during a deploy (it applies migrations) — a
+# different, already-privileged actor than the read-only infra-pulse
+# collector, which only ever SELECTs from DeployLog. Silently does nothing
+# if the DeployLog table doesn't exist yet (e.g. mid-rollout before this
+# migration has landed) or if postgres isn't reachable — a missing log row
+# must never be the reason a deploy fails.
+log_deploy() {
+  local result="$1"
+  local note="${2:-}"
+  local image_ref
+  image_ref=$(docker inspect --format '{{.Config.Image}}' cmpas-app 2>/dev/null || true)
+  local deploy_id="deploy-$(date +%s%N)-$$"
+  # `-v name=value` substitution (:'name') only runs through psql's normal
+  # input processing, not through -c — that's why this pipes a heredoc over
+  # stdin instead of using -c "...".
+  docker exec -i cmpas-postgres psql -U postgres -d cmpas_db -v ON_ERROR_STOP=0 \
+    -v id="$deploy_id" -v started="$deploy_started_at" -v result="$result" -v image="$image_ref" -v note="$note" \
+    >/dev/null 2>&1 <<-'EOSQL' || true
+		INSERT INTO "DeployLog" (id, "startedAt", "finishedAt", result, "imageRef", "errorNote")
+		SELECT :'id', :'started'::timestamptz, now(), :'result', NULLIF(:'image', ''), NULLIF(:'note', '')
+		WHERE to_regclass('public."DeployLog"') IS NOT NULL;
+	EOSQL
+}
+
 rollback_app() {
   local old_image_id="$1"
   local old_image_ref="$2"
@@ -124,6 +151,16 @@ done
 webhook_secret=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
 if [ -z "$webhook_secret" ]; then
   upsert_env TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 32)"
+fi
+
+# infra-pulse-collector's DB password (O-260817-12) — generated once here,
+# same pattern as AUTH_SECRET/TELEGRAM_WEBHOOK_SECRET above, never
+# committed. The role itself is (re)created further below, after migrations
+# have run.
+infra_pulse_password=$(grep '^INFRA_PULSE_DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2- || true)
+if [ -z "$infra_pulse_password" ]; then
+  upsert_env INFRA_PULSE_DB_PASSWORD "$(openssl rand -base64 24)"
+  log 'INFRA_PULSE_DB_PASSWORD generated.'
 fi
 
 log "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2- | cut -c1-8)..."
@@ -208,12 +245,49 @@ if ! docker compose run --rm --no-deps app node scripts/verify-production-schema
   if [ "$migrations_failed" = '1' ]; then
     log 'ERROR: prisma migrate deploy had already failed above — that is the likely cause.'
   fi
+  log_deploy schema_guard_stopped 'verify-production-schema.js failed'
   exit 1
+fi
+
+# infra-pulse-collector's role (O-260817-12) — provisioned here, not in
+# docker/init-postgres.sh, because that script only runs on a brand-new
+# empty data directory and this database already has one. Runs every
+# deploy, after migrations, so InfraPulse (which the grants below reference)
+# is guaranteed to exist by now. Idempotent: safe to run against a role and
+# grants that already exist.
+if [ -n "$infra_pulse_password" ] && docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+    "SELECT to_regclass('public.\"InfraPulse\"') IS NOT NULL;" 2>/dev/null | grep -qx t; then
+  role_exists=$(docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+    "SELECT 1 FROM pg_roles WHERE rolname = 'infra_pulse_reader';" 2>/dev/null || true)
+  # `-v name=value` substitution (:'name') only runs through psql's normal
+  # input processing, not through -c — piped over stdin instead, same as
+  # log_deploy above.
+  if [ -z "$role_exists" ]; then
+    docker exec -i cmpas-postgres psql -U postgres -d cmpas_db -v ON_ERROR_STOP=0 -v pw="$infra_pulse_password" \
+      >/dev/null 2>&1 <<-'EOSQL' || log 'WARNING: infra_pulse_reader role creation failed.'
+		CREATE ROLE infra_pulse_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'pw';
+	EOSQL
+  else
+    docker exec -i cmpas-postgres psql -U postgres -d cmpas_db -v ON_ERROR_STOP=0 -v pw="$infra_pulse_password" \
+      >/dev/null 2>&1 <<-'EOSQL' || log 'WARNING: infra_pulse_reader password update failed.'
+		ALTER ROLE infra_pulse_reader PASSWORD :'pw';
+	EOSQL
+  fi
+  # SELECT everywhere (existing app data, read-only); INSERT/DELETE on
+  # InfraPulse only — the collector's own output table, nothing else.
+  docker exec cmpas-postgres psql -U postgres -d cmpas_db -v ON_ERROR_STOP=0 \
+    -c 'GRANT CONNECT ON DATABASE cmpas_db TO infra_pulse_reader;
+        GRANT USAGE ON SCHEMA public TO infra_pulse_reader;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO infra_pulse_reader;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO infra_pulse_reader;
+        GRANT INSERT, DELETE ON "InfraPulse" TO infra_pulse_reader;' \
+    >/dev/null 2>&1 || log 'WARNING: infra_pulse_reader grants failed.'
 fi
 
 log 'Recreating only the application container.'
 if ! docker compose up -d --no-deps --force-recreate app; then
   rollback_app "$old_image_id" "$old_image_ref" || true
+  log_deploy rolled_back 'docker compose up --force-recreate app failed'
   exit 1
 fi
 
@@ -222,6 +296,7 @@ if ! wait_for_app; then
   docker ps -a --filter name=cmpas-app --format '{{.Names}} | {{.Status}}'
   docker logs cmpas-app --tail 300 2>&1 || true
   rollback_app "$old_image_id" "$old_image_ref" || true
+  log_deploy rolled_back 'new app container did not become healthy'
   exit 1
 fi
 
@@ -237,6 +312,7 @@ log "Auth endpoint status: ${auth_status}"
 if [ "$auth_status" = '000' ] || [ "$auth_status" -ge 500 ]; then
   log 'ERROR: auth endpoint verification failed.'
   rollback_app "$old_image_id" "$old_image_ref" || true
+  log_deploy rolled_back 'auth endpoint check failed after deploy'
   exit 1
 fi
 
@@ -262,4 +338,5 @@ if [ -n "$max_token" ]; then
 fi
 
 docker image prune -f >/dev/null || true
+log_deploy success "$([ "$migrations_failed" = '1' ] && echo 'migrate deploy had failed but schema verification passed' || echo '')"
 log 'Deployment completed successfully.'
