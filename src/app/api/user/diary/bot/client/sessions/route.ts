@@ -32,6 +32,11 @@ export async function GET(req: NextRequest) {
     const clientId = await resolveClientId(req.nextUrl.searchParams);
     if (!clientId) return NextResponse.json([]);
 
+    const client = await db.diaryClient.findUnique({
+        where: { id: clientId },
+        select: { consentRevokedAt: true },
+    });
+
     const sessions = await db.diarySession.findMany({
         where: {
             clientId,
@@ -54,6 +59,7 @@ export async function GET(req: NextRequest) {
         id: session.id,
         clientId: session.clientId,
         clientToken: clientActionToken(session.psychologistId, session.clientId),
+        clientConsentRevokedAt: client?.consentRevokedAt ?? null,
         date: session.date,
         time: session.time,
         endTime: session.endTime,

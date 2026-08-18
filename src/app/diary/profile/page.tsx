@@ -133,6 +133,11 @@ export default function ProfilePage() {
                                 placeholder="Иванова Анна"
                                 className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-sm font-medium transition-all"
                             />
+                            {!profile.fullName && (
+                                <p className="text-xs text-amber-600 dark:text-amber-500 mt-1.5 ml-1">
+                                    Пусто — на экране согласия клиента вместо этого имени будет показан только логин аккаунта. Заполните поле, чтобы клиент видел, кто оператор его данных.
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-semibold mb-2 ml-1 text-foreground/90 flex items-center gap-1.5">

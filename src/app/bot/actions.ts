@@ -6,6 +6,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
+import { getConsentStatus, recordConsent, attachPendingConsent, isConsentSatisfied, type ConsentIdentity } from '@/lib/booking/consent';
 
 /** Send to Telegram and/or MAX depending on which IDs are set. Runs both in
  * parallel so a slow/failed Telegram send (e.g. flaky VPN) never delays or
@@ -419,7 +420,7 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
     return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
 }
 
-export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
+export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null, consentVersion?: string }) {
     let normalizedPhone = form.phone.replace(/[^\d+]/g, '');
     const plainDigits = normalizedPhone.replace(/[^\d]/g, '');
 
@@ -504,6 +505,24 @@ export async function bookSession(psychologistId: string, userDetails: any, form
                 }
             }
         }
+    }
+
+    // Consent given earlier in this same request by a client who had neither
+    // a clientId nor a telegramUserId yet at accept time (anonymous
+    // browser/MAX visitor) — recordConsent() couldn't attach it to anything
+    // then; the client row exists now, resolved by phone above.
+    if (form.consentVersion && client.consentVersion !== form.consentVersion) {
+        await attachPendingConsent(db, client.id, form.consentVersion);
+        client = { ...client, consentVersion: form.consentVersion, consentDate: new Date(), consentHash: client.consentHash };
+    }
+
+    const activeConsentForGate = await db.consentVersion.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' },
+        select: { version: true }
+    });
+    if (activeConsentForGate && !isConsentSatisfied(client, activeConsentForGate.version)) {
+        return { success: false, error: 'Нужно дать согласие на обработку персональных данных' };
     }
 
     const [y, m, d] = form.date.split('-').map(Number);
@@ -864,103 +883,15 @@ export async function getAddressById(addressId: string) {
     return address;
 }
 
-export async function checkConsentRequired(telegramUserId: string, psychologistId: string) {
-    if (!telegramUserId) return { required: true, text: '', version: '' };
-
-    // Get active consent version
-    const activeConsent = await db.consentVersion.findFirst({
-        where: { isActive: true },
-        orderBy: { createdAt: 'desc' }
+export async function checkConsentRequired(psychologistId: string, identity: ConsentIdentity) {
+    const psy = await db.user.findUnique({
+        where: { id: psychologistId },
+        select: { name: true, psychologistSettings: { select: { fullName: true } } }
     });
-
-    if (!activeConsent) return { required: false, text: '', version: '' };
-
-    // Check if client already consented to this version via DiaryClient
-    const diaryClient = await db.diaryClient.findFirst({
-        where: {
-            psychologistId,
-            telegramChatId: telegramUserId,
-        },
-        select: { consentVersion: true }
-    });
-
-    if (diaryClient?.consentVersion === activeConsent.version) {
-        return { required: false, text: activeConsent.text, version: activeConsent.version };
-    }
-
-    // Also check via TelegramClient → DiaryClient link
-    const tgClient = await db.telegramClient.findUnique({
-        where: { telegramUserId },
-        include: {
-            diaryClient: {
-                select: { consentVersion: true }
-            }
-        }
-    });
-    if (tgClient?.diaryClient?.consentVersion === activeConsent.version) {
-        return { required: false, text: activeConsent.text, version: activeConsent.version };
-    }
-
-    // Check consentGiven flag on TelegramClient as last resort
-    if (tgClient?.consentGiven) {
-        return { required: false, text: activeConsent.text, version: activeConsent.version };
-    }
-
-    return { required: true, text: activeConsent.text, version: activeConsent.version };
+    const psychologistName = psy?.psychologistSettings?.fullName || psy?.name || 'специалист';
+    return getConsentStatus(db, psychologistId, identity, psychologistName);
 }
 
-export async function saveConsent(
-    psychologistId: string,
-    telegramUserId: string,
-    consentVersion: string
-) {
-    const timestamp = new Date().toISOString();
-    const hashInput = `${telegramUserId}:${consentVersion}:${timestamp}`;
-    const consentHash = createHash('sha256').update(hashInput).digest('hex');
-
-    // Find or prepare to update client
-    let client = await db.diaryClient.findFirst({
-        where: {
-            psychologistId,
-            OR: [
-                { telegramChatId: telegramUserId },
-            ]
-        }
-    });
-
-    // Save consent data on DiaryClient
-    if (client) {
-        await db.diaryClient.update({
-            where: { id: client.id },
-            data: {
-                consentVersion,
-                consentHash,
-                consentDate: new Date(),
-            }
-        });
-    }
-
-    // Also update TelegramClient consent
-    const tgClient = await db.telegramClient.upsert({
-        where: { telegramUserId },
-        update: { consentGiven: true, consentDate: new Date() },
-        create: {
-            telegramUserId,
-            consentGiven: true,
-            consentDate: new Date(),
-        }
-    });
-
-    if (tgClient.diaryClientId && !client) {
-        await db.diaryClient.update({
-            where: { id: tgClient.diaryClientId },
-            data: {
-                consentVersion,
-                consentHash,
-                consentDate: new Date(),
-            }
-        });
-    }
-
-    return { hash: consentHash, timestamp };
+export async function saveConsent(psychologistId: string, identity: ConsentIdentity, consentVersion: string) {
+    return recordConsent(db, psychologistId, identity, consentVersion);
 }

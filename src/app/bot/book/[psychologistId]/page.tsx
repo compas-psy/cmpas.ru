@@ -161,7 +161,7 @@ export default function ClientBookingPage() {
                         }
 
                         // Check consent requirement
-                        const consent = await checkConsentRequired(String(tgUserId), psychologistId);
+                        const consent = await checkConsentRequired(psychologistId, { telegramUserId: String(tgUserId) });
                         setConsentRequired(consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
@@ -187,9 +187,11 @@ export default function ClientBookingPage() {
                             setUpcomingSessions(sessions);
                         }
 
-                        // Treat as needing consent check
-                        const consent = await checkConsentRequired('', psychologistId);
-                        setConsentRequired((client as any)?.consentVersion ? false : consent.required);
+                        // Consent is checked against this DiaryClient row directly now,
+                        // channel-independent — no need for the client-side fallback that
+                        // used to paper over checkConsentRequired('', ...) always saying "required".
+                        const consent = await checkConsentRequired(psychologistId, { clientId: currentClientId });
+                        setConsentRequired(consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
                     } catch (e) {
@@ -198,7 +200,7 @@ export default function ClientBookingPage() {
                 } else {
                     // Unknown client without TG and without client ID
                     try {
-                        const consent = await checkConsentRequired('', psychologistId);
+                        const consent = await checkConsentRequired(psychologistId, {});
                         setConsentRequired(true);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
@@ -283,8 +285,10 @@ export default function ClientBookingPage() {
 
         setConsentSaving(true);
         try {
-            const tgUserId = tgUser?.id ? String(tgUser.id) : '';
-            await saveConsent(psychologistId, tgUserId, consentVersion);
+            await saveConsent(psychologistId, {
+                telegramUserId: tgUser?.id ? String(tgUser.id) : undefined,
+                clientId: clientId || undefined,
+            }, consentVersion);
             setConsentRequired(false);
             setShowConsentModal(false);
             await performBooking();
@@ -307,7 +311,11 @@ export default function ClientBookingPage() {
                 date: dateStr,
                 time: selectedTimeSlot.time,
                 format: selectedFormat,
-                addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
+                addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null,
+                // Attaches consent accepted this request if it couldn't be saved to a
+                // DiaryClient yet (anonymous browser/MAX visitor, see bookSession()).
+                // No-op if this client already has this version recorded.
+                consentVersion: consentVersion || undefined,
             });
 
             if (res && !res.success) {
@@ -705,9 +713,16 @@ export default function ClientBookingPage() {
                                         )}
                                     </div>
                                     <span className="text-sm text-foreground leading-snug">
-                                        Я даю <a href="/legal/privacy" target="_blank" className="text-primary hover:underline" onClick={e => e.stopPropagation()}>согласие</a> на обработку моих персональных данных
+                                        Я даю согласие на обработку моих персональных данных на условиях, указанных выше
                                     </span>
                                 </label>
+
+                                {/* Separate from the checkbox on purpose: the Privacy Policy is an
+                                    informational document about how КОМПАС as a platform works, not
+                                    something a client accepts (legal/CLIENT_CONSENT_BASIS.md §3). */}
+                                <p className="text-xs text-muted-foreground -mt-2">
+                                    Отдельно: <a href="/legal/privacy" target="_blank" className="underline hover:text-foreground transition-colors" onClick={e => e.stopPropagation()}>как обрабатываются данные</a> на платформе КОМПАС
+                                </p>
 
                                 <button
                                     onClick={handleConsentAccept}
