@@ -6,11 +6,13 @@ const registry: EventRegistry = {
     products: ['practice'],
     events: {
         payment_succeeded: {
+            product: 'practice',
             required: ['terminal', 'plan', 'amount', 'months'],
             optional: [],
             props: { terminal: 'string', plan: 'string', amount: 'number', months: 'number' },
         },
         consent_updated: {
+            product: 'practice',
             required: ['granted'],
             optional: [],
             props: { granted: 'boolean' },
@@ -42,6 +44,11 @@ describe('validateEvent (charter/12_ANALYTICS.md §3)', () => {
 
     it('rejects an unknown product', () => {
         expect(validateEvent(baseEvent({ product: 'nonexistent' }), registry).valid).toBe(false);
+    });
+
+    it('rejects a known event submitted under a product it does not belong to', () => {
+        const withZapiski: EventRegistry = { ...registry, products: [...registry.products, 'zapiski'] };
+        expect(validateEvent(baseEvent({ product: 'zapiski' }), withZapiski).valid).toBe(false);
     });
 
     it('rejects a prop not declared for the event — this is how rebillId/password could never sneak in', () => {
@@ -77,5 +84,78 @@ describe('validateEvent (charter/12_ANALYTICS.md §3)', () => {
         expect(real.events.payment_succeeded).toBeDefined();
         expect(real.events.consent_updated).toBeDefined();
         expect(real.events.identity_linked).toBeDefined();
+    });
+});
+
+describe('validateEvent against the real registry, one event per product (O-260817-17)', () => {
+    it('accepts a well-formed practice event', () => {
+        expect(validateEvent(baseEvent()).valid).toBe(true);
+    });
+
+    it('accepts a well-formed zapiski event', () => {
+        const event = {
+            event: 'note_saved',
+            ts: new Date().toISOString(),
+            product: 'zapiski',
+            account_id: 'user_1',
+            device_id: null,
+            schema_version: 1,
+            props: { length_bucket: 'm', encrypted: true },
+        };
+        expect(validateEvent(event).valid).toBe(true);
+    });
+
+    it('accepts a well-formed moments event', () => {
+        const event = {
+            event: 'practice_started',
+            ts: new Date().toISOString(),
+            product: 'moments',
+            account_id: 'user_1',
+            device_id: null,
+            schema_version: 1,
+            props: { practice_id: 'sleep_01', group: 'SLEEP', is_sleep: true },
+        };
+        expect(validateEvent(event).valid).toBe(true);
+    });
+
+    it('rejects a zapiski event carrying a prop not in the registry', () => {
+        const event = {
+            event: 'note_saved',
+            ts: new Date().toISOString(),
+            product: 'zapiski',
+            account_id: 'user_1',
+            device_id: null,
+            schema_version: 1,
+            props: { length_bucket: 'm', encrypted: true, note_text: 'клиент рассказал про развод' },
+        };
+        expect(validateEvent(event).valid).toBe(false);
+    });
+
+    it('rejects a moments event submitted under a different product', () => {
+        const event = {
+            event: 'practice_started',
+            ts: new Date().toISOString(),
+            product: 'practice',
+            account_id: 'user_1',
+            device_id: null,
+            schema_version: 1,
+            props: { practice_id: 'sleep_01', group: 'SLEEP', is_sleep: true },
+        };
+        expect(validateEvent(event).valid).toBe(false);
+    });
+
+    it('rejects an event of an unknown product for that product\'s own name', () => {
+        const event = {
+            event: 'note_saved',
+            ts: new Date().toISOString(),
+            product: 'momenty',
+            account_id: 'user_1',
+            device_id: null,
+            schema_version: 1,
+            props: { length_bucket: 'm', encrypted: true },
+        };
+        const result = validateEvent(event);
+        expect(result.valid).toBe(false);
+        if (!result.valid) expect(result.reason).toMatch(/unknown product/);
     });
 });

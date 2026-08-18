@@ -3,15 +3,22 @@
 // products, or props not declared for that event are rejected — never
 // silently accepted, and never silently dropped either (the caller decides
 // what to do with a rejection, this module only judges).
+//
+// O-260817-17: every event belongs to exactly one product (the registry's
+// `products` list is who may call /ingest at all, `events.<name>.product` is
+// which of them owns that specific event name) — an event submitted under a
+// product it doesn't belong to is rejected the same as an unknown event.
 
 import fs from 'fs';
 import path from 'path';
 import { load } from 'js-yaml';
 
 export interface EventDef {
+    product: string;
     required: string[];
     optional: string[];
     props?: Record<string, 'string' | 'number' | 'boolean'>;
+    question?: string;
 }
 
 export interface EventRegistry {
@@ -65,6 +72,9 @@ export function validateEvent(raw: RawEvent, registry: EventRegistry = loadRegis
 
     const def = registry.events[raw.event];
     if (!def) return { valid: false, reason: `unknown event: ${raw.event}` };
+    if (def.product !== raw.product) {
+        return { valid: false, reason: `event ${raw.event} belongs to product ${def.product}, not ${raw.product}` };
+    }
 
     const props = (raw.props ?? {}) as Record<string, unknown>;
     const allowedKeys = new Set([...(def.required ?? []), ...(def.optional ?? [])]);

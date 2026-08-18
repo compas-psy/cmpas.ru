@@ -66,6 +66,14 @@ describe('processIngestEvent', () => {
         expect(rejected[0].reason).toBe('unknown account_id');
     });
 
+    it('rejects an event of an unknown product into events_rejected with a reason (O-260817-17)', async () => {
+        const { db, events, rejected } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+        const result = await processIngestEvent(db, paymentEvent({ product: 'momenty' }));
+        expect(result.accepted).toBe(false);
+        expect(events).toHaveLength(0);
+        expect(rejected[0].reason).toMatch(/unknown product/);
+    });
+
     it('a prop outside the registry (e.g. rebillId) never reaches the events table', async () => {
         const { db, events, rejected } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
         const result = await processIngestEvent(db, paymentEvent({
