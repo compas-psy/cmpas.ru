@@ -132,7 +132,16 @@ for key in \
   TELEGRAM_CHAT_ID \
   MAX_BOT_TOKEN \
   MAX_BOT_USERNAME \
-  DADATA_API_KEY; do
+  DADATA_API_KEY \
+  TINKOFF_TERMINAL_KEY \
+  TINKOFF_PASSWORD \
+  TINKOFF_APP_TERMINAL_KEY \
+  TINKOFF_APP_PASSWORD \
+  SMTP_HOST \
+  SMTP_PORT \
+  SMTP_USER \
+  SMTP_PASSWORD \
+  SMTP_FROM; do
   value="${!key:-}"
   if [ -n "$value" ]; then
     upsert_env "$key" "$value"
