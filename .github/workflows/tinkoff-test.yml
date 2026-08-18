@@ -117,9 +117,24 @@ jobs:
                 if (r.Message) console.log('Message: ' + r.Message + ' ' + (r.Details || ''));
                 if (r.PaymentURL) console.log('PaymentURL: ' + r.PaymentURL);
                 if (r.Success && r.PaymentId) {
+                  console.log('OrderId: ' + p.OrderId);
+                  console.log('PaymentId: ' + r.PaymentId);
                   const g = { TerminalKey: key, PaymentId: String(r.PaymentId) };
                   const st = await call('GetState', Object.assign({}, g, { Token: token(g, pwd) }));
                   console.log('GetState: Success=' + st.Success + ' Status=' + (st.Status || st.ErrorCode));
+                }
+                // Гасим прошлые неоплаченные платежи этого терминала, чтобы не
+                // копить висящие ссылки: банк по OrderId отдаёт их идентификаторы.
+                if (process.env.TK_CANCEL_ORDER) {
+                  const c = { TerminalKey: key, OrderId: process.env.TK_CANCEL_ORDER };
+                  const found = await call('CheckOrder', Object.assign({}, c, { Token: token(c, pwd) }));
+                  for (const pay of (found.Payments || [])) {
+                    if (['NEW', 'FORM_SHOWED'].includes(pay.Status)) {
+                      const x = { TerminalKey: key, PaymentId: String(pay.PaymentId) };
+                      const res = await call('Cancel', Object.assign({}, x, { Token: token(x, pwd) }));
+                      console.log('Отмена ' + pay.PaymentId + ': Success=' + res.Success + ' ' + (res.Status || res.ErrorCode || ''));
+                    }
+                  }
                 }
               } catch (e) { console.log('### ' + name + ': запрос не ушёл — ' + (e && e.message)); }
             }
