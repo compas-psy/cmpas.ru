@@ -15,7 +15,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 
 const MAX_BOT_TOKEN = process.env.MAX_BOT_TOKEN;
-const LINK_SECRET = process.env.MAX_LINK_SECRET || process.env.AUTH_SECRET || 'fallback-secret';
+// Подписывающий секрет обязателен. Значения по умолчанию быть не может:
+// код репозитория публичен, и любая захардкоженная строка здесь означает,
+// что кто угодно может подделать ссылку привязки MAX к чужому кабинету.
+const RAW_LINK_SECRET = process.env.MAX_LINK_SECRET || process.env.AUTH_SECRET;
+if (!RAW_LINK_SECRET) {
+    throw new Error('MAX_LINK_SECRET или AUTH_SECRET обязателен: подписывать ссылки привязки MAX нечем.');
+}
+// Явный тип нужен, иначе сужение из проверки выше не доживает до использования
+// внутри обработчика запроса, и tsc видит string | undefined.
+const LINK_SECRET: string = RAW_LINK_SECRET;
 
 export async function POST(request: NextRequest) {
     // Validate that the request comes from the bot (shared secret)
