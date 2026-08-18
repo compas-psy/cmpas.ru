@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32138107709. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32138234618. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -53,7 +53,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda2        89G   64G   21G  77% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2025        1317          49        4954        5915
+Mem:            7941        2013        1305          49        4978        5927
 Swap:            511         253         258
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
@@ -187,17 +187,17 @@ curl: (28) Failed to connect to api.telegram.org port 443 after 136310 ms: Could
 [deploy] WARNING: Telegram webhook registration failed.
 [deploy] Deployment completed successfully.
 ### Состояние контейнеров
-zapiski-api | Up 35 minutes (healthy)
+zapiski-api | Up 36 minutes (healthy)
 cmpas-app | Up About an hour
 zapiski-postgres | Up 8 days (healthy)
 cmpas-mailer | Up 10 days (healthy)
 cmpas-postgres | Up 10 days (healthy)
-cmpas-singbox | Restarting (1) 22 seconds ago
+cmpas-singbox | Restarting (1) 41 seconds ago
 ### Достижим ли Т-Банк с сервера
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.218096s
+код 405, время 0.181263s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -210,10 +210,12 @@ russian_trusted_root_ca.crt
 russian_trusted_sub_ca.crt
 российского корня в доверенных нет
 ### Платежи: последние записи
-ERROR:  column "created_at" does not exist
-LINE 1: ...' || coalesce(terminal,'нет колонки') || ' | ' || created_at
-                                                             ^
-HINT:  Perhaps you meant to reference the column "Payment.createdAt".
+cmpas_cml2q6tfe0001kioc5j6tpyxu_8244a60cc6f1cbad | pending | 99000 | site | 2026-05-08 06:42:16.349
+cmpas_cml2q6tfe0001kioc5j6tpyxu_9d0e50bfb33d4818 | pending | 99000 | site | 2026-04-26 17:56:56.241
+cmpas_cml3mp4xd0006hgrnbw9v9jnl_3f86dcb647887e91 | pending | 99000 | site | 2026-04-13 09:47:32.003
+cmpas_cml2q6tfe0001kioc5j6tpyxu_1c2fea9fbc778f8d | pending | 99000 | site | 2026-04-06 07:38:00.896
+cmpas_cml2q6tfe0001kioc5j6tpyxu_f640f4f81b5009ea | pending | 99000 | site | 2026-04-05 18:50:14.401
+cmpas_cml2q6tfe0001kioc5j6tpyxu_4c4933769ca64fa8 | paid | 99000 | site | 2026-04-05 17:59:04.544
 всего платежей=8
 ### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)
 TINKOFF_TERMINAL_KEY: задан
