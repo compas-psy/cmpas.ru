@@ -17,6 +17,9 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      # Корень Минцифры: сертификат платёжного шлюза Т-Банк выдан им, и без
+      # этой связки Node внутри контейнера соединение отвергает.
+      - NODE_EXTRA_CA_CERTS=/etc/ssl/ru-ca/russian-trusted.pem
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cmpas_db
       - EMAIL_SERVER_HOST=mailer
       - EMAIL_SERVER_PORT=25
@@ -31,6 +34,8 @@ services:
       - .env
     volumes:
       - uploaded_files:/app/public/uploads
+      # Связку кладёт scripts/install-ru-ca.sh; только на чтение.
+      - /etc/ssl/ru-ca:/etc/ssl/ru-ca:ro
     depends_on:
       postgres:
         condition: service_healthy
