@@ -69,3 +69,15 @@ echo | timeout 15 openssl s_client -connect securepay.tinkoff.ru:443 -servername
 echo "-- есть ли в системе российский корневой центр:"
 ls /usr/local/share/ca-certificates/ 2>/dev/null | head -5 || echo "каталог пуст"
 grep -rl "Russian Trusted" /etc/ssl/certs/ 2>/dev/null | head -3 || echo "российского корня в доверенных нет"
+
+echo "### Платежи: последние записи"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT id || ' | ' || coalesce(status,'?') || ' | ' || coalesce(amount::text,'?') || ' | ' || coalesce(terminal,'нет колонки') || ' | ' || created_at
+   FROM \"Payment\" ORDER BY \"createdAt\" DESC LIMIT 5;" 2>&1 | head -8
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'всего платежей=' || count(*) FROM \"Payment\";" 2>&1 | head -2
+
+echo "### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)"
+for k in TINKOFF_TERMINAL_KEY TINKOFF_PASSWORD TINKOFF_APP_TERMINAL_KEY TINKOFF_APP_PASSWORD SMTP_USER SMTP_PASSWORD; do
+  if grep -q "^${k}=." /var/www/cmpas.ru/.env 2>/dev/null; then echo "$k: задан"; else echo "$k: НЕ задан"; fi
+done
