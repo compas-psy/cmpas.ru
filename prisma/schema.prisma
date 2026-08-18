@@ -894,3 +894,73 @@ model AnalyticsEventRejected {
   @@map("events_rejected")
   @@index([createdAt])
 }
+
+// ── Technical pulse (O-260817-12, TZ_management_dashboard.md §9) ────────────
+// One row per collection tick (~every 5 min), written ONLY by the read-only
+// infra-pulse-collector container (docker/infra-pulse-role.sh: SELECT-only
+// DB role + read-only docker socket + read-only host mounts). Raw readings,
+// kept 90 days (collector prunes older rows itself — see
+// scripts/infra-pulse-collector.ts). No user identifiers, no paths, no
+// secrets, ever — grouped/variable-shape numbers only.
+model InfraPulse {
+  id          String   @id @default(cuid())
+  collectedAt DateTime @default(now())
+
+  // Server — from /proc and a read-only host disk mount, not host-level
+  // /proc access is unavailable to a bare docker socket; см. PR notes for
+  // the extra read-only mount this requires.
+  cpuPercent     Float?
+  memUsedBytes   BigInt?
+  memTotalBytes  BigInt?
+  diskUsedBytes  BigInt?
+  diskTotalBytes BigInt?
+
+  // Containers — [{ name, running, uptimeSeconds, restarts24h }]
+  containers Json?
+
+  // Database
+  dbSizeBytes          BigInt?
+  dbTopTables          Json? // [{ name, bytes }] — 5 largest
+  dbRowCounts          Json? // { User: n, DiaryClient: n, DiarySession: n, Payment: n }
+  migrationsApplied    Int?
+  migrationsUnfinished Int?
+  migrationsDrift      Json? // { onlyInRepo: [...], onlyInDb: [...] } — migration folder names only
+
+  // Backups — read from the same read-only host mount as disk usage
+  // (/var/backups/cmpas, already written by deploy-production-remote.sh
+  // and backup-db.yml; no new access category beyond that mount).
+  backupAgeHours           Float?
+  backupSizeBytes          BigInt?
+  backupSizeRatioYesterday Float?
+  backupReadable           Boolean?
+
+  // Reminders (O-260817-16) — null until ReminderOutbox exists (that
+  // migration may land after this one; collector checks first).
+  remindersDue       Int?
+  remindersSent      Int?
+  remindersSentTwice Int?
+
+  // Certificate — outbound TLS handshake to the public port, no docker
+  // socket or DB access needed for this one.
+  certDaysLeft        Int?
+  certDaysLeftZapiski Int?
+
+  @@index([collectedAt])
+}
+
+// Deploy history (O-260817-12, "выкладки" card). NOT written by the
+// read-only collector — deploy-production-remote.sh already has DB write
+// access during a deploy (it applies migrations), so it is the one
+// instrumented to insert a row at each of its own decision points. The
+// collector only ever SELECTs from this table, same as everything else.
+model DeployLog {
+  id         String    @id
+  startedAt  DateTime
+  finishedAt DateTime?
+  result     String // "success" | "rolled_back" | "schema_guard_stopped" | "failed"
+  imageRef   String?
+  errorNote  String?
+
+  @@index([startedAt])
+  @@index([result])
+}

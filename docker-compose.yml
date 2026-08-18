@@ -47,6 +47,40 @@ services:
       - ./deploy/singbox-config.json:/etc/sing-box/config.json:ro
     command: ["run", "-c", "/etc/sing-box/config.json"]
 
+  # Технический пульс (O-260817-12, TZ_management_dashboard.md §9): собирает
+  # показания сервера/контейнеров/базы/копий/рассылки/сертификата раз в 5
+  # минут в таблицу InfraPulse. Отдельный процесс, не внутри сайта — падение
+  # сборщика не задевает сайт, и наоборот. Только чтение: read-only docker
+  # socket, read-only host-mounts (см. src/lib/infra-pulse/collector.ts —
+  # только /proc и папка бэкапов, не весь хост целиком), БД-роль
+  # infra_pulse_reader с SELECT везде и INSERT/DELETE только на свою же
+  # таблицу InfraPulse (docker/init-postgres.sh, scripts/deploy-production-remote.sh).
+  #
+  # Не запускается в обычном `docker compose up` — `docker compose --profile infra-pulse up`,
+  # тот же приём, что у singbox и reminders-worker.
+  infra-pulse:
+    container_name: cmpas-infra-pulse
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: infra-pulse-collector
+    restart: always
+    profiles: ["infra-pulse"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://infra_pulse_reader:${INFRA_PULSE_DB_PASSWORD:-}@postgres:5432/cmpas_db
+      - INFRA_PULSE_CERT_HOST=cmpas.ru
+      - INFRA_PULSE_CERT_HOST_ZAPISKI=zapiski.cmpas.ru
+    env_file:
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/hostfs/proc:ro
+      - /var/backups/cmpas:/hostfs/backups:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:15-alpine
     container_name: cmpas-postgres
