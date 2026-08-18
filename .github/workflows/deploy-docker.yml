@@ -18,6 +18,8 @@ on:
       - '.github/workflows/db-baseline.yml'
       - 'scripts/db-doctor.sh'
       - 'scripts/db-baseline.sh'
+      - '.github/workflows/tinkoff-test.yml'
+      - 'scripts/tinkoff-selftest.ts'
       - 'docs/ops/**'
   push:
     branches: ["main"]
@@ -36,6 +38,8 @@ on:
       - '.github/workflows/db-baseline.yml'
       - 'scripts/db-doctor.sh'
       - 'scripts/db-baseline.sh'
+      - '.github/workflows/tinkoff-test.yml'
+      - 'scripts/tinkoff-selftest.ts'
       - 'docs/ops/**'
   workflow_dispatch:
 
