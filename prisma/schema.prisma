@@ -372,6 +372,7 @@ model DiarySession {
   client       DiaryClient          @relation(fields: [clientId], references: [id], onDelete: Cascade)
   address      PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
   homeworks    Homework[]
+  reminderOutbox ReminderOutbox[]
 
   @@index([psychologistId])
   @@index([clientId])
@@ -836,6 +837,34 @@ model ScheduledClientMessage {
   @@index([clientId])
   @@index([sendAt])
   @@index([status])
+}
+
+// Outbox for session reminders (O-260817-16). One row per planned send —
+// replaces DiarySession.notified24h/notified1h's in-process ±15min window
+// scan (src/lib/reminders/outbox.ts). @@unique([sessionId, kind]) is what
+// makes a duplicate send physically impossible: a worker can only ever hold
+// one row per (session, kind), and status only moves forward.
+model ReminderOutbox {
+  id        String    @id @default(cuid())
+  sessionId String
+  kind      String // "client_24h" | "client_1h" | "psychologist_reminder"
+  dueAt     DateTime // when this reminder should go out
+  status    String    @default("pending") // "pending" | "sending" | "sent" | "failed" | "skipped"
+  attempts  Int       @default(0)
+  sendCount Int       @default(0) // incremented on each confirmed send — the source for "ушло дважды"
+  late      Boolean   @default(false) // sent well after dueAt (caught up after a gap), not on time
+  lockedAt  DateTime? // claim marker; a stale lock (past the lock timeout) is reclaimable
+  lockedBy  String? // worker instance id, diagnostic only
+  sentAt    DateTime?
+  lastError String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  session DiarySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, kind])
+  @@index([status, dueAt])
+  @@index([sessionId])
 }
 
 // Invite tokens for clients to link their Telegram/MAX account to a client card

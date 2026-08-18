@@ -1,20 +1,18 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME === 'nodejs') {
         const cron = await import('node-cron');
-        const { processReminders } = await import('./lib/cron/reminders');
         const { processMorningDigest, processWeeklyDigest } = await import('./lib/cron/digest');
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
 
-        // Напоминания каждые 15 минут
-        cron.schedule('*/15 * * * *', async () => {
-            console.log('[CRON] Запуск рассылки уведомлений (каждые 15 минут)');
-            try {
-                await processReminders();
-            } catch (error) {
-                console.error('[CRON] Ошибка при рассылке уведомлений:', error);
-            }
-        });
+        // Напоминания о сессиях (24ч/1ч/специалисту) больше не отправляются
+        // отсюда (O-260817-16, CJM_booking_v2.md §1 «восьмое, невидимое»):
+        // рассылка внутри процесса сайта на ±15-минутном окне теряла
+        // напоминания при перезапуске и дублировала их при второй копии
+        // сайта. Теперь это отдельный процесс — src/lib/reminders/outbox.ts
+        // + scripts/reminders-worker.ts, свой контейнер reminders-worker в
+        // docker-compose.yml, не запускается по умолчанию (профиль
+        // "reminders").
 
         // Утренний дайджест — 08:00 МСК (05:00 UTC)
         cron.schedule('0 5 * * *', async () => {

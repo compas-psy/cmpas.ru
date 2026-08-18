@@ -66,3 +66,22 @@ EXPOSE 3000
 ENV PORT 3000
 
 CMD ["./scripts/start-production.sh"]
+
+# Reminders outbox worker (O-260817-16): a separate process from the site —
+# `app`'s node-cron no longer sends session reminders at all (see
+# src/lib/reminders/outbox.ts and src/instrumentation.ts). Runs the small
+# TypeScript entrypoint directly via tsx instead of the Next.js build;
+# reuses `builder`'s already-installed deps and generated Prisma client, no
+# separate build step needed.
+FROM builder AS reminders-worker
+WORKDIR /app
+
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 --home /home/nextjs nextjs
+RUN chown -R nextjs:nodejs /app
+USER nextjs
+
+CMD ["npx", "tsx", "scripts/reminders-worker.ts"]

@@ -28,10 +28,20 @@ export type SendMessageOptions = {
     };
 };
 
-export async function sendTelegramMessage(chatId: string, text: string, options?: SendMessageOptions) {
+/**
+ * Возвращает, дошло ли сообщение — раньше функция ничего не возвращала, и
+ * вызывающий код не мог отличить успех от отказа API/сети иначе, чем
+ * читая логи (O-260817-16: обязательный «результат» на каждую попытку в
+ * outbox нельзя посчитать без этого сигнала).
+ */
+export async function sendTelegramMessage(
+    chatId: string,
+    text: string,
+    options?: SendMessageOptions
+): Promise<boolean> {
     if (!TELEGRAM_BOT_TOKEN) {
         console.warn('[Telegram] Отсутствует TELEGRAM_BOT_TOKEN, отправка пропущена.');
-        return;
+        return false;
     }
 
     const controller = new AbortController();
@@ -57,8 +67,11 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
             try {
                 const f = nodeFetch();
                 const res = await f(url, { ...fetchOpts, agent });
-                if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
-                return;
+                if (!res.ok) {
+                    console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
+                    return false;
+                }
+                return true;
             } catch (e: any) {
                 // Proxy attempt failed (incl. timeout) — fall through to a DIRECT
                 // send so a flaky VPN never silently drops a message.
@@ -67,13 +80,18 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
         }
 
         const res = await fetch(url, fetchOpts);
-        if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
+        if (!res.ok) {
+            console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
+            return false;
+        }
+        return true;
     } catch (error: any) {
         if (error.name === 'AbortError') {
             console.error('[Telegram] Таймаут при отправке сообщения в chatId:', chatId);
         } else {
             console.error('[Telegram] Исключение при вызове API:', error);
         }
+        return false;
     } finally {
         clearTimeout(timeout);
     }
