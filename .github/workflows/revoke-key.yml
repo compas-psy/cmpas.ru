@@ -1,0 +1,108 @@
+name: Отозвать утёкший ключ на сервере
+
+# Утёкший ключ: ssh-ed25519 ... eliah@Eliah,
+# отпечаток SHA256:VK0R69yEzaIjnQ5FfoKtI8Ji4f7b2x4q0QFMn0OTmDk.
+# Приватная часть лежала в публичном репозитории — ключ скомпрометирован.
+#
+# Прогон СНАЧАЛА проверяет, не тем ли самым ключом ходит сама выкладка.
+# Если тем — не удаляет ничего: иначе следующая же выкладка потеряет доступ,
+# и чинить будет нечем. Если другим — удаляет и показывает результат.
+#
+# Отпечаток ключа выкладки сравнивается, но не печатается.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    paths: ['.backup/revoke-key']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: revoke-key
+  cancel-in-progress: false
+
+jobs:
+  revoke:
+    name: Проверить и отозвать
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Отозвать на сервере
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/rk
+          chmod 600 ~/.ssh/rk
+
+          # Отпечаток ключа, которым ходит выкладка. Значение не печатаем.
+          DEPLOY_FP=$(ssh-keygen -y -f ~/.ssh/rk 2>/dev/null | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')
+          LEAKED_FP='SHA256:VK0R69yEzaIjnQ5FfoKtI8Ji4f7b2x4q0QFMn0OTmDk'
+          if [ "$DEPLOY_FP" = "$LEAKED_FP" ]; then
+            SAME=1
+          else
+            SAME=0
+          fi
+
+          set +e
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/rk \
+              "$SSH_USER@$SSH_HOST" "SAME=$SAME bash -s" > /tmp/revoke.out 2>&1 <<'REMOTE'
+          set -uo pipefail
+          KEY='AAAAC3NzaC1lZDI1NTE5AAAAILxhLX0Nkd4rEkhNZL46kxMu0+zMjlWmTIvh61rP6RZU'
+          AK=~/.ssh/authorized_keys
+          echo "### Ключей в доступе всего: $(grep -c . "$AK" 2>/dev/null || echo 0)"
+          FOUND=$(grep -c "$KEY" "$AK" 2>/dev/null || echo 0)
+          echo "### Утёкший ключ найден строк: $FOUND"
+          if [ "$FOUND" = '0' ]; then
+            echo "### Ключ доступа к серверу не даёт. Удалять нечего."
+            exit 0
+          fi
+          if [ "${SAME:-0}" = '1' ]; then
+            echo "### ОСТАНОВЛЕНО: этим же ключом ходит выкладка."
+            echo "### Удаление оборвёт доступ и починить будет нечем."
+            echo "### Нужна замена ключа человеком: сначала новый, потом снятие старого."
+            exit 0
+          fi
+          cp "$AK" "$AK.backup-$(date +%F_%H%M%S)"
+          grep -v "$KEY" "$AK" > "$AK.new" && mv "$AK.new" "$AK"
+          chmod 600 "$AK"
+          echo "### Удалён. Ключей осталось: $(grep -c . "$AK")"
+          echo "### Проверка, что утёкшего больше нет: $(grep -c "$KEY" "$AK" || echo 0)"
+          echo "### Резервная копия файла доступа сохранена рядом."
+          REMOTE
+          echo "EXIT_CODE=$?" >> /tmp/revoke.out
+          set -e
+          rm -f ~/.ssh/rk
+
+          mkdir -p docs/ops
+          {
+            echo "# Отзыв утёкшего ключа"
+            echo
+            echo "Прогон ${{ github.run_id }}. Отпечаток утёкшего ключа: \`SHA256:VK0R69yEzaIjnQ5FfoKtI8Ji4f7b2x4q0QFMn0OTmDk\`"
+            echo
+            if [ "$SAME" = '1' ]; then
+              echo "**Выкладка ходит этим же ключом.** Автоматическое снятие запрещено — см. отчёт."
+            else
+              echo "Выкладка ходит другим ключом — снятие безопасно."
+            fi
+            echo
+            echo '```'
+            cat /tmp/revoke.out
+            echo '```'
+          } > docs/ops/revoke-key.md
+
+      - name: Закоммитить отчёт
+        if: always()
+        run: |
+          git config user.name 'simpas-doctor'
+          git config user.email 'bot@users.noreply.github.com'
+          git add docs/ops/revoke-key.md
+          git diff --cached --quiet || git commit -m "Отзыв утёкшего ключа: отчёт"
+          git push origin HEAD:main || echo "нечего пушить"
