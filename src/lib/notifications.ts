@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 export type NotificationType =
     | 'session_confirmed'
     | 'session_cancelled'
+    | 'session_rescheduled'
     | 'session_pending'
     | 'new_booking'
     | 'channel_linked'

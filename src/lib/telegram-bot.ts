@@ -7,7 +7,7 @@ import { createNotification } from '@/lib/notifications';
 import { telegramSendAgent } from '@/lib/telegram-proxy';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
-import { personalClientToken } from '@/lib/client-workflow';
+import { clientActionToken, personalClientToken } from '@/lib/client-workflow';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -322,9 +322,10 @@ export function setupBot() {
         const tgId = ctx.from?.id.toString();
         const session = await db.diarySession.findUnique({ where: { id: sessionId }, include: { client: true } });
         if (!session || session.client.telegramChatId !== tgId) return ctx.answerCbQuery('Сессия не найдена.', { show_alert: true });
-        const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${session.psychologistId}?c=${personalClientToken(session.clientId)}&v=${Date.now()}`;
+        const token = clientActionToken(session.psychologistId, session.clientId);
+        const rescheduleUrl = `${TELEGRAM_APP_URL}/client/reschedule/${session.id}?t=${token}`;
         await ctx.editMessageText('🔄 Чтобы перенести сессию, выберите новое время:', {
-            reply_markup: { inline_keyboard: [[{ text: '📅 Выбрать новое время', web_app: { url: bookUrl } }]] }
+            reply_markup: { inline_keyboard: [[{ text: '📅 Выбрать новое время', web_app: { url: rescheduleUrl } }]] }
         });
         await ctx.answerCbQuery();
     });

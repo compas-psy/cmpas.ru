@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
-import { clientBookingLink, verifyClientActionToken } from '@/lib/client-workflow';
+import { verifyClientActionToken } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 
@@ -95,8 +95,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'reschedule') {
-        const bookingUrl = clientBookingLink(session.psychologistId, session.clientId);
-        return NextResponse.redirect(new URL(bookingUrl, req.url));
+        return NextResponse.redirect(new URL(`/client/reschedule/${session.id}?t=${token}`, req.url));
     }
 
     return resultPage('Неизвестное действие', 'Вернитесь в сообщение и выберите одну из доступных кнопок.', 'danger');
