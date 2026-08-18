@@ -53,13 +53,17 @@ jobs:
       - name: Прогнать самопроверку
         id: selftest
         continue-on-error: true
-        run: npx tsx scripts/tinkoff-selftest.ts
+        run: npx --yes tsx@4 scripts/tinkoff-selftest.ts 2>&1 | tee /tmp/selftest.out
 
       - name: Закоммитить отчёт
         if: always()
         run: |
           git config user.name 'simpas-doctor'
           git config user.email 'bot@users.noreply.github.com'
+          if [ ! -f docs/ops/tinkoff-test.md ]; then
+            mkdir -p docs/ops
+            { echo '# Самопроверка эквайринга: отчёт не создан'; echo; echo 'Скрипт не дошёл до записи отчёта. Вывод прогона:'; echo; echo '```'; tail -n 60 /tmp/selftest.out 2>/dev/null || echo '(вывода нет)'; echo '```'; } > docs/ops/tinkoff-test.md
+          fi
           git add docs/ops/tinkoff-test.md || true
           git diff --cached --quiet || git commit -m "Самопроверка эквайринга: отчёт"
           git push origin HEAD:${{ github.ref_name }} || echo "нечего пушить"

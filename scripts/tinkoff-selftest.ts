@@ -150,13 +150,29 @@ async function main() {
     say();
     say('Что остаётся человеку: открыть ссылку на платёжную форму выше и оплатить тестовой картой. Автоматика номер карты не вводит и не должна.');
 
-    const fs = await import('fs');
-    fs.mkdirSync('docs/ops', { recursive: true });
-    fs.writeFileSync('docs/ops/tinkoff-test.md', lines.join('\n') + '\n');
     if (!ok) process.exitCode = 1;
 }
 
-main().catch(e => {
-    console.error('Самопроверка упала:', e?.message ?? e);
-    process.exitCode = 1;
-});
+async function writeReport() {
+    const fs = await import('fs');
+    fs.mkdirSync('docs/ops', { recursive: true });
+    fs.writeFileSync('docs/ops/tinkoff-test.md', lines.join('\n') + '\n');
+}
+
+main()
+    .catch(e => {
+        // Отчёт должен появиться даже когда проверка развалилась: иначе разбирать
+        // нечего — журналы прогона из среды агента не читаются.
+        say();
+        say('---');
+        say();
+        say('**САМОПРОВЕРКА УПАЛА С ОШИБКОЙ**');
+        say();
+        say('```');
+        say(String(e?.stack ?? e?.message ?? e));
+        say('```');
+        process.exitCode = 1;
+    })
+    .finally(async () => {
+        await writeReport();
+    });
