@@ -6,6 +6,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
+import { trackBookingCreatedBy } from '@/lib/analytics/booking-funnel';
 
 /** Send to Telegram and/or MAX depending on which IDs are set. Runs both in
  * parallel so a slow/failed Telegram send (e.g. flaky VPN) never delays or
@@ -566,6 +567,8 @@ export async function bookSession(psychologistId: string, userDetails: any, form
             status: 'confirmed'
         }
     });
+
+    trackBookingCreatedBy(db, psychologistId, 'client').catch(e => console.error('[analytics] booking_created_by failed:', e));
 
     const sessionsCount = await db.diarySession.count({ where: { clientId: client.id } });
     await db.diaryClient.update({

@@ -9,6 +9,7 @@ import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliver
 import { createNotification } from '@/lib/notifications';
 import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 import { formatSession, toDatabaseType } from '@/lib/mobile-sessions';
+import { trackBookingCreatedBy } from '@/lib/analytics/booking-funnel';
 
 async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     if (!sessions.length) return sessions;
@@ -84,6 +85,8 @@ export async function POST(req: NextRequest) {
             data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending' },
             include: { client: true },
         });
+
+        trackBookingCreatedBy(db, auth.userId, 'specialist').catch(e => console.error('[analytics] booking_created_by failed:', e));
 
         await createNotification({
             psychologistId: auth.userId,

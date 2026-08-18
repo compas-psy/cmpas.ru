@@ -7,6 +7,7 @@ import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/li
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
+import { trackBookingCreatedBy } from '@/lib/analytics/booking-funnel';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -157,6 +158,8 @@ export async function createSession(data: {
             status: 'confirmed',
         },
     });
+
+    trackBookingCreatedBy(db, psychologistId, 'specialist').catch(e => console.error('[analytics] booking_created_by failed:', e));
 
     // Update client stats
     const sessionsCount = await db.diarySession.count({ where: { clientId: data.clientId } });
