@@ -1,16 +1,18 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32124112990. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32125060398. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
 ### Журнал миграций существует?
 t
 ### Записей в журнале
-29
+31
 ### Незавершённых миграций
 0
 ### Последние 20 записей журнала
+20260818090000_ingest_anonymous  finished=2026-08-18 10:03:09.310097+00
+20260817140000_booking_a_b  finished=2026-08-18 10:03:09.281124+00
 20260817120000_analytics_f0_f1  finished=2026-08-17 13:33:19.477871+00
 20260710120000_legal_acceptance_schema_sync  finished=2026-08-17 13:10:59.984689+00
 20260709_legal_acceptance_audit_fields  finished=2026-08-17 13:10:55.588199+00
@@ -29,167 +31,168 @@ t
 20260405_add_max_chat_id_to_diary_client  finished=2026-08-17 13:10:07.654003+00
 20260404_add_trial_ends_at  finished=2026-08-17 13:10:04.578802+00
 20260404_add_max_chat_id  finished=2026-08-17 13:10:01.363918+00
-20260323_add_sync_from_to_calendar_integration  finished=2026-08-17 13:09:58.112921+00
-20260315_add_legal_documents  finished=2026-08-17 13:09:54.676037+00
 ### Колонки, которые добавляли откаченные PR (должны отсутствовать)
+PsychologistSettings.privateRemindersEnabled
+PsychologistSettings.timeSuggestEnabled
 User.analyticsConsentAt
 Payment.terminal
 ### Таблицы, которые добавляли откаченные PR (должны отсутствовать)
 Subscription
+WaitlistEntry
 events
 events_rejected
 ### Всего таблиц в базе
-46
+48
 ### Строк в главных таблицах
 User=14
 DiaryClient=20
 DiarySession=41
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   61G   24G  73% /
-/dev/vda2        89G   61G   24G  73% /
+/dev/vda2        89G   62G   23G  73% /
+/dev/vda2        89G   62G   23G  73% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2199        2226          56        3878        5741
+Mem:            7941        2155        1497          56        4651        5785
 Swap:            511           1         510
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          6         6         46.8GB    46.8GB (100%)
-Containers      6         6         3.719MB   0B (0%)
+Images          6         6         47.39GB   47.39GB (100%)
+Containers      6         6         3.67MB    0B (0%)
 Local Volumes   155       7         210.7MB   4.07MB (1%)
-Build Cache     822       0         51.22GB   50.22GB
+Build Cache     835       0         51.91GB   50.91GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-#1 DONE 0.0s
+#34 DONE 0.3s
 
-#2 [internal] load build definition from Dockerfile
-#2 transferring dockerfile: 2.53kB done
-#2 DONE 0.0s
+#35 exporting to image
+#35 exporting layers
+#35 exporting layers 17.6s done
+#35 exporting manifest sha256:8e6389c324768b2e7043563a8e7f719153df772172102cdb78f4147d67b3358d 0.0s done
+#35 exporting config sha256:64c7a7aba7f6d3425d2d4be9b1c2ac716b616e5c190d45001aea95b787b7f8f1 0.0s done
+#35 exporting attestation manifest sha256:e1e80c084903b811ed9dbfce0bc00974d7411e8b8d990e0f24061caa2d0cd97a 0.0s done
+#35 exporting manifest list sha256:04b763f7408439f87f4c790c675a66a068c4cb3bde9806c0715bfa7707dab3c1 0.0s done
+#35 naming to docker.io/library/cmpasru-app:latest done
+#35 unpacking to docker.io/library/cmpasru-app:latest
+#35 unpacking to docker.io/library/cmpasru-app:latest 6.6s done
+#35 DONE 24.4s
 
-#3 [internal] load metadata for docker.io/library/node:20-slim
-#3 DONE 1.0s
+#36 resolving provenance for metadata file
+#36 DONE 0.0s
+ Image cmpasru-app Built 
+time="2026-08-18T13:03:05+03:00" level=warning msg="No services to build"
+ Container cmpas-mailer Running 
+ Container cmpas-postgres Running 
+[deploy] PostgreSQL is ready.
+[deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
+time="2026-08-18T13:03:05+03:00" level=warning msg="No services to build"
+time="2026-08-18T13:03:05+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-1ff9cb0bad40 Creating 
+ Container cmpasru-app-run-1ff9cb0bad40 Created 
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
 
-#4 [internal] load .dockerignore
-#4 transferring context: 170B done
-#4 DONE 0.0s
+31 migrations found in prisma/migrations
 
-#5 [internal] load build context
-#5 DONE 0.0s
+Applying migration `20260817140000_booking_a_b`
+Applying migration `20260818090000_ingest_anonymous`
 
-#6 [base 1/3] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
-#6 resolve docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 0.1s done
-#6 DONE 0.1s
+The following migration(s) have been applied:
 
-#5 [internal] load build context
-#5 transferring context: 420.83kB 0.4s done
-#5 DONE 0.4s
-
-#7 [deps 3/3] RUN npm install --legacy-peer-deps
-#7 CACHED
-
-#8 [base 2/3] RUN apt-get update -y && apt-get install -y openssl ca-certificates
-#8 CACHED
-
-#9 [base 3/3] WORKDIR /app
-#9 CACHED
-
-#10 [deps 1/3] WORKDIR /app
-#10 CACHED
-
-#11 [deps 2/3] COPY package.json package-lock.json* ./
-#11 CACHED
-
-#12 [builder 2/5] COPY --from=deps /app/node_modules ./node_modules
-#12 CACHED
-
-#13 [builder 3/5] COPY . .
-#13 DONE 0.4s
-
-#14 [builder 4/5] RUN npx prisma generate
-#14 3.208 Prisma schema loaded from prisma/schema.prisma
-#14 13.44 
-#14 13.44 ✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 1.19s
-#14 13.44 
-#14 13.44 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
-#14 13.44 
-#14 13.44 Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
-#14 13.44 
-#14 13.62 npm notice
-#14 13.62 npm notice New major version of npm available! 10.8.2 -> 12.0.2
-#14 13.62 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
-#14 13.62 npm notice To update run: npm install -g npm@12.0.2
-#14 13.62 npm notice
-#14 DONE 13.7s
-
-#15 [builder 5/5] RUN npm run build
-#15 1.076 
-#15 1.076 > cmpas.ru@0.1.0 build
-#15 1.076 > next build
-#15 1.076 
-#15 3.937 ▲ Next.js 16.1.1 (Turbopack)
-#15 3.937 
-#15 4.150   Creating an optimized production build ...
-#15 43.17 ✓ Compiled successfully in 37.4s
-#15 43.17   Skipping validation of types
-#15 43.67   Collecting page data using 3 workers ...
-#15 45.55 [AUTH CRITICAL] AUTH_SECRET is not set! Authentication will not work.
-#15 45.87 [AUTH CRITICAL] AUTH_SECRET is not set! Authentication will not work.
-#15 46.06 Error: MAX_LINK_SECRET или AUTH_SECRET обязателен: подписывать ссылки привязки MAX нечем.
-#15 46.06     at module evaluation (.next/server/chunks/[root-of-the-server]__2a0bdcc3._.js:1:1517)
-#15 46.06     at instantiateModule (.next/server/chunks/[turbopack]_runtime.js:740:9)
-#15 46.06     at instantiateRuntimeModule (.next/server/chunks/[turbopack]_runtime.js:768:12)
-#15 46.06     at getOrInstantiateRuntimeModule (.next/server/chunks/[turbopack]_runtime.js:781:12)
-#15 46.06     at Object.m (.next/server/chunks/[turbopack]_runtime.js:790:18)
-#15 46.06     at Object.<anonymous> (.next/server/app/api/max/connect/route.js:6:3)
-#15 46.07 [AUTH CRITICAL] AUTH_SECRET is not set! Authentication will not work.
-#15 46.09 
-#15 46.09 > Build error occurred
-#15 46.11 Error: Failed to collect page data for /api/max/connect
-#15 46.11     at ignore-listed frames {
-#15 46.11   type: 'Error'
-#15 46.11 }
-#15 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-------
- > [builder 5/5] RUN npm run build:
-46.06     at getOrInstantiateRuntimeModule (.next/server/chunks/[turbopack]_runtime.js:781:12)
-46.06     at Object.m (.next/server/chunks/[turbopack]_runtime.js:790:18)
-46.06     at Object.<anonymous> (.next/server/app/api/max/connect/route.js:6:3)
-46.07 [AUTH CRITICAL] AUTH_SECRET is not set! Authentication will not work.
-46.09 
-46.09 > Build error occurred
-46.11 Error: Failed to collect page data for /api/max/connect
-46.11     at ignore-listed frames {
-46.11   type: 'Error'
-46.11 }
-------
-Dockerfile:24
-
---------------------
-
-  22 |     
-
-  23 |     RUN npx prisma generate
-
-  24 | >>> RUN npm run build
-
-  25 |     
-
-  26 |     # Production image
-
---------------------
-
-failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-
+migrations/
+  └─ 20260817140000_booking_a_b/
+    └─ migration.sql
+  └─ 20260818090000_ingest_anonymous/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+[deploy] Prisma migrations applied.
+[deploy] Applying beta schema safety net.
+psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "User" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:13: NOTICE:  column "documentVersion" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+UPDATE 23
+psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
+CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
+CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
+CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
+CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
+CREATE INDEX
+[deploy] Running strict schema verification against the new image.
+time="2026-08-18T13:03:10+03:00" level=warning msg="No services to build"
+time="2026-08-18T13:03:10+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-d8a2383237ca Creating 
+ Container cmpasru-app-run-d8a2383237ca Created 
+[schema] Все 43 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Recreating only the application container.
+time="2026-08-18T13:03:12+03:00" level=warning msg="No services to build"
+ Container cmpas-app Recreate 
+ Container cmpas-app Recreated 
+ Container cmpas-app Starting 
+ Container cmpas-app Started 
+[deploy] New application is healthy.
+[schema] Все 43 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Auth endpoint status: 200
+curl: (28) Failed to connect to api.telegram.org port 443 after 133108 ms: Couldn't connect to server
+[deploy] WARNING: Telegram webhook registration failed.
+[deploy] Deployment completed successfully.
 ### Состояние контейнеров
-zapiski-api | Up 18 hours (healthy)
-cmpas-app | Up 20 hours
+cmpas-app | Up 3 minutes
+zapiski-api | Up 19 hours (healthy)
 zapiski-postgres | Up 8 days (healthy)
 cmpas-mailer | Up 10 days (healthy)
 cmpas-postgres | Up 10 days (healthy)
-cmpas-singbox | Restarting (1) 2 seconds ago
+cmpas-singbox | Restarting (1) 22 seconds ago
 ```
 
 ## Миграции, лежащие в репозитории
