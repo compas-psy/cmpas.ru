@@ -52,3 +52,13 @@ tail -n 120 /tmp/cmpas-deploy.log 2>/dev/null || echo "журнала нет"
 
 echo "### Состояние контейнеров"
 docker ps -a --format '{{.Names}} | {{.Status}}' 2>&1 | head -20
+
+echo "### Достижим ли Т-Банк с сервера"
+echo "-- имя разрешается в:"
+getent hosts securepay.tinkoff.ru 2>&1 | head -3 || echo "не разрешается"
+echo "-- curl с хоста:"
+curl -sS -o /dev/null -w 'код %{http_code}, время %{time_total}s\n' --max-time 15 https://securepay.tinkoff.ru/v2/GetState 2>&1 | head -3
+echo "-- curl из контейнера приложения:"
+docker exec cmpas-app sh -lc "curl -sS -o /dev/null -w 'код %{http_code}\n' --max-time 15 https://securepay.tinkoff.ru/v2/GetState" 2>&1 | head -3
+echo "-- версия node на хосте:"
+node -v 2>&1 | head -1
