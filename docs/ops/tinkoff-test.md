@@ -1,6 +1,6 @@
 # Самопроверка эквайринга Т-Банк (тестовый терминал)
 
-Прогон: 2026-08-18T11:38:16.898Z
+Прогон: 2026-08-18T11:45:18.279Z
 
 ## Что подставлено
 
@@ -41,6 +41,6 @@ Success: false | Status:  | ErrorCode: 501
 Message: Неверные параметры. Терминал не найден.
 ### приложение
 Success: true | Status: NEW | ErrorCode: 0
-PaymentURL: https://pay.tbank.ru/jEsyvEIJ
+PaymentURL: https://pay.tbank.ru/TVayIZec
 GetState: Success=true Status=NEW
 ```
