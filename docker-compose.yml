@@ -4,6 +4,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # ОБЯЗАТЕЛЬНО. Без target собирается ПОСЛЕДНЯЯ стадия Dockerfile, а после
+      # добавления сборщика показаний последней стала infra-pulse-collector —
+      # и контейнер приложения превращался в сборщик: Next.js не стартовал,
+      # проверка здоровья не проходила, выкладка падала и откатывалась.
+      target: runner
     restart: always
     dns:
       - 8.8.8.8
