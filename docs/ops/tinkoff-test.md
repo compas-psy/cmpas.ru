@@ -1,6 +1,6 @@
 # Самопроверка эквайринга Т-Банк (тестовый терминал)
 
-Прогон: 2026-08-18T11:35:46.290Z
+Прогон: 2026-08-18T11:38:16.898Z
 
 ## Что подставлено
 
@@ -36,7 +36,11 @@ TypeError: fetch failed
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
-Warning: Ignoring extra certs from `/etc/ssl/ru-ca/russian-trusted.pem`, load failed: error:04800066:PEM routines::bad end line
-### сайт: запрос не ушёл — fetch failed
-### приложение: запрос не ушёл — fetch failed
+### сайт
+Success: false | Status:  | ErrorCode: 501
+Message: Неверные параметры. Терминал не найден.
+### приложение
+Success: true | Status: NEW | ErrorCode: 0
+PaymentURL: https://pay.tbank.ru/jEsyvEIJ
+GetState: Success=true Status=NEW
 ```
