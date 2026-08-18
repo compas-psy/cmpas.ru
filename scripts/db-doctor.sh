@@ -62,3 +62,10 @@ echo "-- curl из контейнера приложения:"
 docker exec cmpas-app sh -lc "curl -sS -o /dev/null -w 'код %{http_code}\n' --max-time 15 https://securepay.tinkoff.ru/v2/GetState" 2>&1 | head -3
 echo "-- версия node на хосте:"
 node -v 2>&1 | head -1
+
+echo "### Кто выдал сертификат Т-Банка"
+echo | timeout 15 openssl s_client -connect securepay.tinkoff.ru:443 -servername securepay.tinkoff.ru -showcerts 2>/dev/null \
+  | grep -E "^(s|i):|subject=|issuer=" | head -8 || echo "openssl не отработал"
+echo "-- есть ли в системе российский корневой центр:"
+ls /usr/local/share/ca-certificates/ 2>/dev/null | head -5 || echo "каталог пуст"
+grep -rl "Russian Trusted" /etc/ssl/certs/ 2>/dev/null | head -3 || echo "российского корня в доверенных нет"
