@@ -894,8 +894,8 @@ model AnalyticsEvent {
   event         String
   ts            DateTime
   product       String
-  accountId     String
-  deviceId      String? // null until analyticsConsentAt is set for the account
+  accountId     String? // null for a device without an account yet (O-260817-13)
+  deviceId      String? // null until consent is on file — for the account (analyticsConsentAt) or, absent an account, for the device (AnalyticsDeviceConsent)
   props         Json
   schemaVersion Int
   createdAt     DateTime @default(now())
@@ -914,4 +914,16 @@ model AnalyticsEventRejected {
 
   @@map("events_rejected")
   @@index([createdAt])
+}
+
+// Consent basis for a device that has no account (O-260817-13): МОМЕНТЫ has
+// none at all, ЗАПИСКИ has no production login yet. Independent of
+// User.analyticsConsentAt — an account's consent doesn't retroactively cover
+// events the same device sent before the account existed, and vice versa.
+model AnalyticsDeviceConsent {
+  deviceId  String    @id
+  consentAt DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@map("analytics_device_consent")
 }
