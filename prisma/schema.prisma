@@ -852,7 +852,7 @@ model ClientInviteToken {
 model PracticeNotification {
   id             String    @id @default(cuid())
   psychologistId String
-  type           String // "session_confirmed" | "session_cancelled" | "session_pending" | "new_booking" | "channel_linked" | "homework_received" | "document_acknowledged" | "document_opened"
+  type           String // see NotificationType in src/lib/notifications.ts
   title          String
   subtitle       String?
   sessionId      String?
