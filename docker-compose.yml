@@ -32,21 +32,6 @@ services:
       mailer:
         condition: service_started
 
-  # Local HTTP/SOCKS proxy tunneling outbound traffic through a mieru VPN
-  # server, used to reach api.telegram.org from a RU-hosted server (Telegram
-  # is blocked/throttled from Russian IPs). Only started if the mieru
-  # credentials are present in .env — see deploy-docker.yml. The app only
-  # actually routes through it when the telegram_vpn_proxy admin flag is on
-  # (/admin/features) — this container being up does not force proxying.
-  singbox:
-    image: ghcr.io/sagernet/sing-box:latest
-    container_name: cmpas-singbox
-    restart: always
-    profiles: ["vpn"]
-    volumes:
-      - ./deploy/singbox-config.json:/etc/sing-box/config.json:ro
-    command: ["run", "-c", "/etc/sing-box/config.json"]
-
   # Технический пульс (O-260817-12, TZ_management_dashboard.md §9): собирает
   # показания сервера/контейнеров/базы/копий/рассылки/сертификата раз в 5
   # минут в таблицу InfraPulse. Отдельный процесс, не внутри сайта — падение
@@ -57,7 +42,7 @@ services:
   # таблицу InfraPulse (docker/init-postgres.sh, scripts/deploy-production-remote.sh).
   #
   # Не запускается в обычном `docker compose up` — `docker compose --profile infra-pulse up`,
-  # тот же приём, что у singbox и reminders-worker.
+  # тот же приём, что у reminders-worker.
   infra-pulse:
     container_name: cmpas-infra-pulse
     build:
