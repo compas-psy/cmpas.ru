@@ -1,6 +1,6 @@
 # Доверие корню Минцифры
 
-Прогон 32132230966.
+Прогон 32132573808.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -19,14 +19,13 @@ notAfter=Mar  6 11:25:19 2027 GMT
 [ru-ca] отпечаток SHA-256: BB:BD:E2:10:3E:79:0B:99:9E:C6:2B:D0:3C:F6:25:A5:A2:E7:C3:16:E1:0A:FE:6A:49:0E:ED:EA:D8:B3:FD:9B
 [ru-ca] Устанавливаю в доверенные системы.
 Updating certificates in /etc/ssl/certs...
-rehash: warning: skipping ca-certificates.crt,it does not contain exactly one certificate or CRL
-rehash: warning: skipping dhparam1024.pem,it does not contain exactly one certificate or CRL
-rehash: warning: skipping dhparam2048.pem,it does not contain exactly one certificate or CRL
-rehash: warning: skipping dhparam4096.pem,it does not contain exactly one certificate or CRL
-2 added, 0 removed; done.
+0 added, 0 removed; done.
 Running hooks in /etc/ca-certificates/update.d...
 done.
 [ru-ca] Складываю связку для контейнера приложения.
+[ru-ca] Связка собрана, сертификатов внутри: 2
+[ru-ca] Проверяю связку глазами Node:
+[ru-ca] Node получил код 200
 [ru-ca] Проверяю платёжный шлюз с хоста:
 [ru-ca] код ответа 405
 [ru-ca] Готово. Доверие установлено, шлюз отвечает.
