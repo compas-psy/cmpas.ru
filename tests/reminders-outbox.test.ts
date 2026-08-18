@@ -184,7 +184,7 @@ describe('ensureOutboxRows (O-260817-16)', () => {
 });
 
 describe('sendOutboxRow (O-260817-16)', () => {
-    it('sends the 24h client reminder text unchanged from the old reminders.ts, and a copy to the psychologist', async () => {
+    it('sends the neutral 24h client reminder text (build24hReminderText, product/practice/CJM_booking_v1.md §1.3), and a copy to the psychologist', async () => {
         const session = baseSession();
         const { db } = makeFakeDb([session]);
 
@@ -193,9 +193,11 @@ describe('sendOutboxRow (O-260817-16)', () => {
         expect(result.ok).toBe(true);
         expect(sendTelegramMock).toHaveBeenCalledWith(
             'tg-client',
-            expect.stringContaining('Напоминание о сессии'),
+            expect.stringContaining('Напоминание о встрече'),
             expect.anything()
         );
+        const clientText = sendTelegramMock.mock.calls.find((call) => call[0] === 'tg-client')![1];
+        expect(clientText).not.toMatch(/психолог/i);
         expect(sendTelegramMock).toHaveBeenCalledWith('tg-psy', expect.stringContaining('Завтра в 13:00 сессия с клиентом Клиент'), expect.anything());
     });
 

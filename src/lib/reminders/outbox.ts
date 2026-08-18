@@ -9,12 +9,14 @@
 //   - FOR UPDATE SKIP LOCKED means two worker replicas never claim the same
 //     row, so "two copies of the site" can no longer mean "sent twice".
 //
-// Message TEXT is unchanged from the old reminders.ts — this file only
-// changes WHEN and HOW RELIABLY a message goes out, never WHAT it says
-// (boundary of this order: text is separate CJM work).
+// Message TEXT is not this order's concern: the 24h client text is
+// build24hReminderText() (product/practice/CJM_booking_v1.md §1.3, closes
+// B-260816-02) — this file only changes WHEN and HOW RELIABLY a message
+// goes out, never WHAT it says.
 
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { clientActionToken, clientBookingLink, publicBaseUrl } from '@/lib/client-workflow';
+import { build24hReminderText } from '@/lib/cron/reminder-text';
 import { sendTelegramMessage, type SendMessageOptions } from '@/lib/telegram';
 import { sendMaxMessage as sendMaxText } from '@/lib/max';
 import { sendMaxMessage as sendMaxFull } from '@/lib/max-bot';
@@ -177,13 +179,16 @@ async function sendToClientAndMaybePsychologist(
 
     if (!telegramTarget && !maxId) return { ok: true }; // nothing to notify — not a failure
 
-    const psychologistName = session.psychologist?.name || 'Ваш психолог';
     let text: string;
     if (kind === 'client_24h') {
-        const linkText = session.format === 'online' && onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
-        const confirmationText =
-            session.status === 'pending' ? '\n\nПожалуйста, подтвердите встречу кнопкой ниже.' : '\n\nВстреча уже подтверждена.';
-        text = `Напоминание о сессии\n\nЗдравствуйте, ${client.name}! Завтра в ${session.time} у вас встреча с психологом (${psychologistName}).\nФормат: ${session.format === 'online' ? 'Онлайн' : `В кабинете: ${session.address?.name || 'адрес уточнит специалист'}`}.${linkText}${confirmationText}`;
+        text = build24hReminderText({
+            clientName: client.name,
+            time: session.time,
+            format: session.format,
+            addressName: session.address?.name,
+            onlineLink,
+            confirmationRequired: session.status === 'pending',
+        });
     } else {
         const linkText = session.format === 'online' && onlineLink ? `\n🔗 Подключение: ${onlineLink}` : '';
         const confirmationText = session.status === 'pending' ? '\nПодтвердите, пожалуйста, встречу.' : '';

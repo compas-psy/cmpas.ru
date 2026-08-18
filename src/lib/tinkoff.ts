@@ -13,8 +13,26 @@
  */
 import { createHash } from 'crypto';
 
-const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY || '1775405621806DEMO';
-const PASSWORD = process.env.TINKOFF_PASSWORD || 'MwTygrFgyCLUQcFu';
+// Демонстрационный терминал — только для разработки. На бою молчаливый откат
+// к нему означает, что деньги идут мимо кассы, а система об этом не сообщает.
+// Поэтому в продакшне отсутствие ключей — громкая ошибка, а не тихий DEMO.
+const DEMO_TERMINAL_KEY = '1775405621806DEMO';
+const DEMO_PASSWORD = 'MwTygrFgyCLUQcFu';
+
+const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY || DEMO_TERMINAL_KEY;
+const PASSWORD = process.env.TINKOFF_PASSWORD || DEMO_PASSWORD;
+
+/** Работаем ли мы сейчас на демонстрационном терминале. */
+export function isDemoTerminal(): boolean {
+    return TERMINAL_KEY === DEMO_TERMINAL_KEY;
+}
+
+if (process.env.NODE_ENV === 'production' && isDemoTerminal()) {
+    console.error(
+        '[tinkoff] TINKOFF_TERMINAL_KEY и TINKOFF_PASSWORD не заданы: приём платежей работает ' +
+        'на демонстрационном терминале. Реальные платежи не проходят.'
+    );
+}
 const TINKOFF_API = 'https://securepay.tinkoff.ru/v2';
 
 export type Terminal = 'site' | 'app';
