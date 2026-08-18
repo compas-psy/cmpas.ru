@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
-import { clientBookingLink, verifyClientActionToken } from '@/lib/client-workflow';
+import { verifyClientActionToken } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
-import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
+import { canClientCancel, clientCancelBlockedMessage, isClientLinkExpired } from '@/lib/client-cancellation';
 
 function escapeHtml(value: string) {
     return value
@@ -39,6 +39,18 @@ export async function GET(req: NextRequest) {
         return resultPage('Ссылка недействительна', 'Сессия не найдена или ссылка устарела.', 'danger');
     }
 
+    const settings = await db.psychologistSettings.findUnique({
+        where: { psychologistId: session.psychologistId },
+        select: { cancellationHours: true, privateRemindersEnabled: true },
+    });
+
+    // CJM_booking_v1.md §1.3 "тихая запись": once opted in, the specialist's
+    // clients stop being able to act on a link after the session is over —
+    // an old notification shouldn't stay a live button forever.
+    if (settings?.privateRemindersEnabled && isClientLinkExpired(session)) {
+        return resultPage('Ссылка недействительна', 'Эта встреча уже прошла.', 'danger');
+    }
+
     if (action === 'confirm') {
         if (session.status !== 'cancelled') {
             await db.diarySession.update({
@@ -59,10 +71,6 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'cancel') {
-        const settings = await db.psychologistSettings.findUnique({
-            where: { psychologistId: session.psychologistId },
-            select: { cancellationHours: true },
-        });
         const policy = canClientCancel(session, settings);
         if (!policy.allowed) {
             const message = clientCancelBlockedMessage(policy.limitHours);
@@ -95,8 +103,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'reschedule') {
-        const bookingUrl = clientBookingLink(session.psychologistId, session.clientId);
-        return NextResponse.redirect(new URL(bookingUrl, req.url));
+        return NextResponse.redirect(new URL(`/client/reschedule/${session.id}?t=${token}`, req.url));
     }
 
     return resultPage('Неизвестное действие', 'Вернитесь в сообщение и выберите одну из доступных кнопок.', 'danger');

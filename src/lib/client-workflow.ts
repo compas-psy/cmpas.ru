@@ -50,8 +50,59 @@ export function verifyDocumentDeliveryToken(deliveryId: string, token?: string |
     return safeEqualHex(token, documentDeliveryToken(deliveryId));
 }
 
+const PERSONAL_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Legacy unsigned `?c=<DiaryClient.id>` links (sent before this fix shipped)
+// keep working until this date, then only signed tokens are accepted. Fixed
+// 90-day window from rollout (2026-08-17), not from send time — there's no
+// record of when each individual old link was sent.
+const LEGACY_CLIENT_ID_ACCEPTED_UNTIL = new Date('2026-11-15T00:00:00Z').getTime();
+
+// Distinct prefix so a signed token can never be mistaken for a raw
+// DiaryClient cuid (and vice versa) when deciding which path to verify.
+const SIGNED_LINK_PREFIX = 'st1_';
+
+/** Personal client link token: clientId + expiry, HMAC-signed so it can't be forged or edited. */
+export function personalClientToken(clientId: string, issuedAt: number = Date.now()) {
+    const expiresAt = issuedAt + PERSONAL_LINK_TTL_MS;
+    const payload = `${clientId}.${expiresAt}`;
+    const sig = createHash('sha256').update(`${payload}:${appSecret()}`).digest('hex').slice(0, 32);
+    return SIGNED_LINK_PREFIX + Buffer.from(`${payload}.${sig}`).toString('base64url');
+}
+
+/**
+ * Resolves a `?c=` link parameter to a DiaryClient id.
+ * - Signed token (current format): verified and checked for expiry.
+ * - Anything else: accepted as a legacy raw clientId only inside the 90-day
+ *   grace window, and logged as deprecated so we can see when traffic drops.
+ */
+export function resolvePersonalClientToken(token: string | null | undefined): { clientId: string; legacy: boolean } | null {
+    if (!token) return null;
+
+    if (token.startsWith(SIGNED_LINK_PREFIX)) {
+        try {
+            const decoded = Buffer.from(token.slice(SIGNED_LINK_PREFIX.length), 'base64url').toString('utf8');
+            const [clientId, expiresAtStr, sig] = decoded.split('.');
+            if (!clientId || !expiresAtStr || !sig) return null;
+            const expected = createHash('sha256').update(`${clientId}.${expiresAtStr}:${appSecret()}`).digest('hex').slice(0, 32);
+            if (!safeEqualHex(sig, expected)) return null;
+            if (Date.now() > Number(expiresAtStr)) return null;
+            return { clientId, legacy: false };
+        } catch {
+            return null;
+        }
+    }
+
+    if (Date.now() < LEGACY_CLIENT_ID_ACCEPTED_UNTIL) {
+        console.warn(`[client-workflow] legacy unsigned personal link used, clientId=${token}`);
+        return { clientId: token, legacy: true };
+    }
+    return null;
+}
+
 export function clientBookingLink(psychologistId: string, clientId: string) {
-    return `${publicBaseUrl()}/bot/book/${psychologistId}?c=${clientId}`;
+    const base = `${publicBaseUrl()}/bot/book/${psychologistId}`;
+    return clientId ? `${base}?c=${personalClientToken(clientId)}` : base;
 }
 
 export function clientDocumentLink(deliveryId: string) {

@@ -6,7 +6,11 @@
 #
 # Every event implicitly has the envelope fields: event, ts, product,
 # account_id, device_id, schema_version — those are validated separately,
-# not listed per-event below.
+# not listed per-event below. account_id and device_id are each optional,
+# but at least one is required (O-260817-13: a device without an account —
+# МОМЕНТЫ has none, ЗАПИСКИ has no production login yet — sends device_id
+# alone).
+#
 #
 # O-260817-17: this file is the single registry every product submits
 # through (charter/12_ANALYTICS.md §3 treats the receiver as shared —

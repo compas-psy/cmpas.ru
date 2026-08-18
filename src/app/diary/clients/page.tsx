@@ -307,7 +307,10 @@ export default function ClientsPage() {
                                 </div>
                             </div>
                             <ShareButton
-                                url={`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`}
+                                url={async () => {
+                                    const { getClientBookingLink } = await import('../actions/clients');
+                                    return getClientBookingLink(selectedClient.id);
+                                }}
                                 text="Здравствуйте! Ваша персональная ссылка для управления записями на сессии:"
                                 title="Поделиться ссылкой"
                                 label="Поделиться"
@@ -558,7 +561,10 @@ export default function ClientsPage() {
                                         <CalendarClock className="w-4 h-4" /> Запланировать
                                     </button>
                                     <ShareButton
-                                        url={`https://cmpas.ru/bot/book/${selectedClient.psychologistId}?c=${selectedClient.id}`}
+                                        url={async () => {
+                                            const { getClientBookingLink } = await import('../actions/clients');
+                                            return getClientBookingLink(selectedClient.id);
+                                        }}
                                         text="Здравствуйте! Ваша персональная ссылка для управления записями на сессии:"
                                         title="Поделиться ссылкой"
                                         label="Поделиться"
