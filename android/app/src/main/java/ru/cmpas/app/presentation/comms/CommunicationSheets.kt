@@ -320,7 +320,7 @@ fun SendDocumentSheet(
                     Spacer(Modifier.height(4.dp))
                     InfoBanner(
                         icon = Icons.Outlined.VerifiedUser,
-                        text = "Будет зафиксирована версия документа, дата, время и способ подтверждения.",
+                        text = "Согласие по 152-ФЗ: будет зафиксирована версия документа, дата, время и способ подтверждения.",
                         background = SuccessSoft,
                         foreground = Forest700,
                     )

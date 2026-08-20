@@ -41,7 +41,7 @@ fun SettingsScreen(
     var dayBefore by rememberSaveable { mutableStateOf(true) }
     var twoHoursBefore by rememberSaveable { mutableStateOf(true) }
     var paymentReminder by rememberSaveable { mutableStateOf(true) }
-    var consentReminder by rememberSaveable { mutableStateOf(false) }
+    var consentReminder by rememberSaveable { mutableStateOf(true) }
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
     var copied by rememberSaveable { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current

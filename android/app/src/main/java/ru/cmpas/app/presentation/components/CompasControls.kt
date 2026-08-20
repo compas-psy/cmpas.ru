@@ -1,5 +1,8 @@
 package ru.cmpas.app.presentation.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -8,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,19 +122,19 @@ private fun SegmentedContent(
         options.forEachIndexed { index, label ->
             val active = index == selectedIndex
             val interaction = remember { MutableInteractionSource() }
+            // 200ms transition (SPEC §8) instead of an instant snap between segments.
+            val activeProgress by animateFloatAsState(if (active) 1f else 0f, tween(200), label = "segment-bg")
+            val textColor by animateColorAsState(if (active) Color.White else CompasMutedFg, tween(200), label = "segment-fg")
             val segmentModifier = Modifier
                 .weight(1f)
                 .height(38.dp)
                 .clip(RoundedCornerShape(11.dp))
-                .then(
-                    if (active) Modifier.background(Brush.linearGradient(listOf(Forest700, Forest800)))
-                    else Modifier,
-                )
+                .background(Brush.linearGradient(listOf(Forest700, Forest800)), alpha = activeProgress)
                 .clickable(interactionSource = interaction, indication = null) { onSelect(index) }
             Box(segmentModifier, contentAlignment = Alignment.Center) {
                 Text(
                     label,
-                    color = if (active) Color.White else CompasMutedFg,
+                    color = textColor,
                     fontSize = 13.sp,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,

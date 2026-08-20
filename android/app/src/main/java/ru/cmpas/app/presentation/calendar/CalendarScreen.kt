@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Tune
@@ -43,8 +44,12 @@ fun CalendarScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sel = uiState.selectedDate
-    val daySessions = remember(uiState.sessions, sel) {
-        uiState.sessions.filter { it.date == sel.toString() }.sortedBy { it.startTime }
+    var showFilters by remember { mutableStateOf(false) }
+    val filteredSessions = remember(uiState.sessions, uiState.formatFilter) {
+        uiState.formatFilter?.let { f -> uiState.sessions.filter { it.format == f } } ?: uiState.sessions
+    }
+    val daySessions = remember(filteredSessions, sel) {
+        filteredSessions.filter { it.date == sel.toString() }.sortedBy { it.startTime }
     }
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
@@ -61,7 +66,7 @@ fun CalendarScreen(
                         Spacer(Modifier.height(4.dp))
                         Text("Календарь", style = tHero, color = CompasFg)
                     }
-                    IconButtonGlass(Icons.Outlined.Tune, "Фильтр", onClick = { /* TODO filters */ })
+                    IconButtonGlass(Icons.Outlined.Tune, "Фильтр", badge = uiState.formatFilter != null, onClick = { showFilters = true })
                 }
             }
 
@@ -91,13 +96,48 @@ fun CalendarScreen(
                 SectionTitle("$title · ${daySessions.size} ${sessionsWord(daySessions.size)}", actionLabel = "Записать", onAction = onAddSession)
             }
 
-            val agenda = if (uiState.viewMode == CalendarViewMode.LIST) uiState.sessions.sortedWith(compareBy({ it.date }, { it.startTime })) else daySessions
+            val agenda = if (uiState.viewMode == CalendarViewMode.LIST) filteredSessions.sortedWith(compareBy({ it.date }, { it.startTime })) else daySessions
             if (agenda.isEmpty()) {
                 item { GlassCard(padding = 18.dp) { Text("Нет записей на этот день", style = tBody2) } }
             } else {
                 items(agenda, key = { it.id }) { s -> AgendaRow(s, onClick = { onSessionClick(s.id) }) }
             }
         }
+
+        if (showFilters) {
+            CompasBottomSheet(onClose = { showFilters = false }) {
+                SheetHead("Фильтр", "Показывать записи по формату")
+                Spacer(Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterOptionRow("Все форматы", uiState.formatFilter == null) {
+                        viewModel.setFormatFilter(null); showFilters = false
+                    }
+                    FilterOptionRow("Видео", uiState.formatFilter == SessionFormat.ONLINE) {
+                        viewModel.setFormatFilter(SessionFormat.ONLINE); showFilters = false
+                    }
+                    FilterOptionRow("Очно", uiState.formatFilter == SessionFormat.IN_PERSON) {
+                        viewModel.setFormatFilter(SessionFormat.IN_PERSON); showFilters = false
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterOptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .then(if (selected) Modifier.background(Forest700.copy(alpha = 0.10f)) else Modifier)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = tBody, color = if (selected) Forest700 else CompasFg, modifier = Modifier.weight(1f))
+        if (selected) Icon(Icons.Outlined.Check, null, tint = Forest700, modifier = Modifier.size(20.dp))
     }
 }
 
