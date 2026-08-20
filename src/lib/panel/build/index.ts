@@ -225,6 +225,76 @@ export function screen(key: string, product: ProductKey = 'practice'): Promise<S
     }
 }
 
+/** Худшее состояние экрана — точка у пункта бокового меню. */
+export type ScreenSeverity = 'warning' | 'serious' | null;
+
+function severityOf(result: ScreenResult): ScreenSeverity {
+    let warning = false;
+
+    for (const block of Object.values(result.blocks)) {
+        // Упавший запрос — это поломка панели, а не показателя: «серьёзно».
+        if (block.state === 'broken') return 'serious';
+        if (block.state === 'stale') warning = true;
+
+        const lamp = (block.data as { lamp?: string } | null)?.lamp;
+        if (lamp === 'broken' || lamp === 'serious') return 'serious';
+        if (lamp === 'warning') warning = true;
+
+        // «Требует вас» — список пунктов, у каждого своя лампа.
+        if (Array.isArray(block.data)) {
+            for (const item of block.data as { lamp?: string }[]) {
+                if (item?.lamp === 'broken' || item?.lamp === 'serious') return 'serious';
+                if (item?.lamp === 'warning') warning = true;
+            }
+        }
+    }
+
+    return warning ? 'warning' : null;
+}
+
+/**
+ * Состояние каждого экрана для точек в боковом меню.
+ * Считается по уже посчитанным (кешированным) экранам, лишних запросов нет.
+ */
+export async function screenSeverities(): Promise<Record<string, ScreenSeverity>> {
+    const keys = ['morning', 'money', 'products', 'funnel', 'retention', 'tech', 'quality'] as const;
+    const results = await Promise.all([
+        screen('morning'),
+        screen('money'),
+        screen('products', 'practice'),
+        screen('funnel'),
+        screen('retention'),
+        screen('tech'),
+        screen('quality'),
+    ]);
+
+    const out: Record<string, ScreenSeverity> = {};
+    keys.forEach((key, i) => {
+        out[key] = severityOf(results[i]);
+    });
+
+    // Лампы «Утра» знают, на какой экран ведут: лампа «База» показывает
+    // расхождение миграций, а чинить его идут на «Технику». Без этого
+    // переноса красная лампа на «Утре» не давала точки у своего экрана,
+    // и сценарий «увидел красное — ткнул» обрывался.
+    const worse = (a: ScreenSeverity, b: ScreenSeverity): ScreenSeverity =>
+        a === 'serious' || b === 'serious' ? 'serious' : a === 'warning' || b === 'warning' ? 'warning' : null;
+
+    for (const block of Object.values(results[0].blocks)) {
+        const lamp = block.data as { lamp?: string; href?: string } | null;
+        if (!lamp?.href || !lamp.lamp) continue;
+
+        const target = keys.find((k) => lamp.href === `/admin/panel/${k}`);
+        if (!target) continue;
+
+        const level: ScreenSeverity =
+            lamp.lamp === 'broken' || lamp.lamp === 'serious' ? 'serious' : lamp.lamp === 'warning' ? 'warning' : null;
+        out[target] = worse(out[target], level);
+    }
+
+    return out;
+}
+
 /**
  * Число «честных дыр» по всей панели — блоков в состоянии `no_data`.
  * Считается динамически: ссылка «Что мы не умеем измерять — N честных дыр»

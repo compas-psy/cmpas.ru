@@ -34,7 +34,11 @@ export function dateOf(iso: string | Date | null): string {
 }
 
 export function monthOf(iso: string | Date): string {
-    return MONTH.format(typeof iso === 'string' ? new Date(iso) : iso).replace('.', '');
+    // Intl отдаёт «сент. 25 г.» — на оси графика нужен только месяц и год.
+    return MONTH.format(typeof iso === 'string' ? new Date(iso) : iso)
+        .replace(/\s*г\.?$/, '')
+        .replace('.', '')
+        .trim();
 }
 
 /** Часы → «6 д 4 ч» / «3 ч 10 м» — как в макете «Техники». */

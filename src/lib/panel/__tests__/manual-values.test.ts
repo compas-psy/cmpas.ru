@@ -150,3 +150,64 @@ describe('ручные значения панели', () => {
         }
     });
 });
+
+describe('регламент обновления стоимости инфраструктуры', () => {
+    // Владелец: обновлять раз в две недели. Просроченное значение — `stale`
+    // с причиной, а не `ok`: цифра месячной давности, выданная за свежую,
+    // хуже отсутствующей.
+    const findMany = vi.fn();
+    const findFirst = vi.fn();
+
+    beforeEach(() => {
+        vi.resetModules();
+        findMany.mockReset();
+        findFirst.mockReset();
+        findFirst.mockResolvedValue(null);
+    });
+
+    async function costWithAge(days: number | null) {
+        vi.doMock('@/lib/db', () => ({
+            db: {
+                systemConfig: { findMany: () => findMany() },
+                infraPulse: { findFirst: () => findFirst() },
+            },
+        }));
+        findMany.mockResolvedValue([
+            {
+                key: 'infra_cost_rub',
+                value: JSON.stringify({
+                    server: 6400,
+                    storage: 1150,
+                    domains: 310,
+                    updatedAt: days === null ? undefined : new Date(Date.now() - days * 86400_000).toISOString(),
+                }),
+            },
+        ]);
+        const { qInfraCost } = await import('../queries/tech');
+        return qInfraCost();
+    }
+
+    it('свежее значение — ok', async () => {
+        const block = await costWithAge(3);
+        expect(block.state).toBe('ok');
+        expect(block.data?.total).toBe(7860);
+    });
+
+    it('на границе двух недель ещё ok', async () => {
+        expect((await costWithAge(13)).state).toBe('ok');
+    });
+
+    it('старше двух недель — stale с причиной, а не ok', async () => {
+        const block = await costWithAge(20);
+        expect(block.state).toBe('stale');
+        expect(block.reason).toContain('регламенту раз в две недели');
+        // Данные при этом сохраняются: устарело — не значит «нет».
+        expect(block.data?.total).toBe(7860);
+    });
+
+    it('месяц без обновления — по-прежнему stale, данные не теряются', async () => {
+        const block = await costWithAge(40);
+        expect(block.state).toBe('stale');
+        expect(block.data?.server).toBe(6400);
+    });
+});

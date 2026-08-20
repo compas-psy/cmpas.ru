@@ -242,7 +242,25 @@ export interface InfraCostCard extends ManualInfraCost {
 export async function qInfraCost(): Promise<PanelBlock<InfraCostCard>> {
     const manual = await manualInfraCost();
     if (manual) {
-        return ok('q_infra_cost', { ...manual, source: 'manual' as const });
+        const data = { ...manual, source: 'manual' as const };
+
+        // Регламент владельца: статьи расхода обновляются раз в две недели.
+        // Просроченное значение отдаётся как `stale`, а не как `ok`: цифра
+        // месячной давности, выданная за свежую, хуже отсутствующей.
+        const ageDays = manual.updatedAt
+            ? (Date.now() - new Date(manual.updatedAt).getTime()) / (24 * 60 * 60 * 1000)
+            : null;
+        const severity = severityFor('infraCostAgeDays', ageDays);
+
+        if (severity === 'warning' || severity === 'serious') {
+            return stale(
+                'q_infra_cost',
+                data,
+                `суммы не обновляли ${Math.floor(ageDays ?? 0)} дн — по регламенту раз в две недели`,
+                manual.updatedAt,
+            );
+        }
+        return ok('q_infra_cost', data, manual.updatedAt ?? undefined);
     }
 
     const pulse = await latestPulse();

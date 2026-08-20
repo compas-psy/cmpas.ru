@@ -66,7 +66,11 @@ export function StatTile({
     tone = 'plain',
     labelColor,
 }: {
-    label: string;
+    /**
+     * Заголовок плитки. Не задаётся, когда плитка стоит внутри `BlockFrame`:
+     * рамка уже напечатала капс-лейбл, и второй такой же — визуальный мусор.
+     */
+    label?: string;
     value: ReactNode;
     unit?: string;
     delta?: Delta;
@@ -88,17 +92,19 @@ export function StatTile({
                 minWidth: 0,
             }}
         >
-            <div
-                style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: '.09em',
-                    textTransform: 'uppercase',
-                    color: labelColor ?? (tone === 'warning' ? 'var(--wa-fg)' : tone === 'serious' ? 'var(--se-fg)' : 'var(--p-sub)'),
-                }}
-            >
-                {label}
-            </div>
+            {label ? (
+                <div
+                    style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '.09em',
+                        textTransform: 'uppercase',
+                        color: labelColor ?? (tone === 'warning' ? 'var(--wa-fg)' : tone === 'serious' ? 'var(--se-fg)' : 'var(--p-sub)'),
+                    }}
+                >
+                    {label}
+                </div>
+            ) : null}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
                 <span className="p-mono" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-.02em' }}>
                     {value}

@@ -43,26 +43,25 @@ export default async function MoneyScreen() {
                 {/* Полоса KPI */}
                 <Grid cols={6}>
                     <BlockFrame block={mrr} label="MRR">
-                        {(d) => <StatTile label="MRR" value={rub(d.current)} unit="₽" delta={d.delta} />}
+                        {(d) => <StatTile value={rub(d.current)} unit="₽" delta={d.delta} />}
                     </BlockFrame>
                     <BlockFrame block={paying} label="Платящих">
-                        {(d) => <StatTile label="Платящих" value={num(d.active)} delta={d.delta} note={`триал ${num(d.trial)} · отсрочка ${num(d.grace)}`} />}
+                        {(d) => <StatTile value={num(d.active)} delta={d.delta} note={`триал ${num(d.trial)} · отсрочка ${num(d.grace)}`} />}
                     </BlockFrame>
                     <BlockFrame block={arpu} label="Средний чек">
-                        {(d) => <StatTile label="Средний чек" value={rub(d.value)} unit="₽" delta={d.delta} note={`${num(d.payers)} ${plural(d.payers, 'плательщик', 'плательщика', 'плательщиков')}`} />}
+                        {(d) => <StatTile value={rub(d.value)} unit="₽" delta={d.delta} note={`${num(d.payers)} ${plural(d.payers, 'плательщик', 'плательщика', 'плательщиков')}`} />}
                     </BlockFrame>
                     <BlockFrame block={trial} label="Триал → оплата">
-                        {(d) => <StatTile label="Триал → оплата" value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.converted)} из ${num(d.cohort)}`} />}
+                        {(d) => <StatTile value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.converted)} из ${num(d.cohort)}`} />}
                     </BlockFrame>
                     <BlockFrame block={churn} label="Отток по деньгам">
-                        {(d) => <StatTile label="Отток по деньгам" value={dec(d.rate)} unit="%" delta={d.delta} note={`ушли ${num(d.churned)}`} />}
+                        {(d) => <StatTile value={dec(d.rate)} unit="%" delta={d.delta} note={`ушли ${num(d.churned)}`} />}
                     </BlockFrame>
                     <BlockFrame block={payments} label="Успешность списаний">
                         {(d) => {
                             const severity = severityFor('paymentSuccess', d.rate);
                             return (
                                 <StatTile
-                                    label="Успешность списаний"
                                     value={dec(d.rate)}
                                     unit="%"
                                     tone={severity === 'serious' ? 'serious' : severity === 'warning' ? 'warning' : 'plain'}
@@ -85,7 +84,7 @@ export default async function MoneyScreen() {
                                         slot="c1"
                                         title="Выручка по месяцам, ₽"
                                         unit="₽"
-                                        format={(v) => num(v)}
+                                        format="rub"
                                     />
                                 </>
                             )}

@@ -53,6 +53,12 @@ export const THRESHOLDS = {
     /** Свежесть экрана, часы с последнего расчёта. */
     // подтверждено владельцем 20.08
     screenFreshnessHours: { warning: 12, serious: 36, direction: 'above', unit: 'ч' },
+    /**
+     * Возраст ручного ввода стоимости инфраструктуры, дни.
+     * Регламент владельца: обновлять раз в две недели.
+     */
+    // подтверждено владельцем 20.08
+    infraCostAgeDays: { warning: 14, serious: 28, direction: 'above', unit: 'дн' },
 } satisfies Record<string, Threshold>;
 
 export type ThresholdKey = keyof typeof THRESHOLDS;

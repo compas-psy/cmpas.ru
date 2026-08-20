@@ -25,6 +25,22 @@ import {
 
 const AXIS = { fontSize: 11, fill: 'var(--p-sub)', fontFamily: 'var(--p-mono)' };
 
+/**
+ * Формат подписи задаётся ИМЕНЕМ, а не функцией: график — клиентский
+ * компонент, а функцию через границу сервер→клиент передать нельзя
+ * (React отвечает на это отказом рендера, а не предупреждением).
+ */
+export type ValueFormat = 'num' | 'rub' | 'pct' | 'raw';
+
+const RU = new Intl.NumberFormat('ru-RU');
+
+function formatValue(value: number, kind: ValueFormat = 'raw'): string {
+    if (kind === 'num') return RU.format(Math.round(value));
+    if (kind === 'rub') return RU.format(Math.round(value));
+    if (kind === 'pct') return value.toFixed(1).replace('.', ',');
+    return String(value);
+}
+
 function TooltipBox({
     active,
     payload,
@@ -36,7 +52,7 @@ function TooltipBox({
     payload?: { value: number | null; name?: string; dataKey?: string | number; color?: string }[];
     label?: string | number;
     unit?: string;
-    format?: (v: number) => string;
+    format?: ValueFormat;
 }) {
     if (!active || !payload?.length) return null;
     return (
@@ -60,7 +76,7 @@ function TooltipBox({
                     <span className="p-mono" style={{ marginLeft: 'auto', fontWeight: 600 }}>
                         {p.value === null || p.value === undefined
                             ? 'данных нет'
-                            : `${format ? format(p.value) : p.value}${unit ? ` ${unit}` : ''}`}
+                            : `${formatValue(p.value, format)}${unit ? ` ${unit}` : ''}`}
                     </span>
                 </div>
             ))}
@@ -128,7 +144,7 @@ export function SingleAxisLine({
     height?: number;
     title: string;
     unit?: string;
-    format?: (v: number) => string;
+    format?: ValueFormat;
 }) {
     return (
         <div style={{ width: '100%', height }} role="img" aria-label={title}>
@@ -141,7 +157,7 @@ export function SingleAxisLine({
                         tickLine={false}
                         axisLine={false}
                         width={54}
-                        tickFormatter={(v: number) => (format ? format(v) : String(v))}
+                        tickFormatter={(v: number) => formatValue(v, format)}
                     />
                     <Tooltip content={<TooltipBox unit={unit} format={format} />} cursor={{ stroke: 'var(--p-sub)', strokeDasharray: '3 3' }} />
                     <Line

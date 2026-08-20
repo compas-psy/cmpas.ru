@@ -102,13 +102,13 @@ function Practice({ blocks }: { blocks: Blocks }) {
 
             <Grid cols={3}>
                 <BlockFrame block={active} label="Активные специалисты">
-                    {(d) => <StatTile label="Активные специалисты" value={`${num(d.wau)} / ${num(d.mau)}`} delta={d.delta} note={`WAU / MAU · липкость ${dec(d.stickiness, 0)} %`} />}
+                    {(d) => <StatTile value={`${num(d.wau)} / ${num(d.mau)}`} delta={d.delta} note={`WAU / MAU · липкость ${dec(d.stickiness, 0)} %`} />}
                 </BlockFrame>
                 <BlockFrame block={activation} label="Активация за 7 дней">
-                    {(d) => <StatTile label="Активация за 7 дней" value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.activated)} из ${num(d.cohort)}`} />}
+                    {(d) => <StatTile value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.activated)} из ${num(d.cohort)}`} />}
                 </BlockFrame>
                 <BlockFrame block={reschedule} label="Переносы и отмены">
-                    {(d) => <StatTile label="Переносы и отмены" value={dec(d.rate)} unit="%" note={`${num(d.cancelled)} из ${num(d.total)} записей за 28 дней`} />}
+                    {(d) => <StatTile value={dec(d.rate)} unit="%" note={`${num(d.cancelled)} из ${num(d.total)} записей за 28 дней`} />}
                 </BlockFrame>
             </Grid>
 
