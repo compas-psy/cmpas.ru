@@ -44,6 +44,12 @@ jobs:
               -i ~/.ssh/doctor_key "$SSH_USER@$SSH_HOST" 'bash -s' \
               < scripts/db-doctor.sh > /tmp/doctor.out 2>&1 || true
           rm -f ~/.ssh/doctor_key
+          # Печатаем вывод и в журнал прогона: когда отчёт не доезжает до
+          # репозитория (ветка разошлась с main, push отклонён), журнал —
+          # единственное место, где результат вообще можно прочитать.
+          echo '===== НАЧАЛО ОТЧЁТА ====='
+          cat /tmp/doctor.out
+          echo '===== КОНЕЦ ОТЧЁТА ====='
           mkdir -p docs/ops
           {
             echo "# Состояние базы на боевом сервере"
