@@ -12,12 +12,12 @@ import { toast } from 'sonner';
 import {
     toggleUserBlock, changeUserRole, resetUserTrialFromNow, setUserTrialForever,
     extendUserTrial, testModeReset, deleteUserAccount,
-} from '../../actions/users';
+} from '@/app/admin/actions/users';
 import {
     addUserNote, deleteUserNote, toggleNotePin,
     addUserTag, removeUserTag,
     sendAdminMessage, logAdminAction,
-} from '../../actions/crm';
+} from '@/app/admin/actions/crm';
 
 type TabKey = 'overview' | 'profile' | 'billing' | 'legal' | 'diary' | 'activity' | 'communicate';
 
@@ -657,7 +657,7 @@ function CommunicateTab({ user }: { user: any }) {
                 setMessage('');
                 setSubject('');
                 // Reload messages
-                const { getMessageHistory } = await import('../../actions/crm');
+                const { getMessageHistory } = await import('@/app/admin/actions/crm');
                 const updated = await getMessageHistory(user.id);
                 setMessages(updated);
             } else {
@@ -702,7 +702,7 @@ function CommunicateTab({ user }: { user: any }) {
 
     // Load messages on mount
     if (!messagesLoaded) {
-        import('../../actions/crm').then(mod => {
+        import('@/app/admin/actions/crm').then(mod => {
             mod.getMessageHistory(user.id).then(msgs => {
                 setMessages(msgs);
                 setMessagesLoaded(true);

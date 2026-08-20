@@ -38,7 +38,7 @@ export default function FeaturesPage() {
 
   const load = useCallback(async () => {
     try {
-      const { getFeatureFlags } = await import('../actions/features');
+      const { getFeatureFlags } = await import('@/app/admin/actions/features');
       const data = await getFeatureFlags();
       setFlags(data);
     } catch { toast.error('Ошибка загрузки'); }
@@ -48,7 +48,7 @@ export default function FeaturesPage() {
   const loadStatus = useCallback(async () => {
     setCheckingStatus(true);
     try {
-      const { getMessagingStatus } = await import('../actions/features');
+      const { getMessagingStatus } = await import('@/app/admin/actions/features');
       setMsgStatus(await getMessagingStatus());
     } catch { toast.error('Не удалось проверить статус мессенджеров'); }
     setCheckingStatus(false);
@@ -59,7 +59,7 @@ export default function FeaturesPage() {
   const toggle = async (key: string, enabled: boolean) => {
     setToggling(key);
     try {
-      const { setFeatureFlag } = await import('../actions/features');
+      const { setFeatureFlag } = await import('@/app/admin/actions/features');
       await setFeatureFlag(key, enabled);
       setFlags(prev => ({ ...prev, [key]: { ...prev[key], enabled } }));
       toast.success(`${flags[key]?.label}: ${enabled ? 'Включено' : 'Выключено'}`);

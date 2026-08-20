@@ -966,6 +966,14 @@ model InfraPulse {
   certDaysLeft        Int?
   certDaysLeftZapiski Int?
 
+  // Channels & build budget (TZ_ADMIN_PANEL_DEV.md §6.1) — three strictly
+  // additive columns. All nullable: a collector that predates this migration
+  // simply leaves them null, and the panel renders those blocks as no_data
+  // rather than as zero.
+  webhookErrorRates Json? // { telegram: { rate, checkedAt }, max: { rate, checkedAt } }
+  buildMinutesLeft  Int? // remaining GitHub Actions minutes
+  infraCostRub      Json? // { server, storage, domains, total, source: 'manual'|'api' }
+
   @@index([collectedAt])
 }
 

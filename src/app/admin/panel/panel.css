@@ -1,0 +1,145 @@
+/* Служебный токен-слой управленческой панели.
+ *
+ * Источник — handoff Claude Design: файлы токенов в `_ds/design-system-…`
+ * плюс слой, объявленный на `[data-panel]`. Значения переносятся дословно
+ * и НЕ переизобретаются: ТЗ §3 «Источник визуальной правды».
+ *
+ * Правило приёмки: hex-значения живут только здесь. В компонентах панели
+ * цвет берётся исключительно через var(--…) — это проверяет
+ * src/lib/panel/__tests__/tokens.test.ts.
+ */
+
+[data-panel] {
+  /* ── Поверхности и текст ── */
+  --p-bg: #F7F8F4;
+  --p-card: #FFFFFF;
+  --p-inset: #F2F4EF;
+  --p-border: #E4E9E3;
+  --p-ink: #142018;
+  --p-muted: #5F6C64;
+  --p-sub: #8A968E;
+  --p-shadow: 0 8px 30px rgba(20, 32, 24, .06);
+  --p-rail: #1D4735;
+  --p-rail-ink: #F6FAF6;
+
+  /* Кнопка-действие на «Утре» — мастер-цвет продукта */
+  --p-primary: #1D4735;
+  --p-primary-ink: #FFFFFF;
+
+  /* ── Состояния: фон / текст / граница ──
+   * Пять цветов состояний зарезервированы (ТЗ §3.1 п.6) и никогда
+   * не переиспользуются как «ряд номер четыре».
+   */
+  --ok-bg: #EAF7EE; --ok-fg: #2C7A48; --ok-br: #CBE7D5;
+  --wa-bg: #FFF3E6; --wa-fg: #A9620A; --wa-br: #F2DDC1;
+  --se-bg: #FCECE8; --se-fg: #B4472F; --se-br: #F0CFC5;
+  --br-bg: #8E1F14; --br-fg: #FFFFFF; --br-br: #8E1F14;
+  --un-bg: #F1F2EF; --un-fg: #6B7671; --un-br: #DCE0DA;
+
+  /* ── Категориальная палитра: шесть слотов без цикла ──
+   * Закрепление за сущностью, а не за местом в списке (ТЗ §3.1 п.3):
+   * 1 ПРАКТИКА · 2 ЗАПИСКИ · 3 МОМЕНТЫ · 4 Платформа · 5 резерв · 6 резерв.
+   */
+  --c1: #0E7F55; --c2: #D97A21; --c3: #2E6FB8;
+  --c4: #A8425F; --c5: #7B62C0; --c6: #8C8A2B;
+  --heat: #0E7F55;
+
+  /* ── Раскладка ── */
+  --cols6: repeat(6, minmax(0, 1fr));
+  --cols4: repeat(4, minmax(0, 1fr));
+  --cols3: repeat(3, minmax(0, 1fr));
+  --cols2: repeat(2, minmax(0, 1fr));
+  --hero: 64px;
+  --pad: 28px;
+  --railw: 232px;
+  --rail-display: flex;
+  --mobilebar-display: none;
+  --content-max: 1240px;
+  /* Ширина колонки подписи в воронке — на телефоне полосе нужно место. */
+  --funnel-label: 200px;
+
+  /* ── Типографика ── */
+  --p-font: 'Geist', var(--font-geist-sans), -apple-system, system-ui, sans-serif;
+  --p-mono: 'Geist Mono', var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+[data-panel][data-theme='dark'] {
+  --p-bg: #0D1512;
+  --p-card: #151F1A;
+  --p-inset: #1B2721;
+  --p-border: #26332C;
+  --p-ink: #E7EFE9;
+  --p-muted: #93A29A;
+  --p-sub: #75847C;
+  --p-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+  --p-rail: #101A15;
+  --p-rail-ink: #DCE7DF;
+
+  --p-primary: #2C7A48;
+  --p-primary-ink: #FFFFFF;
+
+  --ok-bg: #12291D; --ok-fg: #5CBF87; --ok-br: #1E4230;
+  --wa-bg: #2E2110; --wa-fg: #E0A252; --wa-br: #4A3618;
+  --se-bg: #331914; --se-fg: #E77C61; --se-br: #4E2820;
+  --br-bg: #B22A1B; --br-fg: #FFFFFF; --br-br: #B22A1B;
+  --un-bg: #1C231F; --un-fg: #8D9A93; --un-br: #2C3833;
+
+  /* Тёмная палитра — свой набор шагов, а не инверсия светлой (ТЗ §3.1 п.4). */
+  --c1: #26A278; --c2: #CC7A18; --c3: #4A8CD8;
+  --c4: #C75B77; --c5: #9A82DC; --c6: #8C8E26;
+  --heat: #26A278;
+}
+
+/* Мобильный вид — медиазапрос, а не переключатель (handoff, Interactions). */
+@media (max-width: 720px) {
+  [data-panel] {
+    --cols6: repeat(2, minmax(0, 1fr));
+    --cols4: repeat(2, minmax(0, 1fr));
+    --cols3: repeat(2, minmax(0, 1fr));
+    --cols2: minmax(0, 1fr);
+    --hero: 48px;
+    --pad: 16px;
+    --railw: 0px;
+    --rail-display: none;
+    --mobilebar-display: flex;
+    --funnel-label: 104px;
+  }
+}
+
+[data-panel] {
+  min-height: 100vh;
+  display: flex;
+  background: var(--p-bg);
+  color: var(--p-ink);
+  font-family: var(--p-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-panel] nav[data-rail] { display: var(--rail-display); }
+[data-panel] [data-mobilebar] { display: var(--mobilebar-display); }
+
+[data-panel] [data-nav][data-active='true'] { background: rgba(246, 250, 246, .16); color: var(--p-rail-ink); }
+[data-panel] [data-nav]:hover { background: rgba(255, 255, 255, .09); }
+[data-panel] [data-mbtn][data-active='true'] { background: var(--p-card); color: var(--p-ink); border-color: var(--p-card); }
+[data-panel] [data-tab][data-active='true'] { background: var(--p-card); color: var(--p-ink); box-shadow: 0 1px 3px rgba(20, 32, 24, .1); }
+[data-panel] [data-chip]:hover { background: var(--p-inset); }
+
+/* Лампы: hover — тень, active — нажатие. 150ms ease, без пружин. */
+[data-panel] [data-lamp] { transition: transform .15s ease, box-shadow .15s ease; }
+[data-panel] [data-lamp]:hover { box-shadow: var(--p-shadow); }
+[data-panel] [data-lamp]:active { transform: scale(.97); }
+
+/* Появление контента — fade + slide-from-bottom, 300ms. */
+@keyframes panel-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+[data-panel] [data-enter] { animation: panel-enter .3s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-panel] [data-enter] { animation: none; }
+  [data-panel] [data-lamp] { transition: none; }
+}
+
+/* Таблицы и тепловая карта скроллятся сами, страница — никогда. */
+[data-panel] [data-scroll-x] { overflow-x: auto; }
+
+[data-panel] a { color: inherit; text-decoration: none; }
+[data-panel] .p-mono { font-family: var(--p-mono); font-variant-numeric: tabular-nums; }
