@@ -59,6 +59,17 @@ wait_for_app() {
 
 deploy_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
+# Disk hygiene (O-260818-02): build cache accumulated to 51GB with only 24GB
+# free out of 89GB — not the 18.08 outage's cause, but the next few deploys
+# would have run out of disk mid-build otherwise. Runs at the very start,
+# before anything else touches the disk. Only dangling (untagged) images and
+# build-cache layers older than a week are removed: a plain `docker image
+# prune` (no -a) never touches the image `cmpas-app` currently runs, tagged
+# images are never "dangling".
+log 'Уборка кэша сборок и неиспользуемых образов старше недели.'
+docker builder prune -f --filter 'until=168h' >/dev/null 2>&1 || true
+docker image prune -f --filter 'until=168h' >/dev/null 2>&1 || true
+
 # Deploy history (O-260817-12, "выкладки" card). This script already has
 # full DB write access during a deploy (it applies migrations) — a
 # different, already-privileged actor than the read-only infra-pulse
@@ -165,32 +176,22 @@ fi
 
 log "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2- | cut -c1-8)..."
 
-vpn_enabled=0
-if [ -n "${MIERU_SERVER:-}" ] && [ -n "${MIERU_PORT:-}" ] && [ -n "${MIERU_USERNAME:-}" ] && [ -n "${MIERU_PASSWORD:-}" ]; then
-  log 'Preparing sing-box configuration.'
-  escaped_server=$(printf '%s' "$MIERU_SERVER" | sed 's/[&|]/\\&/g')
-  escaped_port=$(printf '%s' "$MIERU_PORT" | sed 's/[&|]/\\&/g')
-  escaped_username=$(printf '%s' "$MIERU_USERNAME" | sed 's/[&|]/\\&/g')
-  escaped_password=$(printf '%s' "$MIERU_PASSWORD" | sed 's/[&|]/\\&/g')
-  sed \
-    -e "s|\${MIERU_SERVER}|${escaped_server}|g" \
-    -e "s|\${MIERU_PORT}|${escaped_port}|g" \
-    -e "s|\${MIERU_USERNAME}|${escaped_username}|g" \
-    -e "s|\${MIERU_PASSWORD}|${escaped_password}|g" \
-    deploy/singbox-config.template.json > deploy/singbox-config.json
-
-  if docker run --rm \
-      -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" \
-      ghcr.io/sagernet/sing-box:latest check -c /c.json; then
-    vpn_enabled=1
-    upsert_env TELEGRAM_PROXY 'http://singbox:1080'
-  else
-    log 'WARNING: sing-box configuration check failed; deploying without VPN sidecar.'
-    upsert_env TELEGRAM_PROXY ''
-  fi
-else
-  upsert_env TELEGRAM_PROXY ''
-fi
+# VPN sidecar removed (O-260818-02): docs/ops/db-doctor.md's 18.08
+# diagnostics found cmpas-singbox permanently in "Restarting (1)" —
+# investigated and reproduced locally: `sing-box check` on
+# deploy/singbox-config.template.json fails unconditionally with
+# "unknown outbound type: mieru", on every sing-box release that exists
+# (mieru is an unrelated, independent proxy project — sagernet/sing-box has
+# never had a "mieru" outbound type). This config could not have ever
+# produced a working tunnel; the branch below always fell through to the
+# "check failed" `else`, so TELEGRAM_PROXY has always been unset on every
+# real deploy and src/lib/telegram-proxy.ts has always run in its already-
+# documented not-configured fallback. A silently, permanently restarting
+# container that never did anything is worse than no container — removing
+# it rather than leaving it flapping. The server itself still has the old
+# container from before this was noticed; clean it up on this deploy too.
+docker rm -f cmpas-singbox >/dev/null 2>&1 || true
+upsert_env TELEGRAM_PROXY ''
 
 old_image_id=$(docker inspect --format '{{.Image}}' cmpas-app 2>/dev/null || true)
 old_image_ref=$(docker inspect --format '{{.Config.Image}}' cmpas-app 2>/dev/null || true)
@@ -210,18 +211,21 @@ fi
 log 'Validating Docker Compose configuration.'
 docker compose config --quiet
 
+available_gb=$(($(df --output=avail -k / | tail -n 1 | tr -d ' ') / 1024 / 1024))
+if [ "$available_gb" -lt 10 ]; then
+  log "ERROR: свободно ${available_gb}ГБ на /, нужно не меньше 10ГБ — сборка образа не запускается. Освободить: docker builder prune, docker image prune, старые дампы в ${backup_dir}."
+  log_deploy disk_guard_stopped "only ${available_gb}GB free before build"
+  exit 1
+fi
+log "Свободно ${available_gb}ГБ на /."
+
 log 'Building the new application image while the old app remains online.'
 docker compose build app
 
 systemctl stop exim4 postfix sendmail 2>/dev/null || true
 systemctl disable exim4 postfix sendmail 2>/dev/null || true
 
-if [ "$vpn_enabled" = '1' ]; then
-  export COMPOSE_PROFILES=vpn
-  docker compose --profile vpn up -d postgres mailer singbox
-else
-  docker compose up -d postgres mailer
-fi
+docker compose up -d postgres mailer
 
 wait_for_postgres
 log 'PostgreSQL is ready.'
