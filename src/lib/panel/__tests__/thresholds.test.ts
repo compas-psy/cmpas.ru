@@ -37,8 +37,24 @@ describe('пороги', () => {
         expect(worstSeverity([null, null])).toBeNull();
     });
 
+    it('каждый порог помечен датой подтверждения владельцем', () => {
+        // Порог без отметки считается временным. Отметка ставится рядом с
+        // значением, чтобы её нельзя было потерять при правке числа.
+        const src = readFileSync(path.resolve(__dirname, '../thresholds.ts'), 'utf8');
+        for (const key of Object.keys(THRESHOLDS)) {
+            const at = src.indexOf(`${key}: {`);
+            expect(at, `порог ${key} не найден в исходнике`).toBeGreaterThan(-1);
+            const preceding = src.slice(Math.max(0, at - 220), at);
+            expect(
+                /\/\/ подтверждено владельцем \d{2}\.\d{2}/.test(preceding),
+                `порог ${key} без отметки «подтверждено владельцем DD.MM»`,
+            ).toBe(true);
+        }
+    });
+
     it('неподтверждённые пороги перечислены явно — молча «согласованными» они не становятся', () => {
-        expect(UNCONFIRMED_THRESHOLDS.size).toBeGreaterThan(0);
+        // Сейчас список пуст: все восемь подтверждены 20.08.2026. Механизм
+        // остаётся для новых порогов.
         for (const key of UNCONFIRMED_THRESHOLDS) {
             expect(THRESHOLDS[key]).toBeDefined();
         }

@@ -263,7 +263,7 @@ export async function qAttention(lamps: {
             consequence: 'Копии снимаются, но никем не разворачивались. Пока это так, бэкапа у нас нет — есть файлы неизвестного качества.',
             minutes: 20,
             lamp: 'serious',
-            action: { label: 'Назначить проверку', href: '/admin/system' },
+            action: { label: 'Отметить восстановление', href: '/admin/panel/tech#backup' },
         });
     }
 

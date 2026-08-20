@@ -1,9 +1,8 @@
 /**
  * Пороги панели (ТЗ §7). Ни одного магического числа в компонентах.
  *
- * Пороги из макета взяты как правдоподобные и НЕ являются согласованными.
- * Значение считается временным, пока рядом нет комментария
- * `// TODO: подтверждено владельцем DD.MM`.
+ * Все восемь порогов подтверждены владельцем 20.08.2026. Значение считается
+ * временным, пока рядом нет отметки `// подтверждено владельцем DD.MM`.
  */
 
 export interface Threshold {
@@ -19,30 +18,40 @@ export interface Threshold {
 
 export const THRESHOLDS = {
     /** Успешность списаний, %. */
+    // подтверждено владельцем 20.08
     paymentSuccess: { warning: 92, serious: 85, direction: 'below', unit: '%' },
     /** Свободно на диске, %. */
+    // подтверждено владельцем 20.08
     diskFree: { warning: 20, serious: 10, direction: 'below', unit: '%' },
     /** Возраст последней резервной копии, часы. */
+    // подтверждено владельцем 20.08
     backupAgeHours: { warning: 26, serious: 48, direction: 'above', unit: 'ч' },
     /** Остаток минут сборок GitHub Actions. */
+    // подтверждено владельцем 20.08
     buildMinutes: { warning: 400, serious: 150, direction: 'below', unit: 'мин' },
     /** Тишина события, часы. */
+    // подтверждено владельцем 20.08
     eventSilenceHours: { warning: 24, serious: 72, direction: 'above', unit: 'ч' },
     /** Расхождение независимых источников, %. */
+    // подтверждено владельцем 20.08
     sourceDiff: { warning: 2, serious: 10, direction: 'above', unit: '%' },
     /**
      * Напоминания вовремя, %. Цель ровно 100 % — зафиксировано ТЗ §7,
      * поэтому «внимание» начинается при любом значении ниже 100.
      */
-    // TODO: подтверждено владельцем — зафиксировано в ТЗ §7, дата не проставлена
+    // подтверждено владельцем 20.08
     remindersOnTime: { warning: 100, serious: 95, direction: 'below', unit: '%' },
     /** Ошибки вебхуков мессенджеров, %. */
+    // подтверждено владельцем 20.08
     webhookErrorRate: { warning: 1, serious: 5, direction: 'above', unit: '%' },
     /** Отвергнуто при приёме событий, %. */
+    // подтверждено владельцем 20.08
     rejectedEvents: { warning: 2, serious: 5, direction: 'above', unit: '%' },
     /** Дней до истечения сертификата. */
+    // подтверждено владельцем 20.08
     certDaysLeft: { warning: 21, serious: 7, direction: 'below', unit: 'дн' },
     /** Свежесть экрана, часы с последнего расчёта. */
+    // подтверждено владельцем 20.08
     screenFreshnessHours: { warning: 12, serious: 36, direction: 'above', unit: 'ч' },
 } satisfies Record<string, Threshold>;
 
@@ -52,26 +61,18 @@ export type ThresholdKey = keyof typeof THRESHOLDS;
  * Расхождение миграций: любое расхождение — «серьёзно».
  * Зафиксировано ТЗ §7, порога «внимание» у него нет вовсе.
  */
-// TODO: подтверждено владельцем — зафиксировано в ТЗ §7, дата не проставлена
+// подтверждено владельцем 20.08
 export const MIGRATION_DRIFT_IS_ALWAYS_SERIOUS = true;
 
 /**
  * Пороги, которые владелец ещё не подтвердил. Панель их применяет, но
  * помечает подписью «порог не подтверждён» — врать про согласованность хуже,
  * чем показать временное значение.
+ *
+ * Сейчас список пуст: все пороги подтверждены владельцем 20.08.2026.
+ * Механизм оставлен — новый порог заводится сюда, пока его не согласовали.
  */
-export const UNCONFIRMED_THRESHOLDS: ReadonlySet<ThresholdKey> = new Set([
-    'paymentSuccess',
-    'diskFree',
-    'backupAgeHours',
-    'buildMinutes',
-    'eventSilenceHours',
-    'sourceDiff',
-    'webhookErrorRate',
-    'rejectedEvents',
-    'certDaysLeft',
-    'screenFreshnessHours',
-]);
+export const UNCONFIRMED_THRESHOLDS: ReadonlySet<ThresholdKey> = new Set([]);
 
 export type Severity = 'ok' | 'warning' | 'serious';
 

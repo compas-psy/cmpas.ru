@@ -4,6 +4,7 @@ import type { BackupCard, ChannelsCard, DbCard, DeployCard, ServerCard } from '@
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card, CapsLabel, StateGlyph } from '@/components/panel/block';
 import { InsetTile, ThresholdBar } from '@/components/panel/meters';
+import { BackupDrillForm } from '@/components/panel/manual-value';
 import { bytes, dateOf, dec, duration, num, pct } from '@/lib/panel/format';
 import { severityFor } from '@/lib/panel/thresholds';
 
@@ -56,6 +57,7 @@ export default async function TechScreen() {
                     </Card>
 
                     <Card tone="serious">
+                        <span id="backup" />
                         <BlockFrame block={pick<BackupCard>(blocks, 'backups')} label="Резервные копии" minHeight={240}>
                             {(d) => <Backups data={d} />}
                         </BlockFrame>
@@ -295,6 +297,7 @@ function Backups({ data }: { data: BackupCard }) {
                         копии, которые никто не разворачивал, — это файлы, а не бэкап.
                     </div>
                 ) : null}
+                <BackupDrillForm current={data.drillAt} />
             </div>
 
             {data.ageHours !== null ? (

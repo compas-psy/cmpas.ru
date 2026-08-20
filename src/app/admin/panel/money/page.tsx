@@ -7,6 +7,7 @@ import { BlockFrame, Card, CapsLabel } from '@/components/panel/block';
 import { StatTile } from '@/components/panel/stat';
 import { InsetTile, ThresholdBar } from '@/components/panel/meters';
 import { SingleAxisLine } from '@/components/panel/charts';
+import { InfraCostForm } from '@/components/panel/manual-value';
 import { dateOf, dec, num, pct, plural, rub } from '@/lib/panel/format';
 import { severityFor } from '@/lib/panel/thresholds';
 
@@ -195,6 +196,7 @@ export default async function MoneyScreen() {
 
                     {/* Стоимость инфраструктуры — ручной ввод */}
                     <Card tone={cost.state === 'no_data' ? 'plain' : 'warning'}>
+                        <span id="cost" />
                         <BlockFrame block={cost} label="Стоимость инфраструктуры" minHeight={180}>
                             {(d) => (
                                 <>
@@ -220,9 +222,14 @@ export default async function MoneyScreen() {
                                         {d.source === 'manual' ? 'введено вручную' : 'из биллинга'}
                                         {d.updatedAt ? `, обновлено ${dateOf(d.updatedAt)}` : ''}
                                     </CapsLabel>
+                                    <InfraCostForm current={d} />
                                 </>
                             )}
                         </BlockFrame>
+                        {/* Пока значения нет, блок в no_data и его содержимое не
+                            рисуется — форма нужна и в этом случае, иначе ввести
+                            первое значение будет негде. */}
+                        {cost.state === 'no_data' ? <InfraCostForm current={null} /> : null}
                     </Card>
                 </Grid>
             </ScreenBody>
