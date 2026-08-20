@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
-import { getUserDetailsFull } from '../../actions/crm';
+import { getUserDetailsFull } from '@/app/admin/actions/crm';
 import UserDetailTabs from './user-detail-tabs';
 
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {

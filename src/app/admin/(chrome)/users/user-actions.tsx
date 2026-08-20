@@ -8,7 +8,7 @@ import {
 import {
     toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount,
     extendUserTrial, resetUserTrialFromNow, setUserTrialForever,
-} from "../actions/users"
+} from "@/app/admin/actions/users"
 import { useRouter } from "next/navigation"
 
 export function UserActions({

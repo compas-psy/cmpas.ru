@@ -6,7 +6,7 @@ import {
     Loader2, Check, Mail, Zap, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getSegmentCount, sendMassCommunication, getAllTags } from '../actions/crm';
+import { getSegmentCount, sendMassCommunication, getAllTags } from '@/app/admin/actions/crm';
 
 const SEGMENTS = [
     { key: 'all', label: 'Все пользователи', icon: Users, desc: 'Все зарегистрированные' },

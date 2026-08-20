@@ -1,0 +1,202 @@
+import Link from 'next/link';
+import { screen, countAllHonestHoles } from '@/lib/panel/build';
+import { pick } from '@/lib/panel/types';
+import { isProductKey, PRODUCTS, type ProductKey } from '@/lib/panel/screens';
+import type { PracticeActivation, PracticeActive, PracticeNsm, PracticeReschedule } from '@/lib/panel/queries/products';
+import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
+import { BlockFrame, Card } from '@/components/panel/block';
+import { StatTile, TrendPill } from '@/components/panel/stat';
+import { HonestZero } from '@/components/panel/meters';
+import { dec, num, plural } from '@/lib/panel/format';
+
+export const dynamic = 'force-dynamic';
+
+/** Экран 3 — «Продукты». Табы продуктов — query-параметр, а не смена маршрута. */
+export default async function ProductsScreen({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
+    const params = await searchParams;
+    const product: ProductKey = isProductKey(params.p) ? params.p : 'practice';
+    const [{ blocks, generatedAt }, holes] = await Promise.all([screen('products', product), countAllHonestHoles()]);
+
+    return (
+        <>
+            <ScreenHeader
+                screenNo={3}
+                title="Продукты"
+                screenKey="products"
+                filters={[{ label: 'Период', value: '28 дней' }]}
+                generatedAt={generatedAt}
+            />
+            <ScreenBody>
+                {/* Сегмент-переключатель */}
+                <div style={{ display: 'inline-flex', gap: 3, padding: 3, background: 'var(--p-inset)', borderRadius: 14, width: 'fit-content' }}>
+                    {PRODUCTS.map((p) => (
+                        <Link
+                            key={p.key}
+                            href={`/admin/panel/products?p=${p.key}`}
+                            data-tab
+                            data-active={p.key === product}
+                            aria-current={p.key === product ? 'page' : undefined}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: 11,
+                                color: p.key === product ? 'var(--p-ink)' : 'var(--p-muted)',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                letterSpacing: '.02em',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                            }}
+                        >
+                            {/* Цвет закреплён за продуктом и не зависит от того, какой таб открыт. */}
+                            <span aria-hidden style={{ width: 8, height: 8, borderRadius: 3, background: `var(--${p.slot})` }} />
+                            {p.title}
+                        </Link>
+                    ))}
+                </div>
+
+                {product === 'practice' ? <Practice blocks={blocks} /> : null}
+                {product === 'zapiski' ? <Zapiski blocks={blocks} /> : null}
+                {product === 'momenty' ? <Momenty blocks={blocks} /> : null}
+
+                <Link
+                    href="/admin/panel/quality"
+                    style={{ fontSize: 12.5, color: 'var(--p-muted)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                >
+                    Что мы не умеем измерять — {num(holes)} {plural(holes, 'честная дыра', 'честные дыры', 'честных дыр')}
+                </Link>
+            </ScreenBody>
+        </>
+    );
+}
+
+type Blocks = Awaited<ReturnType<typeof screen>>['blocks'];
+
+function Practice({ blocks }: { blocks: Blocks }) {
+    const nsm = pick<PracticeNsm>(blocks, 'nsm');
+    const active = pick<PracticeActive>(blocks, 'active');
+    const activation = pick<PracticeActivation>(blocks, 'activation');
+    const reschedule = pick<PracticeReschedule>(blocks, 'reschedule');
+    const bookingAuthor = pick<never>(blocks, 'bookingAuthor');
+    const reminders = pick<never>(blocks, 'reminders');
+
+    return (
+        <>
+            <Card>
+                <BlockFrame block={nsm} label="Главная метрика ПРАКТИКИ" minHeight={110}>
+                    {(d) => (
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+                                <span className="p-mono" style={{ fontSize: 38, fontWeight: 700, letterSpacing: '-.03em' }}>
+                                    {dec(d.value)}
+                                </span>
+                                <span style={{ fontSize: 14, color: 'var(--p-muted)' }}>сессии на активного специалиста в неделю</span>
+                            </div>
+                            <span style={{ marginLeft: 'auto' }}>
+                                <TrendPill delta={d.delta} />
+                            </span>
+                        </div>
+                    )}
+                </BlockFrame>
+            </Card>
+
+            <Grid cols={3}>
+                <BlockFrame block={active} label="Активные специалисты">
+                    {(d) => <StatTile label="Активные специалисты" value={`${num(d.wau)} / ${num(d.mau)}`} delta={d.delta} note={`WAU / MAU · липкость ${dec(d.stickiness, 0)} %`} />}
+                </BlockFrame>
+                <BlockFrame block={activation} label="Активация за 7 дней">
+                    {(d) => <StatTile label="Активация за 7 дней" value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.activated)} из ${num(d.cohort)}`} />}
+                </BlockFrame>
+                <BlockFrame block={reschedule} label="Переносы и отмены">
+                    {(d) => <StatTile label="Переносы и отмены" value={dec(d.rate)} unit="%" note={`${num(d.cancelled)} из ${num(d.total)} записей за 28 дней`} />}
+                </BlockFrame>
+            </Grid>
+
+            <Grid cols={2} gap={12}>
+                <Card>
+                    <BlockFrame block={bookingAuthor} label="Кто заводит запись" minHeight={120}>
+                        {() => null}
+                    </BlockFrame>
+                </Card>
+                <Card>
+                    <BlockFrame block={reminders} label="Напоминания ушли вовремя" minHeight={120}>
+                        {() => null}
+                    </BlockFrame>
+                </Card>
+            </Grid>
+        </>
+    );
+}
+
+function Zapiski({ blocks }: { blocks: Blocks }) {
+    const labels: Record<string, string> = {
+        zapiskiNsm: 'Сессий закрыто заметкой',
+        zapiskiWriters: 'Пишут хоть что-то',
+        zapiskiNotesPerSession: 'Заметок на сессию',
+        zapiskiSyncs: 'Синхронизаций',
+        zapiskiConflicts: 'Конфликтов',
+        zapiskiSupport: 'Бета: обращения',
+    };
+
+    return (
+        <>
+            <Card>
+                <div style={{ fontSize: 14, lineHeight: '20px' }}>
+                    У ЗАПИСОК отдельный сервер и своя база. Кросс-продуктового приёмника не существует, поэтому ни один
+                    показатель ниже не измеряется — это не сбой панели, а отсутствующая механика.
+                </div>
+            </Card>
+            <Grid cols={3}>
+                {Object.entries(labels).map(([key, label]) => (
+                    <BlockFrame key={key} block={pick<never>(blocks, key)} label={label}>
+                        {() => null}
+                    </BlockFrame>
+                ))}
+            </Grid>
+        </>
+    );
+}
+
+function Momenty({ blocks }: { blocks: Blocks }) {
+    const labels: Record<string, string> = {
+        momentyNsm: 'Завершили первую практику в первый день',
+        momentyInstalls: 'Установок в неделю',
+        momentyD1: 'D1',
+        momentyD7: 'D7',
+        momentyD30: 'D30',
+    };
+
+    return (
+        <>
+            <Card>
+                <div style={{ fontSize: 14, lineHeight: '20px' }}>
+                    У МОМЕНТОВ нет сервера: события копятся на устройстве и никуда не уходят. Пока сервера нет, эти
+                    показатели не появятся — сколько бы ни ждали.
+                </div>
+            </Card>
+            <Grid cols={3}>
+                {Object.entries(labels).map(([key, label]) => (
+                    <BlockFrame key={key} block={pick<never>(blocks, key)} label={label}>
+                        {() => null}
+                    </BlockFrame>
+                ))}
+            </Grid>
+            <Card>
+                <BlockFrame block={pick<{ count: number }>(blocks, 'crossProduct')} label="Переходы в другие продукты" minHeight={130}>
+                    {(d) =>
+                        d.count === 0 ? (
+                            <HonestZero
+                                title="Переходы в другие продукты"
+                                explanation="Точек перехода между продуктами в коде нет ни у одного из них: событие crossed_to_product есть в реестре, но его никто не отправляет. График появится, когда появится механика."
+                            />
+                        ) : (
+                            <div className="p-mono" style={{ fontSize: 38, fontWeight: 700 }}>
+                                {num(d.count)}
+                            </div>
+                        )
+                    }
+                </BlockFrame>
+            </Card>
+        </>
+    );
+}
