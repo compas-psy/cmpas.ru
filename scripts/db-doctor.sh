@@ -117,3 +117,13 @@ docker inspect cmpas-app --format 'запусков={{.RestartCount}} стату
 
 echo "### Свободное место подробно"
 df -h / /var/lib/docker 2>&1 | head -5
+
+echo "### Какой образ реально запущен"
+docker inspect cmpas-app --format 'образ={{.Config.Image}} создан={{.Created}} запущен={{.State.StartedAt}}' 2>&1 | head -2
+docker images --format '{{.Repository}}:{{.Tag}} {{.ID}} {{.CreatedSince}}' 2>&1 | head -8
+echo "### Метка сборки внутри контейнера"
+docker exec cmpas-app sh -lc 'cat /app/BUILD_INFO 2>/dev/null || ls -la /app/.next/BUILD_ID 2>/dev/null && cat /app/.next/BUILD_ID 2>/dev/null' 2>&1 | head -4
+echo "### Есть ли панель в запущенной сборке"
+docker exec cmpas-app sh -lc 'ls /app/.next/server/app/admin/ 2>/dev/null' 2>&1 | head -20
+echo "### Хвост журнала последней выкладки"
+tail -40 /tmp/cmpas-deploy.log 2>&1 | tail -40
