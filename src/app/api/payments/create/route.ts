@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { initPayment, PLANS, PlanKey } from '@/lib/tinkoff';
+import { track } from '@/lib/analytics/track';
 import { randomBytes } from 'crypto';
 
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
@@ -60,6 +61,16 @@ export async function POST(request: NextRequest) {
             tinkoffPaymentId: result.paymentId,
             paymentUrl: result.paymentUrl,
         },
+    });
+
+    // B4: payment_initiated — платёжная сессия у банка реально создана
+    // (result.success), человек сейчас пойдёт на paymentUrl. Раньше этого
+    // момента событию быть нечем: Payment.status ещё 'pending' до колбэка.
+    await track(db, {
+        event: 'payment_initiated',
+        product: 'practice',
+        accountId: session.user.id,
+        props: { terminal: payment.terminal, plan, amount, months },
     });
 
     return NextResponse.json({ paymentUrl: result.paymentUrl });
