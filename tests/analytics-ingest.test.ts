@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { processIngestEvent } from '@/lib/analytics/ingest';
 
 type Db = Parameters<typeof processIngestEvent>[0];
@@ -14,7 +14,11 @@ function makeDb(user: StoredUser | null) {
     const deviceConsents = new Map<string, StoredDeviceConsent>();
 
     const db: Db = {
-        analyticsEvent: { create: (async ({ data }: { data: EventRecord }) => { events.push(data); return data; }) as Db['analyticsEvent']['create'] },
+        analyticsEvent: {
+            create: (async ({ data }: { data: EventRecord }) => { events.push(data); return data; }) as Db['analyticsEvent']['create'],
+            findUnique: (async ({ where }: { where: { eventId: string } }) =>
+                events.find((e) => e.eventId === where.eventId) ?? null) as Db['analyticsEvent']['findUnique'],
+        },
         analyticsEventRejected: { create: (async ({ data }: { data: RejectedRecord }) => { rejected.push(data); return data; }) as Db['analyticsEventRejected']['create'] },
         user: {
             findUnique: (async () => currentUser) as Db['user']['findUnique'],
@@ -208,6 +212,60 @@ describe('processIngestEvent', () => {
             const result = await processIngestEvent(db, paymentEvent({ device_id: 'device_other' }), new Date(now), store);
             expect(result.accepted).toBe(true);
             expect(events.some((e) => e.deviceId === 'device_other')).toBe(true);
+        });
+    });
+
+    describe('идемпотентность по event_id (O-260817-17)', () => {
+        it('без event_id ведёт себя как раньше — findUnique не вызывается вовсе', async () => {
+            const { db, events } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+            const findUniqueSpy = vi.spyOn(db.analyticsEvent, 'findUnique');
+            await processIngestEvent(db, paymentEvent());
+            expect(findUniqueSpy).not.toHaveBeenCalled();
+            expect(events).toHaveLength(1);
+        });
+
+        it('первая отправка с event_id создаёт строку как обычно', async () => {
+            const { db, events } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+            const result = await processIngestEvent(db, paymentEvent({ event_id: 'evt_1' }));
+            expect(result.accepted).toBe(true);
+            expect(events).toHaveLength(1);
+            expect(events[0].eventId).toBe('evt_1');
+        });
+
+        it('повторная отправка того же event_id — accepted:true, но не создаёт вторую строку', async () => {
+            const { db, events } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+            await processIngestEvent(db, paymentEvent({ event_id: 'evt_dup' }));
+            const second = await processIngestEvent(db, paymentEvent({ event_id: 'evt_dup' }));
+
+            expect(second.accepted).toBe(true);
+            expect(events).toHaveLength(1);
+        });
+
+        it('повторная отправка с тем же event_id не повторяет побочный эффект consent_updated', async () => {
+            const { db, events, getUser } = makeDb({ id: 'user_1', analyticsConsentAt: null });
+            const now = new Date('2026-08-18T09:00:00Z');
+            const consentEvent = {
+                event: 'consent_updated', ts: now.toISOString(), product: 'practice', event_id: 'evt_consent',
+                account_id: 'user_1', device_id: 'device_abc', schema_version: 1, props: { granted: true },
+            };
+            await processIngestEvent(db, consentEvent, now);
+            expect(getUser()?.analyticsConsentAt).toEqual(now);
+
+            // Повтор (например, ретрай клиента после таймаута ответа) — не должен
+            // ни переписать consent на новое время, ни создать вторую запись.
+            const later = new Date('2026-08-18T09:05:00Z');
+            const result = await processIngestEvent(db, consentEvent, later);
+
+            expect(result.accepted).toBe(true);
+            expect(getUser()?.analyticsConsentAt).toEqual(now); // не сдвинулся на later
+            expect(events).toHaveLength(1);
+        });
+
+        it('разные event_id для одинаковых по остальным полям событий создают отдельные строки', async () => {
+            const { db, events } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+            await processIngestEvent(db, paymentEvent({ event_id: 'evt_a' }));
+            await processIngestEvent(db, paymentEvent({ event_id: 'evt_b' }));
+            expect(events).toHaveLength(2);
         });
     });
 });

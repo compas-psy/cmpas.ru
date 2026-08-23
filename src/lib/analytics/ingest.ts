@@ -24,6 +24,9 @@ export type IngestResult =
     | { accepted: true }
     | { accepted: false; reason: string };
 
+/** Наибольшая пачка, которую примет POST /ingest за один запрос (O-260817-17). */
+export const MAX_INGEST_BATCH_SIZE = 200;
+
 export async function processIngestEvent(
     db: Db,
     raw: RawEvent,
@@ -38,6 +41,18 @@ export async function processIngestEvent(
         return { accepted: false, reason: validation.reason };
     }
 
+    // Идемпотентность (O-260817-17): event_id необязателен — без него
+    // поведение не меняется вовсе, findUnique даже не вызывается. С ним
+    // повтор той же отправки (например, ретрай клиента после таймаута
+    // ответа) не создаёт вторую строку и не повторяет побочные эффекты
+    // события (скажем, consent_updated не переигрывает согласие на новое
+    // время) — просто честно отвечает "принято", как и в первый раз.
+    const eventId = typeof raw.event_id === 'string' && raw.event_id ? raw.event_id : null;
+    if (eventId) {
+        const existing = await db.analyticsEvent.findUnique({ where: { eventId } });
+        if (existing) return { accepted: true };
+    }
+
     const accountId = (raw.account_id ?? null) as string | null;
     const deviceId = (raw.device_id ?? null) as string | null;
 
@@ -49,9 +64,9 @@ export async function processIngestEvent(
     const props = (raw.props ?? {}) as Record<string, unknown>;
 
     if (accountId) {
-        return writeAccountEvent(db, raw, accountId, deviceId, event, props, now);
+        return writeAccountEvent(db, raw, accountId, deviceId, event, props, now, eventId);
     }
-    return writeDeviceOnlyEvent(db, raw, deviceId as string, event, props, now);
+    return writeDeviceOnlyEvent(db, raw, deviceId as string, event, props, now, eventId);
 }
 
 async function writeAccountEvent(
@@ -62,6 +77,7 @@ async function writeAccountEvent(
     event: string,
     props: Record<string, unknown>,
     now: Date,
+    eventId: string | null,
 ): Promise<IngestResult> {
     const user = await db.user.findUnique({ where: { id: accountId }, select: { id: true, analyticsConsentAt: true } });
     if (!user) {
@@ -91,6 +107,7 @@ async function writeAccountEvent(
             deviceId: consentGiven ? deviceId : null,
             props: props as Prisma.InputJsonValue,
             schemaVersion: raw.schema_version as number,
+            eventId,
         },
     });
 
@@ -104,6 +121,7 @@ async function writeDeviceOnlyEvent(
     event: string,
     props: Record<string, unknown>,
     now: Date,
+    eventId: string | null,
 ): Promise<IngestResult> {
     const existing = await db.analyticsDeviceConsent.findUnique({ where: { deviceId } });
     let consentGiven = existing?.consentAt != null;
@@ -137,6 +155,7 @@ async function writeDeviceOnlyEvent(
             deviceId,
             props: props as Prisma.InputJsonValue,
             schemaVersion: raw.schema_version as number,
+            eventId,
         },
     });
 

@@ -45,6 +45,9 @@ export interface RawEvent {
     device_id?: unknown;
     props?: unknown;
     schema_version?: unknown;
+    // Идемпотентность POST /ingest (O-260817-17) — необязателен, отсутствие
+    // не меняет поведение (см. src/lib/analytics/ingest.ts).
+    event_id?: unknown;
 }
 
 export type ValidationResult = { valid: true } | { valid: false; reason: string };
@@ -60,6 +63,9 @@ export function validateEvent(raw: RawEvent, registry: EventRegistry = loadRegis
     }
     if (raw.device_id !== null && raw.device_id !== undefined && typeof raw.device_id !== 'string') {
         return { valid: false, reason: 'device_id must be a string or null' };
+    }
+    if (raw.event_id !== null && raw.event_id !== undefined && typeof raw.event_id !== 'string') {
+        return { valid: false, reason: 'event_id must be a string or null' };
     }
     // O-260817-13: a device without an account may send device_id alone.
     if (!raw.account_id && !raw.device_id) {

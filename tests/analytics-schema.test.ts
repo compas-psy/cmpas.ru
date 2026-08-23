@@ -159,3 +159,17 @@ describe('validateEvent against the real registry, one event per product (O-2608
         if (!result.valid) expect(result.reason).toMatch(/unknown product/);
     });
 });
+
+describe('validateEvent + event_id (O-260817-17, идемпотентность)', () => {
+    it('event_id отсутствует — валиден как раньше', () => {
+        expect(validateEvent(baseEvent()).valid).toBe(true);
+    });
+
+    it('event_id — строка — валиден', () => {
+        expect(validateEvent(baseEvent({ event_id: 'evt_123' })).valid).toBe(true);
+    });
+
+    it('event_id — не строка — отказ', () => {
+        expect(validateEvent(baseEvent({ event_id: 12345 })).valid).toBe(false);
+    });
+});

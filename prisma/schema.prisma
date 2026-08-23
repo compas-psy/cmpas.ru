@@ -899,6 +899,11 @@ model AnalyticsEvent {
   props         Json
   schemaVersion Int
   createdAt     DateTime @default(now())
+  // Идемпотентность POST /ingest (O-260817-17) — необязательный конверт-ID
+  // от отправителя. Уникален, но nullable: старые/несовместимые клиенты, не
+  // присылающие event_id, продолжают писать как раньше — Postgres не
+  // считает несколько NULL коллизией уникального индекса.
+  eventId       String?  @unique
 
   @@map("events")
   @@index([event])
