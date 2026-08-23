@@ -181,7 +181,7 @@ describe('computeSubscriptionBackfill', () => {
         expect(firstRun.every((p) => p.action === 'create')).toBe(true);
 
         // Материализуем результат первого прогона как "уже в базе" и считаем план снова.
-        const existingAfterFirstRun: ExistingSubscription[] = firstRun.map((p) => ({ userId: p.userId, ...p.target! }));
+        const existingAfterFirstRun: ExistingSubscription[] = firstRun.map((p) => ({ ...p.target! }));
         const secondRun = computeSubscriptionBackfill(users, payments, existingAfterFirstRun, NOW);
 
         expect(secondRun.every((p) => p.action === 'skip')).toBe(true);

@@ -38,8 +38,8 @@ async function main() {
     // (пользователь мог быть оплачен, но затем User.subscriptionEndsAt
     // обнулён) — поэтому пользователей с payments, но без
     // subscriptionEndsAt, тоже нужно передать: собираем их id отдельно.
-    const paidUserIds = new Set(payments.map((p) => p.userId));
-    const knownUserIds = new Set(users.map((u) => u.id));
+    const paidUserIds = new Set(payments.map((p: { userId: string }) => p.userId));
+    const knownUserIds = new Set(users.map((u: { id: string }) => u.id));
     const missingUserIds = [...paidUserIds].filter((id) => !knownUserIds.has(id));
     const extraUsers = missingUserIds.length
         ? await db.user.findMany({
