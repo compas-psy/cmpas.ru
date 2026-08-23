@@ -166,6 +166,38 @@ if [ -z "$infra_pulse_password" ]; then
   log 'INFRA_PULSE_DB_PASSWORD generated.'
 fi
 
+# ANALYTICS_INGEST_SECRET (POST /ingest, Authorization: Bearer <...>) — тот же
+# приём самозаведения, что у TELEGRAM_WEBHOOK_SECRET/INFRA_PULSE_DB_PASSWORD
+# выше. Читается ПОСЛЕ цикла переноса из окружения (`for key in ...` выше):
+# если GitHub передал секрет явно, он уже лежит в .env к этому моменту и
+# генерация ниже — no-op, заданное человеком значение не трогаем. Только если
+# его не задали ни оттуда, ни руками в .env раньше — рождаем его здесь, на
+# сервере; в репозиторий он не попадает никогда.
+analytics_ingest_secret=$(grep '^ANALYTICS_INGEST_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
+if [ -z "$analytics_ingest_secret" ]; then
+  analytics_ingest_secret=$(openssl rand -hex 32)
+  upsert_env ANALYTICS_INGEST_SECRET "$analytics_ingest_secret"
+  log 'ANALYTICS_INGEST_SECRET generated.'
+fi
+
+# Мост к ЗАПИСКАМ: на этом же сервере в /var/www/zapiski живёт соседний
+# продукт, и его код, который шлёт события в наш POST /ingest, обязан знать
+# тот же ANALYTICS_INGEST_SECRET. Пишет — эта выкладка (ПРАКТИКА, секрет
+# рождается здесь же, см. выше); читает — выкладка/рантайм ЗАПИСОК на этом
+# сервере. Не через переменную окружения: у ЗАПИСОК своя выкладка и свой
+# .env, общего источника переменных между двумя продуктами до сих пор не
+# было, а заводить его ради одного значения — лишняя связанность двух
+# независимых деплоев. Поэтому — общий файл на диске сервера, а не
+# воображаемый общий env. Перезаписывается на КАЖДОЙ выкладке (не только при
+# первой генерации выше), иначе смена секрета человеком в .env ПРАКТИКИ
+# никогда не доедет до соседа. Права строго 600, владелец root — секрет для
+# межпроцессного чтения (root/сервис ЗАПИСОК), не для всех на сервере.
+mkdir -p /etc/simpas
+( umask 077; printf '%s\n' "$analytics_ingest_secret" > /etc/simpas/ingest-secret )
+chmod 600 /etc/simpas/ingest-secret
+chown root:root /etc/simpas/ingest-secret
+log 'ANALYTICS_INGEST_SECRET synced to /etc/simpas/ingest-secret for ЗАПИСОК.'
+
 log "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2- | cut -c1-8)..."
 
 vpn_enabled=0
