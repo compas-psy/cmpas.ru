@@ -171,6 +171,34 @@ jobs:
             android/app/build/test-results/
           retention-days: 14
 
+      - name: Build Release APK
+        working-directory: android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -o pipefail
+          # Ключ кладём во временный каталог, если он есть. Нет — собираем
+          # неподписанным: proguard прогоняется в любом случае, а гейт подписи
+          # ниже не даст ничего опубликовать.
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            umask 077
+            mkdir -p "${RUNNER_TEMP}/signing"
+            printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/signing/praktika.jks"
+            export ANDROID_KEYSTORE_PATH="${RUNNER_TEMP}/signing/praktika.jks"
+          fi
+          /tmp/gradle-8.9/bin/gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee ../android-build.log
+
+      # Гейт подписи стоит ПОСЛЕ сборки намеренно.
+      #
+      # Без ключа сборка всё равно происходит — и это ценно: она прогоняет
+      # proguard, то есть проверяет, переживают ли сериализация и рефлексия
+      # сокращение кода. Без ключа пакет выходит неподписанным, гейт ниже
+      # роняет прогон, и наверх не уходит ничего: ни артефакта, ни релиза.
+      # Так проверяется больше, а опубликовать нечего в обоих случаях.
       # Ключ подписи приходит из секретов, а не из репозитория.
       #
       # Раньше он лежал в android/keystore/compas-release.jks вместе с паролями
@@ -260,18 +288,6 @@ jobs:
           echo "keystore=${keystore}" >> "$GITHUB_OUTPUT"
           echo "expected_signer=${expected}" >> "$GITHUB_OUTPUT"
           echo "Ключ на месте, алиас найден, пароли подходят, отпечаток совпал: ${expected}"
-
-      - name: Build Release APK
-        working-directory: android
-        shell: bash
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -o pipefail
-          /tmp/gradle-8.9/bin/gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee ../android-build.log
 
       - name: Upload build log
         if: always()
