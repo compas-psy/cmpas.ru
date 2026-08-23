@@ -98,14 +98,25 @@ android {
     }
 }
 
-// main split the monolithic Models.kt into focused model files (Core/Client/Note/
-// Workflow). The legacy Models.kt is kept on disk but excluded from compilation to
-// avoid redeclaration. We DO compile SessionReminderFactory.kt: our redesigned
-// SessionDetailViewModel relies on its buildReminders() and no longer defines it.
+// Легаси Models.kt удалён 23.08.2026.
+//
+// Монолит был разбит на CoreModels/ClientModels/NoteModels/WorkflowModels, а сам
+// файл оставили на диске и просто исключили из компиляции, чтобы не спорить с
+// повторными объявлениями. Отладочной сборке это не мешало, а релизная запускает
+// lintVitalRelease — и он падал именно на нём:
+//
+//   Unexpected failure during lint analysis of Models.kt
+//   class ...KaFirMemberFunctionSymbolPointer pointer already disposed
+//
+// Lint разбирает исходники независимо от того, что исключено из компиляции.
+// Исключение прятало дубли от компилятора, но не от него.
+//
+// Файл был мёртв полностью: 344 строки повторных объявлений (Session, Client,
+// SessionReminder — все уже есть в живых файлах) и ни одной ссылки во всём
+// модуле. Удалён вместе с исключением: глушить lint значило бы оставить причину
+// на месте.
+//
 // Geist .ttf binaries are committed under src/main/res/font/ (no build-time fetch).
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    exclude("**/Models.kt")
-}
 
 // Имена и причины упавших тестов печатаются в консоль, а не только в отчёт.
 // Отчёт выгружается артефактом, но артефакты лежат в blob-хранилище GitHub,
