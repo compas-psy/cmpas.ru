@@ -1,16 +1,17 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32658428158. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32658754968. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
 ### Журнал миграций существует?
 t
 ### Записей в журнале
-37
+38
 ### Незавершённых миграций
 0
 ### Последние 20 записей журнала
+20260823170000_client_request_id  finished=2026-08-23 18:35:50.620241+00
 20260823100000_visitor_analytics_account_id  finished=2026-08-23 15:07:36.727566+00
 20260823094500_app_response_time  finished=2026-08-23 15:07:36.710728+00
 20260823093000_analytics_event_id  finished=2026-08-23 15:07:36.684168+00
@@ -30,7 +31,6 @@ t
 20260531_configurable_documents_payments  finished=2026-08-17 13:10:33.116919+00
 20260426_add_system_config  finished=2026-08-17 13:10:29.427704+00
 20260419_add_schedule_rules  finished=2026-08-17 13:10:25.622061+00
-20260411_schedule_v2  finished=2026-08-17 13:10:21.886053+00
 ### Колонки, которые добавляли откаченные PR (должны отсутствовать)
 PsychologistSettings.privateRemindersEnabled
 PsychologistSettings.timeSuggestEnabled
@@ -49,147 +49,147 @@ DiaryClient=20
 DiarySession=41
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   23G   62G  27% /
-/dev/vda2        89G   23G   62G  27% /
+/dev/vda2        89G   22G   63G  27% /
+/dev/vda2        89G   22G   63G  27% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2030         959          55        5313        5911
+Mem:            7941        1950         789          55        5563        5990
 Swap:            511           1         510
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          7         6         11.08GB   10.58GB (95%)
-Containers      7         6         28.59MB   12.29kB (0%)
-Local Volumes   155       7         265.8MB   4.07MB (1%)
-Build Cache     103       19        7.657GB   4.193GB
+Images          7         7         10.84GB   10.84GB (100%)
+Containers      7         6         28.51MB   12.29kB (0%)
+Local Volumes   155       7         265.9MB   4.07MB (1%)
+Build Cache     103       0         7.896GB   7.273GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
-#17 ...
+#40 DONE 0.0s
+ Image cmpasru-app Built 
+ Image cmpasru-infra-pulse Built 
+time="2026-08-23T21:35:46+03:00" level=warning msg="No services to build"
+ Container cmpas-postgres Running 
+ Container cmpas-mailer Running 
+[deploy] PostgreSQL is ready.
+[deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
+time="2026-08-23T21:35:47+03:00" level=warning msg="No services to build"
+time="2026-08-23T21:35:47+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-0865772c0896 Creating 
+ Container cmpasru-app-run-0865772c0896 Created 
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
 
-#38 [app] resolving provenance for metadata file
-#38 DONE 0.0s
+38 migrations found in prisma/migrations
 
-#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
-#17 56.92 Get:2 http://deb.debian.org/debian bookworm/main amd64 libgdbm6 amd64 1.23-3 [72.2 kB]
-#17 57.66 Get:3 http://deb.debian.org/debian bookworm/main amd64 libgdbm-compat4 amd64 1.23-3 [48.2 kB]
-#17 58.49 Get:4 http://deb.debian.org/debian bookworm/main amd64 libperl5.36 amd64 5.36.0-7+deb12u3 [4196 kB]
-#17 132.4 Get:5 http://deb.debian.org/debian bookworm/main amd64 perl amd64 5.36.0-7+deb12u3 [239 kB]
-#17 137.0 Get:6 http://deb.debian.org/debian bookworm/main amd64 netbase all 6.4 [12.8 kB]
-#17 137.2 Get:7 http://deb.debian.org/debian bookworm/main amd64 readline-common all 8.2-1.3 [69.0 kB]
-#17 138.1 Get:8 http://deb.debian.org/debian bookworm/main amd64 sensible-utils all 0.0.17+nmu1 [19.0 kB]
-#17 138.2 Get:9 http://deb.debian.org/debian bookworm/main amd64 libkrb5support0 amd64 1.20.1-2+deb12u5 [33.2 kB]
-#17 138.4 Get:10 http://deb.debian.org/debian bookworm/main amd64 libk5crypto3 amd64 1.20.1-2+deb12u5 [79.7 kB]
-#17 139.4 Get:11 http://deb.debian.org/debian bookworm/main amd64 libkeyutils1 amd64 1.6.3-2 [8808 B]
-#17 139.6 Get:12 http://deb.debian.org/debian bookworm/main amd64 libkrb5-3 amd64 1.20.1-2+deb12u5 [332 kB]
-#17 145.8 Get:13 http://deb.debian.org/debian bookworm/main amd64 libgssapi-krb5-2 amd64 1.20.1-2+deb12u5 [135 kB]
-#17 149.0 Get:14 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg-10 [20.3 kB]
-#17 149.5 Get:15 http://deb.debian.org/debian bookworm/main amd64 libsasl2-2 amd64 2.1.28+dfsg-10 [59.7 kB]
-#17 150.3 Get:16 http://deb.debian.org/debian bookworm/main amd64 libldap-2.5-0 amd64 2.5.13+dfsg-5 [183 kB]
-#17 152.8 Get:17 http://deb.debian.org/debian-security bookworm-security/main amd64 libpq5 amd64 15.19-0+deb12u1 [203 kB]
-#17 157.0 Get:18 http://deb.debian.org/debian bookworm/main amd64 libreadline8 amd64 8.2-1.3 [166 kB]
-#17 159.6 Get:19 http://deb.debian.org/debian bookworm/main amd64 postgresql-client-common all 248+deb12u1 [35.2 kB]
-#17 160.1 Get:20 http://deb.debian.org/debian-security bookworm-security/main amd64 postgresql-client-15 amd64 15.19-0+deb12u1 [1759 kB]
-#17 196.2 Get:21 http://deb.debian.org/debian bookworm/main amd64 postgresql-client all 15+248+deb12u1 [10.2 kB]
-#17 196.9 debconf: delaying package configuration, since apt-utils is not installed
-#17 197.0 Fetched 10.5 MB in 3min 11s (55.0 kB/s)
-#17 197.1 Selecting previously unselected package perl-modules-5.36.
-#17 197.1 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6593 files and directories currently installed.)
-#17 197.1 Preparing to unpack .../00-perl-modules-5.36_5.36.0-7+deb12u3_all.deb ...
-#17 197.1 Unpacking perl-modules-5.36 (5.36.0-7+deb12u3) ...
-#17 198.0 Selecting previously unselected package libgdbm6:amd64.
-#17 198.0 Preparing to unpack .../01-libgdbm6_1.23-3_amd64.deb ...
-#17 198.0 Unpacking libgdbm6:amd64 (1.23-3) ...
-#17 198.1 Selecting previously unselected package libgdbm-compat4:amd64.
-#17 198.1 Preparing to unpack .../02-libgdbm-compat4_1.23-3_amd64.deb ...
-#17 198.1 Unpacking libgdbm-compat4:amd64 (1.23-3) ...
-#17 198.1 Selecting previously unselected package libperl5.36:amd64.
-#17 198.1 Preparing to unpack .../03-libperl5.36_5.36.0-7+deb12u3_amd64.deb ...
-#17 198.1 Unpacking libperl5.36:amd64 (5.36.0-7+deb12u3) ...
-#17 198.9 Selecting previously unselected package perl.
-#17 198.9 Preparing to unpack .../04-perl_5.36.0-7+deb12u3_amd64.deb ...
-#17 198.9 Unpacking perl (5.36.0-7+deb12u3) ...
-#17 199.0 Selecting previously unselected package netbase.
-#17 199.0 Preparing to unpack .../05-netbase_6.4_all.deb ...
-#17 199.0 Unpacking netbase (6.4) ...
-#17 199.1 Selecting previously unselected package readline-common.
-#17 199.1 Preparing to unpack .../06-readline-common_8.2-1.3_all.deb ...
-#17 199.1 Unpacking readline-common (8.2-1.3) ...
-#17 199.2 Selecting previously unselected package sensible-utils.
-#17 199.2 Preparing to unpack .../07-sensible-utils_0.0.17+nmu1_all.deb ...
-#17 199.2 Unpacking sensible-utils (0.0.17+nmu1) ...
-#17 199.2 Selecting previously unselected package libkrb5support0:amd64.
-#17 199.3 Preparing to unpack .../08-libkrb5support0_1.20.1-2+deb12u5_amd64.deb ...
-#17 199.3 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
-#17 199.3 Selecting previously unselected package libk5crypto3:amd64.
-#17 199.3 Preparing to unpack .../09-libk5crypto3_1.20.1-2+deb12u5_amd64.deb ...
-#17 199.3 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
-#17 199.4 Selecting previously unselected package libkeyutils1:amd64.
-#17 199.4 Preparing to unpack .../10-libkeyutils1_1.6.3-2_amd64.deb ...
-#17 199.4 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
-#17 199.5 Selecting previously unselected package libkrb5-3:amd64.
-#17 199.5 Preparing to unpack .../11-libkrb5-3_1.20.1-2+deb12u5_amd64.deb ...
-#17 199.5 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
-#17 199.6 Selecting previously unselected package libgssapi-krb5-2:amd64.
-#17 199.6 Preparing to unpack .../12-libgssapi-krb5-2_1.20.1-2+deb12u5_amd64.deb ...
-#17 199.7 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
-#17 199.7 Selecting previously unselected package libsasl2-modules-db:amd64.
-#17 199.7 Preparing to unpack .../13-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
-#17 199.7 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
-#17 199.8 Selecting previously unselected package libsasl2-2:amd64.
-#17 199.8 Preparing to unpack .../14-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
-#17 199.8 Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
-#17 199.9 Selecting previously unselected package libldap-2.5-0:amd64.
-#17 199.9 Preparing to unpack .../15-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
-#17 199.9 Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
-#17 200.0 Selecting previously unselected package libpq5:amd64.
-#17 200.0 Preparing to unpack .../16-libpq5_15.19-0+deb12u1_amd64.deb ...
-#17 200.0 Unpacking libpq5:amd64 (15.19-0+deb12u1) ...
-#17 200.1 Selecting previously unselected package libreadline8:amd64.
-#17 200.1 Preparing to unpack .../17-libreadline8_8.2-1.3_amd64.deb ...
-#17 200.1 Unpacking libreadline8:amd64 (8.2-1.3) ...
-#17 200.2 Selecting previously unselected package postgresql-client-common.
-#17 200.2 Preparing to unpack .../18-postgresql-client-common_248+deb12u1_all.deb ...
-#17 200.2 Unpacking postgresql-client-common (248+deb12u1) ...
-#17 200.3 Selecting previously unselected package postgresql-client-15.
-#17 200.3 Preparing to unpack .../19-postgresql-client-15_15.19-0+deb12u1_amd64.deb ...
-#17 200.3 Unpacking postgresql-client-15 (15.19-0+deb12u1) ...
-#17 200.8 Selecting previously unselected package postgresql-client.
-#17 200.8 Preparing to unpack .../20-postgresql-client_15+248+deb12u1_all.deb ...
-#17 200.8 Unpacking postgresql-client (15+248+deb12u1) ...
-#17 200.9 Setting up libkeyutils1:amd64 (1.6.3-2) ...
-#17 200.9 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
-#17 200.9 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
-#17 200.9 Setting up perl-modules-5.36 (5.36.0-7+deb12u3) ...
-#17 200.9 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
-#17 200.9 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
-#17 201.0 Setting up sensible-utils (0.0.17+nmu1) ...
-#17 201.0 Setting up netbase (6.4) ...
-#17 201.0 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
-#17 201.0 Setting up readline-common (8.2-1.3) ...
-#17 201.0 Setting up libgdbm6:amd64 (1.23-3) ...
-#17 201.0 Setting up libreadline8:amd64 (8.2-1.3) ...
-#17 201.1 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
-#17 201.1 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
-#17 201.1 Setting up libgdbm-compat4:amd64 (1.23-3) ...
-#17 201.1 Setting up libperl5.36:amd64 (5.36.0-7+deb12u3) ...
-#17 201.1 Setting up libpq5:amd64 (15.19-0+deb12u1) ...
-#17 201.1 Setting up perl (5.36.0-7+deb12u3) ...
-#17 201.2 Setting up postgresql-client-common (248+deb12u1) ...
-#17 201.2 Setting up postgresql-client-15 (15.19-0+deb12u1) ...
-#17 203.0 update-alternatives: using /usr/share/postgresql/15/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
-#17 203.1 Setting up postgresql-client (15+248+deb12u1) ...
-#17 203.1 Processing triggers for libc-bin (2.36-9+deb12u13) ...
-#17 DONE 203.5s
+Applying migration `20260823170000_client_request_id`
 
-#39 [infra-pulse] exporting to image
-#39 exporting layers
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20260823170000_client_request_id/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+[deploy] Prisma migrations applied.
+[deploy] Applying beta schema safety net.
+psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "User" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:13: NOTICE:  column "documentVersion" of relation "LegalDocumentAcceptance" already exists, skipping
+ALTER TABLE
+UPDATE 26
+psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
+CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relation "DiarySession" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
+CREATE INDEX
+CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
+CREATE INDEX
+CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
+ALTER TABLE
+CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
+psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
+[deploy] Running strict schema verification against the new image.
+time="2026-08-23T21:35:51+03:00" level=warning msg="No services to build"
+time="2026-08-23T21:35:51+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-c608f4e67ca0 Creating 
+ Container cmpasru-app-run-c608f4e67ca0 Created 
+[schema] Все 47 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Starting the infra-pulse collector.
+time="2026-08-23T21:35:55+03:00" level=warning msg="No services to build"
+ Container cmpas-postgres Running 
+ Container cmpas-infra-pulse Recreate 
+ Container cmpas-infra-pulse Recreated 
+ Container cmpas-postgres Waiting 
+ Container cmpas-postgres Healthy 
+ Container cmpas-infra-pulse Starting 
+ Container cmpas-infra-pulse Started 
+[deploy] Recreating only the application container.
+time="2026-08-23T21:36:01+03:00" level=warning msg="No services to build"
+ Container cmpas-app Recreate 
+ Container cmpas-app Recreated 
+ Container cmpas-app Starting 
+ Container cmpas-app Started 
+[deploy] New application is healthy.
+[schema] Все 47 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Auth endpoint status: 200
+[deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
+time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
+time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
+ Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Creating 
+ Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Created 
+npm warn exec The following package was not found and will be installed: tsx@4.23.12
+[backfill-subscriptions] план: create=0 update=0 skip=1
+[backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
+curl: (28) Failed to connect to api.telegram.org port 443 after 133939 ms: Couldn't connect to server
+[deploy] WARNING: Telegram webhook registration failed.
+[deploy] Deployment completed successfully.
 ### Состояние контейнеров
-zapiski-api | Up 14 minutes (healthy)
-cmpas-app | Up 3 hours
-cmpas-infra-pulse | Up 3 hours
+zapiski-api | Up About a minute (healthy)
+cmpas-app | Up 4 minutes
+cmpas-infra-pulse | Up 4 minutes
 zapiski-postgres | Up 3 days (healthy)
 cmpas-mailer | Up 3 days (healthy)
 cmpas-postgres | Up 3 days (healthy)
@@ -198,7 +198,7 @@ cmpas-singbox | Exited (1) 3 days ago
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.220874s
+код 405, время 0.149048s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -230,19 +230,19 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.157618s
-https://cmpas.ru/diary -> 307 за 0.203340s
-https://cmpas.ru/admin -> 307 за 0.395591s
+https://cmpas.ru/ -> 200 за 0.107241s
+https://cmpas.ru/diary -> 307 за 0.175858s
+https://cmpas.ru/admin -> 307 за 0.546663s
 ### Сертификат cmpas.ru
 notBefore=Jul  4 23:22:19 2026 GMT
 notAfter=Oct  2 23:22:18 2026 GMT
 subject=CN = cmpas.ru
 issuer=C = US, O = Let's Encrypt, CN = YE1
 ### Кто слушает 80 и 443
-LISTEN 0      4096                                       0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=2144813,fd=7))                                                                                                                                        
+LISTEN 0      4096                                       0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=2269390,fd=7))                                                                                                                                        
 LISTEN 0      511                                        0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=2140643,fd=11),("nginx",pid=2140642,fd=11),("nginx",pid=2140641,fd=11),("nginx",pid=2140640,fd=11),("nginx",pid=901,fd=11))                                  
 LISTEN 0      511                                        0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=2140643,fd=12),("nginx",pid=2140642,fd=12),("nginx",pid=2140641,fd=12),("nginx",pid=2140640,fd=12),("nginx",pid=901,fd=12))                                  
-LISTEN 0      4096                                          [::]:3000          [::]:*    users:(("docker-proxy",pid=2144819,fd=7))                                                                                                                                        
+LISTEN 0      4096                                          [::]:3000          [::]:*    users:(("docker-proxy",pid=2269397,fd=7))                                                                                                                                        
 LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=2140643,fd=13),("nginx",pid=2140642,fd=13),("nginx",pid=2140641,fd=13),("nginx",pid=2140640,fd=13),("nginx",pid=901,fd=13))                                  
 LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=2140643,fd=14),("nginx",pid=2140642,fd=14),("nginx",pid=2140641,fd=14),("nginx",pid=2140640,fd=14),("nginx",pid=901,fd=14))                                  
 ### Журнал приложения, последние 60 строк
@@ -254,52 +254,17 @@ LISTEN 0      511                                           [::]:80            [
 [schema] Prisma migration history has no unfinished entries.
 [startup] Schema is ready. Starting Next.js...
 ▲ Next.js 16.1.1
-- Local:         http://11fee9ef954a:3000
-- Network:       http://11fee9ef954a:3000
+- Local:         http://a122c221ad01:3000
+- Network:       http://a122c221ad01:3000
 
 ✓ Starting...
-✓ Ready in 326ms
+✓ Ready in 266ms
 [AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
 [CRON] Инструментация: cron-задачи зарегистрированы
 [AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
 [TG Bot] API root: https://api.telegram.org
 [MAX] Webhook registration on startup: {"success":true}
 [AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-The width(-1) and height(-1) of chart should be greater than 0,
-       please check the style of container, or the props width(100%) and height(100%),
-       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
-       height and width.
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-The width(-1) and height(-1) of chart should be greater than 0,
-       please check the style of container, or the props width(100%) and height(100%),
-       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
-       height and width.
-Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-The width(-1) and height(-1) of chart should be greater than 0,
-       please check the style of container, or the props width(100%) and height(100%),
-       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
-       height and width.
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
 ### Журнал контейнера в цикле перезапуска
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
@@ -332,66 +297,66 @@ The width(-1) and height(-1) of chart should be greater than 0,
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 ### Почему перезапускался app (последний выход)
-запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-08-23T15:07:43.723555862Z
+запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-08-23T18:36:03.606873566Z
 ### Свободное место подробно
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   23G   62G  27% /
-/dev/vda2        89G   23G   62G  27% /
+/dev/vda2        89G   22G   63G  27% /
+/dev/vda2        89G   22G   63G  27% /
 ### Какой образ реально запущен
-образ=cmpasru-app создан=2026-08-23T15:07:42.551579176Z запущен=2026-08-23T15:07:43.723555862Z
-cmpasru-app:latest 16ccefa29a00 4 minutes ago
-zapiski-api:latest e3f55738faa2 3 hours ago
-cmpasru-infra-pulse:latest 2ac0ba3456ae 3 hours ago
+образ=cmpasru-app создан=2026-08-23T18:36:02.448311888Z запущен=2026-08-23T18:36:03.606873566Z
+cmpasru-infra-pulse:latest d7fe4aec2572 7 minutes ago
+cmpasru-app:latest 16ccefa29a00 10 minutes ago
+zapiski-api:latest da4efd9a685a 3 hours ago
 postgres:16-alpine 57c72fd2a128 6 weeks ago
 ghcr.io/sagernet/sing-box:latest c8b67944345d 8 weeks ago
 boky/postfix:latest aafc77238423 7 months ago
 postgres:15-alpine b3968e348b48 8 months ago
 ### Метка сборки внутри контейнера
--rw-r--r-- 1 nextjs nodejs 21 Aug 23 15:04 /app/.next/BUILD_ID
-qq2mwjX2-f6Zj2FKRud_J### Есть ли панель в запущенной сборке
+-rw-r--r-- 1 nextjs nodejs 21 Aug 23 18:29 /app/.next/BUILD_ID
+Hre-BUHBYrR4Z68IgjBP1### Есть ли панель в запущенной сборке
 (chrome)
 panel
 ### Хвост журнала последней выкладки
-#17 200.0 Unpacking libpq5:amd64 (15.19-0+deb12u1) ...
-#17 200.1 Selecting previously unselected package libreadline8:amd64.
-#17 200.1 Preparing to unpack .../17-libreadline8_8.2-1.3_amd64.deb ...
-#17 200.1 Unpacking libreadline8:amd64 (8.2-1.3) ...
-#17 200.2 Selecting previously unselected package postgresql-client-common.
-#17 200.2 Preparing to unpack .../18-postgresql-client-common_248+deb12u1_all.deb ...
-#17 200.2 Unpacking postgresql-client-common (248+deb12u1) ...
-#17 200.3 Selecting previously unselected package postgresql-client-15.
-#17 200.3 Preparing to unpack .../19-postgresql-client-15_15.19-0+deb12u1_amd64.deb ...
-#17 200.3 Unpacking postgresql-client-15 (15.19-0+deb12u1) ...
-#17 200.8 Selecting previously unselected package postgresql-client.
-#17 200.8 Preparing to unpack .../20-postgresql-client_15+248+deb12u1_all.deb ...
-#17 200.8 Unpacking postgresql-client (15+248+deb12u1) ...
-#17 200.9 Setting up libkeyutils1:amd64 (1.6.3-2) ...
-#17 200.9 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
-#17 200.9 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
-#17 200.9 Setting up perl-modules-5.36 (5.36.0-7+deb12u3) ...
-#17 200.9 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
-#17 200.9 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
-#17 201.0 Setting up sensible-utils (0.0.17+nmu1) ...
-#17 201.0 Setting up netbase (6.4) ...
-#17 201.0 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
-#17 201.0 Setting up readline-common (8.2-1.3) ...
-#17 201.0 Setting up libgdbm6:amd64 (1.23-3) ...
-#17 201.0 Setting up libreadline8:amd64 (8.2-1.3) ...
-#17 201.1 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
-#17 201.1 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
-#17 201.1 Setting up libgdbm-compat4:amd64 (1.23-3) ...
-#17 201.1 Setting up libperl5.36:amd64 (5.36.0-7+deb12u3) ...
-#17 201.1 Setting up libpq5:amd64 (15.19-0+deb12u1) ...
-#17 201.1 Setting up perl (5.36.0-7+deb12u3) ...
-#17 201.2 Setting up postgresql-client-common (248+deb12u1) ...
-#17 201.2 Setting up postgresql-client-15 (15.19-0+deb12u1) ...
-#17 203.0 update-alternatives: using /usr/share/postgresql/15/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
-#17 203.1 Setting up postgresql-client (15+248+deb12u1) ...
-#17 203.1 Processing triggers for libc-bin (2.36-9+deb12u13) ...
-#17 DONE 203.5s
-
-#39 [infra-pulse] exporting to image
-#39 exporting layers
+ Container cmpasru-app-run-c608f4e67ca0 Creating 
+ Container cmpasru-app-run-c608f4e67ca0 Created 
+[schema] Все 47 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Starting the infra-pulse collector.
+time="2026-08-23T21:35:55+03:00" level=warning msg="No services to build"
+ Container cmpas-postgres Running 
+ Container cmpas-infra-pulse Recreate 
+ Container cmpas-infra-pulse Recreated 
+ Container cmpas-postgres Waiting 
+ Container cmpas-postgres Healthy 
+ Container cmpas-infra-pulse Starting 
+ Container cmpas-infra-pulse Started 
+[deploy] Recreating only the application container.
+time="2026-08-23T21:36:01+03:00" level=warning msg="No services to build"
+ Container cmpas-app Recreate 
+ Container cmpas-app Recreated 
+ Container cmpas-app Starting 
+ Container cmpas-app Started 
+[deploy] New application is healthy.
+[schema] Все 47 таблиц и их колонки на месте.
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[deploy] Auth endpoint status: 200
+[deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
+time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
+time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
+ Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Creating 
+ Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Created 
+npm warn exec The following package was not found and will be installed: tsx@4.23.12
+[backfill-subscriptions] план: create=0 update=0 skip=1
+[backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
+curl: (28) Failed to connect to api.telegram.org port 443 after 133939 ms: Couldn't connect to server
+[deploy] WARNING: Telegram webhook registration failed.
+[deploy] Deployment completed successfully.
 ### Флаги аналитики в /var/www/cmpas.ru/.env
 ANALYTICS_INGEST_ENABLED=true
 ANALYTICS_TRACKING_ENABLED=true
@@ -400,10 +365,10 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 /etc/simpas/ingest-secret: есть, 65 байт, права 600, владелец root
 /var/www/zapiski/.ingest-secret: есть, 65 байт, права 600, владелец root
 ### Контейнер infra-pulse
-cmpas-infra-pulse | Up 3 hours | cmpasru-infra-pulse
+cmpas-infra-pulse | Up 4 minutes | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=48
-последняя=2026-08-23 18:33:13.734 возраст_мин=1
+строк всего=49
+последняя=2026-08-23 18:36:10.597 возраст_мин=4
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
