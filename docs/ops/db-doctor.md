@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32658754968. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32658893775. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -49,147 +49,147 @@ DiaryClient=20
 DiarySession=41
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   22G   63G  27% /
-/dev/vda2        89G   22G   63G  27% /
+/dev/vda2        89G   23G   62G  28% /
+/dev/vda2        89G   23G   62G  28% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        1950         789          55        5563        5990
-Swap:            511           1         510
+Mem:            7941        2133        1312          55        4857        5807
+Swap:            511          11         500
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          7         7         10.84GB   10.84GB (100%)
+Images          7         6         11.64GB   11.68GB (100%)
 Containers      7         6         28.51MB   12.29kB (0%)
 Local Volumes   155       7         265.9MB   4.07MB (1%)
-Build Cache     103       0         7.896GB   7.273GB
+Build Cache     118       36        8.735GB   6.395GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-#40 DONE 0.0s
- Image cmpasru-app Built 
- Image cmpasru-infra-pulse Built 
-time="2026-08-23T21:35:46+03:00" level=warning msg="No services to build"
- Container cmpas-postgres Running 
- Container cmpas-mailer Running 
-[deploy] PostgreSQL is ready.
-[deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
-time="2026-08-23T21:35:47+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:35:47+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-0865772c0896 Creating 
- Container cmpasru-app-run-0865772c0896 Created 
-Prisma schema loaded from prisma/schema.prisma
-Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
+#33 DONE 0.5s
 
-38 migrations found in prisma/migrations
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 9.446 Selecting previously unselected package libgdbm6:amd64.
+#17 9.447 Preparing to unpack .../01-libgdbm6_1.23-3_amd64.deb ...
+#17 9.454 Unpacking libgdbm6:amd64 (1.23-3) ...
+#17 9.521 Selecting previously unselected package libgdbm-compat4:amd64.
+#17 9.525 Preparing to unpack .../02-libgdbm-compat4_1.23-3_amd64.deb ...
+#17 9.529 Unpacking libgdbm-compat4:amd64 (1.23-3) ...
+#17 9.570 Selecting previously unselected package libperl5.36:amd64.
+#17 9.573 Preparing to unpack .../03-libperl5.36_5.36.0-7+deb12u3_amd64.deb ...
+#17 9.575 Unpacking libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#17 ...
 
-Applying migration `20260823170000_client_request_id`
+#34 [app runner 18/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+#34 DONE 0.2s
 
-The following migration(s) have been applied:
+#35 [app runner 19/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+#35 DONE 0.3s
 
-migrations/
-  └─ 20260823170000_client_request_id/
-    └─ migration.sql
-      
-All migrations have been successfully applied.
-[deploy] Prisma migrations applied.
-[deploy] Applying beta schema safety net.
-psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "User" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:13: NOTICE:  column "documentVersion" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-UPDATE 26
-psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
-CREATE INDEX
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
-CREATE INDEX
-CREATE TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
-CREATE INDEX
-CREATE TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-CREATE INDEX
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
-[deploy] Running strict schema verification against the new image.
-time="2026-08-23T21:35:51+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:35:51+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-c608f4e67ca0 Creating 
- Container cmpasru-app-run-c608f4e67ca0 Created 
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Starting the infra-pulse collector.
-time="2026-08-23T21:35:55+03:00" level=warning msg="No services to build"
- Container cmpas-postgres Running 
- Container cmpas-infra-pulse Recreate 
- Container cmpas-infra-pulse Recreated 
- Container cmpas-postgres Waiting 
- Container cmpas-postgres Healthy 
- Container cmpas-infra-pulse Starting 
- Container cmpas-infra-pulse Started 
-[deploy] Recreating only the application container.
-time="2026-08-23T21:36:01+03:00" level=warning msg="No services to build"
- Container cmpas-app Recreate 
- Container cmpas-app Recreated 
- Container cmpas-app Starting 
- Container cmpas-app Started 
-[deploy] New application is healthy.
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Auth endpoint status: 200
-[deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Creating 
- Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Created 
-npm warn exec The following package was not found and will be installed: tsx@4.23.12
-[backfill-subscriptions] план: create=0 update=0 skip=1
-[backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
-curl: (28) Failed to connect to api.telegram.org port 443 after 133939 ms: Couldn't connect to server
-[deploy] WARNING: Telegram webhook registration failed.
-[deploy] Deployment completed successfully.
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 10.51 Selecting previously unselected package perl.
+#17 ...
+
+#36 [app runner 20/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+#36 DONE 0.3s
+
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 10.52 Preparing to unpack .../04-perl_5.36.0-7+deb12u3_amd64.deb ...
+#17 10.54 Unpacking perl (5.36.0-7+deb12u3) ...
+#17 10.72 Selecting previously unselected package netbase.
+#17 10.72 Preparing to unpack .../05-netbase_6.4_all.deb ...
+#17 10.72 Unpacking netbase (6.4) ...
+#17 10.79 Selecting previously unselected package readline-common.
+#17 10.79 Preparing to unpack .../06-readline-common_8.2-1.3_all.deb ...
+#17 10.80 Unpacking readline-common (8.2-1.3) ...
+#17 10.89 Selecting previously unselected package sensible-utils.
+#17 10.89 Preparing to unpack .../07-sensible-utils_0.0.17+nmu1_all.deb ...
+#17 10.91 Unpacking sensible-utils (0.0.17+nmu1) ...
+#17 11.14 Selecting previously unselected package libkrb5support0:amd64.
+#17 11.14 Preparing to unpack .../08-libkrb5support0_1.20.1-2+deb12u5_amd64.deb ...
+#17 11.14 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+#17 11.30 Selecting previously unselected package libk5crypto3:amd64.
+#17 11.30 Preparing to unpack .../09-libk5crypto3_1.20.1-2+deb12u5_amd64.deb ...
+#17 11.34 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#17 11.63 Selecting previously unselected package libkeyutils1:amd64.
+#17 11.63 Preparing to unpack .../10-libkeyutils1_1.6.3-2_amd64.deb ...
+#17 11.65 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
+#17 11.69 Selecting previously unselected package libkrb5-3:amd64.
+#17 11.70 Preparing to unpack .../11-libkrb5-3_1.20.1-2+deb12u5_amd64.deb ...
+#17 11.70 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#17 11.79 Selecting previously unselected package libgssapi-krb5-2:amd64.
+#17 11.79 Preparing to unpack .../12-libgssapi-krb5-2_1.20.1-2+deb12u5_amd64.deb ...
+#17 11.81 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#17 11.90 Selecting previously unselected package libsasl2-modules-db:amd64.
+#17 11.90 Preparing to unpack .../13-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
+#17 11.90 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+#17 12.01 Selecting previously unselected package libsasl2-2:amd64.
+#17 12.01 Preparing to unpack .../14-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
+#17 12.03 Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+#17 12.14 Selecting previously unselected package libldap-2.5-0:amd64.
+#17 12.14 Preparing to unpack .../15-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
+#17 12.15 Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#17 12.28 Selecting previously unselected package libpq5:amd64.
+#17 12.28 Preparing to unpack .../16-libpq5_15.19-0+deb12u1_amd64.deb ...
+#17 12.30 Unpacking libpq5:amd64 (15.19-0+deb12u1) ...
+#17 12.48 Selecting previously unselected package libreadline8:amd64.
+#17 12.48 Preparing to unpack .../17-libreadline8_8.2-1.3_amd64.deb ...
+#17 12.48 Unpacking libreadline8:amd64 (8.2-1.3) ...
+#17 12.63 Selecting previously unselected package postgresql-client-common.
+#17 12.63 Preparing to unpack .../18-postgresql-client-common_248+deb12u1_all.deb ...
+#17 12.64 Unpacking postgresql-client-common (248+deb12u1) ...
+#17 12.70 Selecting previously unselected package postgresql-client-15.
+#17 12.70 Preparing to unpack .../19-postgresql-client-15_15.19-0+deb12u1_amd64.deb ...
+#17 12.73 Unpacking postgresql-client-15 (15.19-0+deb12u1) ...
+#17 13.15 Selecting previously unselected package postgresql-client.
+#17 13.15 Preparing to unpack .../20-postgresql-client_15+248+deb12u1_all.deb ...
+#17 13.16 Unpacking postgresql-client (15+248+deb12u1) ...
+#17 13.29 Setting up libkeyutils1:amd64 (1.6.3-2) ...
+#17 13.37 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+#17 13.43 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+#17 13.47 Setting up perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#17 13.49 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#17 13.52 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+#17 13.55 Setting up sensible-utils (0.0.17+nmu1) ...
+#17 13.55 Setting up netbase (6.4) ...
+#17 13.62 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#17 13.62 Setting up readline-common (8.2-1.3) ...
+#17 13.64 Setting up libgdbm6:amd64 (1.23-3) ...
+#17 13.66 Setting up libreadline8:amd64 (8.2-1.3) ...
+#17 13.67 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#17 13.69 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#17 13.71 Setting up libgdbm-compat4:amd64 (1.23-3) ...
+#17 13.72 Setting up libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#17 13.73 Setting up libpq5:amd64 (15.19-0+deb12u1) ...
+#17 13.75 Setting up perl (5.36.0-7+deb12u3) ...
+#17 13.79 Setting up postgresql-client-common (248+deb12u1) ...
+#17 13.84 Setting up postgresql-client-15 (15.19-0+deb12u1) ...
+#17 15.53 update-alternatives: using /usr/share/postgresql/15/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
+#17 15.65 Setting up postgresql-client (15+248+deb12u1) ...
+#17 15.68 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#17 DONE 16.0s
+
+#37 [app] exporting to image
+#37 exporting layers
+#37 ...
+
+#38 [infra-pulse] exporting to image
+#38 exporting layers
+#38 ...
+
+#37 [app] exporting to image
+#37 exporting layers 18.7s done
+#37 exporting manifest sha256:773fb9f020c3e1486a402ee1b1651689a387514afddcb5d0623fbea31681418c 0.0s done
+#37 exporting config sha256:f2c493acb7c4a076ffff71d62a18d6df29e920176582250419bcf7e27b1f700b 0.0s done
+#37 exporting attestation manifest sha256:1ec45824cd21ffd105446c4d0ea24f1107acf2475b2e49cf4082799d0bbd25ce
+#37 exporting attestation manifest sha256:1ec45824cd21ffd105446c4d0ea24f1107acf2475b2e49cf4082799d0bbd25ce 0.0s done
+#37 exporting manifest list sha256:835202748009eac5bbe17e7ea22bfdedd32e4f41690cc2e1d49b37042d6e1890 0.0s done
+#37 naming to docker.io/library/cmpasru-app:latest done
+#37 unpacking to docker.io/library/cmpasru-app:latest
 ### Состояние контейнеров
-zapiski-api | Up About a minute (healthy)
-cmpas-app | Up 4 minutes
-cmpas-infra-pulse | Up 4 minutes
+zapiski-api | Up 4 minutes (healthy)
+cmpas-app | Up 6 minutes
+cmpas-infra-pulse | Up 6 minutes
 zapiski-postgres | Up 3 days (healthy)
 cmpas-mailer | Up 3 days (healthy)
 cmpas-postgres | Up 3 days (healthy)
@@ -198,7 +198,7 @@ cmpas-singbox | Exited (1) 3 days ago
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.149048s
+код 405, время 0.146168s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -230,9 +230,9 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.107241s
-https://cmpas.ru/diary -> 307 за 0.175858s
-https://cmpas.ru/admin -> 307 за 0.546663s
+https://cmpas.ru/ -> 200 за 0.120515s
+https://cmpas.ru/diary -> 307 за 0.134083s
+https://cmpas.ru/admin -> 307 за 0.322611s
 ### Сертификат cmpas.ru
 notBefore=Jul  4 23:22:19 2026 GMT
 notAfter=Oct  2 23:22:18 2026 GMT
@@ -300,12 +300,12 @@ LISTEN 0      511                                           [::]:80            [
 запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-08-23T18:36:03.606873566Z
 ### Свободное место подробно
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   22G   63G  27% /
-/dev/vda2        89G   22G   63G  27% /
+/dev/vda2        89G   23G   62G  28% /
+/dev/vda2        89G   23G   62G  28% /
 ### Какой образ реально запущен
 образ=cmpasru-app создан=2026-08-23T18:36:02.448311888Z запущен=2026-08-23T18:36:03.606873566Z
-cmpasru-infra-pulse:latest d7fe4aec2572 7 minutes ago
-cmpasru-app:latest 16ccefa29a00 10 minutes ago
+cmpasru-app:latest 835202748009 32 seconds ago
+cmpasru-infra-pulse:latest d7fe4aec2572 9 minutes ago
 zapiski-api:latest da4efd9a685a 3 hours ago
 postgres:16-alpine 57c72fd2a128 6 weeks ago
 ghcr.io/sagernet/sing-box:latest c8b67944345d 8 weeks ago
@@ -317,46 +317,46 @@ Hre-BUHBYrR4Z68IgjBP1### Есть ли панель в запущенной сб
 (chrome)
 panel
 ### Хвост журнала последней выкладки
- Container cmpasru-app-run-c608f4e67ca0 Creating 
- Container cmpasru-app-run-c608f4e67ca0 Created 
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Starting the infra-pulse collector.
-time="2026-08-23T21:35:55+03:00" level=warning msg="No services to build"
- Container cmpas-postgres Running 
- Container cmpas-infra-pulse Recreate 
- Container cmpas-infra-pulse Recreated 
- Container cmpas-postgres Waiting 
- Container cmpas-postgres Healthy 
- Container cmpas-infra-pulse Starting 
- Container cmpas-infra-pulse Started 
-[deploy] Recreating only the application container.
-time="2026-08-23T21:36:01+03:00" level=warning msg="No services to build"
- Container cmpas-app Recreate 
- Container cmpas-app Recreated 
- Container cmpas-app Starting 
- Container cmpas-app Started 
-[deploy] New application is healthy.
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Auth endpoint status: 200
-[deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:36:10+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Creating 
- Container cmpasru-infra-pulse-run-d8cf8a9fbe56 Created 
-npm warn exec The following package was not found and will be installed: tsx@4.23.12
-[backfill-subscriptions] план: create=0 update=0 skip=1
-[backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
-curl: (28) Failed to connect to api.telegram.org port 443 after 133939 ms: Couldn't connect to server
-[deploy] WARNING: Telegram webhook registration failed.
-[deploy] Deployment completed successfully.
+#17 13.67 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#17 13.69 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#17 13.71 Setting up libgdbm-compat4:amd64 (1.23-3) ...
+#17 13.72 Setting up libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#17 13.73 Setting up libpq5:amd64 (15.19-0+deb12u1) ...
+#17 13.75 Setting up perl (5.36.0-7+deb12u3) ...
+#17 13.79 Setting up postgresql-client-common (248+deb12u1) ...
+#17 13.84 Setting up postgresql-client-15 (15.19-0+deb12u1) ...
+#17 15.53 update-alternatives: using /usr/share/postgresql/15/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
+#17 15.65 Setting up postgresql-client (15+248+deb12u1) ...
+#17 15.68 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#17 DONE 16.0s
+
+#37 [app] exporting to image
+#37 exporting layers
+#37 ...
+
+#38 [infra-pulse] exporting to image
+#38 exporting layers
+#38 ...
+
+#37 [app] exporting to image
+#37 exporting layers 18.7s done
+#37 exporting manifest sha256:773fb9f020c3e1486a402ee1b1651689a387514afddcb5d0623fbea31681418c 0.0s done
+#37 exporting config sha256:f2c493acb7c4a076ffff71d62a18d6df29e920176582250419bcf7e27b1f700b 0.0s done
+#37 exporting attestation manifest sha256:1ec45824cd21ffd105446c4d0ea24f1107acf2475b2e49cf4082799d0bbd25ce
+#37 exporting attestation manifest sha256:1ec45824cd21ffd105446c4d0ea24f1107acf2475b2e49cf4082799d0bbd25ce 0.0s done
+#37 exporting manifest list sha256:835202748009eac5bbe17e7ea22bfdedd32e4f41690cc2e1d49b37042d6e1890 0.0s done
+#37 naming to docker.io/library/cmpasru-app:latest done
+#37 unpacking to docker.io/library/cmpasru-app:latest
+#37 unpacking to docker.io/library/cmpasru-app:latest 10.3s done
+#37 DONE 29.3s
+
+#38 [infra-pulse] exporting to image
+#38 ...
+
+#39 [app] resolving provenance for metadata file
+#39 DONE 0.1s
+
+#38 [infra-pulse] exporting to image
 ### Флаги аналитики в /var/www/cmpas.ru/.env
 ANALYTICS_INGEST_ENABLED=true
 ANALYTICS_TRACKING_ENABLED=true
@@ -365,10 +365,10 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 /etc/simpas/ingest-secret: есть, 65 байт, права 600, владелец root
 /var/www/zapiski/.ingest-secret: есть, 65 байт, права 600, владелец root
 ### Контейнер infra-pulse
-cmpas-infra-pulse | Up 4 minutes | cmpasru-infra-pulse
+cmpas-infra-pulse | Up 6 minutes | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=49
-последняя=2026-08-23 18:36:10.597 возраст_мин=4
+строк всего=50
+последняя=2026-08-23 18:41:11.253 возраст_мин=2
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
@@ -378,17 +378,22 @@ events_rejected
 ### Наполнение событий и подписок
 events=503
 подписок=1
+### Куда на самом деле слушает приложение
+HOSTNAME внутри контейнера: a122c221ad01
+IP контейнера: 172.18.0.2 
+### Приёмник без ключа (ждём 401)
+POST /api/ingest без Authorization -> 401
+  ответ: {"accepted":false,"reason":"unauthorized"}
 ### Разделение секретов по продуктам
 ANALYTICS_INGEST_SECRET: задан, длина 64
 ANALYTICS_INGEST_SECRET_MOMENTS: НЕ ЗАДАН (МОМЕНТЫ получат 401 — как и сегодня)
-запрос не прошёл: fetch failed
+секретом ПРАКТИКИ шлём событие МОМЕНТОВ -> HTTP 200 {"accepted":false,"reason":"missing account_id and device_id — at least one is required"}
+ВНИМАНИЕ: ожидали отказ по продукту, получили другое
 ### Мобильные маршруты аналитики (без токена — ждём 401)
-запрос не прошёл: fetch failed
-запрос не прошёл: fetch failed
+POST /api/mobile/analytics -> 401
+POST /api/mobile/analytics/consent -> 405
 ### Срок хранения событий
 событий старше 180 дней: 0
-### Приёмник изнутри сервера (без заголовка — ждём 401)
-запрос не прошёл: fetch failed
 ```
 
 ## Миграции, лежащие в репозитории
