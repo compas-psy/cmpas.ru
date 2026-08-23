@@ -198,6 +198,27 @@ chmod 600 /etc/simpas/ingest-secret
 chown root:root /etc/simpas/ingest-secret
 log 'ANALYTICS_INGEST_SECRET synced to /etc/simpas/ingest-secret for ЗАПИСОК.'
 
+# Вторая копия — внутрь каталога самих ЗАПИСОК, и вот почему она нужна, а не
+# избыточна. Файл выше принадлежит root с правами 600. Если выкладка ЗАПИСОК
+# ходит на сервер под другим ssh-пользователем (а это разные репозитории с
+# разными секретами SERVER_USER — знать наверняка мы не можем), она его
+# просто не прочитает, мост тихо останется выключенным, и человеку придётся
+# лезть руками разбираться с правами. Чтобы этого вопроса не существовало
+# вовсе, кладём копию в /var/www/zapiski — каталог, который выкладка ЗАПИСОК
+# заведомо читает и пишет, — и отдаём её владельцу ЭТОГО каталога, кем бы он
+# ни был. Права те же 600: сосед читает как свой файл, посторонние — никак.
+# Каталога может не быть, если провижн ЗАПИСОК ещё не отработал: тогда просто
+# пропускаем, это не ошибка нашей выкладки.
+if [ -d /var/www/zapiski ]; then
+  zapiski_owner=$(stat -c '%u:%g' /var/www/zapiski)
+  ( umask 077; printf '%s\n' "$analytics_ingest_secret" > /var/www/zapiski/.ingest-secret )
+  chmod 600 /var/www/zapiski/.ingest-secret
+  chown "$zapiski_owner" /var/www/zapiski/.ingest-secret
+  log 'ANALYTICS_INGEST_SECRET also placed in /var/www/zapiski/.ingest-secret (owned by that directory owner).'
+else
+  log 'ЗАПИСКИ directory /var/www/zapiski is absent; skipping the second copy of the ingest secret.'
+fi
+
 # Аналитический слой (O-260817-17, ТЗ_management_dashboard.md) написан и
 # покрыт тестами целиком, но CLAUDE.md §5.2 / устав §6.1 требуют, чтобы новая
 # функциональность ехала за флагом, выключенным по умолчанию
