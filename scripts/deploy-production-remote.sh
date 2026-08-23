@@ -354,6 +354,32 @@ else
   log 'Skipping infra-pulse collector start: InfraPulse table or INFRA_PULSE_DB_PASSWORD are not ready yet.'
 fi
 
+# Карточка «Стоимость инфраструктуры» (ТЗ_management_dashboard.md §6.1,
+# src/lib/infra-pulse/infra-cost.ts) читает SystemConfig.infra_cost_rub — до
+# сих пор его заводили SQL-запросом руками. Если INFRA_COST_RUB задан в
+# окружении раннера — сеем строку сюда сами; число не выдумываем, кладём
+# ровно то, что передали. Если не задан — блок ничего не делает, карточка
+# честно молчит, как и раньше. Не перезаписываем уже существующую строку:
+# `setInfraCost` в панели (src/app/admin/panel/actions.ts) — единственный
+# другой писатель этого ключа, и если человек уже ввёл число через панель,
+# повторная выкладка с тем же (или другим) INFRA_COST_RUB не должна тихо
+# затирать его ввод — тот же принцип, что у ensure_env выше.
+if [ -n "${INFRA_COST_RUB:-}" ]; then
+  if printf '%s' "$INFRA_COST_RUB" | grep -qE '^[0-9]+$'; then
+    infra_cost_json=$(printf '{"server":%s,"storage":null,"domains":null,"source":"manual","updatedAt":"%s"}' \
+      "$INFRA_COST_RUB" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+    docker exec -i cmpas-postgres psql -U postgres -d cmpas_db -v ON_ERROR_STOP=0 -v value="$infra_cost_json" \
+      >/dev/null 2>&1 <<-'EOSQL' || log 'WARNING: SystemConfig.infra_cost_rub seed failed.'
+			INSERT INTO "SystemConfig" (key, value, label, category, "updatedAt")
+			SELECT 'infra_cost_rub', :'value', 'Стоимость инфраструктуры, ₽/мес', 'panel', now()
+			WHERE to_regclass('public."SystemConfig"') IS NOT NULL
+			  AND NOT EXISTS (SELECT 1 FROM "SystemConfig" WHERE key = 'infra_cost_rub');
+		EOSQL
+  else
+    log "WARNING: INFRA_COST_RUB='${INFRA_COST_RUB}' is not a plain non-negative integer; skipping SystemConfig seed."
+  fi
+fi
+
 log 'Recreating only the application container.'
 if ! docker compose up -d --no-deps --force-recreate app; then
   rollback_app "$old_image_id" "$old_image_ref" || true
