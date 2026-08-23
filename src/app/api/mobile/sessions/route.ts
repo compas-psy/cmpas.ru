@@ -95,10 +95,29 @@ export async function POST(req: NextRequest) {
             if (newStart < itemEnd && newEnd > itemStart) return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
         }
 
-        const session = await db.diarySession.create({
-            data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending', clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null } as any,
-            include: { client: true },
-        });
+        // Гонка двух одновременных повторов: оба проходят проверку выше, и
+        // второй упирается в UNIQUE-индекс на clientRequestId. Проверено на
+        // настоящем Postgres — БД отвергает дубль с P2002. Для клиента это тот
+        // же самый случай «уже создано», а не ошибка сервера.
+        const createSessionRow = async () => {
+            try {
+                return await db.diarySession.create({
+                    data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending', clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null } as any,
+                    include: { client: true },
+                });
+            } catch (error) {
+                const isDuplicateKey = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+                if (!isDuplicateKey || !clientRequestId) throw error;
+                const raced = await db.diarySession.findFirst({
+                    where: { clientRequestId, psychologistId: auth.userId } as any,
+                    include: { client: true },
+                });
+                if (!raced) throw error;
+                return raced;
+            }
+        };
+
+        const session = await createSessionRow();
 
         await createNotification({
             psychologistId: auth.userId,

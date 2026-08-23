@@ -122,6 +122,34 @@ describe('POST /api/mobile/sessions — повтор с тем же ключом
         expect(store.sessions[0].clientRequestId).toBeNull();
     });
 
+    it('гонка двух повторов: отказ БД по UNIQUE возвращает уже созданное, а не 500', async () => {
+        // Два одновременных повтора оба проходят проверку по ключу и второй
+        // упирается в UNIQUE-индекс. Проверено на настоящем Postgres, что БД
+        // такой дубль отвергает; здесь проверяется, что маршрут это переживает.
+        const { POST } = await import('../src/app/api/mobile/sessions/route');
+        const { db } = (await import('@/lib/db')) as any;
+
+        // Строка уже создана «другим процессом» ПОСЛЕ того, как наша проверка
+        // по ключу вернула пусто: create падает, findFirst её находит.
+        const realCreate = db.diarySession.create;
+        db.diarySession.create = async () => {
+            store.sessions.push({ id: 'session-raced', clientRequestId: 'op-race', psychologistId: 'psy-1', client: { id: 'c', name: 'Клиент' }, date: new Date(), time: '10:00' });
+            const err: any = new Error('Unique constraint failed');
+            err.code = 'P2002';
+            Object.setPrototypeOf(err, (await import('@prisma/client')).Prisma.PrismaClientKnownRequestError.prototype);
+            throw err;
+        };
+
+        const res = await POST(post('https://cmpas.ru/api/mobile/sessions', {
+            clientId: 'c', date: '2026-09-01', startTime: '10:00', clientRequestId: 'op-race',
+        }) as any);
+
+        db.diarySession.create = realCreate;
+        expect(res.status).not.toBe(500);
+        expect(store.sessions).toHaveLength(1);
+        expect((await res.json()).id).toBe('session-raced');
+    });
+
     it('разные ключи создают разные сессии', async () => {
         const { POST } = await import('../src/app/api/mobile/sessions/route');
         await POST(post('https://cmpas.ru/api/mobile/sessions', { clientId: 'c', date: '2026-09-01', startTime: '10:00', clientRequestId: 'op-1' }) as any);

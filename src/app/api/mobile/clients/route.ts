@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { normalizePhone, phoneLookupVariants } from '@/lib/clients/phone';
@@ -133,6 +134,32 @@ export async function POST(req: NextRequest) {
             orderBy: { updatedAt: 'desc' },
         }) : null;
 
+        // Гонка двух одновременных повторов: оба проходят проверку по ключу
+        // выше, и второй упирается в UNIQUE-индекс на clientRequestId (P2002).
+        // Для клиента это тот же случай «уже создано», а не ошибка сервера.
+        const createClientRow = async () => {
+            try {
+                return await db.diaryClient.create({
+                    data: {
+                        psychologistId: auth.userId,
+                        name: name.trim(),
+                        email: email || null,
+                        phone: normalizedPhone,
+                        gender: gender || null,
+                        clientRequestId: idempotencyKey,
+                    } as any,
+                });
+            } catch (error) {
+                const isDuplicateKey = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+                if (!isDuplicateKey || !idempotencyKey) throw error;
+                const raced = await db.diaryClient.findFirst({
+                    where: { clientRequestId: idempotencyKey, psychologistId: auth.userId } as any,
+                });
+                if (!raced) throw error;
+                return raced;
+            }
+        };
+
         const client = existing
             ? await db.diaryClient.update({
                 where: { id: existing.id },
@@ -143,16 +170,7 @@ export async function POST(req: NextRequest) {
                     ...(!existing.gender && gender ? { gender } : {}),
                 },
             })
-            : await db.diaryClient.create({
-                data: {
-                    psychologistId: auth.userId,
-                    name: name.trim(),
-                    email: email || null,
-                    phone: normalizedPhone,
-                    gender: gender || null,
-                    clientRequestId: idempotencyKey,
-                } as any,
-            });
+            : await createClientRow();
 
         const sessionsCount = existing ? await db.diarySession.count({ where: { clientId: client.id } }) : 0;
 
