@@ -10,9 +10,38 @@
  * измениться незаметно.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
+
+/**
+ * База подменяется пустыми ответами.
+ *
+ * Тест проверяет ФОРМУ ответа панели — что в нём нет ни запрещённых полей,
+ * ни строк, похожих на почту, телефон или путь. Числа для этого не нужны, а
+ * живой Postgres в прогоне тестов недоступен. Раньше блоки ЗАПИСОК и
+ * МОМЕНТОВ были статическими заглушками и базы не касались; когда они стали
+ * считаться по AnalyticsEvent, тест начал падать на инициализации Prisma —
+ * то есть переставал проверять приватность вовсе.
+ */
+const emptyModel = {
+    findMany: async () => [],
+    findFirst: async () => null,
+    findUnique: async () => null,
+    count: async () => 0,
+    groupBy: async () => [],
+    aggregate: async () => ({}),
+};
+
+vi.mock('@/lib/db', () => ({
+    db: new Proxy({} as Record<string, unknown>, {
+        get: (_target, prop) => {
+            if (prop === 'then') return undefined;
+            if (prop === '$queryRaw' || prop === '$executeRaw') return async () => [];
+            return emptyModel;
+        },
+    }),
+}));
 
 const ROOT = path.resolve(__dirname, '..');
 const QUERIES = path.join(ROOT, 'queries');
