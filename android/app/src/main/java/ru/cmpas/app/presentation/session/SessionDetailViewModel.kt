@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.analytics.AnalyticsRecorder
+import ru.cmpas.app.data.analytics.SessionStatusTarget
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.ResendReminderRequest
 import ru.cmpas.app.data.api.SendMessageRequest
@@ -23,6 +25,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SessionDetailViewModel @Inject constructor(
     private val api: CompasApi,
+    private val analytics: AnalyticsRecorder,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionDetailUiState())
     val uiState = _uiState.asStateFlow()
@@ -182,11 +185,14 @@ class SessionDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
                     PracticeRefreshBus.notifyChanged()
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CONFIRMED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка подтверждения") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CONFIRMED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CONFIRMED, false) }
             }
         }
     }
@@ -199,11 +205,14 @@ class SessionDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
                     PracticeRefreshBus.notifyChanged()
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.COMPLETED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.COMPLETED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.COMPLETED, false) }
             }
         }
     }
@@ -216,11 +225,14 @@ class SessionDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, cancelled = true) }
                     PracticeRefreshBus.notifyChanged()
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CANCELLED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка отмены") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CANCELLED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CANCELLED, false) }
             }
         }
     }
@@ -249,11 +261,14 @@ class SessionDetailViewModel @Inject constructor(
                 val r = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
                 if (r.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, session = r.body(), showRescheduleDialog = false) }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.RESCHEDULED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Время уже занято") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.RESCHEDULED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.RESCHEDULED, false) }
             }
         }
     }

@@ -74,6 +74,7 @@ fun PostSessionNoteScreen(
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var restored by remember { mutableStateOf(false) }
+    var hasSaved by remember { mutableStateOf(false) }
 
     fun startVoiceRecording() {
         runCatching {
@@ -181,6 +182,14 @@ fun PostSessionNoteScreen(
             runCatching { if (isRecording) recorder?.stop() }
             runCatching { recorder?.release() }
             runCatching { player?.release() }
+
+            // Аналитика: покидание экрана редактора без сохранения
+            if (!hasSaved) {
+                val hadInput = shortText.isNotBlank() || request.isNotBlank() || observation.isNotBlank() ||
+                               intervention.isNotBlank() || dynamics.isNotBlank() || nextStep.isNotBlank() ||
+                               (voiceFilePath != null && hasVoiceDraft)
+                viewModel.noteEditorClosed(hadInput)
+            }
         }
     }
 
@@ -355,7 +364,12 @@ fun PostSessionNoteScreen(
                 enabled = !uiState.isSaving && !isRecording,
                 modifier = Modifier.weight(1.55f),
                 onClick = {
-                    viewModel.saveNote(sessionId, buildText(), buildStructured()) { success, _ -> if (success) onSaved() }
+                    viewModel.saveNote(sessionId, buildText(), buildStructured()) { success, _ ->
+                        if (success) {
+                            hasSaved = true
+                            onSaved()
+                        }
+                    }
                 },
             )
         }

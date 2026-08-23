@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.UpdateSessionRequest
+import ru.cmpas.app.data.analytics.AnalyticsSession
 import ru.cmpas.app.data.sync.OutboxSync
 import ru.cmpas.app.domain.model.AttentionItem
 import ru.cmpas.app.domain.model.PaymentStatus
@@ -25,6 +26,7 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val api: CompasApi,
     private val outbox: OutboxSync,
+    private val analyticsSession: AnalyticsSession,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState = _uiState.asStateFlow()
@@ -33,6 +35,7 @@ class DashboardViewModel @Inject constructor(
         loadDashboard()
         loadProfile()
         syncOutbox()
+        startAnalytics()
         viewModelScope.launch {
             PracticeRefreshBus.changes.collectLatest { loadDashboard(showLoader = false) }
         }
@@ -41,6 +44,17 @@ class DashboardViewModel @Inject constructor(
     fun refresh() {
         loadDashboard(showLoader = false)
         syncOutbox()
+        viewModelScope.launch { analyticsSession.flush() }
+    }
+
+    /**
+     * Механика аналитики: `app_opened` один раз за запуск процесса и попытка
+     * отправить накопленное. Вся работа внутри AnalyticsSession обёрнута так,
+     * что наружу не выходит ни одно исключение — падение аналитики не роняет
+     * экран (красная линия учредителя).
+     */
+    private fun startAnalytics() {
+        viewModelScope.launch { analyticsSession.onAppForeground() }
     }
 
     /**

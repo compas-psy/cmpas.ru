@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.analytics.AnalyticsRecorder
+import ru.cmpas.app.data.analytics.DaysAheadBucket
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateClientRequest
 import ru.cmpas.app.data.api.CreateSessionRequest
@@ -19,6 +21,7 @@ import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionType
 import ru.cmpas.app.domain.model.TimeSlot
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -29,6 +32,7 @@ data class OnboardingInfo(val clientId: String, val clientName: String, val phon
 class QuickActionViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
+    private val analytics: AnalyticsRecorder,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(QuickActionUiState())
     val uiState = _uiState.asStateFlow()
@@ -157,6 +161,18 @@ class QuickActionViewModel @Inject constructor(
 
     fun dismissOnboarding() = _uiState.update { it.copy(onboardingInfo = null, onboardingOptions = null, onboardingResult = null) }
 
+    private fun calculateDaysAheadBucket(dateString: String): DaysAheadBucket? = runCatching {
+        val sessionDate = LocalDate.parse(dateString)
+        val today = LocalDate.now()
+        when {
+            sessionDate < today -> DaysAheadBucket.PAST
+            sessionDate == today -> DaysAheadBucket.SAME_DAY
+            sessionDate <= today.plusDays(7) -> DaysAheadBucket.WITHIN_WEEK
+            sessionDate <= today.plusDays(31) -> DaysAheadBucket.WITHIN_MONTH
+            else -> DaysAheadBucket.LATER
+        }
+    }.getOrNull()
+
     private suspend fun saveClient(name: String, phone: String, email: String, gender: String?): String {
         require(name.isNotBlank()) { "Укажите имя клиента" }
         require(email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { "Проверьте адрес электронной почты" }
@@ -165,6 +181,7 @@ class QuickActionViewModel @Inject constructor(
             val client = if (response.isSuccessful) response.body() else null
             if (client != null) {
                 localStore.upsertClient(client)
+                runCatching { analytics.recordClientCreated(delivered = true) }
                 val options = if (client.telegramId.isNullOrBlank() && client.maxId.isNullOrBlank()) {
                     runCatching { api.getOnboardingOptions(client.id).takeIf { it.isSuccessful }?.body() }.getOrNull()
                 } else null
@@ -174,10 +191,12 @@ class QuickActionViewModel @Inject constructor(
                 "Клиент добавлен"
             } else {
                 localStore.createClient(name.trim(), phone, email, gender, null)
+                runCatching { analytics.recordClientCreated(delivered = false) }
                 "Клиент сохранён на устройстве"
             }
         } catch (_: Exception) {
             localStore.createClient(name.trim(), phone, email, gender, null)
+            runCatching { analytics.recordClientCreated(delivered = false) }
             "Клиент сохранён на устройстве"
         }
     }
@@ -189,8 +208,10 @@ class QuickActionViewModel @Inject constructor(
         return try {
             val response = api.createSession(CreateSessionRequest(client!!.id, date!!, time!!, format = format, type = type))
             val session = if (response.isSuccessful) response.body() else null
+            val daysAheadBucket = calculateDaysAheadBucket(date)
             if (session != null) {
                 localStore.upsertSession(session)
+                runCatching { analytics.recordSessionCreated(delivered = true, repeatBatch = false, daysAheadBucket = daysAheadBucket) }
                 val options = runCatching { api.getOnboardingOptions(client.id).takeIf { it.isSuccessful }?.body() }.getOrNull()
                 if (options != null && (options.documents.isNotEmpty() || options.hasSession)) {
                     _uiState.update { it.copy(onboardingInfo = OnboardingInfo(client.id, client.name, client.phone, session.id), onboardingOptions = options, isOnboardingBusy = false) }
@@ -198,10 +219,13 @@ class QuickActionViewModel @Inject constructor(
                 "Запись добавлена"
             } else {
                 localStore.createSession(client, date, time, addMinutes(time, 50), format, type, comment)
+                runCatching { analytics.recordSessionCreated(delivered = false, repeatBatch = false, daysAheadBucket = daysAheadBucket) }
                 "Запись сохранена на устройстве"
             }
         } catch (_: Exception) {
+            val daysAheadBucket = calculateDaysAheadBucket(date ?: "")
             localStore.createSession(client!!, date!!, time!!, addMinutes(time, 50), format, type, comment)
+            runCatching { analytics.recordSessionCreated(delivered = false, repeatBatch = false, daysAheadBucket = daysAheadBucket) }
             "Запись сохранена на устройстве"
         }
     }
@@ -224,6 +248,7 @@ class QuickActionViewModel @Inject constructor(
         var local = 0
         repeat(count) { index ->
             val nextDate = java.time.LocalDate.parse(date).plusWeeks(index.toLong()).toString()
+            val daysAheadBucket = calculateDaysAheadBucket(nextDate)
             val session = try {
                 val response = api.createSession(
                     CreateSessionRequest(client!!.id, nextDate, time, format = SessionFormat.ONLINE, type = SessionType.INDIVIDUAL),
@@ -234,9 +259,11 @@ class QuickActionViewModel @Inject constructor(
             }
             if (session != null) {
                 localStore.upsertSession(session)
+                runCatching { analytics.recordSessionCreated(delivered = true, repeatBatch = true, daysAheadBucket = daysAheadBucket) }
                 delivered++
             } else {
                 localStore.createSession(client!!, nextDate, time, endTime, SessionFormat.ONLINE, SessionType.INDIVIDUAL, comment)
+                runCatching { analytics.recordSessionCreated(delivered = false, repeatBatch = true, daysAheadBucket = daysAheadBucket) }
                 local++
             }
         }

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.analytics.AnalyticsRecorder
+import ru.cmpas.app.data.analytics.InviteChannel
 import ru.cmpas.app.data.api.ChannelRequest
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.InviteRequest
@@ -29,6 +31,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ClientDetailViewModel @Inject constructor(
     private val api: CompasApi,
+    private val analytics: AnalyticsRecorder,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ClientDetailUiState())
     val uiState = _uiState.asStateFlow()
@@ -136,12 +139,19 @@ class ClientDetailViewModel @Inject constructor(
     fun generateInviteLink(clientId: String, channel: String = "auto") {
         viewModelScope.launch {
             _uiState.update { it.copy(isCreatingInvite = true, inviteError = null, channelActionError = null, channelStatus = null) }
+            val inviteChannel = when (channel) {
+                "telegram" -> InviteChannel.TELEGRAM
+                "max" -> InviteChannel.MAX
+                else -> InviteChannel.AUTO
+            }
             val response = runCatching { api.createClientChannelInvite(clientId, InviteRequest(channel)) }.getOrNull()
             if (response?.isSuccessful == true) {
                 _uiState.update { it.copy(isCreatingInvite = false, inviteResponse = response.body()) }
                 startChannelPolling(clientId, channel)
+                runCatching { analytics.recordClientInviteCreated(inviteChannel, true) }
             } else {
                 _uiState.update { it.copy(isCreatingInvite = false, inviteError = "Не удалось создать приглашение — повторите") }
+                runCatching { analytics.recordClientInviteCreated(inviteChannel, false) }
             }
         }
     }
