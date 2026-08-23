@@ -6,6 +6,7 @@ export async function register() {
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
         const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
+        const { pruneOldAnalyticsEvents } = await import('./lib/cron/analytics-retention');
 
         // Напоминания каждые 15 минут
         cron.schedule('*/15 * * * *', async () => {
@@ -59,6 +60,17 @@ export async function register() {
         // каждые 5 минут, тем же периодом, что и отложенные сообщения выше.
         cron.schedule('*/5 * * * *', async () => {
             await flushResponseTimeWindow();
+        });
+
+        // Срок хранения AnalyticsEvent — 180 дней (решение учредителя 6) —
+        // раз в сутки, в 03:00 МСК (00:00 UTC), в тихое время.
+        cron.schedule('0 0 * * *', async () => {
+            console.log('[CRON] Срок хранения аналитических событий (180 дней)');
+            try {
+                await pruneOldAnalyticsEvents();
+            } catch (error) {
+                console.error('[CRON] Ошибка удаления устаревших аналитических событий:', error);
+            }
         });
 
         console.log('[CRON] Инструментация: cron-задачи зарегистрированы');
