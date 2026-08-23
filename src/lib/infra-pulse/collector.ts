@@ -14,8 +14,9 @@ import { certDaysLeft } from './cert';
 import { readInfraCost } from './infra-cost';
 import { readPaymentFailureRate } from './webhook-error-rate';
 import { readBuildMinutesLeft, type BuildMinutesConfig } from './build-minutes';
+import { readResponseP95 } from './response-time';
 
-type Db = Pick<PrismaClient, '$queryRaw' | '$executeRaw' | 'infraPulse' | 'payment' | 'systemConfig'>;
+type Db = Pick<PrismaClient, '$queryRaw' | '$executeRaw' | 'infraPulse' | 'payment' | 'systemConfig' | 'appResponseTime'>;
 
 export interface CollectorConfig {
     procRoot: string; // e.g. "/hostfs/proc" — read-only host mount
@@ -131,8 +132,17 @@ async function readBuildMinutesSafe(config: CollectorConfig) {
     }
 }
 
+async function readResponseP95Safe(db: Db) {
+    try {
+        return await readResponseP95(db);
+    } catch (error) {
+        console.error('[infra-pulse] response p95 read failed:', error);
+        return null;
+    }
+}
+
 export async function collectOnce(db: Db, config: CollectorConfig): Promise<Prisma.InfraPulseCreateInput> {
-    const [server, containers, dbResult, backups, reminders, certs, infraCost, webhookRate, buildMinutesLeft] = await Promise.all([
+    const [server, containers, dbResult, backups, reminders, certs, infraCost, webhookRate, buildMinutesLeft, responseP95Ms] = await Promise.all([
         readServerStats(config),
         readContainers(config),
         readDb(db, config),
@@ -142,6 +152,7 @@ export async function collectOnce(db: Db, config: CollectorConfig): Promise<Pris
         readInfraCostSafe(db),
         readWebhookErrorRatesSafe(db),
         readBuildMinutesSafe(config),
+        readResponseP95Safe(db),
     ]);
 
     return {
@@ -173,6 +184,10 @@ export async function collectOnce(db: Db, config: CollectorConfig): Promise<Pris
         infraCostRub: infraCost ? (infraCost as unknown as Prisma.InputJsonValue) : undefined,
         webhookErrorRates: webhookRate ? ({ payments: webhookRate } as unknown as Prisma.InputJsonValue) : undefined,
         buildMinutesLeft: buildMinutesLeft,
+        // q_tech_response_p95 (ТЗ §5) — читаем последнее окно AppResponseTime,
+        // которое пишет сам процесс приложения (middleware.ts + cron flush в
+        // instrumentation.ts). См. response-time.ts.
+        responseP95Ms: responseP95Ms,
     };
 }
 

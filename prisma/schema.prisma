@@ -975,9 +975,18 @@ model InfraPulse {
   // additive columns. All nullable: a collector that predates this migration
   // simply leaves them null, and the panel renders those blocks as no_data
   // rather than as zero.
-  webhookErrorRates Json? // { telegram: { rate, checkedAt }, max: { rate, checkedAt } }
+  // { payments: { rate, checkedAt, sampleSize } } — доля платежей Т-Банка со
+  // статусом 'failed' за сутки. Изначально задумывался как доля ошибок
+  // именно Telegram/MAX ботов (см. историю), но их доставка нигде не
+  // журналируется; см. src/lib/infra-pulse/webhook-error-rate.ts за полным
+  // обоснованием честной замены источника.
+  webhookErrorRates Json?
   buildMinutesLeft  Int? // remaining GitHub Actions minutes
   infraCostRub      Json? // { server, storage, domains, total, source: 'manual'|'api' }
+
+  // Ответ приложения (q_tech_response_p95, ТЗ §5) — переносится из
+  // AppResponseTime, см. комментарий там же.
+  responseP95Ms Int?
 
   @@index([collectedAt])
 }
@@ -1049,4 +1058,29 @@ model ReminderOutbox {
   @@unique([sessionId, type, channel])
   @@index([dueAt])
   @@index([status])
+}
+
+// Время ответа приложения (q_tech_response_p95, ТЗ §5, экран 6). Пишет сам
+// процесс Next.js через middleware.ts — у него уже есть полная запись, в
+// отличие от read-only коллектора, — а не infra-pulse-collector: тот только
+// читает эту таблицу, как он уже читает DeployLog и Payment, и переносит
+// последний p95 в свой снимок (src/lib/infra-pulse/response-time.ts). Это
+// сохраняет инвариант "InfraPulse пишет только коллектор" нетронутым.
+//
+// Одна строка на окно (~5 минут), не строка на запрос — middleware
+// накапливает длительности в памяти процесса
+// (src/lib/infra-pulse/response-time.ts, defaultDurationStore) и сбрасывает
+// агрегатом по расписанию (src/instrumentation.ts), тем же приёмом, что и
+// остальные cron-задачи в этом файле. Никакого внешнего APM.
+model AppResponseTime {
+  id          String   @id @default(cuid())
+  windowStart DateTime
+  windowEnd   DateTime
+  sampleCount Int
+  p50Ms       Int?
+  p95Ms       Int?
+  p99Ms       Int?
+  createdAt   DateTime @default(now())
+
+  @@index([windowEnd])
 }

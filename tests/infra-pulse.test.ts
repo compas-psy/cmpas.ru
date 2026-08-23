@@ -391,4 +391,30 @@ describe('collectOnce заполняет три объявленных, но н�
 
         expect(result.buildMinutesLeft).toBe(1800);
     }, 15000);
+
+    it('responseP95Ms приходит из последнего свежего окна AppResponseTime, а не остаётся пустым (ТЗ §5)', async () => {
+        const db = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            payment: { count: vi.fn().mockResolvedValue(0) },
+            systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+            appResponseTime: { findFirst: vi.fn().mockResolvedValue({ p95Ms: 340, windowEnd: new Date() }) },
+        };
+
+        const result = await collectOnce(db as any, unreachableConfig());
+
+        expect(result.responseP95Ms).toBe(340);
+    }, 15000);
+
+    it('responseP95Ms остаётся null, когда окон ещё не было', async () => {
+        const db = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            payment: { count: vi.fn().mockResolvedValue(0) },
+            systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+            appResponseTime: { findFirst: vi.fn().mockResolvedValue(null) },
+        };
+
+        const result = await collectOnce(db as any, unreachableConfig());
+
+        expect(result.responseP95Ms).toBeNull();
+    }, 15000);
 });
