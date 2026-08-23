@@ -31,6 +31,12 @@ const config: CollectorConfig = {
         secondary: process.env.INFRA_PULSE_CERT_HOST_ZAPISKI || null,
     },
     retentionDays: DEFAULT_RETENTION_DAYS,
+    // Оба опциональны — без них buildMinutesLeft честно остаётся null,
+    // сетевой запрос к GitHub не делается (build-minutes.ts).
+    githubActions: {
+        token: process.env.INFRA_PULSE_GITHUB_TOKEN || null,
+        org: process.env.INFRA_PULSE_GITHUB_ORG || null,
+    },
 };
 
 let stopping = false;

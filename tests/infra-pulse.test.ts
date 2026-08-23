@@ -14,6 +14,10 @@ import { diffMigrations } from '@/lib/infra-pulse/db-stats';
 import { listBackupFiles, findYesterdayBackup, summarizeBackups } from '@/lib/infra-pulse/backup-stats';
 import { daysUntil } from '@/lib/infra-pulse/cert';
 import { collectReminderCounters } from '@/lib/infra-pulse/reminders-counters';
+import { parseInfraCostConfigValue, readInfraCost } from '@/lib/infra-pulse/infra-cost';
+import { computePaymentFailureRate, readPaymentFailureRate } from '@/lib/infra-pulse/webhook-error-rate';
+import { readBuildMinutesLeft } from '@/lib/infra-pulse/build-minutes';
+import { collectOnce, type CollectorConfig } from '@/lib/infra-pulse/collector';
 
 describe('server-stats (O-260817-12)', () => {
     it('parses the cpu line of /proc/stat', () => {
@@ -183,4 +187,208 @@ describe('cert.daysUntil (O-260817-12)', () => {
         const now = new Date('2026-08-18T00:00:00Z');
         expect(daysUntil('2026-08-01T00:00:00Z', now)).toBeLessThan(0);
     });
+});
+
+describe('infra-cost (O-260817-12, коллектор наконец заполняет infraCostRub)', () => {
+    it('null when SystemConfig has no value for the key yet', () => {
+        expect(parseInfraCostConfigValue(undefined)).toBeNull();
+        expect(parseInfraCostConfigValue(null)).toBeNull();
+    });
+
+    it('null on the sentinel "false" value written for an unset flag-like config', () => {
+        expect(parseInfraCostConfigValue('false')).toBeNull();
+    });
+
+    it('null on malformed JSON — never throws', () => {
+        expect(parseInfraCostConfigValue('{not json')).toBeNull();
+    });
+
+    it('parses the shape written by setInfraCost (src/app/admin/panel/actions.ts) and computes total', () => {
+        const raw = JSON.stringify({ server: 3000, storage: 500, domains: 200, source: 'manual', updatedAt: '2026-08-18T09:00:00.000Z' });
+        expect(parseInfraCostConfigValue(raw)).toEqual({
+            server: 3000,
+            storage: 500,
+            domains: 200,
+            total: 3700,
+            source: 'manual',
+            updatedAt: '2026-08-18T09:00:00.000Z',
+        });
+    });
+
+    it('a partial entry (only one article filled) still parses, missing ones are null', () => {
+        const raw = JSON.stringify({ server: 3000, source: 'manual', updatedAt: '2026-08-18T09:00:00.000Z' });
+        const result = parseInfraCostConfigValue(raw);
+        expect(result?.storage).toBeNull();
+        expect(result?.domains).toBeNull();
+        expect(result?.total).toBe(3000);
+    });
+
+    it('readInfraCost reads SystemConfig by the exact key the panel writes to', async () => {
+        const findUnique = vi.fn().mockResolvedValue({ value: JSON.stringify({ server: 100, storage: 0, domains: 0 }) });
+        const result = await readInfraCost({ systemConfig: { findUnique } } as any);
+        expect(findUnique).toHaveBeenCalledWith({ where: { key: 'infra_cost_rub' } });
+        expect(result?.total).toBe(100);
+    });
+
+    it('readInfraCost is null when the config row does not exist', async () => {
+        const findUnique = vi.fn().mockResolvedValue(null);
+        const result = await readInfraCost({ systemConfig: { findUnique } } as any);
+        expect(result).toBeNull();
+    });
+});
+
+describe('webhook-error-rate (O-260817-12, коллектор наконец заполняет webhookErrorRates)', () => {
+    it('null when there were no payments in the window — no data, not 0% errors', () => {
+        const now = new Date('2026-08-18T00:00:00Z');
+        expect(computePaymentFailureRate({ total: 0, failed: 0 }, now)).toBeNull();
+    });
+
+    it('computes the failure share out of total', () => {
+        const now = new Date('2026-08-18T00:00:00Z');
+        const result = computePaymentFailureRate({ total: 20, failed: 3 }, now);
+        expect(result?.rate).toBeCloseTo(0.15, 5);
+        expect(result?.sampleSize).toBe(20);
+        expect(result?.checkedAt).toBe(now.toISOString());
+    });
+
+    it('readPaymentFailureRate counts only the last 24h and only status = failed', async () => {
+        const now = new Date('2026-08-18T12:00:00Z');
+        const count = vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(2);
+        const result = await readPaymentFailureRate({ payment: { count } } as any, now);
+
+        expect(count).toHaveBeenNthCalledWith(1, { where: { createdAt: { gte: new Date('2026-08-17T12:00:00Z') } } });
+        expect(count).toHaveBeenNthCalledWith(2, {
+            where: { createdAt: { gte: new Date('2026-08-17T12:00:00Z') }, status: 'failed' },
+        });
+        expect(result).toEqual({ rate: 0.2, checkedAt: now.toISOString(), sampleSize: 10 });
+    });
+});
+
+describe('build-minutes (O-260817-12, коллектор наконец заполняет buildMinutesLeft)', () => {
+    it('без токена GitHub не делает сетевой запрос вовсе и возвращает null', async () => {
+        const fetchImpl = vi.fn();
+        const result = await readBuildMinutesLeft({ token: null, org: 'compas-psy' }, fetchImpl as any);
+        expect(result).toBeNull();
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('без организации тоже не делает запрос', async () => {
+        const fetchImpl = vi.fn();
+        const result = await readBuildMinutesLeft({ token: 'gh_token', org: null }, fetchImpl as any);
+        expect(result).toBeNull();
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('с токеном вычисляет остаток минут из ответа GitHub billing API', async () => {
+        const fetchImpl = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ included_minutes: 3000, total_minutes_used: 1200 }),
+        });
+        const result = await readBuildMinutesLeft({ token: 'gh_token', org: 'compas-psy' }, fetchImpl as any);
+        expect(result).toBe(1800);
+        expect(fetchImpl).toHaveBeenCalledWith(
+            'https://api.github.com/orgs/compas-psy/settings/billing/actions',
+            expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer gh_token' }) }),
+        );
+    });
+
+    it('ответ не 2xx — null, не бросает исключение', async () => {
+        const fetchImpl = vi.fn().mockResolvedValue({ ok: false });
+        const result = await readBuildMinutesLeft({ token: 'gh_token', org: 'compas-psy' }, fetchImpl as any);
+        expect(result).toBeNull();
+    });
+
+    it('сетевая ошибка — null, не бросает исключение', async () => {
+        const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
+        const result = await readBuildMinutesLeft({ token: 'gh_token', org: 'compas-psy' }, fetchImpl as any);
+        expect(result).toBeNull();
+    });
+});
+
+describe('collectOnce заполняет три объявленных, но никогда не заполнявшихся поля (O-260817-12)', () => {
+    function unreachableConfig(overrides: Partial<CollectorConfig> = {}): CollectorConfig {
+        return {
+            procRoot: '/nonexistent/proc',
+            diskPath: '/nonexistent/backups',
+            dockerSocketPath: '/nonexistent/docker.sock',
+            backupDir: '/nonexistent/backups',
+            migrationsDir: '/nonexistent/migrations',
+            certHostnames: { primary: 'invalid.test-nonexistent-host.example', secondaryLabel: 'zapiski', secondary: null },
+            retentionDays: 90,
+            githubActions: { token: null, org: null },
+            ...overrides,
+        };
+    }
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('infraCostRub приходит из SystemConfig, а не остаётся null', async () => {
+        const db = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            payment: { count: vi.fn().mockResolvedValue(0) },
+            systemConfig: {
+                findUnique: vi.fn().mockResolvedValue({
+                    value: JSON.stringify({ server: 3000, storage: 500, domains: 200, source: 'manual', updatedAt: '2026-08-18T09:00:00.000Z' }),
+                }),
+            },
+        };
+
+        const result = await collectOnce(db as any, unreachableConfig());
+
+        expect(result.infraCostRub).toEqual({
+            server: 3000,
+            storage: 500,
+            domains: 200,
+            total: 3700,
+            source: 'manual',
+            updatedAt: '2026-08-18T09:00:00.000Z',
+        });
+    }, 15000);
+
+    it('webhookErrorRates приходит из доли неуспешных платежей за сутки, а не остаётся null', async () => {
+        const db = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            payment: { count: vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(2) },
+            systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+        };
+
+        const result = await collectOnce(db as any, unreachableConfig());
+
+        expect(result.webhookErrorRates).toMatchObject({
+            payments: { rate: 0.2, sampleSize: 10 },
+        });
+    }, 15000);
+
+    it('buildMinutesLeft остаётся честным null без токена GitHub — не выдумываем доступа', async () => {
+        const db = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            payment: { count: vi.fn().mockResolvedValue(0) },
+            systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+        };
+
+        const result = await collectOnce(db as any, unreachableConfig({ githubActions: { token: null, org: null } }));
+
+        expect(result.buildMinutesLeft).toBeNull();
+    }, 15000);
+
+    it('buildMinutesLeft считается из GitHub Actions billing API, когда токен задан', async () => {
+        const db = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            payment: { count: vi.fn().mockResolvedValue(0) },
+            systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+        };
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({ ok: true, json: async () => ({ included_minutes: 3000, total_minutes_used: 1200 }) }),
+        );
+
+        const result = await collectOnce(
+            db as any,
+            unreachableConfig({ githubActions: { token: 'gh_token', org: 'compas-psy' } }),
+        );
+
+        expect(result.buildMinutesLeft).toBe(1800);
+    }, 15000);
 });
