@@ -154,6 +154,17 @@ jobs:
       # завести его (Settings → Secrets and variables → Actions) остаётся
       # человеку, который знает фактическую стоимость сервера.
       INFRA_COST_RUB: ${{ secrets.INFRA_COST_RUB }}
+      # Секрет приёмника аналитики. Выкладка умеет родить его сама на сервере
+      # (scripts/deploy-production-remote.sh), и для ПРАКТИКИ с ЗАПИСКАМИ
+      # этого достаточно: сосед берёт значение из общего файла на той же
+      # машине. Но МОМЕНТЫ — приложение: их секрет зашивается в сборку на
+      # раннере GitHub, до сервера ему не дотянуться. Единственная точка, где
+      # значение может совпасть у всех троих, — секрет уровня организации с
+      # этим именем. Поэтому он обязан доезжать и сюда: если человек его
+      # завёл, сервер берёт ЕГО, а не рождает свой, и сборка МОМЕНТОВ
+      # сходится с приёмником. Если не завёл — сервер рождает свой, ПРАКТИКА
+      # и ЗАПИСКИ работают, а сборка МОМЕНТОВ честно падает с объяснением.
+      ANALYTICS_INGEST_SECRET: ${{ secrets.ANALYTICS_INGEST_SECRET }}
     steps:
       - name: Deploy via SSH
         id: deploy
@@ -164,7 +175,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           command_timeout: 45m
-          envs: YANDEX_CLIENT_ID,YANDEX_CLIENT_SECRET,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,MAX_BOT_TOKEN,MAX_BOT_USERNAME,DADATA_API_KEY,MIERU_SERVER,MIERU_PORT,MIERU_USERNAME,MIERU_PASSWORD,TINKOFF_TERMINAL_KEY,TINKOFF_PASSWORD,TINKOFF_APP_TERMINAL_KEY,TINKOFF_APP_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM,INFRA_COST_RUB
+          envs: YANDEX_CLIENT_ID,YANDEX_CLIENT_SECRET,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,MAX_BOT_TOKEN,MAX_BOT_USERNAME,DADATA_API_KEY,MIERU_SERVER,MIERU_PORT,MIERU_USERNAME,MIERU_PASSWORD,TINKOFF_TERMINAL_KEY,TINKOFF_PASSWORD,TINKOFF_APP_TERMINAL_KEY,TINKOFF_APP_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM,INFRA_COST_RUB,ANALYTICS_INGEST_SECRET
           script: |
             set -e
             cd /var/www/cmpas.ru

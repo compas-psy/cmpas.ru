@@ -141,3 +141,32 @@ describe('G5: стоимость инфраструктуры задаётся �
         expect(forwardedNames).toContain('INFRA_COST_RUB');
     });
 });
+
+/**
+ * Секрет приёмника должен доезжать из GitHub до сервера — иначе три продукта
+ * не сойдутся.
+ *
+ * Выкладка умеет родить секрет сама, и для ПРАКТИКИ с ЗАПИСКАМИ этого хватает:
+ * сосед читает значение из общего файла на той же машине. Но МОМЕНТЫ —
+ * приложение: их секрет зашивается в сборку на раннере GitHub, до сервера ему
+ * не дотянуться. Если человек заведёт секрет организации ради МОМЕНТОВ, а до
+ * сервера этот секрет не доедет, сервер родит СВОЙ — и сборка МОМЕНТОВ будет
+ * получать 401 вечно, при том что «секрет же задан». Ровно тот отказ, который
+ * ищут месяцами.
+ */
+describe('ANALYTICS_INGEST_SECRET доезжает из GitHub до деплой-скрипта', () => {
+    const workflow = readFileSync(
+        path.join(process.cwd(), '.github/workflows/deploy-docker.yml'),
+        'utf8',
+    );
+
+    it('объявлен в env: job-а выкладки', () => {
+        expect(workflow).toMatch(/ANALYTICS_INGEST_SECRET:\s*\$\{\{\s*secrets\.ANALYTICS_INGEST_SECRET\s*\}\}/);
+    });
+
+    it('перечислен в envs: ssh-action — без этого до скрипта он не доедет', () => {
+        const envsLine = workflow.split('\n').find((line) => line.trim().startsWith('envs:'));
+        expect(envsLine, 'строка envs: обязана существовать').toBeDefined();
+        expect(envsLine!.split(',').map((s) => s.trim())).toContain('ANALYTICS_INGEST_SECRET');
+    });
+});
