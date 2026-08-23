@@ -1,0 +1,38 @@
+[
+  {
+    "event": "consent_updated",
+    "ts": "2026-08-23T10:00:00Z",
+    "product": "moments",
+    "device_id": "moments-device-42",
+    "event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "schema_version": 1,
+    "props": { "granted": true }
+  },
+  {
+    "event": "app_installed",
+    "ts": "2026-08-23T10:00:01Z",
+    "product": "moments",
+    "device_id": "moments-device-42",
+    "event_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "schema_version": 1,
+    "props": {}
+  },
+  {
+    "event": "practice_started",
+    "ts": "2026-08-23T10:00:02Z",
+    "product": "moments",
+    "device_id": "moments-device-42",
+    "event_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "schema_version": 1,
+    "props": { "practice_id": "breath_4_7_8", "group": "calm", "is_sleep": false }
+  },
+  {
+    "event": "practice_finished",
+    "ts": "2026-08-23T10:00:03Z",
+    "product": "moments",
+    "device_id": "moments-device-42",
+    "event_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    "schema_version": 1,
+    "props": { "practice_id": "breath_4_7_8", "group": "calm", "is_sleep": false, "completion_pct": 100 }
+  }
+]
