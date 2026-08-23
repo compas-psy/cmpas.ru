@@ -211,7 +211,10 @@ log 'Validating Docker Compose configuration.'
 docker compose config --quiet
 
 log 'Building the new application image while the old app remains online.'
-docker compose build app
+# --profile infra-pulse: без него `docker compose build` не видит сервис
+# infra-pulse вовсе (у него отдельная цель infra-pulse-collector в том же
+# Dockerfile) — образ для коллектора иначе не собирался бы ни разу.
+docker compose --profile infra-pulse build app infra-pulse
 
 systemctl stop exim4 postfix sendmail 2>/dev/null || true
 systemctl disable exim4 postfix sendmail 2>/dev/null || true
@@ -282,6 +285,24 @@ if [ -n "$infra_pulse_password" ] && docker exec cmpas-postgres psql -U postgres
         ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO infra_pulse_reader;
         GRANT INSERT, DELETE ON "InfraPulse" TO infra_pulse_reader;' \
     >/dev/null 2>&1 || log 'WARNING: infra_pulse_reader grants failed.'
+
+  # Сам подъём коллектора (O-260817-12). docker-compose.yml намеренно
+  # прячет infra-pulse за profiles: ["infra-pulse"] — тот же приём, что и у
+  # singbox чуть выше, — но, в отличие от singbox, явного вызова с этим
+  # профилем для него нигде в скрипте не было. Итог в проде: сервис ни разу
+  # не поднимался ни одним деплоем, и все восемь карточек панели, которые
+  # он кормит («Техника», «Каналы»), молчали, хотя сам коллектор написан и
+  # покрыт тестами (tests/infra-pulse.test.ts). Вызов — здесь, внутри этого
+  # `if`, а не раньше в скрипте: раньше ещё нет ни таблицы InfraPulse (её
+  # создают миграции), ни роли infra_pulse_reader (её создают несколькими
+  # строками выше) — коллектор, запущенный раньше, просто не смог бы
+  # подключиться и ушёл бы в цикл перезапусков.
+  log 'Starting the infra-pulse collector.'
+  if ! docker compose --profile infra-pulse up -d infra-pulse; then
+    log 'WARNING: infra-pulse collector failed to start; site deploy continues regardless — it runs in its own container and its failure must never block or roll back the site (see docker logs cmpas-infra-pulse).'
+  fi
+else
+  log 'Skipping infra-pulse collector start: InfraPulse table or INFRA_PULSE_DB_PASSWORD are not ready yet.'
 fi
 
 log 'Recreating only the application container.'
