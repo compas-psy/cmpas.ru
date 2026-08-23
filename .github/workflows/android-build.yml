@@ -68,7 +68,45 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          /tmp/gradle-8.9/bin/gradle testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee ../android-test.log
+          # Без --stacktrace: на упавшем тесте Gradle печатает полсотни строк
+          # собственного стека исполнителя, в которых тонет единственное, что
+          # нужно — какой тест упал и почему.
+          /tmp/gradle-8.9/bin/gradle testDebugUnitTest --no-daemon 2>&1 | tee ../android-test.log
+
+      # Компактный итог прямо в журнал прогона. Отчёт выгружается артефактом,
+      # но артефакты GitHub лежат в blob-хранилище, к которому из части сред
+      # нет доступа (CONNECT tunnel failed, 403) — и тогда «тесты упали»
+      # приходит без единого слова о том, какие именно.
+      - name: Итог тестов
+        if: always()
+        working-directory: android
+        shell: bash
+        run: |
+          results=app/build/test-results/testDebugUnitTest
+          [ -d "$results" ] || { echo "Результатов нет — тесты не запускались."; exit 0; }
+          echo "===== ИТОГ ТЕСТОВ ====="
+          for f in "$results"/*.xml; do
+            [ -e "$f" ] || continue
+            sed -n 's/.*<testsuite name="\([^"]*\)".*tests="\([0-9]*\)".*failures="\([0-9]*\)".*errors="\([0-9]*\)".*/\1: тестов \2, провалов \3, ошибок \4/p' "$f"
+          done
+          echo "===== ЧТО ИМЕННО УПАЛО ====="
+          found=0
+          for f in "$results"/*.xml; do
+            [ -e "$f" ] || continue
+            grep -q "<failure\|<error" "$f" || continue
+            found=1
+            python3 - "$f" <<'PYEOF'
+          import re, sys, html
+          text = open(sys.argv[1], encoding='utf-8').read()
+          for case in re.findall(r'<testcase\b[^>]*>.*?</testcase>|<testcase\b[^>]*/>', text, re.S):
+              name = re.search(r'name="([^"]*)"', case)
+              fail = re.search(r'<(?:failure|error)[^>]*message="([^"]*)"', case)
+              if name and fail:
+                  print(f"  ✗ {html.unescape(name.group(1))}")
+                  print(f"      {html.unescape(fail.group(1))[:400]}")
+          PYEOF
+          done
+          [ "$found" = 1 ] || echo "  (провалов нет)"
 
       - name: Upload test reports
         if: always()
