@@ -7,8 +7,9 @@
  */
 
 import { db } from '@/lib/db';
-import { noData, ok, type PanelBlock } from '../types';
+import { noData, ok, stale, type PanelBlock } from '../types';
 import { deltaAbs, deltaPoints, deltaPercent, type Delta } from '../format';
+import { latestPulse, NO_PULSE_REASON, staleReason } from './infra';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -188,9 +189,44 @@ export async function qPracticeBookingAuthor(): Promise<PanelBlock<never>> {
     return noData('q_practice_booking_author', 'признак автора записи не собирается: поля «кто создал запись» в схеме нет');
 }
 
-/** `q_practice_reminders` — зависит от `ReminderOutbox`, которого в схеме нет. */
-export async function qPracticeReminders(): Promise<PanelBlock<never>> {
-    return noData('q_practice_reminders', 'журнал отправок не заведён — сверять «должны были уйти» не с чем');
+export interface PracticeReminders {
+    due: number;
+    sent: number;
+    sentTwice: number;
+    /** % от due, что реально ушло. null — due=0, делить не на что. */
+    sentRate: number | null;
+}
+
+/**
+ * `q_practice_reminders` — журнал `ReminderOutbox` (O-260817-16) заведён и
+ * заполняется из `processReminders()` (src/lib/cron/reminders.ts); коллектор
+ * InfraPulse уже снимает с него due/sent/sentTwice
+ * (src/lib/infra-pulse/reminders-counters.ts) — та же тройка полей, что уже
+ * показывает q_tech_channels на экране «Техника» (tech.ts). Здесь та же
+ * InfraPulse читается ещё раз (панель только читает готовый снимок, ТЗ §1,
+ * §11 — второй коллектор не заводим), под продуктовым углом: доля
+ * долетевших напоминаний, а не техническое здоровье канала.
+ */
+export async function qPracticeReminders(): Promise<PanelBlock<PracticeReminders>> {
+    const pulse = await latestPulse();
+    if (!pulse) return noData('q_practice_reminders', NO_PULSE_REASON);
+    const { row } = pulse;
+
+    if (row.remindersDue === null) {
+        return noData(
+            'q_practice_reminders',
+            'коллектор ещё не снимал показания журнала отправок (ReminderOutbox)',
+            pulse.collectedAt.toISOString(),
+        );
+    }
+
+    const due = row.remindersDue;
+    const sent = row.remindersSent ?? 0;
+    const sentTwice = row.remindersSentTwice ?? 0;
+    const data: PracticeReminders = { due, sent, sentTwice, sentRate: due > 0 ? (sent / due) * 100 : null };
+    const at = pulse.collectedAt.toISOString();
+
+    return pulse.isStale ? stale('q_practice_reminders', data, staleReason(pulse.ageMinutes), at) : ok('q_practice_reminders', data, at);
 }
 
 /**
