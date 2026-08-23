@@ -164,4 +164,13 @@ docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
   "SELECT 'подписок=' || count(*) FROM \"Subscription\";" 2>&1 | head -2
 
 echo "### Приёмник изнутри сервера (без заголовка — ждём 401)"
-docker exec cmpas-app sh -lc "curl -sS -o /dev/null -w 'POST /api/ingest -> %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' --max-time 15 http://localhost:3000/api/ingest" 2>&1 | head -3
+# curl в образе приложения нет (alpine без него) — стучимся тем, что там
+# заведомо есть: node. Прошлый прогон здесь молча вернул «curl: not found».
+docker exec cmpas-app node -e "
+fetch('http://localhost:3000/api/ingest', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{}',
+}).then(r => console.log('POST /api/ingest -> ' + r.status))
+  .catch(e => console.log('запрос не прошёл: ' + e.message));
+" 2>&1 | head -3
