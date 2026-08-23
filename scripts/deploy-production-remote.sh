@@ -198,6 +198,20 @@ chmod 600 /etc/simpas/ingest-secret
 chown root:root /etc/simpas/ingest-secret
 log 'ANALYTICS_INGEST_SECRET synced to /etc/simpas/ingest-secret for ЗАПИСОК.'
 
+# Аналитический слой (O-260817-17, ТЗ_management_dashboard.md) написан и
+# покрыт тестами целиком, но CLAUDE.md §5.2 / устав §6.1 требуют, чтобы новая
+# функциональность ехала за флагом, выключенным по умолчанию
+# (src/lib/analytics/flags.ts), пока человек явно не включит. Учредитель
+# включил прямым распоряжением: после этого прохода деплоя должно работать
+# всё, кроме резервной копии (которая тут ни при чём — она делается
+# несколькими строками выше, безусловно, для любого деплоя, флагами не
+# управляется). Решение зафиксировано здесь явно, а не молча — чтобы
+# следующий читатель видел причину, а не самоуправство скрипта. ensure_env, а
+# не upsert_env: если человек когда-нибудь выставит значение в .env руками,
+# деплой его не перебьёт.
+ensure_env ANALYTICS_INGEST_ENABLED 'true'
+ensure_env ANALYTICS_TRACKING_ENABLED 'true'
+
 log "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2- | cut -c1-8)..."
 
 vpn_enabled=0
