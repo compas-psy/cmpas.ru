@@ -186,34 +186,47 @@ jobs:
           path: android-build.log
           retention-days: 14
 
+      # Имя файла и тег релиза — по общему правилу трёх продуктов СИМПАС
+      # (scripts/check-release-naming.sh): simpas-<продукт>-<версия>.apk и
+      # <продукт>-v<версия>, без хеша коммита и без номера прогона — релиз
+      # соответствует ВЕРСИИ, а не прогону сборки. Сторож зовётся сразу же,
+      # на вычисленных значениях, а не на готовом файле, чтобы упасть раньше,
+      # чем что-либо будет загружено.
       - name: Prepare APK
         id: apk
         run: |
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           VERSION=$(grep 'versionName' android/app/build.gradle.kts | head -1 | grep -oP '"[^"]*"' | tr -d '"')
-          SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          FILENAME="compas-${VERSION}-${SHA}.apk"
+          FILENAME="simpas-praktika-${VERSION}.apk"
+          TAG="praktika-v${VERSION}"
+          bash scripts/check-release-naming.sh "$FILENAME" "$TAG" praktika
           cp "$APK_PATH" "$FILENAME"
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: compas-android-apk
-          path: compas-*.apk
+          name: simpas-praktika-apk
+          path: simpas-*.apk
           retention-days: 90
 
+      # Один тег версии = один релиз: пересборка той же версии обновляет
+      # существующий релиз (softprops/action-gh-release апдейтит релиз по
+      # уже существующему tag_name вместо создания нового), а не плодит
+      # новые при каждом прогоне — раньше в теге был github.run_number,
+      # и каждый прогон одной и той же версии создавал отдельный релиз.
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v${{ steps.apk.outputs.version }}-b${{ github.run_number }}
-          name: "КОМПАС Android ${{ steps.apk.outputs.version }} (#${{ github.run_number }})"
+          tag_name: ${{ steps.apk.outputs.tag }}
+          name: "КОМПАС ПРАКТИКА ${{ steps.apk.outputs.version }}"
           body: |
-            ## КОМПАС для Android
+            ## КОМПАС ПРАКТИКА для Android
             Скачайте APK ниже и установите на телефон.
-          files: compas-*.apk
+          files: simpas-*.apk
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
