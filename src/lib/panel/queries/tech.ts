@@ -69,9 +69,25 @@ export async function qTechServer(): Promise<PanelBlock<ServerCard>> {
     );
 }
 
-/** Ответ 95-го процентиля никто не измеряет — блок честно пуст (ТЗ §5, экран 6). */
-export async function qTechResponseP95(): Promise<PanelBlock<never>> {
-    return noData('q_tech_response_p95', 'время ответа никто не замеряет: ни APM, ни логов с длительностями');
+export interface ResponseP95Card {
+    p95Ms: number;
+}
+
+/**
+ * Источник появился (O-260817-12/§5): src/proxy.ts меряет каждый запрос,
+ * src/lib/cron/response-time.ts раз в ~5 минут пишет окно в AppResponseTime,
+ * а коллектор переносит последний ещё не устаревший p95 в свой снимок
+ * InfraPulse.responseP95Ms — читаем его так же, как остальные карточки
+ * этого экрана, тем же fromPulse.
+ */
+export async function qTechResponseP95(): Promise<PanelBlock<ResponseP95Card>> {
+    const pulse = await latestPulse();
+    if (!pulse) return noData('q_tech_response_p95', NO_PULSE_REASON);
+    const { row } = pulse;
+    if (row.responseP95Ms === null || row.responseP95Ms === undefined) {
+        return noData('q_tech_response_p95', 'приложение ещё не отдало ни одного полного окна замеров времени ответа');
+    }
+    return fromPulse<ResponseP95Card>('q_tech_response_p95', { p95Ms: row.responseP95Ms }, pulse);
 }
 
 export interface DbCard {

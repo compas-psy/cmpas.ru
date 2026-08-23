@@ -5,6 +5,7 @@ export async function register() {
         const { processMorningDigest, processWeeklyDigest } = await import('./lib/cron/digest');
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
+        const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
 
         // Напоминания каждые 15 минут
         cron.schedule('*/15 * * * *', async () => {
@@ -52,6 +53,12 @@ export async function register() {
             } catch (error) {
                 console.error('[CRON] Ошибка отложенных сообщений:', error);
             }
+        });
+
+        // Снимок времени ответа приложения (q_tech_response_p95, ТЗ §5) —
+        // каждые 5 минут, тем же периодом, что и отложенные сообщения выше.
+        cron.schedule('*/5 * * * *', async () => {
+            await flushResponseTimeWindow();
         });
 
         console.log('[CRON] Инструментация: cron-задачи зарегистрированы');
