@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'fs';
 import path from 'path';
+import { load as loadYaml } from 'js-yaml';
 import { describe, it, expect } from 'vitest';
 
 const scriptPath = path.resolve(import.meta.dirname, '../scripts/deploy-production-remote.sh');
@@ -121,5 +122,22 @@ describe('G5: стоимость инфраструктуры задаётся �
 
     it('если переменная не задана — блок обёрнут в проверку и ничего не делает', () => {
         expect(source).toMatch(/if\s+\[\s+-n\s+"\$\{?INFRA_COST_RUB/);
+    });
+
+    it('GitHub Actions действительно доносит INFRA_COST_RUB до раннера и до самого деплой-скрипта', () => {
+        // Без этого секрет, даже заведённый в GitHub, никогда не попадёт в
+        // окружение SSH-сессии appleboy/ssh-action, которая запускает
+        // deploy-production-remote.sh — код в скрипте был бы мёртвым.
+        const workflowPath = path.resolve(import.meta.dirname, '../.github/workflows/deploy-docker.yml');
+        const workflow = loadYaml(readFileSync(workflowPath, 'utf8')) as {
+            jobs: { deploy: { env?: Record<string, string>; steps: Array<{ with?: { envs?: string } }> } };
+        };
+        const deployEnv = workflow.jobs.deploy.env ?? {};
+        expect(deployEnv.INFRA_COST_RUB).toBe('${{ secrets.INFRA_COST_RUB }}');
+
+        const sshStep = workflow.jobs.deploy.steps.find((s) => s.with?.envs);
+        expect(sshStep, 'нет шага SSH-деплоя с envs:').toBeDefined();
+        const forwardedNames = (sshStep!.with!.envs as string).split(',');
+        expect(forwardedNames).toContain('INFRA_COST_RUB');
     });
 });
