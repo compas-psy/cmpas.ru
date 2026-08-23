@@ -23,12 +23,41 @@ import javax.inject.Singleton
 class LocalPracticeStore @Inject constructor(
     @ApplicationContext context: Context,
 ) {
+    /**
+     * Часы вынесены в поле, чтобы тест мог их заморозить.
+     *
+     * Замер «сколько повторов теряется» нельзя ставить на скорость машины:
+     * на быстрой JVM весь цикл укладывается в одну миллисекунду и все записи
+     * затирают друг друга, а на Robolectric в CI каждая итерация занимает
+     * больше миллисекунды и совпадения не случается вовсе. Тест, зависящий от
+     * скорости, ничего не доказывает ни зелёный, ни красный. С замороженными
+     * часами проверяется само правило: id не имеет права зависеть от времени.
+     */
+    internal var clock: () -> Long = System::currentTimeMillis
+
     private val prefs = context.getSharedPreferences("compas_local_practice", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /**
+     * Идентификатор локальной записи.
+     *
+     * Раньше строился из System.currentTimeMillis(), а запись в хранилище
+     * делается как `filterNot { it.id == item.id } + item` — то есть
+     * совпадение id не порождало дубль, а УДАЛЯЛО предыдущую запись.
+     * QuickActionViewModel.saveRepeatedSlot() зовёт createSession() в тесном
+     * цикле, весь цикл укладывается в одну миллисекунду, и из двенадцати
+     * запрошенных повторов доезжал один — при том, что пользователю
+     * сообщалось «Создано повторов: 12».
+     *
+     * Префикс "local-" сохранён намеренно: на нём держится проверка
+     * PostSessionNoteViewModel.isRemoteSessionId() и очередь досылки,
+     * отличающая ещё не созданное на сервере от уже созданного.
+     */
+    private fun newLocalId(kind: String): String = "local-$kind-${clock()}"
+
     fun createClient(name: String, phone: String?, email: String?, gender: String?, notes: String?): Client {
         val client = Client(
-            id = "local-client-${System.currentTimeMillis()}",
+            id = newLocalId("client"),
             name = name.ifBlank { "Новый клиент" },
             email = email?.ifBlank { null },
             phone = phone?.ifBlank { null },
@@ -59,7 +88,7 @@ class LocalPracticeStore @Inject constructor(
         notes: String?,
     ): Session {
         val session = Session(
-            id = "local-session-${System.currentTimeMillis()}",
+            id = newLocalId("session"),
             clientId = client.id,
             clientName = client.name,
             date = date,
@@ -93,7 +122,7 @@ class LocalPracticeStore @Inject constructor(
 
     fun saveNote(sessionId: String, text: String): LocalNoteDto {
         val note = LocalNoteDto(
-            id = "local-note-${System.currentTimeMillis()}",
+            id = newLocalId("note"),
             sessionId = sessionId,
             text = text,
             createdAt = LocalDateTime.now().toString(),
