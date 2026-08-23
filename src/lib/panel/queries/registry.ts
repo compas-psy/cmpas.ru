@@ -5,6 +5,14 @@
  * попасть в таблицу: всё, чего в нём нет, приёмник отвергает
  * (`src/lib/analytics/schema.ts`). Панель опирается на него, чтобы отличить
  * «событие не приходило» от «события не существует».
+ *
+ * Это независимый от src/lib/analytics/schema.ts построчный разбор (не
+ * js-yaml) — он не тянет за собой Prisma-типы в клиентский бандл панели.
+ * E1 (контракт контура v2 п.6): `product:` строки бывают либо простым
+ * значением (`product: practice`), либо списком в одну строку
+ * (`product: [practice, zapiski, moments]`) для consent_updated и
+ * identity_linked — вторая форма разбирается ниже отдельно и отображается
+ * как список через запятую, а не как одно значение.
  */
 
 import { readFileSync } from 'fs';
@@ -39,9 +47,15 @@ export function readEventRegistry(): Map<string, { product: string }> {
                 map.set(current, { product: 'unknown' });
                 continue;
             }
-            const productMatch = /^ {4}product:\s*(\S+)\s*$/.exec(line);
+            const productMatch = /^ {4}product:\s*(.+?)\s*$/.exec(line);
             if (productMatch && current) {
-                map.set(current, { product: productMatch[1] });
+                const value = productMatch[1];
+                // Список в одну строку — [practice, zapiski, moments]
+                // (E1) — иначе одно простое значение.
+                const product = value.startsWith('[') && value.endsWith(']')
+                    ? value.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean).join(', ')
+                    : value;
+                map.set(current, { product });
             }
         }
     } catch (error) {
