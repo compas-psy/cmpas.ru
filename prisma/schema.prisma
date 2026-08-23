@@ -222,6 +222,14 @@ model VisitorAnalytics {
   fingerprintComponents String? // JSON string of all fingerprint components
   visits                Int       @default(1)
 
+  // Связка с аккаунтом (B5, q_sources — funnel.ts): проставляется один раз
+  // при входе/регистрации (src/auth.ts), когда становится известно, кем
+  // оказался этот отпечаток устройства — задним числом не переписывается
+  // (13_TRACKING_PLAN.md §2: "Задним числом идентификаторы не
+  // перезаписываются"). Не внешний ключ — тот же выбор, что уже сделан для
+  // PageView.visitorId ниже, см. миграцию 20260823100000.
+  accountId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -234,6 +242,7 @@ model VisitorAnalytics {
   @@index([osName])
   @@index([utmSource])
   @@index([createdAt])
+  @@index([accountId])
 }
 
 // Per-hit pageview log (for time-series charts, top pages, etc.)

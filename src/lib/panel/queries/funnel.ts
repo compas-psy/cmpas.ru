@@ -140,17 +140,60 @@ export async function qFunnelBooking(): Promise<PanelBlock<FunnelData>> {
     return ok('q_funnel_booking', { steps: withDrops(raw), windowDays });
 }
 
+export interface SourcesData {
+    /** Число аккаунтов на каждый utm-источник (без метки — «без метки»). */
+    sources: { source: string; accounts: number }[];
+    /** Сколько всего аккаунтов вообще удалось привязать к визиту. */
+    totalLinked: number;
+}
+
 /**
  * `q_sources` — источники привлечения.
  *
- * Разметка источника есть только в `VisitorAnalytics` (utm по отпечатку
- * устройства) и ни в одном событии реестра. Связать отпечаток с аккаунтом
- * нечем, поэтому «регистраций / активаций / оплат по источнику» получить
- * неоткуда — а выдать utm-визиты за регистрации значило бы соврать.
+ * Разметка источника лежит в `VisitorAnalytics` (utm по отпечатку
+ * устройства), а не в событии реестра. До B5 отпечаток не был связан с
+ * аккаунтом никак, поэтому «оплат/регистраций по источнику» получить было
+ * неоткуда. Теперь src/auth.ts проставляет VisitorAnalytics.accountId один
+ * раз при входе (13_TRACKING_PLAN.md §2 — задним числом не переписывается),
+ * так что для аккаунтов, у которых визит долетел до /api/analytics ДО
+ * входа, источник считается. Остальные (регистрация до этой связки,
+ * заблокированный трекер, вход без предварительного визита на сайт) в счёт
+ * не попадают — честный пробел, не 0 у несуществующего источника.
  */
-export async function qSources(): Promise<PanelBlock<never>> {
-    return noData(
-        'q_sources',
-        'метка источника не связана с аккаунтом: utm лежит в VisitorAnalytics по отпечатку устройства, в реестре событий метки источника нет',
-    );
+export async function qSources(): Promise<PanelBlock<SourcesData>> {
+    // Один аккаунт может быть связан с несколькими устройствами (телефон и
+    // ноутбук, каждое линкуется на своём первом входе) — считаем аккаунты,
+    // не строки VisitorAnalytics, иначе один человек с двух устройств
+    // задвоился бы в двух источниках сразу. Источник — по самому раннему
+    // связанному визиту (first-touch, charter/13_TRACKING_PLAN.md §5.3).
+    const linked = await db.visitorAnalytics.findMany({
+        where: { accountId: { not: null } },
+        select: { accountId: true, utmSource: true },
+        orderBy: { createdAt: 'asc' },
+    });
+
+    if (linked.length === 0) {
+        return noData(
+            'q_sources',
+            'ни один визит ещё не связан с аккаунтом — связка проставляется при входе (B5), задним числом старые визиты не восстанавливаются',
+        );
+    }
+
+    const bySource = new Map<string, Set<string>>();
+    const seenAccounts = new Set<string>();
+    for (const row of linked) {
+        const accountId = row.accountId as string; // where: accountId not null
+        if (seenAccounts.has(accountId)) continue; // первая по времени строка на аккаунт уже учтена
+        seenAccounts.add(accountId);
+        const key = row.utmSource ?? 'без метки';
+        const set = bySource.get(key) ?? new Set<string>();
+        set.add(accountId);
+        bySource.set(key, set);
+    }
+
+    const sources = [...bySource.entries()]
+        .map(([source, accounts]) => ({ source, accounts: accounts.size }))
+        .sort((a, b) => b.accounts - a.accounts);
+
+    return ok('q_sources', { sources, totalLinked: seenAccounts.size });
 }
