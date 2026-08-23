@@ -386,6 +386,33 @@ if [ "$auth_status" = '000' ] || [ "$auth_status" -ge 500 ]; then
   exit 1
 fi
 
+# Обратное заполнение Subscription (задача B2, scripts/backfill-subscriptions.ts)
+# — однократный проход по истории Payment/User, идемпотентен
+# (Subscription.userId уникален — повторный прогон не создаёт дублей, см.
+# комментарий в самом скрипте). Запускается здесь: миграции уже применены
+# (Subscription создаётся ими) и приложение только что подтвердило здоровье
+# проверкой auth-эндпоинта выше — не раньше.
+#
+# Сам скрипт — TypeScript, подключает Prisma напрямую и требует tsx + полное
+# дерево исходников. У образа `app` (Dockerfile, target: runner) их нет: он
+# нарочно копирует только .next/standalone и пару отдельных .js-скриптов
+# (см. verify-production-schema.js выше). У infra-pulse — ровно то, что
+# нужно: та же стадия `builder`, тот же полный `npm install` со всеми
+# devDependencies (tsx в их числе) и `COPY . .` — и этот образ уже собран
+# несколькими строками выше вместе с app, пересобирать не нужно. DATABASE_URL
+# у infra-pulse по умолчанию — read-only роль infra_pulse_reader, поэтому
+# здесь он переопределяется на обычного пользователя приложения из .env, у
+# которого есть право писать в Subscription.
+#
+# Ошибка НЕ валит выкладку: это дозаполнение истории, а не условие
+# работоспособности приложения — сайт уже поднят и здоров к этому моменту.
+log 'Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).'
+app_database_url=$(grep '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- || true)
+if ! docker compose run --rm --no-deps -e DATABASE_URL="$app_database_url" infra-pulse \
+    npx tsx scripts/backfill-subscriptions.ts; then
+  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose run --rm --no-deps -e DATABASE_URL=... infra-pulse npx tsx scripts/backfill-subscriptions.ts).'
+fi
+
 tg_token=$(grep '^TELEGRAM_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)
 tg_api_url=$(grep '^TELEGRAM_API_URL=' .env 2>/dev/null | cut -d= -f2- || true)
 tg_api_url=${tg_api_url:-https://api.telegram.org}
