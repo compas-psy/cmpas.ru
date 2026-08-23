@@ -163,6 +163,50 @@ docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
 docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
   "SELECT 'подписок=' || count(*) FROM \"Subscription\";" 2>&1 | head -2
 
+echo "### Разделение секретов по продуктам"
+# Проверяем не «настроено ли», а «работает ли»: берём НАСТОЯЩИЙ общий секрет
+# из окружения контейнера и пробуем прислать им событие МОМЕНТОВ. Он для
+# practice и zapiski, значит приёмник обязан отвергнуть конверт с причиной про
+# продукт — при этом сам запрос авторизован, то есть проверяется именно
+# привязка секрет→продукт, а не отсутствие секрета.
+docker exec cmpas-app node -e "
+const secret = process.env.ANALYTICS_INGEST_SECRET;
+const momentsSecret = process.env.ANALYTICS_INGEST_SECRET_MOMENTS;
+console.log('ANALYTICS_INGEST_SECRET: ' + (secret ? 'задан, длина ' + secret.length : 'НЕ ЗАДАН'));
+console.log('ANALYTICS_INGEST_SECRET_MOMENTS: ' + (momentsSecret ? 'задан, длина ' + momentsSecret.length : 'НЕ ЗАДАН (МОМЕНТЫ получат 401 — как и сегодня)'));
+if (!secret) { console.log('нечем проверять привязку'); process.exit(0); }
+const envelope = {
+  event: 'app_installed', ts: new Date().toISOString(), product: 'moments',
+  device_id: 'doctor-probe', props: {}, schema_version: 1,
+};
+fetch('http://localhost:3000/api/ingest', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },
+  body: JSON.stringify(envelope),
+}).then(async r => {
+  const body = await r.text();
+  console.log('секретом ПРАКТИКИ шлём событие МОМЕНТОВ -> HTTP ' + r.status + ' ' + body.slice(0, 200));
+  if (body.includes('secret not allowed for product')) console.log('ПРИВЯЗКА РАБОТАЕТ: чужой продукт отвергнут');
+  else console.log('ВНИМАНИЕ: ожидали отказ по продукту, получили другое');
+}).catch(e => console.log('запрос не прошёл: ' + e.message));
+" 2>&1 | head -8
+
+echo "### Мобильные маршруты аналитики (без токена — ждём 401)"
+for route in /api/mobile/analytics /api/mobile/analytics/consent; do
+  docker exec cmpas-app node -e "
+  fetch('http://localhost:3000$route', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '[]',
+  }).then(r => console.log('POST $route -> ' + r.status))
+    .catch(e => console.log('запрос не прошёл: ' + e.message));
+  " 2>&1 | head -2
+done
+
+echo "### Срок хранения событий"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'событий старше 180 дней: ' || count(*) FROM events WHERE ts < NOW() - INTERVAL '180 days';" 2>&1 | head -2
+
 echo "### Приёмник изнутри сервера (без заголовка — ждём 401)"
 # curl в образе приложения нет (alpine без него) — стучимся тем, что там
 # заведомо есть: node. Прошлый прогон здесь молча вернул «curl: not found».
