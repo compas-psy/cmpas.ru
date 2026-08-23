@@ -903,7 +903,7 @@ model AnalyticsEvent {
   event         String
   ts            DateTime
   product       String
-  accountId     String? // null for a device without an account yet (O-260817-13)
+  accountId     String? // null for a device without an account yet (O-260817-13). No FK to User — practice's own User.id, or (E2) a ЗАПИСКИ/МОМЕНТЫ account_id written as-is; product tells them apart.
   deviceId      String? // null until consent is on file — for the account (analyticsConsentAt) or, absent an account, for the device (AnalyticsDeviceConsent)
   props         Json
   schemaVersion Int
@@ -1021,8 +1021,17 @@ model DeployLog {
 // none at all, ЗАПИСКИ has no production login yet. Independent of
 // User.analyticsConsentAt — an account's consent doesn't retroactively cover
 // events the same device sent before the account existed, and vice versa.
+//
+// E2 (контракт контура v2 п.5): this table also holds consent for every
+// ЗАПИСКИ/МОМЕНТЫ subject, not only literal devices — ПРАКТИКА has no table
+// of their users, so their account_id can never be looked up in `User`.
+// `deviceId` is that subject's key, formatted as `${product}:${account_id
+// ?? device_id}` (src/lib/analytics/ingest.ts, subjectKeyFor) — for those
+// two products it is NOT always a physical device identifier, despite the
+// column name (kept as-is to avoid an unnecessary migration). Only
+// ПРАКТИКА's own device-only rows still use a raw, unprefixed device_id.
 model AnalyticsDeviceConsent {
-  deviceId  String    @id
+  deviceId  String    @id // ПРАКТИКА: raw device_id. ЗАПИСКИ/МОМЕНТЫ: subject key `${product}:${account_id ?? device_id}` — see comment above.
   consentAt DateTime?
   updatedAt DateTime  @updatedAt
 

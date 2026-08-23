@@ -146,7 +146,7 @@ describe('processIngestEvent', () => {
             expect(rejected[0].reason).toBe('consent required for a device without an account');
         });
 
-        it('device_id-only consent_updated(granted=true) is itself accepted and unlocks later events', async () => {
+        it('device_id-only consent_updated(granted=true) is itself accepted and unlocks a later event of the same product', async () => {
             const { db, events, getDeviceConsent } = makeDb(null);
             const now = new Date('2026-08-18T09:00:00Z');
             const consentResult = await processIngestEvent(db, {
@@ -154,15 +154,37 @@ describe('processIngestEvent', () => {
                 device_id: 'device_anon', schema_version: 1, props: { granted: true },
             }, now);
             expect(consentResult.accepted).toBe(true);
-            expect(getDeviceConsent('device_anon')?.consentAt).toEqual(now);
+            // E2: субъект чужого продукта именуется с префиксом продукта
+            // (subjectKeyFor), даже когда задан только device_id — иначе
+            // тот же самый "сырой" device_id, случайно совпавший у другого
+            // продукта, унаследовал бы это согласие (см. тест ниже).
+            expect(getDeviceConsent('moments:device_anon')?.consentAt).toEqual(now);
 
-            const result = await processIngestEvent(db, paymentEvent({
-                account_id: undefined, device_id: 'device_anon', event: 'payment_succeeded',
-            }));
+            const result = await processIngestEvent(db, {
+                event: 'practice_started', ts: new Date().toISOString(), product: 'moments',
+                device_id: 'device_anon', schema_version: 1,
+                props: { practice_id: 'sleep_01', group: 'SLEEP', is_sleep: true },
+            });
             expect(result.accepted).toBe(true);
             expect(events).toHaveLength(2);
             expect(events[1].accountId).toBeNull();
             expect(events[1].deviceId).toBe('device_anon');
+        });
+
+        it('согласие МОМЕНТОВ по device_id не утекает в device-only-путь ПРАКТИКИ с тем же сырым device_id (E2)', async () => {
+            const { db, events, rejected } = makeDb(null);
+            const now = new Date('2026-08-18T09:00:00Z');
+            await processIngestEvent(db, {
+                event: 'consent_updated', ts: now.toISOString(), product: 'moments',
+                device_id: 'device_anon', schema_version: 1, props: { granted: true },
+            }, now);
+
+            const result = await processIngestEvent(db, paymentEvent({
+                account_id: undefined, device_id: 'device_anon', event: 'payment_succeeded',
+            }));
+            expect(result.accepted).toBe(false);
+            expect(events).toHaveLength(1); // только сам consent_updated МОМЕНТОВ, payment_succeeded не прошёл
+            expect(rejected[0].reason).toBe('consent required for a device without an account');
         });
 
         it('a device that later gets an account is linked by identity_linked without rewriting its past device-only rows', async () => {
@@ -175,8 +197,12 @@ describe('processIngestEvent', () => {
             await processIngestEvent(db, paymentEvent({ account_id: undefined, device_id: 'device_anon' }));
             const rowBeforeLink = { ...events[0] };
 
+            // identity_linked принадлежит всем трём продуктам (E1), но здесь
+            // устройство всё это время транслировало события ПРАКТИКИ —
+            // связка идёт под тем же продуктом, иначе account_id 'user_1'
+            // (ПРАКТИКА) пытались бы искать в чужом subject-пространстве.
             const result = await processIngestEvent(db, {
-                event: 'identity_linked', ts: new Date().toISOString(), product: 'moments',
+                event: 'identity_linked', ts: new Date().toISOString(), product: 'practice',
                 account_id: 'user_1', device_id: 'device_anon', schema_version: 1, props: {},
             });
 
@@ -187,31 +213,147 @@ describe('processIngestEvent', () => {
         });
     });
 
-    describe('rate limiting by device_id (O-260817-13)', () => {
-        it('accepts events under the limit and rejects once a device floods the endpoint', async () => {
+    describe('чужой продукт (ЗАПИСКИ/МОМЕНТЫ) гейтится по субъекту, не по User (E2, контракт контура v2 п.5)', () => {
+        function noteSavedEvent(overrides: Record<string, unknown> = {}) {
+            return {
+                event: 'note_saved',
+                ts: new Date().toISOString(),
+                product: 'zapiski',
+                account_id: 'zapiski_acct_42',
+                device_id: undefined,
+                schema_version: 1,
+                props: {},
+                ...overrides,
+            };
+        }
+
+        it('событие ЗАПИСОК с чужим account_id и согласием субъекта на файле — принято, User не участвует', async () => {
+            const { db, events, rejected } = makeDb(null); // нет ни одного пользователя ПРАКТИКИ
+            const findUniqueSpy = vi.spyOn(db.user, 'findUnique');
+            await db.analyticsDeviceConsent.upsert({
+                where: { deviceId: 'zapiski:zapiski_acct_42' },
+                create: { deviceId: 'zapiski:zapiski_acct_42', consentAt: new Date('2026-08-01T00:00:00Z') },
+                update: {},
+            });
+
+            const result = await processIngestEvent(db, noteSavedEvent());
+
+            expect(result.accepted).toBe(true);
+            expect(rejected).toHaveLength(0);
+            expect(events).toHaveLength(1);
+            expect(events[0].product).toBe('zapiski');
+            expect(events[0].accountId).toBe('zapiski_acct_42');
+            expect(findUniqueSpy).not.toHaveBeenCalled();
+        });
+
+        it('тот же субъект ЗАПИСОК без согласия — отказ, а не "unknown account_id"', async () => {
+            const { db, events, rejected } = makeDb(null);
+            const result = await processIngestEvent(db, noteSavedEvent());
+
+            expect(result.accepted).toBe(false);
+            expect(events).toHaveLength(0);
+            expect(rejected[0].reason).not.toBe('unknown account_id');
+            expect(rejected[0].reason).toMatch(/consent/);
+        });
+
+        it('чужой account_id пишется в events как есть, отличимый по product, и никогда не отвергается как unknown account_id', async () => {
+            const { db, events } = makeDb(null);
+            await db.analyticsDeviceConsent.upsert({
+                where: { deviceId: 'zapiski:zapiski_acct_42' },
+                create: { deviceId: 'zapiski:zapiski_acct_42', consentAt: new Date() },
+                update: {},
+            });
+            await processIngestEvent(db, noteSavedEvent());
+            expect(events[0].accountId).toBe('zapiski_acct_42');
+            expect(events[0].product).toBe('zapiski');
+        });
+
+        it('subject-ключ по account_id ЗАПИСОК изолирован от User того же id в ПРАКТИКЕ (нет коллизии по префиксу)', async () => {
+            // Пользователь ПРАКТИКИ с тем же "сырым" id существует и дал
+            // согласие — но это его собственное согласие, оно не должно
+            // просочиться на одноимённый subject ЗАПИСОК.
+            const { db, events, rejected } = makeDb({ id: 'shared_id', analyticsConsentAt: new Date() });
+            const result = await processIngestEvent(db, noteSavedEvent({ account_id: 'shared_id' }));
+
+            expect(result.accepted).toBe(false); // у subject'а zapiski:shared_id согласия нет
+            expect(events).toHaveLength(0);
+            expect(rejected[0].reason).not.toBe('unknown account_id');
+        });
+
+        it('consent_updated от МОМЕНТОВ по account_id ставит согласие субъекта и сам принимается; следом идущее practice_started принято', async () => {
+            const { db, events, getDeviceConsent } = makeDb(null);
+            const now = new Date('2026-08-20T10:00:00Z');
+
+            const consentResult = await processIngestEvent(db, {
+                event: 'consent_updated', ts: now.toISOString(), product: 'moments',
+                account_id: 'moments_acct_9', device_id: undefined, schema_version: 1, props: { granted: true },
+            }, now);
+            expect(consentResult.accepted).toBe(true);
+            expect(getDeviceConsent('moments:moments_acct_9')?.consentAt).toEqual(now);
+
+            const result = await processIngestEvent(db, {
+                event: 'practice_started', ts: new Date().toISOString(), product: 'moments',
+                account_id: 'moments_acct_9', device_id: undefined, schema_version: 1,
+                props: { practice_id: 'sleep_01', group: 'SLEEP', is_sleep: true },
+            });
+            expect(result.accepted).toBe(true);
+            expect(events).toHaveLength(2);
+            expect(events[1].accountId).toBe('moments_acct_9');
+            expect(events[1].product).toBe('moments');
+        });
+    });
+
+    describe('ограничение частоты по субъекту, 600/60с (E3, контракт контура v2 п.7)', () => {
+        // Ключ — тот же субъект, что гейтит согласие (subjectKeyFor): для
+        // ПРАКТИКИ это account_id, если он есть, а не device_id — поэтому
+        // варьируем account_id, не device_id, чтобы развести субъектов.
+
+        it('пачка из 200 подряд от одного субъекта проходит целиком', async () => {
             const { db, events, rejected } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
             const store = new Map<string, number[]>();
             const now = Date.now();
-            let lastResult;
-            for (let i = 0; i < 61; i++) {
-                lastResult = await processIngestEvent(db, paymentEvent({ device_id: 'device_flood' }), new Date(now), store);
+            for (let i = 0; i < 200; i++) {
+                const result = await processIngestEvent(db, paymentEvent(), new Date(now), store);
+                expect(result.accepted).toBe(true);
             }
-            expect(lastResult?.accepted).toBe(false);
-            expect(lastResult && 'reason' in lastResult ? lastResult.reason : null).toBe('rate limited');
-            expect(events).toHaveLength(60);
+            expect(events).toHaveLength(200);
             expect(rejected).toHaveLength(0);
         });
 
-        it('does not rate-limit a fresh device_id after another one floods', async () => {
+        it('601-е событие того же субъекта за минуту отбивается, первые 600 приняты', async () => {
             const { db, events } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
             const store = new Map<string, number[]>();
             const now = Date.now();
-            for (let i = 0; i < 61; i++) {
-                await processIngestEvent(db, paymentEvent({ device_id: 'device_flood' }), new Date(now), store);
+            let lastResult;
+            for (let i = 0; i < 601; i++) {
+                lastResult = await processIngestEvent(db, paymentEvent(), new Date(now), store);
             }
-            const result = await processIngestEvent(db, paymentEvent({ device_id: 'device_other' }), new Date(now), store);
+            expect(lastResult?.accepted).toBe(false);
+            expect(lastResult && 'reason' in lastResult ? lastResult.reason : null).toBe('rate limited');
+            expect(events).toHaveLength(600);
+        });
+
+        it('разные субъекты не мешают друг другу: один залил лимит — другой всё равно принят', async () => {
+            const { db, events } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+            const store = new Map<string, number[]>();
+            const now = Date.now();
+            for (let i = 0; i < 601; i++) {
+                await processIngestEvent(db, paymentEvent({ account_id: 'user_flood' }), new Date(now), store);
+            }
+            const result = await processIngestEvent(db, paymentEvent({ account_id: 'user_other' }), new Date(now), store);
             expect(result.accepted).toBe(true);
-            expect(events.some((e) => e.deviceId === 'device_other')).toBe(true);
+            expect(events.some((e) => e.accountId === 'user_other')).toBe(true);
+        });
+
+        it('account_id-only событие (без device_id) тоже ограничивается — не только по device_id, как раньше (E3 закрывает этот разрыв)', async () => {
+            const { db } = makeDb({ id: 'user_1', analyticsConsentAt: new Date() });
+            const store = new Map<string, number[]>();
+            const now = Date.now();
+            let lastResult;
+            for (let i = 0; i < 601; i++) {
+                lastResult = await processIngestEvent(db, paymentEvent({ device_id: undefined }), new Date(now), store);
+            }
+            expect(lastResult?.accepted).toBe(false);
         });
     });
 
