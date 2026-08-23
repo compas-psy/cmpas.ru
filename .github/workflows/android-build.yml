@@ -171,12 +171,12 @@ jobs:
             android/app/build/test-results/
           retention-days: 14
 
-      - name: Build Debug APK
+      - name: Build Release APK
         working-directory: android
         shell: bash
         run: |
           set -o pipefail
-          /tmp/gradle-8.9/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee ../android-build.log
+          /tmp/gradle-8.9/bin/gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee ../android-build.log
 
       - name: Upload build log
         if: always()
@@ -189,7 +189,7 @@ jobs:
       - name: Prepare APK
         id: apk
         run: |
-          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           VERSION=$(grep 'versionName' android/app/build.gradle.kts | head -1 | grep -oP '"[^"]*"' | tr -d '"')
           SHA=$(echo ${{ github.sha }} | cut -c1-7)
           FILENAME="compas-${VERSION}-${SHA}.apk"
