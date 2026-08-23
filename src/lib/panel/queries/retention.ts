@@ -100,9 +100,113 @@ export async function qCohortsPractice(): Promise<PanelBlock<CohortsData>> {
     });
 }
 
-/** Удержание МОМЕНТОВ — сервера нет, событий об использовании тоже. */
-export async function qRetentionMomenty(): Promise<PanelBlock<never>> {
-    return noData('q_retention_momenty', 'у МОМЕНТОВ нет сервера — когорты удержания считать не из чего');
+/**
+ * `q_retention_momenty` — недельные когорты устройств МОМЕНТОВ.
+ *
+ * Прежняя причина («у МОМЕНТОВ нет сервера — когорты удержания считать не из
+ * чего») перестала быть правдой после потоков A/B/E: приёмник общий и
+ * аутентифицированный, транспорт МОМЕНТОВ включён, события продукта попадают
+ * в `AnalyticsEvent` с `product: 'moments'` и `deviceId` вместо аккаунта.
+ * Оставлять её значило бы врать на панели учредителя.
+ *
+ * Считается по тому же смыслу, что и `q_cohorts_practice` рядом, но с двумя
+ * сознательными отличиями:
+ *
+ *  1. Субъект — устройство (`deviceId`), а не пользователь: аккаунтов у
+ *     МОМЕНТОВ в проде нет (`docs/PRIVACY-DPO.md §1` на стороне продукта).
+ *  2. Неделя N отсчитывается от УСТАНОВКИ КАЖДОГО устройства, а не от
+ *     календарной недели когорты. Иначе устройство, установившееся в
+ *     четверг, получало бы «неделю 0» длиной в три дня, и доля возвратов
+ *     занижалась бы тем сильнее, чем ближе к концу недели установка.
+ *
+ * Окно короче практикующего (4 когорты × 4 недели против 4 × 6): продукт
+ * молодой, шесть недель истории у него просто не наберётся, а пустая
+ * половина таблицы читается как поломка, хотя это возраст.
+ */
+const MOMENTY_COHORT_COUNT = 4;
+const MOMENTY_WEEK_COUNT = 4;
+
+export async function qRetentionMomenty(): Promise<PanelBlock<CohortsData>> {
+    const now = Date.now();
+    const oldestStart = now - (MOMENTY_COHORT_COUNT + MOMENTY_WEEK_COUNT - 1) * WEEK_MS;
+
+    const installs = await db.analyticsEvent.findMany({
+        where: {
+            product: 'moments',
+            event: 'app_installed',
+            deviceId: { not: null },
+            ts: { gte: new Date(oldestStart) },
+        },
+        select: { deviceId: true, ts: true },
+    });
+
+    if (installs.length === 0) {
+        return noData(
+            'q_retention_momenty',
+            `за ${MOMENTY_COHORT_COUNT + MOMENTY_WEEK_COUNT - 1} недель от МОМЕНТОВ не пришло ни одного app_installed — приёмник работает, устанавливать сборку с включённым транспортом ещё не начали`,
+        );
+    }
+
+    // Первая установка на устройство: повтор app_installed (переустановка,
+    // повтор доставки без event_id) не имеет права заводить вторую когорту.
+    const installedAt = new Map<string, number>();
+    for (const row of installs as { deviceId: string; ts: Date }[]) {
+        const seen = installedAt.get(row.deviceId);
+        if (seen === undefined || row.ts.getTime() < seen) installedAt.set(row.deviceId, row.ts.getTime());
+    }
+
+    const events = await db.analyticsEvent.findMany({
+        where: {
+            product: 'moments',
+            deviceId: { in: [...installedAt.keys()] },
+            ts: { gte: new Date(oldestStart) },
+        },
+        select: { deviceId: true, ts: true },
+    });
+
+    // Номер недели считаем от установки САМОГО устройства — см. §2 выше.
+    const weeksSeen = new Map<string, Set<number>>();
+    for (const row of events as { deviceId: string; ts: Date }[]) {
+        const installTs = installedAt.get(row.deviceId);
+        if (installTs === undefined) continue;
+        const week = Math.floor((row.ts.getTime() - installTs) / WEEK_MS);
+        if (week < 0) continue;
+        const set = weeksSeen.get(row.deviceId) ?? new Set<number>();
+        set.add(week);
+        weeksSeen.set(row.deviceId, set);
+    }
+
+    const rows: CohortRow[] = [];
+    for (let c = MOMENTY_COHORT_COUNT - 1; c >= 0; c -= 1) {
+        const cohortStart = now - (c + MOMENTY_WEEK_COUNT - 1) * WEEK_MS;
+        const cohortEnd = cohortStart + WEEK_MS;
+        const members = [...installedAt.entries()].filter(([, ts]) => ts >= cohortStart && ts < cohortEnd);
+
+        const cells: CohortCell[] = [];
+        for (let w = 0; w < MOMENTY_WEEK_COUNT; w += 1) {
+            if (members.length === 0) {
+                cells.push({ kind: 'no_data', reason: 'в когорте нет ни одного устройства' });
+                continue;
+            }
+            // Неделя недожита хотя бы у одного участника когорты — срок не
+            // наступил. Это «рано», а не измеренный ноль: разница между
+            // «ещё не вернулись» и «не вернулись» и есть весь смысл блока.
+            const tooEarly = members.some(([, installTs]) => installTs + (w + 1) * WEEK_MS > now);
+            if (tooEarly) {
+                cells.push({ kind: 'too_early' });
+                continue;
+            }
+            const retained = members.filter(([deviceId]) => weeksSeen.get(deviceId)?.has(w)).length;
+            cells.push({ kind: 'value', percent: (retained / members.length) * 100 });
+        }
+
+        rows.push({ label: dateOf(new Date(cohortStart)), size: members.length, cells });
+    }
+
+    return ok('q_retention_momenty', {
+        columns: Array.from({ length: MOMENTY_WEEK_COUNT }, (_, i) => `W${i}`),
+        rows,
+    });
 }
 
 export interface ChurnData {

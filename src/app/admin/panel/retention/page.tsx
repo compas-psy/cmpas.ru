@@ -12,7 +12,7 @@ export default async function RetentionScreen() {
     const { blocks, generatedAt } = await screen('retention');
 
     const cohorts = pick<CohortsData>(blocks, 'cohorts');
-    const momenty = pick<never>(blocks, 'momentyRetention');
+    const momenty = pick<CohortsData>(blocks, 'momentyRetention');
     const churnCount = pick<ChurnData>(blocks, 'churnCount');
     const churnReasons = pick<never>(blocks, 'churnReasons');
 
@@ -35,7 +35,7 @@ export default async function RetentionScreen() {
                 <Grid cols={2} gap={12}>
                     <Card>
                         <BlockFrame block={momenty} label="Удержание МОМЕНТОВ" minHeight={160}>
-                            {() => null}
+                            {(d) => <Heatmap data={d} />}
                         </BlockFrame>
                     </Card>
                     <Card>

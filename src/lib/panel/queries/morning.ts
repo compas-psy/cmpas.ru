@@ -216,14 +216,53 @@ export async function qLampReminders(): Promise<PanelBlock<LampData>> {
 }
 
 /**
- * `q_lamp_app` — источника нет: у МОМЕНТОВ нет сервера, у ЗАПИСОК свой.
- * Это `unverified`, а не «в порядке»: серый пунктир, не зелёный (ТЗ §5).
+ * `q_lamp_app` — сигнал от приложений (ЗАПИСКИ и МОМЕНТЫ).
+ *
+ * Прежде здесь стояло безусловное «нет сигнала от приложений» с
+ * объяснением «у МОМЕНТОВ нет сервера, у ЗАПИСОК свой». После потоков
+ * A/B/E приёмник общий и оба продукта в него шлют, так что утверждение
+ * стало ПРОВЕРЯЕМЫМ — и проверять его теперь обязанность лампы, а не
+ * предположение о мире.
+ *
+ * Три состояния, и серый среди них не худший, а честный:
+ *  - событий не было никогда → `unverified`: не «сломано», а «сборка с
+ *    включённым транспортом ещё не дошла до людей». Красным это рисовать
+ *    нельзя — чинить нечего.
+ *  - события были, но за сутки ни одного → `warning`: раньше доходили,
+ *    сейчас нет. Вот это уже похоже на поломку и стоит внимания.
+ *  - события за сутки есть → `ok`, с числами по каждому продукту.
  */
 export async function qLampApp(): Promise<PanelBlock<LampData>> {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [zapiski, moments, ever] = await Promise.all([
+        db.analyticsEvent.count({ where: { product: 'zapiski', ts: { gte: since } } }),
+        db.analyticsEvent.count({ where: { product: 'moments', ts: { gte: since } } }),
+        db.analyticsEvent.count({ where: { product: { in: ['zapiski', 'moments'] } } }),
+    ]);
+
+    if (ever === 0) {
+        return ok('q_lamp_app', {
+            label: 'Приложение',
+            lamp: 'unverified',
+            detail: 'приёмник готов, событий от приложений ещё не приходило',
+            href: '/admin/panel/tech',
+        });
+    }
+
+    const recent = zapiski + moments;
+    if (recent === 0) {
+        return ok('q_lamp_app', {
+            label: 'Приложение',
+            lamp: 'warning',
+            detail: `за сутки ни одного события, всего накоплено ${num(ever)}`,
+            href: '/admin/panel/tech',
+        });
+    }
+
     return ok('q_lamp_app', {
         label: 'Приложение',
-        lamp: 'unverified',
-        detail: 'нет сигнала от приложений',
+        lamp: 'ok',
+        detail: `за сутки ЗАПИСКИ ${num(zapiski)} · МОМЕНТЫ ${num(moments)}`,
         href: '/admin/panel/tech',
     });
 }

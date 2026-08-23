@@ -20,6 +20,12 @@ vi.mock('@/lib/db', () => ({
         payment: { groupBy: () => groupBy(), findMany: () => findMany(), count: () => count() },
         infraPulse: { findFirst: () => findFirst() },
         systemConfig: { findMany: () => findMany() },
+        // Лампа «Приложение» с этого потока считает сигнал от ЗАПИСОК и
+        // МОМЕНТОВ вместо безусловной серой заглушки, поэтому у неё, как и у
+        // остальных блоков экрана, появился собственный вызов к базе. Раньше
+        // она годилась в этом тесте на роль «блока, который не может упасть»
+        // просто потому, что ни о чём не спрашивала.
+        analyticsEvent: { count: () => count() },
     },
 }));
 
@@ -38,6 +44,8 @@ describe('устойчивость экрана', () => {
             { status: 'failed', _count: { _all: 4 } },
         ]);
         findFirst.mockResolvedValue(null);
+        // …и лампа «Приложение» тоже: сигнал от приложений есть.
+        count.mockResolvedValue(7);
 
         const { screen } = await import('../build');
         const result = await screen('morning');
@@ -56,6 +64,8 @@ describe('устойчивость экрана', () => {
         findMany.mockResolvedValue([]);
         groupBy.mockResolvedValue([]);
         findFirst.mockResolvedValue(null);
+        // …и лампа «Приложение» тоже: сигнал от приложений есть.
+        count.mockResolvedValue(7);
 
         const { screen } = await import('../build');
         const result = await screen('morning');
@@ -69,6 +79,8 @@ describe('устойчивость экрана', () => {
         findMany.mockResolvedValue([]);
         groupBy.mockResolvedValue([]);
         findFirst.mockResolvedValue(null);
+        // …и лампа «Приложение» тоже: сигнал от приложений есть.
+        count.mockResolvedValue(7);
 
         const { screen } = await import('../build');
         const result = await screen('morning');
