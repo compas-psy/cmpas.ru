@@ -5,13 +5,28 @@ import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 import { build24hReminderText } from './reminder-text';
 
+/** MAX-функции возвращают либо null (нет токена / HTTP не ok / исключение — см. maxApi в max-bot.ts),
+ *  либо разобранный JSON-ответ, который может нести success:false при формально успешном HTTP-ответе. */
+function maxSendOk(result: unknown): boolean {
+    return result !== null && (result as { success?: boolean } | null)?.success !== false;
+}
+
+/**
+ * Возвращает исход по каждому каналу: `true`/`false` — попытка была и её
+ * результат, `null` — канал не был задействован (нет chat id). Нужно для
+ * ReminderOutbox (O-260817-16): раньше отправка была "выстрелил и забыл", и
+ * узнать, дошло ли сообщение, можно было только по консольным логам.
+ */
 async function sendNotification(
     tgChatId: string | null | undefined,
     maxChatId: string | null | undefined,
     text: string,
     options?: Parameters<typeof sendTelegramMessage>[2]
-) {
-    if (tgChatId) await sendTelegramMessage(tgChatId, text, options);
+): Promise<{ telegram: boolean | null; max: boolean | null }> {
+    let telegramOk: boolean | null = null;
+    let maxOk: boolean | null = null;
+
+    if (tgChatId) telegramOk = await sendTelegramMessage(tgChatId, text, options);
     if (maxChatId) {
         const telegramKeyboard = (options as any)?.reply_markup?.inline_keyboard;
         if (telegramKeyboard) {
@@ -21,10 +36,73 @@ async function sendNotification(
                     : { text: button.text, payload: button.callback_data || button.payload || '' }
                 )
             );
-            await sendMaxFull(maxChatId, text.replace(/<[^>]+>/g, ''), maxButtons);
+            maxOk = maxSendOk(await sendMaxFull(maxChatId, text.replace(/<[^>]+>/g, ''), maxButtons));
         } else {
-            await sendMaxText(maxChatId, text.replace(/<[^>]+>/g, ''));
+            maxOk = maxSendOk(await sendMaxText(maxChatId, text.replace(/<[^>]+>/g, '')));
         }
+    }
+
+    return { telegram: telegramOk, max: maxOk };
+}
+
+/**
+ * Журнал фактических отправок (O-260817-16, ReminderOutbox). Пишет
+ * ОДНУ строку на пару (сессия, тип напоминания, канал) — повторный проход
+ * cron по той же тройке обновляет её и увеличивает sendCount, а не плодит
+ * дубли (см. @@unique в prisma/schema.prisma). Ошибка самой записи в
+ * ReminderOutbox не должна ронять рассылку — это вторичный журнал, не
+ * основной путь; поэтому обёрнута в try/catch, а не пробрасывается наружу.
+ */
+async function recordReminderOutbox(params: {
+    type: 'session_24h_client' | 'session_24h_psychologist' | 'session_1h_client';
+    channel: 'telegram' | 'max';
+    recipient: string;
+    sessionId: string;
+    dueAt: Date;
+    now: Date;
+    ok: boolean;
+}): Promise<void> {
+    const { type, channel, recipient, sessionId, dueAt, now, ok } = params;
+    try {
+        await (db as any).reminderOutbox.upsert({
+            where: { sessionId_type_channel: { sessionId, type, channel } },
+            create: {
+                type,
+                channel,
+                recipient,
+                sessionId,
+                dueAt,
+                sentAt: ok ? now : null,
+                status: ok ? 'sent' : 'error',
+                error: ok ? null : `${channel} send failed — см. логи [Telegram]/[MAX API] около времени попытки`,
+                sendCount: 1,
+            },
+            update: {
+                sentAt: ok ? now : undefined,
+                status: ok ? 'sent' : 'error',
+                error: ok ? null : `${channel} send failed — см. логи [Telegram]/[MAX API] около времени попытки`,
+                sendCount: { increment: 1 },
+            },
+        });
+    } catch (error) {
+        console.error('[processReminders] Не удалось записать ReminderOutbox:', error);
+    }
+}
+
+/** Записывает исход sendNotification для каждого фактически задействованного канала. */
+async function recordOutcome(
+    outcome: { telegram: boolean | null; max: boolean | null },
+    type: 'session_24h_client' | 'session_24h_psychologist' | 'session_1h_client',
+    recipients: { telegram: string | null | undefined; max: string | null | undefined },
+    sessionId: string,
+    dueAt: Date,
+    now: Date,
+): Promise<void> {
+    if (outcome.telegram !== null && recipients.telegram) {
+        await recordReminderOutbox({ type, channel: 'telegram', recipient: recipients.telegram, sessionId, dueAt, now, ok: outcome.telegram });
+    }
+    if (outcome.max !== null && recipients.max) {
+        await recordReminderOutbox({ type, channel: 'max', recipient: recipients.max, sessionId, dueAt, now, ok: outcome.max });
     }
 }
 
@@ -80,11 +158,19 @@ export async function processReminders() {
                     onlineLink,
                     confirmationRequired: session.status === 'pending',
                 });
-                await sendNotification(
+                const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
                     message,
                     sessionActions(session, session.status === 'pending'),
+                );
+                await recordOutcome(
+                    outcome,
+                    'session_24h_client',
+                    { telegram: telegramTarget, max: maxId },
+                    session.id,
+                    new Date(session.date.getTime() - 24 * 60 * 60 * 1000),
+                    now,
                 );
             }
 
@@ -93,11 +179,19 @@ export async function processReminders() {
             if (psychologistTelegramId || psychologistMaxId) {
                 const statusText = session.status === 'confirmed' ? 'подтверждена' : 'ожидает подтверждения';
                 const message = `Завтра в ${session.time} сессия с клиентом ${client.name}. Статус: ${statusText}.`;
-                await sendNotification(psychologistTelegramId, psychologistMaxId, message, {
+                const outcome = await sendNotification(psychologistTelegramId, psychologistMaxId, message, {
                     reply_markup: {
                         inline_keyboard: [[{ text: '👤 Профиль клиента', url: `https://cmpas.ru/diary/clients?clientId=${client.id}` }]],
                     },
                 });
+                await recordOutcome(
+                    outcome,
+                    'session_24h_psychologist',
+                    { telegram: psychologistTelegramId, max: psychologistMaxId },
+                    session.id,
+                    new Date(session.date.getTime() - 24 * 60 * 60 * 1000),
+                    now,
+                );
             }
 
             await db.diarySession.update({
@@ -135,11 +229,19 @@ export async function processReminders() {
             if (telegramTarget || maxId) {
                 const confirmationText = session.status === 'pending' ? '\nПодтвердите, пожалуйста, встречу.' : '';
                 const message = `Сессия начнётся через 1 час, в ${session.time}.${linkText}${confirmationText}`;
-                await sendNotification(
+                const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
                     message,
                     sessionActions(session, session.status === 'pending'),
+                );
+                await recordOutcome(
+                    outcome,
+                    'session_1h_client',
+                    { telegram: telegramTarget, max: maxId },
+                    session.id,
+                    new Date(session.date.getTime() - 60 * 60 * 1000),
+                    now,
                 );
             }
 

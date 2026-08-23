@@ -1005,3 +1005,43 @@ model AnalyticsDeviceConsent {
 
   @@map("analytics_device_consent")
 }
+
+// Журнал фактических отправок напоминаний (O-260817-16). До этой модели
+// таблица не существовала: src/lib/infra-pulse/reminders-counters.ts уже
+// проверял её наличие через to_regclass('public."ReminderOutbox"') и отдавал
+// null, пока её нет — карточка «Рассылка» панели молчала как no_data не
+// потому, что коллектор не умел её читать, а потому, что писать в неё было
+// некому.
+//
+// Пишет processReminders() (src/lib/cron/reminders.ts) — в момент
+// фактической попытки отправки, а не заранее по расписанию: у ПРАКТИКИ нет
+// отдельного шага планирования напоминаний, cron каждые 15 минут сам
+// опрашивает DiarySession и шлёт то, что попало в 24-часовое/часовое окно.
+// Поэтому `dueAt` здесь — теоретический момент, когда напоминание должно
+// было уйти (время сессии минус 24ч/1ч), а не отдельно запланированная
+// метка; на практике он почти совпадает с `sentAt`, и это честно отражает
+// нынешнюю архитектуру, а не выдуманное планирование.
+//
+// Уникальность по (sessionId, type, channel) — не по id: повторный проход
+// cron по той же сессии и тому же каналу обновляет ту же строку и
+// увеличивает sendCount, а не плодит дубли; sendCount > 1 — это и есть
+// «отправлено дважды», карточка панели уже считает его так
+// (reminders-counters.ts: `sent_twice`).
+model ReminderOutbox {
+  id        String    @id @default(cuid())
+  type      String // 'session_24h_client' | 'session_24h_psychologist' | 'session_1h_client'
+  channel   String // 'telegram' | 'max'
+  recipient String // chat id получателя в этом канале
+  sessionId String? // DiarySession.id, если напоминание привязано к сессии
+  dueAt     DateTime // теоретический момент, когда напоминание должно было уйти
+  sentAt    DateTime? // когда фактически ушло; null, если последняя попытка не удалась
+  status    String    @default("pending") // 'pending' | 'sent' | 'error'
+  error     String?
+  sendCount Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([sessionId, type, channel])
+  @@index([dueAt])
+  @@index([status])
+}
