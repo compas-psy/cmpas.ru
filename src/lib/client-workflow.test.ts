@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // client-workflow.ts imports `db` at module scope for its document/consent
 // helpers, unused by the token functions under test here — mocked so
@@ -47,9 +47,40 @@ describe('personalClientToken / resolvePersonalClientToken', () => {
 });
 
 describe('clientBookingLink', () => {
-    it('omits the c param entirely when there is no clientId', () => {
-        const link = clientBookingLink('psy-1', '');
-        expect(link).toBe('https://cmpas.ru/bot/book/psy-1');
+    // Адрес ссылки берётся из окружения, а не из воздуха: publicBaseUrl читает
+    // AUTH_URL, затем NEXTAUTH_URL и только потом падает на cmpas.ru. Пока
+    // тест не задавал эти переменные сам, он проверял не правило, а машину, на
+    // которой запущен: у разработчика они пусты — зелено, в шаге выкладки
+    // стоит AUTH_URL=http://localhost:3000 (он нужен сборке Next.js) — красно.
+    // Поэтому окружение здесь задаётся явно в каждом случае.
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    function withoutBaseUrlEnv() {
+        vi.stubEnv('AUTH_URL', undefined);
+        vi.stubEnv('NEXTAUTH_URL', undefined);
+    }
+
+    it('без AUTH_URL и NEXTAUTH_URL ссылка ведёт на боевой адрес, а не на localhost', () => {
+        withoutBaseUrlEnv();
+        expect(clientBookingLink('psy-1', '')).toBe('https://cmpas.ru/bot/book/psy-1');
+    });
+
+    it('заданный AUTH_URL сильнее запасного адреса', () => {
+        vi.stubEnv('AUTH_URL', 'https://stage.example.org');
+        expect(clientBookingLink('psy-1', '')).toBe('https://stage.example.org/bot/book/psy-1');
+    });
+
+    it('NEXTAUTH_URL используется, когда AUTH_URL не задан', () => {
+        vi.stubEnv('AUTH_URL', undefined);
+        vi.stubEnv('NEXTAUTH_URL', 'https://old.example.org');
+        expect(clientBookingLink('psy-1', '')).toBe('https://old.example.org/bot/book/psy-1');
+    });
+
+    it('без clientId параметра c в ссылке нет вовсе', () => {
+        withoutBaseUrlEnv();
+        expect(new URL(clientBookingLink('psy-1', '')).searchParams.has('c')).toBe(false);
     });
 
     it('signs the clientId into a token that resolves back correctly', () => {
