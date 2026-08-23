@@ -44,6 +44,13 @@ export async function processIngestEvent(
     raw: RawEvent,
     now: Date = new Date(),
     rateLimitStore: Map<string, number[]> = defaultRateLimitStore,
+    /**
+     * Разрешён ли предъявленному секрету этот продукт (см.
+     * src/lib/analytics/secrets.ts). По умолчанию — разрешено всё: так
+     * существующие вызовы и тесты, которые про привязку ничего не знают,
+     * ведут себя ровно как раньше. Маршрут передаёт настоящую проверку.
+     */
+    productAllowed: (product: string) => boolean = () => true,
 ): Promise<IngestResult> {
     const validation = validateEvent(raw);
     if (!validation.valid) {
@@ -51,6 +58,18 @@ export async function processIngestEvent(
             data: { reason: validation.reason, payload: raw as object },
         });
         return { accepted: false, reason: validation.reason };
+    }
+
+    // Привязка секрет→продукт сверяется ПОСЛЕ проверки конверта: испорченный
+    // конверт обязан получать «неверный конверт», а не «не тот продукт» —
+    // иначе причина отказа зависела бы от того, чей секрет предъявлен, и
+    // отладка чужой стороны превращалась бы в угадайку.
+    if (!productAllowed(raw.product as string)) {
+        const reason = `secret not allowed for product ${raw.product}`;
+        await db.analyticsEventRejected.create({
+            data: { reason, payload: raw as object },
+        });
+        return { accepted: false, reason };
     }
 
     // Идемпотентность (O-260817-17): event_id необязателен — без него

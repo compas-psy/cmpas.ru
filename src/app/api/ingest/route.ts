@@ -1,41 +1,26 @@
-import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { isIngestEnabled } from '@/lib/analytics/flags';
 import { processIngestEvent, MAX_INGEST_BATCH_SIZE, type IngestResult } from '@/lib/analytics/ingest';
+import { resolveIngestIdentity } from '@/lib/analytics/secrets';
 
 /**
- * Общий секрет POST /ingest (O-260817-17). Раньше приёмник не проверял
- * подлинность запроса вовсе — за флагом ANALYTICS_INGEST_ENABLED, но открыт
- * кому угодно, кто узнает URL. Без секрета в окружении отказываем ВСЕМ
- * запросам, а не работаем открытым — в отличие от
- * TELEGRAM_WEBHOOK_SECRET (src/app/api/telegram/webhook/route.ts), который
- * намеренно fail-open, потому что скрипт выкладки его гарантированно
- * генерирует. Секрет ingest — отдельная ручная настройка, её отсутствие
- * с большей вероятностью забытая конфигурация, чем гарантированный факт
- * продакшена, поэтому здесь — fail-closed.
+ * Подлинность запроса — до разбора тела: неаутентифицированный запрос не должен
+ * управлять разбором. Раньше секрет был один на весь контур; теперь их
+ * несколько, и каждый знает свой список продуктов (src/lib/analytics/secrets.ts).
+ * Отсутствие настроенных секретов означает отказ всем, а не открытый приёмник.
  */
-function verifyIngestSecret(request: NextRequest): boolean {
-    const expected = process.env.ANALYTICS_INGEST_SECRET;
-    if (!expected) return false;
-
-    const header = request.headers.get('authorization') ?? '';
-    const prefix = 'Bearer ';
-    if (!header.startsWith(prefix)) return false;
-
-    const got = Buffer.from(header.slice(prefix.length));
-    const want = Buffer.from(expected);
-    return got.length === want.length && crypto.timingSafeEqual(got, want);
-}
 
 export async function POST(request: NextRequest) {
     if (!isIngestEnabled()) {
         return new NextResponse('Not Found', { status: 404 });
     }
 
-    if (!verifyIngestSecret(request)) {
+    const identity = resolveIngestIdentity(request.headers.get('authorization'));
+    if (!identity) {
         return NextResponse.json({ accepted: false, reason: 'unauthorized' }, { status: 401 });
     }
+    const productAllowed = (product: string) => identity.allows(product);
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object') {
@@ -58,11 +43,11 @@ export async function POST(request: NextRequest) {
         }
         const results: IngestResult[] = [];
         for (const item of body) {
-            results.push(await processIngestEvent(db, item));
+            results.push(await processIngestEvent(db, item, new Date(), undefined, productAllowed));
         }
         return NextResponse.json({ results });
     }
 
-    const result = await processIngestEvent(db, body);
+    const result = await processIngestEvent(db, body, new Date(), undefined, productAllowed);
     return NextResponse.json(result);
 }

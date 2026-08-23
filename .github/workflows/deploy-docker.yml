@@ -165,6 +165,18 @@ jobs:
       # сходится с приёмником. Если не завёл — сервер рождает свой, ПРАКТИКА
       # и ЗАПИСКИ работают, а сборка МОМЕНТОВ честно падает с объяснением.
       ANALYTICS_INGEST_SECRET: ${{ secrets.ANALYTICS_INGEST_SECRET }}
+      # Отдельный секрет МОМЕНТОВ. Общий секрет выше теперь действует только
+      # для practice и zapiski (src/lib/analytics/secrets.ts): МОМЕНТЫ —
+      # публикуемое приложение, а секрет внутри публикуемого APK извлекается
+      # из скачанного файла за минуты. С одним общим секретом публикация
+      # приложения публиковала бы ключ от приёма всех трёх продуктов; с
+      # раздельными компрометация даёт возможность слать только события
+      # МОМЕНТОВ.
+      #
+      # Пока переменная не задана, приёмник просто не знает такого секрета и
+      # отвечает 401 — ровно то, что происходит с МОМЕНТАМИ и сегодня: их
+      # клиент не шлёт заголовок Authorization вовсе.
+      ANALYTICS_INGEST_SECRET_MOMENTS: ${{ secrets.ANALYTICS_INGEST_SECRET_MOMENTS }}
     steps:
       - name: Deploy via SSH
         id: deploy
@@ -175,7 +187,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           command_timeout: 45m
-          envs: YANDEX_CLIENT_ID,YANDEX_CLIENT_SECRET,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,MAX_BOT_TOKEN,MAX_BOT_USERNAME,DADATA_API_KEY,MIERU_SERVER,MIERU_PORT,MIERU_USERNAME,MIERU_PASSWORD,TINKOFF_TERMINAL_KEY,TINKOFF_PASSWORD,TINKOFF_APP_TERMINAL_KEY,TINKOFF_APP_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM,INFRA_COST_RUB,ANALYTICS_INGEST_SECRET
+          envs: YANDEX_CLIENT_ID,YANDEX_CLIENT_SECRET,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,MAX_BOT_TOKEN,MAX_BOT_USERNAME,DADATA_API_KEY,MIERU_SERVER,MIERU_PORT,MIERU_USERNAME,MIERU_PASSWORD,TINKOFF_TERMINAL_KEY,TINKOFF_PASSWORD,TINKOFF_APP_TERMINAL_KEY,TINKOFF_APP_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM,INFRA_COST_RUB,ANALYTICS_INGEST_SECRET,ANALYTICS_INGEST_SECRET_MOMENTS
           script: |
             set -e
             cd /var/www/cmpas.ru

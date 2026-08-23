@@ -143,6 +143,7 @@ for key in \
   SMTP_PASSWORD \
   SMTP_FROM \
   ANALYTICS_INGEST_SECRET \
+  ANALYTICS_INGEST_SECRET_MOMENTS \
   INFRA_PULSE_GITHUB_TOKEN \
   INFRA_PULSE_GITHUB_ORG; do
   value="${!key:-}"
@@ -173,6 +174,13 @@ fi
 # генерация ниже — no-op, заданное человеком значение не трогаем. Только если
 # его не задали ни оттуда, ни руками в .env раньше — рождаем его здесь, на
 # сервере; в репозиторий он не попадает никогда.
+# ANALYTICS_INGEST_SECRET_MOMENTS намеренно НЕ самозаводится. Общий секрет выше
+# можно родить на сервере, потому что все, кому он нужен, живут на этой же
+# машине. Секрет МОМЕНТОВ нужен сборке приложения на раннере GitHub — значение,
+# рождённое на сервере, туда не попадёт никогда, и самозаведение дало бы лишь
+# секрет, который ни с чем не сходится. Он либо приходит из секрета GitHub
+# (перенесён циклом выше), либо его нет — и тогда приёмник отвечает МОМЕНТАМ
+# 401, ровно как сегодня.
 analytics_ingest_secret=$(grep '^ANALYTICS_INGEST_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
 if [ -z "$analytics_ingest_secret" ]; then
   analytics_ingest_secret=$(openssl rand -hex 32)
