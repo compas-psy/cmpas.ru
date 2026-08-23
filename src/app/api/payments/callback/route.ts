@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyNotificationToken, resolveTerminal, TinkoffNotification } from '@/lib/tinkoff';
-import { isTrackingEnabled } from '@/lib/analytics/flags';
 import { recordSubscriptionPayment } from '@/lib/analytics/subscription';
 
 function parseBody(body: string, contentType: string): Record<string, unknown> {
@@ -94,14 +93,21 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Tinkoff] Subscription activated: user=${payment.userId}, until=${subscriptionEndsAt.toISOString()}, rebillId=${RebillId}`);
 
-        if (isTrackingEnabled()) {
-            await recordSubscriptionPayment(db, {
-                userId: payment.userId,
-                plan: payment.plan,
-                months: payment.months,
-                terminal: terminalConfig?.terminal ?? payment.terminal,
-            });
-        }
+        // Учётная запись о деньгах (charter/13_TRACKING_PLAN.md §5) — не
+        // поведенческая аналитика, поэтому не за ANALYTICS_TRACKING_ENABLED
+        // (тот флаг — для событий в POST /ingest, см.
+        // src/lib/analytics/flags.ts). Раньше запись Subscription была за
+        // этим флагом, который по умолчанию выключен, — таблица не
+        // заполнялась вовсе, и панель считала выручку/удержание по пустой
+        // Subscription. recordSubscriptionPayment сам не пишет rebillId и
+        // пароль терминала (см. её сигнатуру) — рубеж §5 держит она, не
+        // условие здесь.
+        await recordSubscriptionPayment(db, {
+            userId: payment.userId,
+            plan: payment.plan,
+            months: payment.months,
+            terminal: terminalConfig?.terminal ?? payment.terminal,
+        });
     }
 
     // Tinkoff requires plain text "OK" response
