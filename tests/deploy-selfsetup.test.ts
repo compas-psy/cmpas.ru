@@ -103,9 +103,11 @@ describe('G4: обратное заполнение подписок выпол�
     });
 
     it('ошибка обратного заполнения не валит выкладку: рядом WARNING, а не exit', () => {
-        const backfillIdx = indexOf(/backfill-subscriptions\.ts/);
-        expect(backfillIdx).toBeGreaterThan(-1);
-        const nearby = source.slice(backfillIdx, backfillIdx + 400);
+        // Ищем именно строку запуска, а не первое упоминание файла в комментарии
+        // (комментарий длинный и намеренно поясняет, почему запуск устроен так).
+        const invocationIdx = indexOf(/npx tsx scripts\/backfill-subscriptions\.ts/);
+        expect(invocationIdx).toBeGreaterThan(-1);
+        const nearby = source.slice(invocationIdx, invocationIdx + 400);
         expect(nearby).toMatch(/WARNING/);
         expect(nearby).not.toMatch(/exit\s+1/);
     });
