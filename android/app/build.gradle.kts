@@ -66,6 +66,17 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Robolectric поднимает настоящий Android-рантайм на JVM, поэтому
+    // LocalPracticeStore проверяется с настоящим SharedPreferences, а не с
+    // подменённым хранилищем: тест, написанный против собственной заглушки,
+    // проверяет заглушку.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 // main split the monolithic Models.kt into focused model files (Core/Client/Note/
@@ -118,4 +129,6 @@ dependencies {
     implementation(libs.coroutines.android)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

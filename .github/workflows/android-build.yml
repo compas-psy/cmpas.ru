@@ -59,6 +59,28 @@ jobs:
       # This keeps the signature stable across builds so installs update
       # in place instead of requiring an uninstall.
 
+      # Тесты гоняются ДО сборки: провалившийся тест обязан останавливать
+      # выкладку APK, а не приезжать вместе с ним. До этого шага в этом
+      # workflow не запускался ни один тест, при том что тесты в репозитории
+      # лежали.
+      - name: Run unit tests
+        working-directory: android
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/gradle-8.9/bin/gradle testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee ../android-test.log
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: |
+            android-test.log
+            android/app/build/reports/tests/
+            android/app/build/test-results/
+          retention-days: 14
+
       - name: Build Debug APK
         working-directory: android
         shell: bash
