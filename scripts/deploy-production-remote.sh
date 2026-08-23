@@ -434,9 +434,12 @@ fi
 # работоспособности приложения — сайт уже поднят и здоров к этому моменту.
 log 'Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).'
 app_database_url=$(grep '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- || true)
-if ! docker compose run --rm --no-deps -e DATABASE_URL="$app_database_url" infra-pulse \
+# --profile infra-pulse: тот же явный флаг, что у build/up этого сервиса
+# выше — сервис спрятан за профилем в docker-compose.yml, и `run` его тоже
+# не видит без этого флага.
+if ! docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL="$app_database_url" infra-pulse \
     npx tsx scripts/backfill-subscriptions.ts; then
-  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose run --rm --no-deps -e DATABASE_URL=... infra-pulse npx tsx scripts/backfill-subscriptions.ts).'
+  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL=... infra-pulse npx tsx scripts/backfill-subscriptions.ts).'
 fi
 
 tg_token=$(grep '^TELEGRAM_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)
