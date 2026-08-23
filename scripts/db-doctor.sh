@@ -191,6 +191,12 @@ echo "### Разделение секретов по продуктам"
 # приёмник обязан отвергнуть конверт с причиной ПРО ПРОДУКТ — при этом сам
 # запрос авторизован, то есть проверяется именно привязка секрет->продукт, а не
 # отсутствие секрета.
+#
+# device_id в конверте обязателен, и не для красоты: проверка продукта стоит
+# ПОСЛЕ разбора конверта. Без device_id приёмник отвечает «missing account_id
+# and device_id» и до продукта не доходит — проба возвращает отказ, выглядящий
+# как успех проверки, хотя привязка не проверена вовсе. Ровно это и случилось
+# в прогоне 32658893775.
 if [ -n "${INGEST_SECRET}" ]; then
   echo "ANALYTICS_INGEST_SECRET: задан, длина ${#INGEST_SECRET}"
 else
@@ -207,7 +213,7 @@ if [ -n "${INGEST_SECRET}" ]; then
     -X POST http://localhost:3000/api/ingest \
     -H 'Content-Type: application/json' \
     -H "Authorization: Bearer ${INGEST_SECRET}" \
-    -d '{"event":"app_installed","ts":"2026-01-01T00:00:00Z","product":"moments","props":{},"schema_version":1}' 2>&1)
+    -d '{"event":"app_installed","ts":"2026-01-01T00:00:00Z","product":"moments","device_id":"doctor-probe","props":{},"schema_version":1}' 2>&1)
   body=$(head -c 300 /tmp/doctor-cross.txt 2>/dev/null)
   echo "секретом ПРАКТИКИ шлём событие МОМЕНТОВ -> HTTP ${code} ${body}"
   case "$body" in
@@ -219,11 +225,19 @@ else
 fi
 
 echo "### Мобильные маршруты аналитики (без токена — ждём 401)"
-for route in /api/mobile/analytics /api/mobile/analytics/consent; do
-  curl -sS -o /tmp/doctor-mobile.txt -w "POST ${route} -> %{http_code}\n" --max-time 20 \
-    -X POST "http://localhost:3000${route}" \
-    -H 'Content-Type: application/json' -d '[]' 2>&1 | head -1
-done
+# Метод у каждого маршрута свой, и стучать во все POST-ом нельзя: согласие —
+# это РЕСУРС с GET и PUT, POST там законно отвечает 405. Прогон 32658893775
+# показал ровно 405 — и это был неверный вопрос с моей стороны, а не неверный
+# ответ сервера. Спрашиваем тем методом, который маршрут принимает: иначе
+# проверяется наличие метода, а не то, пускает ли маршрут без токена.
+curl -sS -o /dev/null -w "POST /api/mobile/analytics -> %{http_code}\n" --max-time 20 \
+  -X POST http://localhost:3000/api/mobile/analytics \
+  -H 'Content-Type: application/json' -d '[]' 2>&1 | head -1
+curl -sS -o /dev/null -w "GET  /api/mobile/analytics/consent -> %{http_code}\n" --max-time 20 \
+  http://localhost:3000/api/mobile/analytics/consent 2>&1 | head -1
+curl -sS -o /dev/null -w "PUT  /api/mobile/analytics/consent -> %{http_code}\n" --max-time 20 \
+  -X PUT http://localhost:3000/api/mobile/analytics/consent \
+  -H 'Content-Type: application/json' -d '{"granted":true}' 2>&1 | head -1
 
 echo "### Срок хранения событий"
 docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
