@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.UpdateSessionRequest
+import ru.cmpas.app.data.analytics.AnalyticsSession
+import ru.cmpas.app.data.sync.OutboxSync
 import ru.cmpas.app.domain.model.AttentionItem
 import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.PracticeNotification
@@ -23,6 +25,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val api: CompasApi,
+    private val outbox: OutboxSync,
+    private val analyticsSession: AnalyticsSession,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState = _uiState.asStateFlow()
@@ -30,12 +34,53 @@ class DashboardViewModel @Inject constructor(
     init {
         loadDashboard()
         loadProfile()
+        syncOutbox()
+        startAnalytics()
         viewModelScope.launch {
-            PracticeRefreshBus.changes.collectLatest { loadDashboard(showLoader = false) }
+            // Любое изменение практики — повод попытаться дослать. Раньше здесь
+            // обновлялся только список, а очередь пробовала уехать лишь в init
+            // и в refresh(), который не вызывался ниоткуда. Значит специалист,
+            // создавший запись офлайн и дождавшийся связи не выходя из
+            // приложения, дослал бы её только после перезапуска — при том, что
+            // счётчик недоставленного всё это время показывал бы устаревшее
+            // число.
+            PracticeRefreshBus.changes.collectLatest {
+                loadDashboard(showLoader = false)
+                syncOutbox()
+            }
         }
     }
 
-    fun refresh() = loadDashboard(showLoader = false)
+    fun refresh() {
+        loadDashboard(showLoader = false)
+        syncOutbox()
+        viewModelScope.launch { analyticsSession.flush() }
+    }
+
+    /**
+     * Механика аналитики: `app_opened` один раз за запуск процесса и попытка
+     * отправить накопленное. Вся работа внутри AnalyticsSession обёрнута так,
+     * что наружу не выходит ни одно исключение — падение аналитики не роняет
+     * экран (красная линия учредителя).
+     */
+    private fun startAnalytics() {
+        viewModelScope.launch { analyticsSession.onAppForeground() }
+    }
+
+    /**
+     * Досылка недоставленного и честный счётчик на экране.
+     *
+     * Молчаливая потеря без счётчика превращается в молчаливое ожидание:
+     * специалист не узнает ни что что-то не уехало, ни что оно уехало потом.
+     * Падение досылки не роняет экран — вся работа в runCatching.
+     */
+    private fun syncOutbox() {
+        viewModelScope.launch {
+            val result = runCatching { outbox.sync() }.getOrNull() ?: return@launch
+            _uiState.update { it.copy(undeliveredCount = result.remaining) }
+            if (result.delivered > 0) loadDashboard(showLoader = false)
+        }
+    }
 
     fun loadDashboard(showLoader: Boolean = true) {
         viewModelScope.launch {
@@ -116,6 +161,8 @@ data class DashboardUiState(
     val error: String? = null,
     val isDataLoaded: Boolean = false,
     val paymentUpdatingSessionId: String? = null,
+    /** Сколько записей ещё не доставлено на сервер (очередь досылки). */
+    val undeliveredCount: Int = 0,
     val todayFormatted: String = LocalDate.now()
         .format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")))
         .replaceFirstChar { it.uppercase() },

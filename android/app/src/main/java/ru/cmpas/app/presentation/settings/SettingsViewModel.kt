@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.Response
+import ru.cmpas.app.data.analytics.AnalyticsConsent
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.local.AnalyticsEventStore
 import ru.cmpas.app.domain.model.DashboardDataV2
 import ru.cmpas.app.domain.model.MobileLegalAcceptBody
 import ru.cmpas.app.domain.model.MobileLegalStatus
@@ -18,11 +20,51 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val api: CompasApi,
+    private val analyticsConsent: AnalyticsConsent,
+    private val analyticsEventStore: AnalyticsEventStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState = _uiState.asStateFlow()
 
-    init { refresh() }
+    init {
+        refresh()
+        loadAnalyticsConsent()
+    }
+
+    /**
+     * Тумблер обязан сначала показать последнее известное состояние из
+     * локального кэша (мгновенно, офлайн), а затем — актуальное состояние с
+     * сервера, который остаётся источником истины. Кэш выключен по
+     * умолчанию (см. AnalyticsConsent), поэтому до первого успешного ответа
+     * сети тумблер честно показывает «выключено», а не зависает пустым.
+     */
+    fun loadAnalyticsConsent() {
+        viewModelScope.launch {
+            val cached = analyticsConsent.cached()
+            _uiState.update { it.copy(analyticsConsentGranted = cached.granted) }
+            analyticsConsent.refresh()?.let { fresh ->
+                _uiState.update { it.copy(analyticsConsentGranted = fresh.granted) }
+            }
+        }
+    }
+
+    /**
+     * Пишет согласие через ресурс `PUT /api/mobile/analytics/consent`. При
+     * отзыве очищает и локальную очередь ещё не отправленных событий — отзыв
+     * обязан не только остановить сбор, но и удалить уже собранное.
+     */
+    fun setAnalyticsConsent(granted: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingAnalyticsConsent = true, error = null) }
+            analyticsConsent.setGranted(granted, onRevoked = { analyticsEventStore.clear() })
+                .onSuccess { state ->
+                    _uiState.update { it.copy(isSavingAnalyticsConsent = false, analyticsConsentGranted = state.granted) }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(isSavingAnalyticsConsent = false, error = "Не удалось обновить согласие на аналитику") }
+                }
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -89,4 +131,9 @@ data class SettingsUiState(
     val legalStatus: MobileLegalStatus? = null,
     val bookingLink: String? = null,
     val error: String? = null,
+    // Выключено по умолчанию (fail-closed) — до ответа сервера тумблер не
+    // показывает согласие включённым только потому, что состояние ещё не
+    // загружено.
+    val analyticsConsentGranted: Boolean = false,
+    val isSavingAnalyticsConsent: Boolean = false,
 )

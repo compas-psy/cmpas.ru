@@ -118,6 +118,107 @@ events:
       plan: string
       months: number
 
+  # Семь событий мобильного приложения ПРАКТИКИ (android/**, отдельный
+  # агент). Приложение шлёт их на POST /api/mobile/analytics со своим
+  # обычным пользовательским JWT — секрет ANALYTICS_INGEST_SECRET_* в APK не
+  # кладём (см. src/lib/analytics/secrets.ts); сервер сам подставляет
+  # product:'practice' и account_id из токена и прогоняет их через тот же
+  # processIngestEvent/этот же реестр. device_id приложение не отправляет
+  # никогда — колонка остаётся null для этих событий. Значения перечислений
+  # (surface/to/mode/channel/*_bucket) объявлены в `values` и проверяются
+  # src/lib/analytics/schema.ts после проверки типов. Ни одно свойство не
+  # несёт текст, id клиента, id сессии или точное время сессии.
+  app_opened:
+    product: practice
+    question: "Насколько часто открывают приложение — и с какой поверхности?"
+    required: [surface]
+    optional: [first_launch]
+    props:
+      surface: string
+      first_launch: boolean
+    values:
+      surface: [android]
+
+  session_created:
+    product: practice
+    question: "Создаются ли сессии из приложения, и заранее ли (насколько)?"
+    required: [surface, delivered]
+    optional: [repeat_batch, days_ahead_bucket]
+    props:
+      surface: string
+      delivered: boolean
+      repeat_batch: boolean
+      days_ahead_bucket: string
+    values:
+      surface: [android]
+      days_ahead_bucket: [past, same_day, within_week, within_month, later]
+
+  session_status_changed:
+    product: practice
+    question: "Как меняют статус сессии из приложения — куда именно?"
+    required: [surface, to, delivered]
+    optional: []
+    props:
+      surface: string
+      to: string
+      delivered: boolean
+    values:
+      surface: [android]
+      to: [confirmed, completed, cancelled, rescheduled]
+
+  session_note_saved:
+    product: practice
+    question: "Сохраняют ли заметки по сессии из приложения, каким режимом и как быстро после сессии?"
+    required: [surface, delivered, mode]
+    optional: [blocks_filled, since_session_bucket]
+    props:
+      surface: string
+      delivered: boolean
+      mode: string
+      blocks_filled: number
+      since_session_bucket: string
+    values:
+      surface: [android]
+      mode: [short, blocks]
+      since_session_bucket: [before_session, same_day, next_day, within_week, later]
+    range:
+      blocks_filled: [0, 5]
+
+  session_note_abandoned:
+    product: practice
+    question: "Начинают заметку и бросают — с введённым текстом или пустую?"
+    required: [surface, had_input]
+    optional: []
+    props:
+      surface: string
+      had_input: boolean
+    values:
+      surface: [android]
+
+  client_created:
+    product: practice
+    question: "Заводят ли клиентов из приложения?"
+    required: [surface, delivered]
+    optional: []
+    props:
+      surface: string
+      delivered: boolean
+    values:
+      surface: [android]
+
+  client_invite_created:
+    product: practice
+    question: "Приглашают ли клиентов на самозапись из приложения, каким каналом?"
+    required: [surface, channel, delivered]
+    optional: []
+    props:
+      surface: string
+      channel: string
+      delivered: boolean
+    values:
+      surface: [android]
+      channel: [telegram, max, auto]
+
   # ЗАПИСКИ (source of truth for the client: zapiski's own
   # packages/core/src/analytics/schema.ts). Snapshot taken 18.08.2026.
   # `length_bucket`/`query_length_bucket`/`format` are enums client-side

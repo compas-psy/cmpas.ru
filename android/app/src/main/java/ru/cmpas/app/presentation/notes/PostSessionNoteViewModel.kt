@@ -7,18 +7,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.analytics.AnalyticsRecorder
+import ru.cmpas.app.data.analytics.NoteMode as AnalyticsNoteMode
+import ru.cmpas.app.data.analytics.SinceSessionBucket
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.FeatureInterestRequest
 import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.data.local.LocalPracticeStore
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SmartNoteBlock
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @HiltViewModel
 class PostSessionNoteViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
+    private val analytics: AnalyticsRecorder,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PostSessionNoteUiState())
     val uiState = _uiState.asStateFlow()
@@ -52,12 +60,25 @@ class PostSessionNoteViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                if (sessionId.isRemoteSessionId()) {
+                // Заметка считается дошедшей до сервера, только если сессия
+                // серверная И ответ успешен. Раньше у этой проверки не было
+                // ветки else: при неуспешном ответе и при локальном sessionId
+                // заметка оседала на устройстве, а пользователю сообщалось
+                // «Заметка сохранена» — без единого признака, что на сервер
+                // ничего не ушло и никогда не уйдёт.
+                val delivered = if (sessionId.isRemoteSessionId()) {
                     val response = api.updateSession(
                         sessionId,
                         UpdateSessionRequest(notes = text, structuredNotes = structuredNotes),
                     )
-                    if (response.isSuccessful) response.body()?.let { localStore.upsertSession(it) }
+                    if (response.isSuccessful) {
+                        response.body()?.let { localStore.upsertSession(it) }
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
                 localStore.saveNote(sessionId = sessionId, text = text)
                 _uiState.update { state ->
@@ -68,7 +89,22 @@ class PostSessionNoteViewModel @Inject constructor(
                         session = state.session?.copy(notes = text, notesPlain = text, structuredNotes = structuredNotes),
                     )
                 }
-                onFinished(true, "Заметка сохранена")
+                onFinished(true, if (delivered) "Заметка сохранена" else "Заметка сохранена на устройстве")
+
+                // Аналитика сохранения заметки
+                runCatching {
+                    val mode = if (structuredNotes.isNotEmpty()) AnalyticsNoteMode.BLOCKS else AnalyticsNoteMode.SHORT
+                    val blocksFilled = structuredNotes.size.takeIf { it > 0 }
+                    val sinceSessionBucket = runCatching {
+                        computeSinceSessionBucket(_uiState.value.session)
+                    }.getOrNull()
+                    analytics.recordSessionNoteSaved(
+                        delivered = delivered,
+                        mode = mode,
+                        blocksFilled = blocksFilled,
+                        sinceSessionBucket = sinceSessionBucket,
+                    )
+                }
             } catch (_: Exception) {
                 localStore.saveNote(sessionId = sessionId, text = text)
                 _uiState.update { state ->
@@ -78,7 +114,22 @@ class PostSessionNoteViewModel @Inject constructor(
                         session = state.session?.copy(notes = text, notesPlain = text),
                     )
                 }
-                onFinished(true, "Заметка сохранена локально")
+                onFinished(true, "Заметка сохранена на устройстве")
+
+                // Аналитика сохранения при ошибке
+                runCatching {
+                    val mode = if (structuredNotes.isNotEmpty()) AnalyticsNoteMode.BLOCKS else AnalyticsNoteMode.SHORT
+                    val blocksFilled = structuredNotes.size.takeIf { it > 0 }
+                    val sinceSessionBucket = runCatching {
+                        computeSinceSessionBucket(_uiState.value.session)
+                    }.getOrNull()
+                    analytics.recordSessionNoteSaved(
+                        delivered = false,
+                        mode = mode,
+                        blocksFilled = blocksFilled,
+                        sinceSessionBucket = sinceSessionBucket,
+                    )
+                }
             }
         }
     }
@@ -92,6 +143,38 @@ class PostSessionNoteViewModel @Inject constructor(
             }.getOrNull()
             _uiState.update { it.copy(isMarkingAiInterest = false, aiInterestRecorded = response?.isSuccessful == true) }
             onFinished(if (response?.isSuccessful == true) "Вы в списке первыми" else "Не удалось записать интерес")
+        }
+    }
+
+    fun noteEditorClosed(hadInput: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                analytics.recordSessionNoteAbandoned(hadInput)
+            }
+        }
+    }
+
+    private fun computeSinceSessionBucket(session: Session?): SinceSessionBucket? {
+        val session = session ?: return null
+        val sessionDateTime = runCatching {
+            val date = LocalDate.parse(session.date)
+            val time = LocalTime.parse(session.startTime)
+            LocalDateTime.of(date, time)
+        }.getOrNull() ?: return null
+
+        val now = LocalDateTime.now()
+
+        return when {
+            sessionDateTime.isAfter(now) -> SinceSessionBucket.BEFORE_SESSION
+            else -> {
+                val daysBetween = ChronoUnit.DAYS.between(sessionDateTime.toLocalDate(), now.toLocalDate()).toInt()
+                when {
+                    daysBetween == 0 -> SinceSessionBucket.SAME_DAY
+                    daysBetween == 1 -> SinceSessionBucket.NEXT_DAY
+                    daysBetween in 2..7 -> SinceSessionBucket.WITHIN_WEEK
+                    else -> SinceSessionBucket.LATER
+                }
+            }
         }
     }
 

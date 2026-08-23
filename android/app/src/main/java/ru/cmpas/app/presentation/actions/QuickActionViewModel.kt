@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.analytics.AnalyticsRecorder
+import ru.cmpas.app.data.analytics.DaysAheadBucket
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateClientRequest
 import ru.cmpas.app.data.api.CreateSessionRequest
@@ -19,6 +21,7 @@ import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionType
 import ru.cmpas.app.domain.model.TimeSlot
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -29,6 +32,7 @@ data class OnboardingInfo(val clientId: String, val clientName: String, val phon
 class QuickActionViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
+    private val analytics: AnalyticsRecorder,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(QuickActionUiState())
     val uiState = _uiState.asStateFlow()
@@ -157,14 +161,40 @@ class QuickActionViewModel @Inject constructor(
 
     fun dismissOnboarding() = _uiState.update { it.copy(onboardingInfo = null, onboardingOptions = null, onboardingResult = null) }
 
+    private fun calculateDaysAheadBucket(dateString: String): DaysAheadBucket? = runCatching {
+        val sessionDate = LocalDate.parse(dateString)
+        val today = LocalDate.now()
+        when {
+            sessionDate < today -> DaysAheadBucket.PAST
+            sessionDate == today -> DaysAheadBucket.SAME_DAY
+            sessionDate <= today.plusDays(7) -> DaysAheadBucket.WITHIN_WEEK
+            sessionDate <= today.plusDays(31) -> DaysAheadBucket.WITHIN_MONTH
+            else -> DaysAheadBucket.LATER
+        }
+    }.getOrNull()
+
     private suspend fun saveClient(name: String, phone: String, email: String, gender: String?): String {
         require(name.isNotBlank()) { "Укажите имя клиента" }
         require(email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { "Проверьте адрес электронной почты" }
         return try {
-            val response = api.createClient(CreateClientRequest(name.trim(), email.trim().ifBlank { null }, phone.trim().ifBlank { null }, gender))
+            // Ключ идемпотентности рождается ЗДЕСЬ, до отправки. Раньше прямой
+            // онлайн-путь ключа не слал вовсе: если сервер запрос выполнил, а
+            // ответ потерялся, код считал это отказом, писал запись локально, и
+            // очередь досылки отправляла её заново — с НОВЫМ ключом. Сцепить два
+            // запроса было нечем, и получался настоящий дубль.
+            val response = api.createClient(
+                CreateClientRequest(
+                    name = name.trim(),
+                    email = email.trim().ifBlank { null },
+                    phone = phone.trim().ifBlank { null },
+                    gender = gender,
+                    clientRequestId = java.util.UUID.randomUUID().toString(),
+                ),
+            )
             val client = if (response.isSuccessful) response.body() else null
             if (client != null) {
                 localStore.upsertClient(client)
+                runCatching { analytics.recordClientCreated(delivered = true) }
                 val options = if (client.telegramId.isNullOrBlank() && client.maxId.isNullOrBlank()) {
                     runCatching { api.getOnboardingOptions(client.id).takeIf { it.isSuccessful }?.body() }.getOrNull()
                 } else null
@@ -174,10 +204,12 @@ class QuickActionViewModel @Inject constructor(
                 "Клиент добавлен"
             } else {
                 localStore.createClient(name.trim(), phone, email, gender, null)
+                runCatching { analytics.recordClientCreated(delivered = false) }
                 "Клиент сохранён на устройстве"
             }
         } catch (_: Exception) {
             localStore.createClient(name.trim(), phone, email, gender, null)
+            runCatching { analytics.recordClientCreated(delivered = false) }
             "Клиент сохранён на устройстве"
         }
     }
@@ -187,10 +219,27 @@ class QuickActionViewModel @Inject constructor(
         require(!date.isNullOrBlank()) { "Выберите дату" }
         require(!time.isNullOrBlank()) { "Выберите время" }
         return try {
-            val response = api.createSession(CreateSessionRequest(client!!.id, date!!, time!!, format = format, type = type))
+            // Комментарий доезжает до сервера. Раньше поля notes в запросе не
+            // было вовсе, и введённый пользователем текст сохранялся ТОЛЬКО
+            // когда сервер отказал: на успешном пути он молча пропадал, а
+            // человеку сообщалось «Запись добавлена».
+            // Ключ идемпотентности — см. пояснение в saveClient.
+            val response = api.createSession(
+                CreateSessionRequest(
+                    clientId = client!!.id,
+                    date = date!!,
+                    startTime = time!!,
+                    format = format,
+                    type = type,
+                    clientRequestId = java.util.UUID.randomUUID().toString(),
+                    notes = comment.ifBlank { null },
+                ),
+            )
             val session = if (response.isSuccessful) response.body() else null
+            val daysAheadBucket = calculateDaysAheadBucket(date)
             if (session != null) {
                 localStore.upsertSession(session)
+                runCatching { analytics.recordSessionCreated(delivered = true, repeatBatch = false, daysAheadBucket = daysAheadBucket) }
                 val options = runCatching { api.getOnboardingOptions(client.id).takeIf { it.isSuccessful }?.body() }.getOrNull()
                 if (options != null && (options.documents.isNotEmpty() || options.hasSession)) {
                     _uiState.update { it.copy(onboardingInfo = OnboardingInfo(client.id, client.name, client.phone, session.id), onboardingOptions = options, isOnboardingBusy = false) }
@@ -198,23 +247,67 @@ class QuickActionViewModel @Inject constructor(
                 "Запись добавлена"
             } else {
                 localStore.createSession(client, date, time, addMinutes(time, 50), format, type, comment)
+                runCatching { analytics.recordSessionCreated(delivered = false, repeatBatch = false, daysAheadBucket = daysAheadBucket) }
                 "Запись сохранена на устройстве"
             }
         } catch (_: Exception) {
+            val daysAheadBucket = calculateDaysAheadBucket(date ?: "")
             localStore.createSession(client!!, date!!, time!!, addMinutes(time, 50), format, type, comment)
+            runCatching { analytics.recordSessionCreated(delivered = false, repeatBatch = false, daysAheadBucket = daysAheadBucket) }
             "Запись сохранена на устройстве"
         }
     }
 
+    /**
+     * Серия повторов.
+     *
+     * Раньше эта функция не вызывала API ни разу: все повторы писались только
+     * в localStore, а пользователю сообщалось «Создано повторов: N». Сессии
+     * не появлялись ни в вебе, ни у клиента, и досылки не существовало.
+     * Теперь каждый повтор идёт тем же путём, что и одиночная запись
+     * (saveSession), и сообщение называет фактический исход, а не намерение.
+     */
     private suspend fun saveRepeatedSlot(client: Client?, date: String?, time: String?, secondary: String, comment: String): String {
         require(client != null) { "Выберите клиента" }
         require(!date.isNullOrBlank() && !time.isNullOrBlank()) { "Выберите дату и время" }
         val count = secondary.filter { it.isDigit() }.toIntOrNull()?.coerceIn(2, 12) ?: 4
+        val endTime = addMinutes(time!!, 50)
+        var delivered = 0
+        var local = 0
         repeat(count) { index ->
             val nextDate = java.time.LocalDate.parse(date).plusWeeks(index.toLong()).toString()
-            localStore.createSession(client!!, nextDate, time!!, addMinutes(time, 50), SessionFormat.ONLINE, SessionType.INDIVIDUAL, comment)
+            val daysAheadBucket = calculateDaysAheadBucket(nextDate)
+            val session = try {
+                val response = api.createSession(
+                    CreateSessionRequest(
+                        clientId = client!!.id,
+                        date = nextDate,
+                        startTime = time,
+                        format = SessionFormat.ONLINE,
+                        type = SessionType.INDIVIDUAL,
+                        clientRequestId = java.util.UUID.randomUUID().toString(),
+                        notes = comment.ifBlank { null },
+                    ),
+                )
+                if (response.isSuccessful) response.body() else null
+            } catch (_: Exception) {
+                null
+            }
+            if (session != null) {
+                localStore.upsertSession(session)
+                runCatching { analytics.recordSessionCreated(delivered = true, repeatBatch = true, daysAheadBucket = daysAheadBucket) }
+                delivered++
+            } else {
+                localStore.createSession(client!!, nextDate, time, endTime, SessionFormat.ONLINE, SessionType.INDIVIDUAL, comment)
+                runCatching { analytics.recordSessionCreated(delivered = false, repeatBatch = true, daysAheadBucket = daysAheadBucket) }
+                local++
+            }
         }
-        return "Создано повторов: $count"
+        return when {
+            local == 0 -> "Создано повторов: $delivered"
+            delivered == 0 -> "Повторы сохранены на устройстве: $local — сервер недоступен"
+            else -> "Создано повторов: $delivered, на устройстве: $local"
+        }
     }
 
     private fun buildLocalSlots(date: String): List<TimeSlot> = listOf("10:00", "12:00", "15:00", "17:00").map { TimeSlot(date, it, addMinutes(it, 50), true) }

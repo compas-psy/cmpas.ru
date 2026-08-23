@@ -124,6 +124,7 @@ function buildProducts(product: ProductKey): Promise<ScreenResult> {
         reschedule: products.qPracticeReschedule,
         bookingAuthor: products.qPracticeBookingAuthor,
         reminders: products.qPracticeReminders,
+        mobile: products.qPracticeMobile,
     });
 }
 

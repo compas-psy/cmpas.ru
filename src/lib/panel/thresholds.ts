@@ -59,6 +59,16 @@ export const THRESHOLDS = {
      */
     // подтверждено владельцем 20.08
     infraCostAgeDays: { warning: 14, serious: 28, direction: 'above', unit: 'дн' },
+    /**
+     * Доля специалистов, давших согласие на аналитику, %.
+     *
+     * Это не показатель здоровья продукта, а показатель ЧИТАЕМОСТИ остальных
+     * мобильных цифр: пока согласие дала малая часть людей, любая мобильная
+     * доля — оценка по несамослучайной выборке, а не факт. Ниже порога
+     * мобильные блоки обязаны нести оговорку заметнее, чем сами числа.
+     */
+    // порог НЕ подтверждён владельцем — временное значение
+    analyticsConsentShare: { warning: 40, serious: 15, direction: 'below', unit: '%' },
 } satisfies Record<string, Threshold>;
 
 export type ThresholdKey = keyof typeof THRESHOLDS;
@@ -75,10 +85,10 @@ export const MIGRATION_DRIFT_IS_ALWAYS_SERIOUS = true;
  * помечает подписью «порог не подтверждён» — врать про согласованность хуже,
  * чем показать временное значение.
  *
- * Сейчас список пуст: все пороги подтверждены владельцем 20.08.2026.
- * Механизм оставлен — новый порог заводится сюда, пока его не согласовали.
+ * Восемь порогов подтверждены владельцем 20.08.2026. analyticsConsentShare
+ * заведён позже и не согласовывался — он здесь ровно поэтому.
  */
-export const UNCONFIRMED_THRESHOLDS: ReadonlySet<ThresholdKey> = new Set([]);
+export const UNCONFIRMED_THRESHOLDS: ReadonlySet<ThresholdKey> = new Set(['analyticsConsentShare']);
 
 export type Severity = 'ok' | 'warning' | 'serious';
 

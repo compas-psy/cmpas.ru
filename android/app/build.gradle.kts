@@ -24,26 +24,45 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
     }
 
+    // Ключ подписи приходит ИЗВНЕ, а не из репозитория.
+    //
+    // Раньше он лежал в android/keystore/compas-release.jks вместе с паролями
+    // прямо здесь, в открытом виде. Любой, кто получал доступ к репозиторию,
+    // мог подписать им своё приложение — и оно встало бы поверх настоящего на
+    // телефонах людей как обновление, потому что для Android «то же самое
+    // приложение» означает «тот же applicationId и та же подпись». Для
+    // приложения, работающего с данными клиентов психолога, это неприемлемо.
+    //
+    // Ключ ОСТАЁТСЯ ТЕМ ЖЕ: смена ключа означала бы, что обновление поверх
+    // установленных копий перестанет работать и людям пришлось бы удалять
+    // приложение. Он просто переехал из рабочего дерева в секреты CI.
+    //
+    // Локальная сборка без этих переменных подпишется отладочным ключом
+    // Android — так и задумано: разработчику на своей машине постоянный ключ
+    // не нужен, а раздавать такой пакет запрещает сторож готового пакета
+    // (scripts/check-apk.sh отказывает при CN=Android Debug).
+    val keystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
+    val hasSigningKey = !keystorePath.isNullOrBlank() && file(keystorePath).exists()
+
     signingConfigs {
-        // Stable signing key committed to the repo so every APK (debug or
-        // release) is signed identically -> installs update in place instead
-        // of forcing an uninstall. Safe to commit: it only signs our own
-        // sideloaded distribution builds, not Play Store releases.
-        create("compas") {
-            storeFile = rootProject.file("keystore/compas-release.jks")
-            storePassword = "compas2026"
-            keyAlias = "compas"
-            keyPassword = "compas2026"
+        if (hasSigningKey) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("compas")
             buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
         }
         release {
-            signingConfig = signingConfigs.getByName("compas")
+            if (hasSigningKey) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -66,15 +85,51 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Robolectric поднимает настоящий Android-рантайм на JVM, поэтому
+    // LocalPracticeStore проверяется с настоящим SharedPreferences, а не с
+    // подменённым хранилищем: тест, написанный против собственной заглушки,
+    // проверяет заглушку.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
-// main split the monolithic Models.kt into focused model files (Core/Client/Note/
-// Workflow). The legacy Models.kt is kept on disk but excluded from compilation to
-// avoid redeclaration. We DO compile SessionReminderFactory.kt: our redesigned
-// SessionDetailViewModel relies on its buildReminders() and no longer defines it.
+// Легаси Models.kt удалён 23.08.2026.
+//
+// Монолит был разбит на CoreModels/ClientModels/NoteModels/WorkflowModels, а сам
+// файл оставили на диске и просто исключили из компиляции, чтобы не спорить с
+// повторными объявлениями. Отладочной сборке это не мешало, а релизная запускает
+// lintVitalRelease — и он падал именно на нём:
+//
+//   Unexpected failure during lint analysis of Models.kt
+//   class ...KaFirMemberFunctionSymbolPointer pointer already disposed
+//
+// Lint разбирает исходники независимо от того, что исключено из компиляции.
+// Исключение прятало дубли от компилятора, но не от него.
+//
+// Файл был мёртв полностью: 344 строки повторных объявлений (Session, Client,
+// SessionReminder — все уже есть в живых файлах) и ни одной ссылки во всём
+// модуле. Удалён вместе с исключением: глушить lint значило бы оставить причину
+// на месте.
+//
 // Geist .ttf binaries are committed under src/main/res/font/ (no build-time fetch).
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    exclude("**/Models.kt")
+
+// Имена и причины упавших тестов печатаются в консоль, а не только в отчёт.
+// Отчёт выгружается артефактом, но артефакты лежат в blob-хранилище GitHub,
+// к которому из части сред нет доступа (CONNECT tunnel failed, 403) — и тогда
+// «тесты упали» приходит без единого слова о том, какие и почему.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
 }
 
 dependencies {
@@ -118,4 +173,6 @@ dependencies {
     implementation(libs.coroutines.android)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

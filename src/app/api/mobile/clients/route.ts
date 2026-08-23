@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { normalizePhone, phoneLookupVariants } from '@/lib/clients/phone';
@@ -98,10 +99,32 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { name, email, phone, gender } = await req.json();
+        const { name, email, phone, gender, clientRequestId } = await req.json();
 
         if (!name || typeof name !== 'string') {
             return NextResponse.json({ error: 'Name required' }, { status: 400 });
+        }
+
+        // Идемпотентность досылки — см. DiarySession.clientRequestId. Проверка
+        // идёт до поиска по телефону: у клиента, заведённого без телефона,
+        // совпадать нечему, и повтор создавал бы вторую карточку.
+        const idempotencyKey = typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null;
+        if (idempotencyKey) {
+            const already = await db.diaryClient.findFirst({
+                where: { clientRequestId: idempotencyKey, psychologistId: auth.userId } as any,
+            });
+            if (already) {
+                const count = await db.diarySession.count({ where: { clientId: already.id } });
+                return NextResponse.json({
+                    id: already.id,
+                    name: already.name,
+                    email: already.email,
+                    phone: already.phone,
+                    gender: already.gender,
+                    status: (already.status || 'active').toUpperCase(),
+                    sessionsCount: count,
+                });
+            }
         }
 
         const normalizedPhone = normalizePhone(phone);
@@ -110,6 +133,32 @@ export async function POST(req: NextRequest) {
             where: { psychologistId: auth.userId, phone: { in: variants } },
             orderBy: { updatedAt: 'desc' },
         }) : null;
+
+        // Гонка двух одновременных повторов: оба проходят проверку по ключу
+        // выше, и второй упирается в UNIQUE-индекс на clientRequestId (P2002).
+        // Для клиента это тот же случай «уже создано», а не ошибка сервера.
+        const createClientRow = async () => {
+            try {
+                return await db.diaryClient.create({
+                    data: {
+                        psychologistId: auth.userId,
+                        name: name.trim(),
+                        email: email || null,
+                        phone: normalizedPhone,
+                        gender: gender || null,
+                        clientRequestId: idempotencyKey,
+                    } as any,
+                });
+            } catch (error) {
+                const isDuplicateKey = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+                if (!isDuplicateKey || !idempotencyKey) throw error;
+                const raced = await db.diaryClient.findFirst({
+                    where: { clientRequestId: idempotencyKey, psychologistId: auth.userId } as any,
+                });
+                if (!raced) throw error;
+                return raced;
+            }
+        };
 
         const client = existing
             ? await db.diaryClient.update({
@@ -121,15 +170,7 @@ export async function POST(req: NextRequest) {
                     ...(!existing.gender && gender ? { gender } : {}),
                 },
             })
-            : await db.diaryClient.create({
-                data: {
-                    psychologistId: auth.userId,
-                    name: name.trim(),
-                    email: email || null,
-                    phone: normalizedPhone,
-                    gender: gender || null,
-                },
-            });
+            : await createClientRow();
 
         const sessionsCount = existing ? await db.diarySession.count({ where: { clientId: client.id } }) : 0;
 

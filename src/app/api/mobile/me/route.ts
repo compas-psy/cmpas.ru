@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
                 email: true,
                 image: true,
                 role: true,
+                analyticsConsentAt: true,
             },
         });
 
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
             email: user.email,
             role: (user.role || 'PSYCHOLOGIST').toUpperCase(),
             avatarUrl: user.image,
+            analyticsConsentAt: user.analyticsConsentAt ? user.analyticsConsentAt.toISOString() : null,
         });
     } catch (error) {
         console.error('[mobile/me]', error);

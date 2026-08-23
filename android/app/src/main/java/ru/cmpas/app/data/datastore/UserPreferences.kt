@@ -3,6 +3,7 @@ package ru.cmpas.app.data.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -23,6 +24,13 @@ class UserPreferences @Inject constructor(
         private val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
         private val USER_ID = stringPreferencesKey("user_id")
         private val USER_ROLE = stringPreferencesKey("user_role")
+
+        // Кэш согласия на аналитику — НЕ источник истины (им остаётся сервер,
+        // ru.cmpas.app.data.analytics.AnalyticsConsent). Нужен только чтобы
+        // тумблер в настройках и AnalyticsRecorder/AnalyticsTransport могли
+        // мгновенно и офлайн прочитать последнее известное состояние.
+        private val ANALYTICS_CONSENT_GRANTED = booleanPreferencesKey("analytics_consent_granted")
+        private val ANALYTICS_CONSENT_SINCE = stringPreferencesKey("analytics_consent_since")
     }
 
     suspend fun saveTokens(accessToken: String, refreshToken: String) {
@@ -54,4 +62,19 @@ class UserPreferences @Inject constructor(
     suspend fun clear() {
         context.dataStore.edit { it.clear() }
     }
+
+    /** Пишет последнее известное согласие с сервера в локальный кэш. */
+    suspend fun setAnalyticsConsent(granted: Boolean, since: String?) {
+        context.dataStore.edit { prefs ->
+            prefs[ANALYTICS_CONSENT_GRANTED] = granted
+            if (since != null) prefs[ANALYTICS_CONSENT_SINCE] = since else prefs.remove(ANALYTICS_CONSENT_SINCE)
+        }
+    }
+
+    /** null — кэш ни разу не заполнялся сервером (до логина, до первого refresh, при ошибке сети). */
+    suspend fun getAnalyticsConsentGranted(): Boolean? =
+        context.dataStore.data.map { it[ANALYTICS_CONSENT_GRANTED] }.first()
+
+    suspend fun getAnalyticsConsentSince(): String? =
+        context.dataStore.data.map { it[ANALYTICS_CONSENT_SINCE] }.first()
 }

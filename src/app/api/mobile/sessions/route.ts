@@ -58,8 +58,23 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { clientId, date, startTime, endTime, format, type, duration: durationReq } = await req.json();
+        const { clientId, date, startTime, endTime, format, type, duration: durationReq, clientRequestId, notes } = await req.json();
         if (!clientId || !date || !startTime) return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
+
+        // Идемпотентность досылки. Приложение рождает clientRequestId в момент
+        // постановки записи в очередь, а не в момент отправки, поэтому повтор
+        // после потерянного ответа приходит с тем же ключом. Возвращаем то, что
+        // уже создано, вместо второй сессии в расписании.
+        //
+        // Проверка идёт ДО проверки занятости времени: иначе повтор собственной
+        // же записи натыкался бы на неё саму и получал «Это время уже занято».
+        if (typeof clientRequestId === 'string' && clientRequestId) {
+            const already = await db.diarySession.findFirst({
+                where: { clientRequestId, psychologistId: auth.userId } as any,
+                include: { client: true },
+            });
+            if (already) return NextResponse.json(formatSession(already as any));
+        }
 
         const duration = durationReq || 50;
         const [hours, minutes] = startTime.split(':').map(Number);
@@ -80,10 +95,29 @@ export async function POST(req: NextRequest) {
             if (newStart < itemEnd && newEnd > itemStart) return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
         }
 
-        const session = await db.diarySession.create({
-            data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending' },
-            include: { client: true },
-        });
+        // Гонка двух одновременных повторов: оба проходят проверку выше, и
+        // второй упирается в UNIQUE-индекс на clientRequestId. Проверено на
+        // настоящем Postgres — БД отвергает дубль с P2002. Для клиента это тот
+        // же самый случай «уже создано», а не ошибка сервера.
+        const createSessionRow = async () => {
+            try {
+                return await db.diarySession.create({
+                    data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending', clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null, notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null } as any,
+                    include: { client: true },
+                });
+            } catch (error) {
+                const isDuplicateKey = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+                if (!isDuplicateKey || !clientRequestId) throw error;
+                const raced = await db.diarySession.findFirst({
+                    where: { clientRequestId, psychologistId: auth.userId } as any,
+                    include: { client: true },
+                });
+                if (!raced) throw error;
+                return raced;
+            }
+        };
+
+        const session = await createSessionRow();
 
         await createNotification({
             psychologistId: auth.userId,

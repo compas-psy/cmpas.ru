@@ -282,6 +282,112 @@ export async function qPracticeReminders(): Promise<PanelBlock<PracticeReminders
  * вычислить, нет — см. комментарий блока выше. Причина честная и новая, а
  * не унаследованная ложь про отсутствие приёмника.
  */
+export interface PracticeMobile {
+    /**
+     * Доля активных специалистов, давших согласие на аналитику, %.
+     * null — активных специалистов нет, делить не на что.
+     *
+     * Это не показатель здоровья продукта, а показатель ЧИТАЕМОСТИ всех
+     * остальных чисел в этом блоке.
+     */
+    consentShare: number | null;
+    /** Согласившихся / активных — сырые числа, чтобы долю можно было проверить. */
+    consented: number;
+    activeSpecialists: number;
+    /** Сессий, созданных с телефона за 7 дней (по событиям). */
+    mobileSessions: number;
+    /** Всего сессий создано за 7 дней (по бизнес-таблице). */
+    totalSessions: number;
+    /** Доля мобильных, %. null — знаменатель нулевой. */
+    mobileShare: number | null;
+    /**
+     * Доля действий с телефона, НЕ дошедших до сервера, % (delivered:false).
+     * Ради этого числа флаг delivered и заведён: молчаливая потеря работы
+     * специалиста была невидима ни в базе, ни пользователю.
+     */
+    undeliveredShare: number | null;
+}
+
+const MOBILE_EVENTS = [
+    'session_created',
+    'session_status_changed',
+    'session_note_saved',
+    'client_created',
+    'client_invite_created',
+];
+
+/**
+ * `q_practice_mobile` — что делают с телефона, и насколько этому можно верить.
+ *
+ * Числитель считается по `AnalyticsEvent` (события шлёт приложение), а
+ * знаменатель — по бизнес-таблице `DiarySession`. Это НЕ опечатка и не
+ * небрежность: база знает про все сессии, но не знает, каким интерфейсом их
+ * создали — поля источника у DiarySession нет, а заголовок X-Client сервер не
+ * читает нигде. Другого способа получить долю мобильных сегодня не существует.
+ *
+ * Отсюда обязательная оговорка, и она важнее самих чисел. События шлют только
+ * те, кто дал согласие; остальные не шлют ничего, включая app_opened. Значит
+ * числитель считает подмножество людей, а знаменатель — всех, и мобильная
+ * доля — ОЦЕНКА СНИЗУ по несамослучайной выборке, а не факт. `consentShare`
+ * стоит в блоке первым полем именно поэтому: без него остальные числа
+ * недобросовестно занижены, и по ним нельзя принимать решение.
+ *
+ * Пока событий нет вовсе — блок в `no_data` с настоящей причиной, а не с
+ * нулём: измеренный ноль и отсутствие измерения выглядят одинаково только в
+ * плохой панели.
+ */
+export async function qPracticeMobile(): Promise<PanelBlock<PracticeMobile>> {
+    const now = Date.now();
+    const weekAgo = new Date(now - 7 * DAY_MS);
+
+    const [events, totalSessions, consented, activeRows] = await Promise.all([
+        db.analyticsEvent.findMany({
+            where: { product: 'practice', event: { in: MOBILE_EVENTS }, ts: { gte: weekAgo } },
+            select: { event: true, props: true },
+        }),
+        db.diarySession.count({ where: { createdAt: { gte: weekAgo } } }),
+        db.user.count({ where: { analyticsConsentAt: { not: null } } }),
+        db.diarySession.findMany({
+            where: { date: { gte: new Date(now - 30 * DAY_MS) } },
+            select: { psychologistId: true },
+        }),
+    ]);
+
+    if (events.length === 0) {
+        return noData(
+            'q_practice_mobile',
+            'событий из приложения ещё не приходило: либо согласие никто не давал, либо сборка с аналитикой не вышла',
+        );
+    }
+
+    const activeSpecialists = new Set(activeRows.map((r) => r.psychologistId)).size;
+    const consentShare = activeSpecialists === 0 ? null : Math.round((consented / activeSpecialists) * 1000) / 10;
+
+    const mobileSessions = events.filter((e) => e.event === 'session_created').length;
+    const mobileShare = totalSessions === 0 ? null : Math.round((mobileSessions / totalSessions) * 1000) / 10;
+
+    // delivered есть у всех событий, кроме session_note_abandoned и app_opened —
+    // а их в MOBILE_EVENTS и нет.
+    const withDelivered = events.filter((e) => {
+        const props = (e.props ?? {}) as Record<string, unknown>;
+        return typeof props.delivered === 'boolean';
+    });
+    const undelivered = withDelivered.filter((e) => ((e.props ?? {}) as Record<string, unknown>).delivered === false).length;
+    const undeliveredShare = withDelivered.length === 0
+        ? null
+        : Math.round((undelivered / withDelivered.length) * 1000) / 10;
+
+    return ok('q_practice_mobile', {
+        consentShare,
+        consented,
+        activeSpecialists,
+        mobileSessions,
+        totalSessions,
+        mobileShare,
+        undeliveredShare,
+    });
+}
+
 export async function qZapiskiNsm(): Promise<PanelBlock<never>> {
     return noData(
         'q_zapiski_nsm',

@@ -27,7 +27,7 @@
 // is a mart-layer concern.
 
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { validateEvent, RawEvent } from './schema';
+import { validateEvent, loadRegistry, RawEvent } from './schema';
 import { isRateLimited, defaultRateLimitStore } from './rate-limit';
 
 type Db = Pick<PrismaClient, 'analyticsEvent' | 'analyticsEventRejected' | 'user' | 'analyticsDeviceConsent'>;
@@ -39,18 +39,111 @@ export type IngestResult =
 /** Наибольшая пачка, которую примет POST /ingest за один запрос (O-260817-17). */
 export const MAX_INGEST_BATCH_SIZE = 200;
 
+/**
+ * Что именно ложится в events_rejected.
+ *
+ * Раньше туда писался исходный конверт целиком (`payload: raw`). Строгая
+ * типизация props защищала только таблицу ПРИНЯТЫХ событий; у таблицы
+ * отвергнутых защиты не было вовсе — и обладатель валидного токена одним
+ * намеренно неправильным конвертом клал в базу произвольный текст: например,
+ * содержание заметки о клиенте, без ограничения размера. Клиент — не граница
+ * доверия, границей является сервер, и здесь она отсутствовала.
+ *
+ * Что остаётся. Структурные поля конверта — по ним видно, кто и что прислал.
+ * Значения ОБЪЯВЛЕННЫХ для этого события свойств — они по построению
+ * перечислимы, булевы или числа, свободного текста среди них нет, а видеть их
+ * необходимо: неверное значение перечисления и есть самый частый повод для
+ * отладки. Имена НЕЗАЯВЛЕННЫХ свойств сохраняются усечёнными до 32 символов —
+ * их достаточно, чтобы понять, что прислал клиент, и мало, чтобы пронести
+ * содержание; значения незаявленных свойств не сохраняются вовсе, только их
+ * тип.
+ */
+function rejectedPayload(raw: RawEvent): Record<string, unknown> {
+    const base: Record<string, unknown> = {
+        event: typeof raw.event === 'string' ? raw.event.slice(0, 64) : typeof raw.event,
+        ts: typeof raw.ts === 'string' ? raw.ts.slice(0, 40) : typeof raw.ts,
+        product: typeof raw.product === 'string' ? raw.product.slice(0, 32) : typeof raw.product,
+        account_id: raw.account_id ? 'есть' : null,
+        device_id: raw.device_id ? 'есть' : null,
+        schema_version: typeof raw.schema_version === 'number' ? raw.schema_version : typeof raw.schema_version,
+        event_id: typeof raw.event_id === 'string' ? raw.event_id.slice(0, 64) : null,
+    };
+
+    if (raw.props === null || raw.props === undefined) {
+        base.props = raw.props === null ? null : undefined;
+        return base;
+    }
+    if (typeof raw.props !== 'object' || Array.isArray(raw.props)) {
+        // Сам факт «props не объект» — это и есть причина отказа; значение
+        // сюда не переносим, потому что именно им и проносили текст.
+        base.props_type = Array.isArray(raw.props) ? 'array' : typeof raw.props;
+        return base;
+    }
+
+    const declared = new Set<string>();
+    const def = typeof raw.event === 'string' ? loadRegistry().events[raw.event] : undefined;
+    if (def) {
+        for (const key of def.required) declared.add(key);
+        for (const key of def.optional) declared.add(key);
+    }
+
+    const props: Record<string, unknown> = {};
+    let extra = 0;
+    for (const [key, value] of Object.entries(raw.props as Record<string, unknown>)) {
+        if (declared.has(key)) {
+            // Объявленное свойство: значение видно, но только если оно
+            // примитив — вложенный объект под знакомым именем это попытка
+            // пронести содержание, а не отладочные данные.
+            props[key] = (typeof value === 'object' && value !== null) ? `[${Array.isArray(value) ? 'array' : 'object'}]` : value;
+        } else {
+            if (extra >= 10) continue;
+            extra += 1;
+            // Усечения имени недостаточно: имя свойства само может быть
+            // текстом («клиент рассказал про...»), и первые же его символы
+            // пронесут содержание. Поэтому имя сохраняется, только если оно
+            // ВЫГЛЯДИТ как имя свойства — короткий snake_case из латиницы.
+            // Настоящая ошибка клиента («note_length», «clientId») этому
+            // виду отвечает; произвольный текст — нет.
+            const looksLikePropName = /^[a-z][a-z0-9_]{0,31}$/i.test(key);
+            const label = looksLikePropName ? key : `поле №${extra}`;
+            props[`${label} (не объявлено)`] = `[${typeof value}]`;
+        }
+    }
+    base.props = props;
+    return base;
+}
+
 export async function processIngestEvent(
     db: Db,
     raw: RawEvent,
     now: Date = new Date(),
     rateLimitStore: Map<string, number[]> = defaultRateLimitStore,
+    /**
+     * Разрешён ли предъявленному секрету этот продукт (см.
+     * src/lib/analytics/secrets.ts). По умолчанию — разрешено всё: так
+     * существующие вызовы и тесты, которые про привязку ничего не знают,
+     * ведут себя ровно как раньше. Маршрут передаёт настоящую проверку.
+     */
+    productAllowed: (product: string) => boolean = () => true,
 ): Promise<IngestResult> {
     const validation = validateEvent(raw);
     if (!validation.valid) {
         await db.analyticsEventRejected.create({
-            data: { reason: validation.reason, payload: raw as object },
+            data: { reason: validation.reason, payload: rejectedPayload(raw) },
         });
         return { accepted: false, reason: validation.reason };
+    }
+
+    // Привязка секрет→продукт сверяется ПОСЛЕ проверки конверта: испорченный
+    // конверт обязан получать «неверный конверт», а не «не тот продукт» —
+    // иначе причина отказа зависела бы от того, чей секрет предъявлен, и
+    // отладка чужой стороны превращалась бы в угадайку.
+    if (!productAllowed(raw.product as string)) {
+        const reason = `secret not allowed for product ${raw.product}`;
+        await db.analyticsEventRejected.create({
+            data: { reason, payload: rejectedPayload(raw) },
+        });
+        return { accepted: false, reason };
     }
 
     // Идемпотентность (O-260817-17): event_id необязателен — без него
@@ -117,7 +210,7 @@ async function writeAccountEvent(
     const user = await db.user.findUnique({ where: { id: accountId }, select: { id: true, analyticsConsentAt: true } });
     if (!user) {
         await db.analyticsEventRejected.create({
-            data: { reason: 'unknown account_id', payload: raw as object },
+            data: { reason: 'unknown account_id', payload: rejectedPayload(raw) },
         });
         return { accepted: false, reason: 'unknown account_id' };
     }
@@ -176,7 +269,7 @@ async function writeDeviceOnlyEvent(
     // event is still written with device_id stripped.
     if (!consentGiven) {
         await db.analyticsEventRejected.create({
-            data: { reason: 'consent required for a device without an account', payload: raw as object },
+            data: { reason: 'consent required for a device without an account', payload: rejectedPayload(raw) },
         });
         return { accepted: false, reason: 'consent required for a device without an account' };
     }
@@ -239,7 +332,7 @@ async function writeForeignProductEvent(
     // device_id.
     if (!consentGiven) {
         const reason = `consent required for ${product} subject (no consent on file)`;
-        await db.analyticsEventRejected.create({ data: { reason, payload: raw as object } });
+        await db.analyticsEventRejected.create({ data: { reason, payload: rejectedPayload(raw) } });
         return { accepted: false, reason };
     }
 

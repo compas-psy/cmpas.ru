@@ -7,7 +7,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.data.analytics.AnalyticsRecorder
+import ru.cmpas.app.data.analytics.SessionStatusTarget
 import ru.cmpas.app.data.api.CompasApi
+import ru.cmpas.app.data.api.ResendReminderRequest
 import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.data.api.UpdateSessionRequest
 import ru.cmpas.app.domain.model.ClientDetail
@@ -22,6 +25,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SessionDetailViewModel @Inject constructor(
     private val api: CompasApi,
+    private val analytics: AnalyticsRecorder,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionDetailUiState())
     val uiState = _uiState.asStateFlow()
@@ -49,6 +53,9 @@ class SessionDetailViewModel @Inject constructor(
                             reminders = reminders,
                         )
                     }
+                    // Расчётные статусы из buildReminders — предположение по
+                    // часам. Если сервер знает фактический исход, он заменит их.
+                    if (session != null) loadServerReminders(session.id)
                 } else {
                     _uiState.update { it.copy(isLoading = false, error = "Сессия не найдена") }
                 }
@@ -58,10 +65,24 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(clientId: String, sessionId: String, text: String) {
+    /**
+     * Ручное сообщение клиенту.
+     *
+     * Раньше вызов был обёрнут в runCatching, результат отбрасывался, и наружу
+     * не сообщалось ничего: отправленное и не отправленное выглядели для
+     * специалиста одинаково — окно просто закрывалось. Теперь исход называется.
+     */
+    fun sendMessage(clientId: String, sessionId: String, text: String, onFinished: (Boolean, String) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            runCatching {
-                api.sendMessage(clientId, SendMessageRequest(type = "custom", text = text, sessionId = sessionId))
+            try {
+                val response = api.sendMessage(clientId, SendMessageRequest(type = "custom", text = text, sessionId = sessionId))
+                if (response.isSuccessful) {
+                    onFinished(true, "Сообщение отправлено")
+                } else {
+                    onFinished(false, "Не удалось отправить сообщение")
+                }
+            } catch (e: Exception) {
+                onFinished(false, e.localizedMessage ?: "Не удалось отправить сообщение")
             }
         }
     }
@@ -83,10 +104,76 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
-    /** TODO API: заменить локальное состояние на endpoint повторной отправки. */
-    fun resendReminder(sessionId: String, reminderId: String) {
-        _uiState.update { state ->
-            state.copy(reminders = state.reminders.map { if (it.id == reminderId) it.copy(status = ReminderStatus.SENT) else it })
+    /**
+     * Повторная отправка напоминания — настоящая, через сервер.
+     *
+     * Прежняя версия просто переводила напоминание в SENT в состоянии экрана
+     * и ничего не отправляла (TODO API). Её никто не вызывал, поэтому вреда
+     * она не нанесла, но такая заготовка — заряженная ловушка: первый же, кто
+     * подключит к ней кнопку, получит рапорт об отправке без отправки.
+     *
+     * Исход берётся из ответа сервера: он же пишет попытку в ReminderOutbox,
+     * тем же путём, что и рассылка по расписанию.
+     */
+    fun resendReminder(sessionId: String, reminderId: String, onFinished: (Boolean, String) -> Unit) {
+        val kind = when {
+            reminderId.endsWith(":24h") -> "session_24h_client"
+            reminderId.endsWith(":1h") -> "session_1h_client"
+            else -> null
+        }
+        if (kind == null) {
+            onFinished(false, "Неизвестный тип напоминания")
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(resendingReminderId = reminderId) }
+            try {
+                val response = api.resendSessionReminder(sessionId, ResendReminderRequest(kind))
+                val body = response.body()
+                if (response.isSuccessful && body?.sent == true) {
+                    loadServerReminders(sessionId)
+                    onFinished(true, "Напоминание отправлено")
+                } else {
+                    onFinished(false, body?.message ?: "Не удалось отправить напоминание")
+                }
+            } catch (e: Exception) {
+                onFinished(false, e.localizedMessage ?: "Не удалось отправить напоминание")
+            } finally {
+                _uiState.update { it.copy(resendingReminderId = null) }
+            }
+        }
+    }
+
+    /**
+     * Настоящий статус напоминаний — из ReminderOutbox, а не из часов.
+     *
+     * buildReminders() помечает напоминание как SENT, едва проходит его момент.
+     * Это догадка: сервер мог не отправить сообщение вовсе. Когда сервер знает
+     * исход, он его и показывает; пока строки в журнале нет — остаётся расчёт
+     * по расписанию, но уже не выдаётся за подтверждённую отправку.
+     */
+    private fun loadServerReminders(sessionId: String) {
+        viewModelScope.launch {
+            val rows = try {
+                val response = api.getSessionReminders(sessionId)
+                if (response.isSuccessful) response.body()?.reminders.orEmpty() else emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (rows.isEmpty()) return@launch
+            _uiState.update { state ->
+                state.copy(
+                    reminders = state.reminders.map { reminder ->
+                        val kind = if (reminder.id.endsWith(":24h")) "session_24h_client" else "session_1h_client"
+                        val known = rows.filter { it.kind == kind }
+                        when {
+                            known.isEmpty() -> reminder
+                            known.any { it.status == "sent" } -> reminder.copy(status = ReminderStatus.SENT)
+                            else -> reminder.copy(status = ReminderStatus.FAILED)
+                        }
+                    },
+                )
+            }
         }
     }
 
@@ -98,11 +185,14 @@ class SessionDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
                     PracticeRefreshBus.notifyChanged()
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CONFIRMED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка подтверждения") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CONFIRMED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CONFIRMED, false) }
             }
         }
     }
@@ -115,11 +205,14 @@ class SessionDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
                     PracticeRefreshBus.notifyChanged()
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.COMPLETED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.COMPLETED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.COMPLETED, false) }
             }
         }
     }
@@ -132,11 +225,14 @@ class SessionDetailViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, cancelled = true) }
                     PracticeRefreshBus.notifyChanged()
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CANCELLED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка отмены") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CANCELLED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.CANCELLED, false) }
             }
         }
     }
@@ -165,11 +261,14 @@ class SessionDetailViewModel @Inject constructor(
                 val r = api.updateSession(sessionId, UpdateSessionRequest(date = newDate, startTime = newTime))
                 if (r.isSuccessful) {
                     _uiState.update { it.copy(isActionLoading = false, session = r.body(), showRescheduleDialog = false) }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.RESCHEDULED, true) }
                 } else {
                     _uiState.update { it.copy(isActionLoading = false, actionError = "Время уже занято") }
+                    runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.RESCHEDULED, false) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+                runCatching { analytics.recordSessionStatusChanged(SessionStatusTarget.RESCHEDULED, false) }
             }
         }
     }
@@ -200,4 +299,6 @@ data class SessionDetailUiState(
     val freeTimes: List<String> = emptyList(),
     val freeTimesError: String? = null,
     val reminders: List<SessionReminder> = emptyList(),
+    /** id напоминания, которое сейчас отправляется повторно. */
+    val resendingReminderId: String? = null,
 )

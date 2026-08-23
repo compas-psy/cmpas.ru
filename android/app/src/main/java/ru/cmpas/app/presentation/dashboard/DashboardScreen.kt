@@ -24,6 +24,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
@@ -46,6 +49,20 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = LocalUriHandler.current
     var showNotifications by rememberSaveable { mutableStateOf(false) }
+
+    // Возвращение в приложение — момент, когда связь чаще всего появляется.
+    // До этого refresh() не вызывался НИОТКУДА: очередь досылки пробовала
+    // уехать только при создании ViewModel, то есть фактически один раз за
+    // запуск. Специалист, создавший запись офлайн и дождавшийся связи не
+    // выходя из приложения, дослал бы её лишь после перезапуска.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
@@ -75,6 +92,36 @@ fun DashboardScreen(
                         badge = uiState.attentionItems.isNotEmpty() || uiState.notifications.any { it.unread },
                         onClick = { showNotifications = true },
                     )
+                }
+            }
+
+            // Недоставленное названо вслух. Без счётчика молчаливая потеря просто
+            // превращается в молчаливое ожидание: специалист не узнает ни того,
+            // что запись не уехала, ни того, что она уехала потом.
+            if (uiState.undeliveredCount > 0) {
+                item {
+                    GlassCard(padding = 14.dp) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.CloudOff,
+                                null,
+                                Modifier.size(19.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "Не доставлено на сервер: ${uiState.undeliveredCount}",
+                                    style = tBody2,
+                                )
+                                Text(
+                                    "Записи сохранены на устройстве и уедут, когда появится связь",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

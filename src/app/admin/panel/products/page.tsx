@@ -13,6 +13,7 @@ import type {
     MomentyActivation,
     MomentyInstalls,
     MomentyRetention,
+    PracticeMobile,
 } from '@/lib/panel/queries/products';
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card } from '@/components/panel/block';
@@ -90,6 +91,7 @@ function Practice({ blocks }: { blocks: Blocks }) {
     const reschedule = pick<PracticeReschedule>(blocks, 'reschedule');
     const bookingAuthor = pick<never>(blocks, 'bookingAuthor');
     const reminders = pick<never>(blocks, 'reminders');
+    const mobile = pick<PracticeMobile>(blocks, 'mobile');
 
     return (
         <>
@@ -135,6 +137,52 @@ function Practice({ blocks }: { blocks: Blocks }) {
                     </BlockFrame>
                 </Card>
             </Grid>
+
+            <Card>
+                <BlockFrame block={mobile} label="С телефона" minHeight={130}>
+                    {(d) => (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {/* Оговорка стоит ПЕРВОЙ и набрана заметнее самих чисел.
+                                События шлют только согласившиеся, а знаменатель считается
+                                по всем — значит любая доля ниже оценка снизу, а не факт.
+                                Спрятать эту строку под числа означало бы выдать оценку
+                                за измерение. */}
+                            <div
+                                style={{
+                                    fontSize: 13,
+                                    lineHeight: 1.45,
+                                    color: 'var(--p-muted)',
+                                    borderLeft: '2px solid var(--p-line)',
+                                    paddingLeft: 10,
+                                }}
+                            >
+                                {d.consentShare === null ? (
+                                    <>Активных специалистов нет — долю согласий не с чем сравнить.</>
+                                ) : (
+                                    <>
+                                        Оценка, не факт: согласие на аналитику дали{' '}
+                                        <strong>{dec(d.consentShare, 1)} %</strong> специалистов
+                                        ({num(d.consented)} из {num(d.activeSpecialists)}). Остальные
+                                        не шлют событий вовсе, поэтому доли ниже занижены.
+                                    </>
+                                )}
+                            </div>
+                            <Grid cols={2} gap={12}>
+                                <StatTile
+                                    value={d.mobileShare === null ? '—' : dec(d.mobileShare, 1)}
+                                    unit={d.mobileShare === null ? undefined : '%'}
+                                    note={`записей с телефона: ${num(d.mobileSessions)} из ${num(d.totalSessions)} за 7 дней`}
+                                />
+                                <StatTile
+                                    value={d.undeliveredShare === null ? '—' : dec(d.undeliveredShare, 1)}
+                                    unit={d.undeliveredShare === null ? undefined : '%'}
+                                    note="действий с телефона не дошло до сервера"
+                                />
+                            </Grid>
+                        </div>
+                    )}
+                </BlockFrame>
+            </Card>
         </>
     );
 }

@@ -27,6 +27,24 @@
 import { describe, it, expect } from 'vitest';
 import { loadRegistry, eventProducts } from '@/lib/analytics/schema';
 
+// PRACTICE_SNAPSHOT — семь событий мобильного приложения ПРАКТИКИ
+// (android/**, отдельный агент). Никакого отдельного клиентского реестра
+// вроде zapiski/compas-voice для этого репозитория нет: android/** живёт в
+// этом же репозитории, а не в отдельном. Снимок здесь всё равно фиксирует
+// "форму контракта" (какие события и props обязаны существовать в
+// analytics/schema/events.yaml) тем же способом, что и у ЗАПИСОК/МОМЕНТОВ —
+// чтобы случайное удаление события или prop из реестра ловилось тестом, а
+// не только глазами на код-ревью.
+const PRACTICE_SNAPSHOT: Record<string, string[]> = {
+    app_opened: ['surface', 'first_launch'],
+    session_created: ['surface', 'delivered', 'repeat_batch', 'days_ahead_bucket'],
+    session_status_changed: ['surface', 'to', 'delivered'],
+    session_note_saved: ['surface', 'delivered', 'mode', 'blocks_filled', 'since_session_bucket'],
+    session_note_abandoned: ['surface', 'had_input'],
+    client_created: ['surface', 'delivered'],
+    client_invite_created: ['surface', 'channel', 'delivered'],
+};
+
 const ZAPISKI_SNAPSHOT: Record<string, string[]> = {
     note_saved: ['length_bucket', 'encrypted'],
     note_searched: ['query_length_bucket', 'results_count'],
@@ -65,5 +83,9 @@ describe('central registry is a superset of product registries (O-260817-17)', (
 
     it('contains every moments event and prop from the 18.08.2026 snapshot', () => {
         assertSuperset('moments', MOMENTS_SNAPSHOT);
+    });
+
+    it('contains every practice (mobile app) event and prop from the PRACTICE_SNAPSHOT', () => {
+        assertSuperset('practice', PRACTICE_SNAPSHOT);
     });
 });

@@ -20,6 +20,8 @@ core-ktx = "1.15.0"
 activity-compose = "1.9.3"
 accompanist = "0.36.0"
 core-splashscreen = "1.0.1"
+robolectric = "4.14.1"
+androidx-test-core = "1.6.1"
 
 [libraries]
 # Compose BOM
@@ -74,6 +76,11 @@ firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging
 
 # QR (invite links) — pure-Java, no Play Services required
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing-core" }
+
+# Тесты на JVM: Robolectric даёт настоящий SharedPreferences, поэтому
+# LocalPracticeStore тестируется как есть, без подмены хранилища заглушкой.
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidx-test-core" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

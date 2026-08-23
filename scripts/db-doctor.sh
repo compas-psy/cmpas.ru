@@ -81,3 +81,140 @@ echo "### Заданы ли ключи терминалов в окружени�
 for k in TINKOFF_TERMINAL_KEY TINKOFF_PASSWORD TINKOFF_APP_TERMINAL_KEY TINKOFF_APP_PASSWORD SMTP_USER SMTP_PASSWORD; do
   if grep -q "^${k}=." /var/www/cmpas.ru/.env 2>/dev/null; then echo "$k: задан"; else echo "$k: НЕ задан"; fi
 done
+
+# ── Доступность сайта снаружи и изнутри (добавлено 20.08 при разборе падения) ──
+# Прежняя версия отвечала только на вопрос «что с базой». Когда сайт лёг, а
+# контейнеры при этом живы, нужен ответ на другой вопрос: где именно рвётся
+# путь запроса — на TLS, на шлюзе или в самом приложении.
+
+echo "### Отвечает ли приложение внутри сервера"
+for probe in "http://localhost:3000/" "http://localhost:3000/diary" "http://localhost:3000/api/admin/health"; do
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$probe" 2>&1 || echo "нет ответа")
+  echo "$probe -> $code"
+done
+
+echo "### Отвечает ли сайт снаружи (с самого сервера, через полный путь)"
+for probe in "https://cmpas.ru/" "https://cmpas.ru/diary" "https://cmpas.ru/admin"; do
+  code=$(curl -sS -o /dev/null -w '%{http_code} за %{time_total}s' --max-time 20 "$probe" 2>&1 || echo "нет ответа")
+  echo "$probe -> $code"
+done
+
+echo "### Сертификат cmpas.ru"
+echo | timeout 15 openssl s_client -connect cmpas.ru:443 -servername cmpas.ru 2>/dev/null \
+  | openssl x509 -noout -dates -subject -issuer 2>&1 | head -6 || echo "сертификат не читается — рукопожатие не состоялось"
+
+echo "### Кто слушает 80 и 443"
+(ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -E ':(80|443|3000)\b' | head -10 || echo "не удалось прочитать"
+
+echo "### Журнал приложения, последние 60 строк"
+docker logs --tail 60 cmpas-app 2>&1 | tail -60 || echo "журнал не читается"
+
+echo "### Журнал контейнера в цикле перезапуска"
+docker logs --tail 30 cmpas-singbox 2>&1 | tail -30 || echo "журнал не читается"
+
+echo "### Почему перезапускался app (последний выход)"
+docker inspect cmpas-app --format 'запусков={{.RestartCount}} статус={{.State.Status}} код выхода={{.State.ExitCode}} убит по памяти={{.State.OOMKilled}} стартовал={{.State.StartedAt}}' 2>&1 | head -3 || echo "не удалось"
+
+echo "### Свободное место подробно"
+df -h / /var/lib/docker 2>&1 | head -5
+
+echo "### Какой образ реально запущен"
+docker inspect cmpas-app --format 'образ={{.Config.Image}} создан={{.Created}} запущен={{.State.StartedAt}}' 2>&1 | head -2
+docker images --format '{{.Repository}}:{{.Tag}} {{.ID}} {{.CreatedSince}}' 2>&1 | head -8
+echo "### Метка сборки внутри контейнера"
+docker exec cmpas-app sh -lc 'cat /app/BUILD_INFO 2>/dev/null || ls -la /app/.next/BUILD_ID 2>/dev/null && cat /app/.next/BUILD_ID 2>/dev/null' 2>&1 | head -4
+echo "### Есть ли панель в запущенной сборке"
+docker exec cmpas-app sh -lc 'ls /app/.next/server/app/admin/ 2>/dev/null' 2>&1 | head -20
+echo "### Хвост журнала последней выкладки"
+tail -40 /tmp/cmpas-deploy.log 2>&1 | tail -40
+
+# ── Аналитический контур (проверка выкатки feature/analytics) ──────────────
+echo "### Флаги аналитики в /var/www/cmpas.ru/.env"
+for k in ANALYTICS_INGEST_ENABLED ANALYTICS_TRACKING_ENABLED ANALYTICS_INGEST_SECRET; do
+  v=$(grep -E "^${k}=" /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)
+  if [ -z "$v" ]; then echo "$k: НЕ задан"
+  elif [ "$k" = "ANALYTICS_INGEST_SECRET" ]; then echo "$k: задан (длина ${#v})"
+  else echo "$k=$v"; fi
+done
+
+echo "### Файлы с секретом приёмника"
+for f in /etc/simpas/ingest-secret /var/www/zapiski/.ingest-secret; do
+  if [ -f "$f" ]; then echo "$f: есть, $(stat -c '%s байт, права %a, владелец %U' "$f" 2>/dev/null)"
+  else echo "$f: ОТСУТСТВУЕТ"; fi
+done
+
+echo "### Контейнер infra-pulse"
+docker ps -a --filter 'name=infra-pulse' --format '{{.Names}} | {{.Status}} | {{.Image}}' 2>&1 | head -5
+docker ps -a --filter 'name=infra-pulse' -q 2>/dev/null | head -1 | grep -q . || echo "контейнера infra-pulse нет вовсе"
+
+echo "### Свежесть строк InfraPulse"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'строк всего=' || count(*) FROM \"InfraPulse\";" 2>&1 | head -2
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'последняя=' || COALESCE(max(\"collectedAt\")::text,'нет') || ' возраст_мин=' || COALESCE(round(extract(epoch from (now()-max(\"collectedAt\")))/60)::text,'-') FROM \"InfraPulse\";" 2>&1 | head -2
+
+echo "### Таблицы аналитического контура"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('ReminderOutbox','events','events_rejected','Subscription','analytics_device_consent') ORDER BY 1;" 2>&1 | head -8
+
+echo "### Наполнение событий и подписок"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'events=' || count(*) FROM events;" 2>&1 | head -2
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'подписок=' || count(*) FROM \"Subscription\";" 2>&1 | head -2
+
+echo "### Разделение секретов по продуктам"
+# Проверяем не «настроено ли», а «работает ли»: берём НАСТОЯЩИЙ общий секрет
+# из окружения контейнера и пробуем прислать им событие МОМЕНТОВ. Он для
+# practice и zapiski, значит приёмник обязан отвергнуть конверт с причиной про
+# продукт — при этом сам запрос авторизован, то есть проверяется именно
+# привязка секрет→продукт, а не отсутствие секрета.
+docker exec cmpas-app node -e "
+const secret = process.env.ANALYTICS_INGEST_SECRET;
+const momentsSecret = process.env.ANALYTICS_INGEST_SECRET_MOMENTS;
+console.log('ANALYTICS_INGEST_SECRET: ' + (secret ? 'задан, длина ' + secret.length : 'НЕ ЗАДАН'));
+console.log('ANALYTICS_INGEST_SECRET_MOMENTS: ' + (momentsSecret ? 'задан, длина ' + momentsSecret.length : 'НЕ ЗАДАН (МОМЕНТЫ получат 401 — как и сегодня)'));
+if (!secret) { console.log('нечем проверять привязку'); process.exit(0); }
+const envelope = {
+  event: 'app_installed', ts: new Date().toISOString(), product: 'moments',
+  device_id: 'doctor-probe', props: {}, schema_version: 1,
+};
+fetch('http://localhost:3000/api/ingest', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },
+  body: JSON.stringify(envelope),
+}).then(async r => {
+  const body = await r.text();
+  console.log('секретом ПРАКТИКИ шлём событие МОМЕНТОВ -> HTTP ' + r.status + ' ' + body.slice(0, 200));
+  if (body.includes('secret not allowed for product')) console.log('ПРИВЯЗКА РАБОТАЕТ: чужой продукт отвергнут');
+  else console.log('ВНИМАНИЕ: ожидали отказ по продукту, получили другое');
+}).catch(e => console.log('запрос не прошёл: ' + e.message));
+" 2>&1 | head -8
+
+echo "### Мобильные маршруты аналитики (без токена — ждём 401)"
+for route in /api/mobile/analytics /api/mobile/analytics/consent; do
+  docker exec cmpas-app node -e "
+  fetch('http://localhost:3000$route', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '[]',
+  }).then(r => console.log('POST $route -> ' + r.status))
+    .catch(e => console.log('запрос не прошёл: ' + e.message));
+  " 2>&1 | head -2
+done
+
+echo "### Срок хранения событий"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'событий старше 180 дней: ' || count(*) FROM events WHERE ts < NOW() - INTERVAL '180 days';" 2>&1 | head -2
+
+echo "### Приёмник изнутри сервера (без заголовка — ждём 401)"
+# curl в образе приложения нет (alpine без него) — стучимся тем, что там
+# заведомо есть: node. Прошлый прогон здесь молча вернул «curl: not found».
+docker exec cmpas-app node -e "
+fetch('http://localhost:3000/api/ingest', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{}',
+}).then(r => console.log('POST /api/ingest -> ' + r.status))
+  .catch(e => console.log('запрос не прошёл: ' + e.message));
+" 2>&1 | head -3

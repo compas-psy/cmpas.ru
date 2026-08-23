@@ -8,6 +8,13 @@ on:
       - 'src/app/api/mobile/**'
       - 'src/lib/mobile-auth.ts'
       - 'src/lib/legal-documents.ts'
+      # Стыковочный тест конверта гоняет НАСТОЯЩИЙ приёмник — значит правка
+      # приёмника обязана его запускать. Без этих трёх строк PR, меняющий
+      # только валидатор, реестр или проверку секретов, не запускал ни одного
+      # теста ни в одном workflow.
+      - 'src/lib/analytics/**'
+      - 'analytics/schema/**'
+      - 'src/app/api/ingest/**'
       - '.github/workflows/android-build.yml'
   pull_request:
     paths:
@@ -15,6 +22,13 @@ on:
       - 'src/app/api/mobile/**'
       - 'src/lib/mobile-auth.ts'
       - 'src/lib/legal-documents.ts'
+      # Стыковочный тест конверта гоняет НАСТОЯЩИЙ приёмник — значит правка
+      # приёмника обязана его запускать. Без этих трёх строк PR, меняющий
+      # только валидатор, реестр или проверку секретов, не запускал ни одного
+      # теста ни в одном workflow.
+      - 'src/lib/analytics/**'
+      - 'analytics/schema/**'
+      - 'src/app/api/ingest/**'
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
@@ -59,12 +73,221 @@ jobs:
       # This keeps the signature stable across builds so installs update
       # in place instead of requiring an uninstall.
 
-      - name: Build Debug APK
+      # Тесты гоняются ДО сборки: провалившийся тест обязан останавливать
+      # выкладку APK, а не приезжать вместе с ним. До этого шага в этом
+      # workflow не запускался ни один тест, при том что тесты в репозитории
+      # лежали.
+      - name: Run unit tests
         working-directory: android
         shell: bash
         run: |
           set -o pipefail
-          /tmp/gradle-8.9/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee ../android-build.log
+          # Без --stacktrace: на упавшем тесте Gradle печатает полсотни строк
+          # собственного стека исполнителя, в которых тонет единственное, что
+          # нужно — какой тест упал и почему.
+          /tmp/gradle-8.9/bin/gradle testDebugUnitTest --no-daemon 2>&1 | tee ../android-test.log
+
+      # Компактный итог прямо в журнал прогона. Отчёт выгружается артефактом,
+      # но артефакты GitHub лежат в blob-хранилище, к которому из части сред
+      # нет доступа (CONNECT tunnel failed, 403) — и тогда «тесты упали»
+      # приходит без единого слова о том, какие именно.
+      #
+      # Разбор идёт grep/sed, без вложенного heredoc: heredoc внутри блока
+      # run: в YAML требует терминатора в нулевой колонке, а блок неизбежно
+      # с отступом — такой шаг молча не делает ничего.
+      - name: Итог тестов
+        if: always()
+        working-directory: android
+        shell: bash
+        run: |
+          results=app/build/test-results/testDebugUnitTest
+          if [ ! -d "$results" ]; then
+            echo "Результатов нет — тесты не запускались."
+            exit 0
+          fi
+          echo "===== ИТОГ ТЕСТОВ ====="
+          grep -h -o 'tests="[0-9]*"[^>]*failures="[0-9]*"[^>]*errors="[0-9]*"' "$results"/*.xml || true
+          echo "===== ЧТО ИМЕННО УПАЛО ====="
+          if grep -l '<failure\|<error' "$results"/*.xml >/dev/null 2>&1; then
+            for f in $(grep -l '<failure\|<error' "$results"/*.xml); do
+              echo "--- $(basename "$f")"
+              tr '<' '\n' < "$f" \
+                | sed -n -e 's/^testcase name="\([^"]*\)".*/  ТЕСТ: \1/p' \
+                         -e 's/^failure message="\([^"]*\)".*/      ПРИЧИНА: \1/p' \
+                         -e 's/^error message="\([^"]*\)".*/      ОШИБКА: \1/p'
+            done
+          else
+            echo "  (провалов нет)"
+          fi
+
+      # Стык приложения и приёмника — настоящим конвертом, а не пересказом.
+      #
+      # Зачем именно так. В репозитории уже был tests/cross-repo-contract.ts, и
+      # он сам про себя честно писал, что фикстура МОМЕНТОВ «ВЫВЕДЕНА ЧТЕНИЕМ»
+      # кода Kotlin, потому что Gradle в той среде не поднимался. Такая фикстура
+      # проверяет представление автора о своём же коде, а не сам код. Здесь
+      # Gradle есть: конверт собирает НАСТОЯЩИЙ билдер приложения, тест
+      # выкладывает его файлом, а дальше он проходит через НАСТОЯЩИЙ маршрут и
+      # НАСТОЯЩИЙ валидатор приёмника из этого же репозитория.
+      #
+      # Отсутствие файла — провал, а не пропуск: молча пройденная проверка
+      # выглядит как зелёная ровно так же, как выполненная.
+      - name: Проверить конверт аналитики против приёмника
+        if: success()
+        shell: bash
+        run: |
+          fixture=android/app/build/analytics-fixture/practice-android-envelopes.json
+          if [ ! -s "$fixture" ]; then
+            echo "Конверт не выложен приложением ($fixture отсутствует или пуст)."
+            echo "Тест приложения обязан его записать — иначе стык не проверяется вовсе."
+            exit 1
+          fi
+          mkdir -p tests/fixtures/android
+          cp "$fixture" tests/fixtures/android/practice-android-envelopes.json
+          echo "Конверт от приложения:"
+          cat tests/fixtures/android/practice-android-envelopes.json
+
+      - name: Set up Node
+        if: success()
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Прогнать конверт через приёмник
+        if: success()
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npx vitest run --config vitest.contract.mts
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: |
+            android-test.log
+            android/app/build/reports/tests/
+            android/app/build/test-results/
+          retention-days: 14
+
+      - name: Build Release APK
+        working-directory: android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -o pipefail
+          # Ключ кладём во временный каталог, если он есть. Нет — собираем
+          # неподписанным: proguard прогоняется в любом случае, а гейт подписи
+          # ниже не даст ничего опубликовать.
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            umask 077
+            mkdir -p "${RUNNER_TEMP}/signing"
+            printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/signing/praktika.jks"
+            export ANDROID_KEYSTORE_PATH="${RUNNER_TEMP}/signing/praktika.jks"
+          fi
+          /tmp/gradle-8.9/bin/gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee ../android-build.log
+
+      # Гейт подписи стоит ПОСЛЕ сборки намеренно.
+      #
+      # Без ключа сборка всё равно происходит — и это ценно: она прогоняет
+      # proguard, то есть проверяет, переживают ли сериализация и рефлексия
+      # сокращение кода. Без ключа пакет выходит неподписанным, гейт ниже
+      # роняет прогон, и наверх не уходит ничего: ни артефакта, ни релиза.
+      # Так проверяется больше, а опубликовать нечего в обоих случаях.
+      # Ключ подписи приходит из секретов, а не из репозитория.
+      #
+      # Раньше он лежал в android/keystore/compas-release.jks вместе с паролями
+      # в build.gradle.kts. Любой, кто получал доступ к репозиторию, мог
+      # подписать им своё приложение — и оно встало бы поверх настоящего на
+      # телефонах людей как обновление: для Android «то же самое приложение»
+      # означает «тот же applicationId и та же подпись».
+      #
+      # Ключ ТОТ ЖЕ САМЫЙ, просто переехал. Смена ключа означала бы, что
+      # обновление поверх установленных копий перестанет работать и людям
+      # пришлось бы удалять приложение.
+      #
+      # Половина комплекта секретов — отказ, а не повод собрать отладочный
+      # пакет: это ошибка настройки. Отладочный пакет и был исходным дефектом.
+      - name: Подготовить ключ подписи
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${ANDROID_KEYSTORE_BASE64}" ]   || missing="${missing} ANDROID_KEYSTORE_BASE64"
+          [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] || missing="${missing} ANDROID_KEYSTORE_PASSWORD"
+          [ -n "${ANDROID_KEY_ALIAS}" ]         || missing="${missing} ANDROID_KEY_ALIAS"
+          [ -n "${ANDROID_KEY_PASSWORD}" ]      || missing="${missing} ANDROID_KEY_PASSWORD"
+          if [ -n "${missing}" ]; then
+            echo "::error::Нет секретов подписи:${missing}"
+            echo "Собрать пакет для людей без постоянного ключа нельзя: он подписался бы"
+            echo "отладочным ключом, не встал бы поверх установленных копий и вызвал бы"
+            echo "предупреждение Play Protect."
+            echo ""
+            echo "Ключ тот же самый, что лежал в репозитории. Достать его из истории:"
+            echo "  git show dac0aa2:android/keystore/compas-release.jks | base64 -w0"
+            echo "и положить в Settings → Secrets and variables → Actions:"
+            echo "  ANDROID_KEYSTORE_BASE64   — вывод команды выше"
+            echo "  ANDROID_KEYSTORE_PASSWORD — пароль хранилища"
+            echo "  ANDROID_KEY_ALIAS         — compas"
+            echo "  ANDROID_KEY_PASSWORD      — пароль ключа"
+            exit 1
+          fi
+
+          umask 077
+          mkdir -p "${RUNNER_TEMP}/signing"
+          keystore="${RUNNER_TEMP}/signing/praktika.jks"
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 -d > "${keystore}"
+          # base64 с опечаткой даёт пустой файл, и без этой строки отказ всплыл
+          # бы получасом позже, на подписи.
+          test -s "${keystore}"
+
+          # Проверяем ключ ДО сборки: полчаса компиляции ради «пароль не
+          # подошёл» в самом конце — плохая сделка. Проверяются обе двери:
+          # пароль хранилища и пароль самого ключа.
+          keytool -list -keystore "${keystore}" \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" >/dev/null \
+            || { echo '::error::алиас ANDROID_KEY_ALIAS не найден в хранилище или неверен пароль хранилища'; exit 1; }
+          # -certreq требует ПРИВАТНЫЙ ключ и ничего не меняет в хранилище:
+          # проверка пароля ключа, которая не портит то, что проверяет.
+          keytool -certreq -keystore "${keystore}" \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" \
+            -keypass "${ANDROID_KEY_PASSWORD}" >/dev/null 2>&1 \
+            || { echo '::error::ANDROID_KEY_PASSWORD не подходит к алиасу ANDROID_KEY_ALIAS'; exit 1; }
+
+          # Отпечаток — из САМОГО хранилища, до сборки. Это точка отсчёта:
+          # после сборки с ним сверяется отпечаток готового пакета. Отпечаток
+          # сертификата публичен и печатается в журнал сознательно.
+          expected="$(LANG=C keytool -list -v -keystore "${keystore}" \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" \
+            | awk -F'SHA256: ' '/SHA256:/ { gsub(":", "", $2); print tolower($2); exit }')"
+          test -n "${expected}"
+
+          # Тот же отпечаток записан в репозитории. Расхождение означает, что
+          # ключ подменили — и обновление поверх установленных копий не встанет.
+          # Это отказ сборки, а не предупреждение.
+          repo_fp="$(tr -d '[:space:]' < android/EXPECTED_SIGNER.txt | tr '[:upper:]' '[:lower:]')"
+          if [ "${repo_fp}" != "${expected}" ]; then
+            echo "::error::Отпечаток ключа разошёлся с android/EXPECTED_SIGNER.txt"
+            echo "  в секрете:                    ${expected}"
+            echo "  android/EXPECTED_SIGNER.txt:  ${repo_fp}"
+            echo '  Пакет, подписанный другим ключом, не встанет поверх установленных копий.'
+            echo '  Если ключ сменён сознательно — обновить EXPECTED_SIGNER.txt тем же коммитом.'
+            exit 1
+          fi
+
+          echo "keystore=${keystore}" >> "$GITHUB_OUTPUT"
+          echo "expected_signer=${expected}" >> "$GITHUB_OUTPUT"
+          echo "Ключ на месте, алиас найден, пароли подходят, отпечаток совпал: ${expected}"
 
       - name: Upload build log
         if: always()
@@ -74,34 +297,60 @@ jobs:
           path: android-build.log
           retention-days: 14
 
+      # Имя файла и тег релиза — по общему правилу трёх продуктов СИМПАС
+      # (scripts/check-release-naming.sh): simpas-<продукт>-<версия>.apk и
+      # <продукт>-v<версия>, без хеша коммита и без номера прогона — релиз
+      # соответствует ВЕРСИИ, а не прогону сборки. Сторож зовётся сразу же,
+      # на вычисленных значениях, а не на готовом файле, чтобы упасть раньше,
+      # чем что-либо будет загружено.
       - name: Prepare APK
         id: apk
         run: |
-          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           VERSION=$(grep 'versionName' android/app/build.gradle.kts | head -1 | grep -oP '"[^"]*"' | tr -d '"')
-          SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          FILENAME="compas-${VERSION}-${SHA}.apk"
+          FILENAME="simpas-praktika-${VERSION}.apk"
+          TAG="praktika-v${VERSION}"
+          bash scripts/check-release-naming.sh "$FILENAME" "$TAG" praktika
           cp "$APK_PATH" "$FILENAME"
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      # Сторож готового пакета. Общий для трёх продуктов.
+      #
+      # Проверяется APK, а не шаблон манифеста: в пакет разрешения попадают ещё
+      # и из библиотек через слияние манифестов, а debuggable может проставить
+      # не тот buildType, который читали глазами. Проверять надо то, что уедет
+      # людям.
+      - name: Сторож пакета
+        run: |
+          bash scripts/check-apk.sh \
+            "${{ steps.apk.outputs.filename }}" \
+            "${{ steps.keystore.outputs.expected_signer }}" \
+            android/allowed-permissions.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: compas-android-apk
-          path: compas-*.apk
+          name: simpas-praktika-apk
+          path: simpas-*.apk
           retention-days: 90
 
+      # Один тег версии = один релиз: пересборка той же версии обновляет
+      # существующий релиз (softprops/action-gh-release апдейтит релиз по
+      # уже существующему tag_name вместо создания нового), а не плодит
+      # новые при каждом прогоне — раньше в теге был github.run_number,
+      # и каждый прогон одной и той же версии создавал отдельный релиз.
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v${{ steps.apk.outputs.version }}-b${{ github.run_number }}
-          name: "КОМПАС Android ${{ steps.apk.outputs.version }} (#${{ github.run_number }})"
+          tag_name: ${{ steps.apk.outputs.tag }}
+          name: "КОМПАС ПРАКТИКА ${{ steps.apk.outputs.version }}"
           body: |
-            ## КОМПАС для Android
+            ## КОМПАС ПРАКТИКА для Android
             Скачайте APK ниже и установите на телефон.
-          files: compas-*.apk
+          files: simpas-*.apk
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

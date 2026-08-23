@@ -125,6 +125,17 @@ fun SettingsScreen(
                 }
             }
 
+            item { SectionTitle("Аналитика") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    AnalyticsConsentRow(
+                        checked = uiState.analyticsConsentGranted,
+                        saving = uiState.isSavingAnalyticsConsent,
+                        onChange = viewModel::setAnalyticsConsent,
+                    )
+                }
+            }
+
             item { SectionTitle("Мессенджеры и данные") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
@@ -196,6 +207,64 @@ private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, on
                 uncheckedTrackColor = CompasBorder,
                 uncheckedBorderColor = CompasBorder,
             ),
+        )
+    }
+}
+
+/**
+ * Тумблер согласия на аналитику: выключен по умолчанию, честное объяснение
+ * рядом — что собираем, чего не собираем никогда, что даёт отзыв.
+ * Формулировка обещает ровно то, что происходит: сбор прекращается и уже
+ * собранные события удаляются (на сервере это делает параллельный агент,
+ * локальную очередь чистит SettingsViewModel.setAnalyticsConsent).
+ */
+@Composable
+private fun AnalyticsConsentRow(checked: Boolean, saving: Boolean, onChange: (Boolean) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Помогать разработке", style = tBody, color = CompasFg)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    // Не «анонимная»: события привязаны к вашему аккаунту —
+                    // иначе их нельзя было бы удалить по вашему требованию.
+                    // Обещать анонимность там, где её нет, хуже, чем не
+                    // обещать ничего.
+                    "Статистика действий в приложении — без содержания заметок и данных клиентов",
+                    style = tBody2,
+                    color = CompasMutedFg,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            if (saving) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Forest700)
+            } else {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Forest700,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = CompasBorder,
+                        uncheckedBorderColor = CompasBorder,
+                    ),
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            // Формулировка обязана обещать ровно то, что произойдёт. Сервер
+            // при отзыве удаляет события этого аккаунта и в той же транзакции
+            // пишет запись о самом отзыве — она остаётся. Умолчать об этом
+            // означало бы пообещать чистый лист и оставить строку.
+            "Собираем: какие действия происходят в приложении — открытие, создание сессий и клиентов, " +
+                "изменение статусов, факт сохранения заметки. Не собираем никогда: текст заметок, " +
+                "данные клиентов, содержание переписки. Если выключить — сбор прекращается, а уже " +
+                "собранные события удаляются; остаётся только запись о самом отключении. " +
+                "Данные хранятся не дольше 180 дней.",
+            style = tMeta,
+            color = CompasMutedFg,
         )
     }
 }
