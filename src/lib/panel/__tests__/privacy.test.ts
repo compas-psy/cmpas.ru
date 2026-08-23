@@ -103,8 +103,21 @@ async function samplePayloads(): Promise<Record<string, unknown>[]> {
     const tech = await import('../queries/tech');
 
     return [
-        products.zapiskiBlocks(),
-        products.momentyBlocks(),
+        {
+            zapiskiNsm: await products.qZapiskiNsm(),
+            zapiskiWriters: await products.qZapiskiWriters(),
+            zapiskiNotesPerSession: await products.qZapiskiNotesPerSession(),
+            zapiskiSyncs: await products.qZapiskiSyncs(),
+            zapiskiConflicts: await products.qZapiskiConflicts(),
+            zapiskiSupport: await products.qZapiskiSupport(),
+        },
+        {
+            momentyNsm: await products.qMomentyNsm(),
+            momentyInstalls: await products.qMomentyInstalls(),
+            momentyD1: await products.qMomentyD1(),
+            momentyD7: await products.qMomentyD7(),
+            momentyD30: await products.qMomentyD30(),
+        },
         { bookingAuthor: await products.qPracticeBookingAuthor(), reminders: await products.qPracticeReminders() },
         { sources: await funnel.qSources() },
         { momenty: await retention.qRetentionMomenty(), churnReasons: await retention.qChurnReasons() },
