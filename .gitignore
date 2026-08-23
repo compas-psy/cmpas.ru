@@ -65,3 +65,9 @@ graphify-out/
 /diag.mjs
 /audit-*.mjs
 /z*.mjs
+
+# Ключ подписи в репозитории не хранится — он приходит из секретов CI.
+# См. CLAUDE.md и .github/workflows/android-build.yml.
+android/keystore/
+*.jks
+*.keystore

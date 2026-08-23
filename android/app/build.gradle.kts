@@ -24,26 +24,45 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
     }
 
+    // Ключ подписи приходит ИЗВНЕ, а не из репозитория.
+    //
+    // Раньше он лежал в android/keystore/compas-release.jks вместе с паролями
+    // прямо здесь, в открытом виде. Любой, кто получал доступ к репозиторию,
+    // мог подписать им своё приложение — и оно встало бы поверх настоящего на
+    // телефонах людей как обновление, потому что для Android «то же самое
+    // приложение» означает «тот же applicationId и та же подпись». Для
+    // приложения, работающего с данными клиентов психолога, это неприемлемо.
+    //
+    // Ключ ОСТАЁТСЯ ТЕМ ЖЕ: смена ключа означала бы, что обновление поверх
+    // установленных копий перестанет работать и людям пришлось бы удалять
+    // приложение. Он просто переехал из рабочего дерева в секреты CI.
+    //
+    // Локальная сборка без этих переменных подпишется отладочным ключом
+    // Android — так и задумано: разработчику на своей машине постоянный ключ
+    // не нужен, а раздавать такой пакет запрещает сторож готового пакета
+    // (scripts/check-apk.sh отказывает при CN=Android Debug).
+    val keystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
+    val hasSigningKey = !keystorePath.isNullOrBlank() && file(keystorePath).exists()
+
     signingConfigs {
-        // Stable signing key committed to the repo so every APK (debug or
-        // release) is signed identically -> installs update in place instead
-        // of forcing an uninstall. Safe to commit: it only signs our own
-        // sideloaded distribution builds, not Play Store releases.
-        create("compas") {
-            storeFile = rootProject.file("keystore/compas-release.jks")
-            storePassword = "compas2026"
-            keyAlias = "compas"
-            keyPassword = "compas2026"
+        if (hasSigningKey) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("compas")
             buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
         }
         release {
-            signingConfig = signingConfigs.getByName("compas")
+            if (hasSigningKey) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

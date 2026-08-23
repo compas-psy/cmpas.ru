@@ -171,9 +171,104 @@ jobs:
             android/app/build/test-results/
           retention-days: 14
 
+      # Ключ подписи приходит из секретов, а не из репозитория.
+      #
+      # Раньше он лежал в android/keystore/compas-release.jks вместе с паролями
+      # в build.gradle.kts. Любой, кто получал доступ к репозиторию, мог
+      # подписать им своё приложение — и оно встало бы поверх настоящего на
+      # телефонах людей как обновление: для Android «то же самое приложение»
+      # означает «тот же applicationId и та же подпись».
+      #
+      # Ключ ТОТ ЖЕ САМЫЙ, просто переехал. Смена ключа означала бы, что
+      # обновление поверх установленных копий перестанет работать и людям
+      # пришлось бы удалять приложение.
+      #
+      # Половина комплекта секретов — отказ, а не повод собрать отладочный
+      # пакет: это ошибка настройки. Отладочный пакет и был исходным дефектом.
+      - name: Подготовить ключ подписи
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${ANDROID_KEYSTORE_BASE64}" ]   || missing="${missing} ANDROID_KEYSTORE_BASE64"
+          [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] || missing="${missing} ANDROID_KEYSTORE_PASSWORD"
+          [ -n "${ANDROID_KEY_ALIAS}" ]         || missing="${missing} ANDROID_KEY_ALIAS"
+          [ -n "${ANDROID_KEY_PASSWORD}" ]      || missing="${missing} ANDROID_KEY_PASSWORD"
+          if [ -n "${missing}" ]; then
+            echo "::error::Нет секретов подписи:${missing}"
+            echo "Собрать пакет для людей без постоянного ключа нельзя: он подписался бы"
+            echo "отладочным ключом, не встал бы поверх установленных копий и вызвал бы"
+            echo "предупреждение Play Protect."
+            echo ""
+            echo "Ключ тот же самый, что лежал в репозитории. Достать его из истории:"
+            echo "  git show dac0aa2:android/keystore/compas-release.jks | base64 -w0"
+            echo "и положить в Settings → Secrets and variables → Actions:"
+            echo "  ANDROID_KEYSTORE_BASE64   — вывод команды выше"
+            echo "  ANDROID_KEYSTORE_PASSWORD — пароль хранилища"
+            echo "  ANDROID_KEY_ALIAS         — compas"
+            echo "  ANDROID_KEY_PASSWORD      — пароль ключа"
+            exit 1
+          fi
+
+          umask 077
+          mkdir -p "${RUNNER_TEMP}/signing"
+          keystore="${RUNNER_TEMP}/signing/praktika.jks"
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 -d > "${keystore}"
+          # base64 с опечаткой даёт пустой файл, и без этой строки отказ всплыл
+          # бы получасом позже, на подписи.
+          test -s "${keystore}"
+
+          # Проверяем ключ ДО сборки: полчаса компиляции ради «пароль не
+          # подошёл» в самом конце — плохая сделка. Проверяются обе двери:
+          # пароль хранилища и пароль самого ключа.
+          keytool -list -keystore "${keystore}" \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" >/dev/null \
+            || { echo '::error::алиас ANDROID_KEY_ALIAS не найден в хранилище или неверен пароль хранилища'; exit 1; }
+          # -certreq требует ПРИВАТНЫЙ ключ и ничего не меняет в хранилище:
+          # проверка пароля ключа, которая не портит то, что проверяет.
+          keytool -certreq -keystore "${keystore}" \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" \
+            -keypass "${ANDROID_KEY_PASSWORD}" >/dev/null 2>&1 \
+            || { echo '::error::ANDROID_KEY_PASSWORD не подходит к алиасу ANDROID_KEY_ALIAS'; exit 1; }
+
+          # Отпечаток — из САМОГО хранилища, до сборки. Это точка отсчёта:
+          # после сборки с ним сверяется отпечаток готового пакета. Отпечаток
+          # сертификата публичен и печатается в журнал сознательно.
+          expected="$(LANG=C keytool -list -v -keystore "${keystore}" \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" \
+            | awk -F'SHA256: ' '/SHA256:/ { gsub(":", "", $2); print tolower($2); exit }')"
+          test -n "${expected}"
+
+          # Тот же отпечаток записан в репозитории. Расхождение означает, что
+          # ключ подменили — и обновление поверх установленных копий не встанет.
+          # Это отказ сборки, а не предупреждение.
+          repo_fp="$(tr -d '[:space:]' < android/EXPECTED_SIGNER.txt | tr '[:upper:]' '[:lower:]')"
+          if [ "${repo_fp}" != "${expected}" ]; then
+            echo "::error::Отпечаток ключа разошёлся с android/EXPECTED_SIGNER.txt"
+            echo "  в секрете:                    ${expected}"
+            echo "  android/EXPECTED_SIGNER.txt:  ${repo_fp}"
+            echo '  Пакет, подписанный другим ключом, не встанет поверх установленных копий.'
+            echo '  Если ключ сменён сознательно — обновить EXPECTED_SIGNER.txt тем же коммитом.'
+            exit 1
+          fi
+
+          echo "keystore=${keystore}" >> "$GITHUB_OUTPUT"
+          echo "expected_signer=${expected}" >> "$GITHUB_OUTPUT"
+          echo "Ключ на месте, алиас найден, пароли подходят, отпечаток совпал: ${expected}"
+
       - name: Build Release APK
         working-directory: android
         shell: bash
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -o pipefail
           /tmp/gradle-8.9/bin/gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee ../android-build.log
@@ -204,6 +299,19 @@ jobs:
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      # Сторож готового пакета. Общий для трёх продуктов.
+      #
+      # Проверяется APK, а не шаблон манифеста: в пакет разрешения попадают ещё
+      # и из библиотек через слияние манифестов, а debuggable может проставить
+      # не тот buildType, который читали глазами. Проверять надо то, что уедет
+      # людям.
+      - name: Сторож пакета
+        run: |
+          bash scripts/check-apk.sh \
+            "${{ steps.apk.outputs.filename }}" \
+            "${{ steps.keystore.outputs.expected_signer }}" \
+            android/allowed-permissions.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
