@@ -11,8 +11,12 @@ import { collectDbStats, diffMigrations, readRepoMigrationNames } from './db-sta
 import { listBackupFiles, summarizeBackups } from './backup-stats';
 import { collectReminderCounters } from './reminders-counters';
 import { certDaysLeft } from './cert';
+import { readInfraCost } from './infra-cost';
+import { readPaymentFailureRate } from './webhook-error-rate';
+import { readBuildMinutesLeft, type BuildMinutesConfig } from './build-minutes';
+import { readResponseP95 } from './response-time';
 
-type Db = Pick<PrismaClient, '$queryRaw' | '$executeRaw' | 'infraPulse'>;
+type Db = Pick<PrismaClient, '$queryRaw' | '$executeRaw' | 'infraPulse' | 'payment' | 'systemConfig' | 'appResponseTime'>;
 
 export interface CollectorConfig {
     procRoot: string; // e.g. "/hostfs/proc" — read-only host mount
@@ -22,6 +26,9 @@ export interface CollectorConfig {
     migrationsDir: string; // this image's own prisma/migrations — no extra grant
     certHostnames: { primary: string; secondaryLabel: 'zapiski'; secondary: string | null };
     retentionDays: number;
+    // Остаток минут GitHub Actions (buildMinutesLeft, ТЗ §6.1). Без токена —
+    // не выдумываем доступа, поле остаётся null (см. build-minutes.ts).
+    githubActions: BuildMinutesConfig;
 }
 
 export const DEFAULT_RETENTION_DAYS = 90;
@@ -98,14 +105,54 @@ async function readCerts(config: CollectorConfig) {
     return { primary, secondary };
 }
 
+async function readInfraCostSafe(db: Db) {
+    try {
+        return await readInfraCost(db);
+    } catch (error) {
+        console.error('[infra-pulse] infra cost read failed:', error);
+        return null;
+    }
+}
+
+async function readWebhookErrorRatesSafe(db: Db) {
+    try {
+        return await readPaymentFailureRate(db);
+    } catch (error) {
+        console.error('[infra-pulse] webhook error rate failed:', error);
+        return null;
+    }
+}
+
+async function readBuildMinutesSafe(config: CollectorConfig) {
+    try {
+        return await readBuildMinutesLeft(config.githubActions);
+    } catch (error) {
+        console.error('[infra-pulse] github actions billing read failed:', error);
+        return null;
+    }
+}
+
+async function readResponseP95Safe(db: Db) {
+    try {
+        return await readResponseP95(db);
+    } catch (error) {
+        console.error('[infra-pulse] response p95 read failed:', error);
+        return null;
+    }
+}
+
 export async function collectOnce(db: Db, config: CollectorConfig): Promise<Prisma.InfraPulseCreateInput> {
-    const [server, containers, dbResult, backups, reminders, certs] = await Promise.all([
+    const [server, containers, dbResult, backups, reminders, certs, infraCost, webhookRate, buildMinutesLeft, responseP95Ms] = await Promise.all([
         readServerStats(config),
         readContainers(config),
         readDb(db, config),
         readBackups(config),
         readReminders(db),
         readCerts(config),
+        readInfraCostSafe(db),
+        readWebhookErrorRatesSafe(db),
+        readBuildMinutesSafe(config),
+        readResponseP95Safe(db),
     ]);
 
     return {
@@ -130,6 +177,17 @@ export async function collectOnce(db: Db, config: CollectorConfig): Promise<Pris
         remindersSentTwice: reminders?.sentTwice ?? null,
         certDaysLeft: certs.primary,
         certDaysLeftZapiski: certs.secondary,
+        // Три поля ниже были объявлены в схеме (миграция 20260820120000) и
+        // ни разу не заполнялись — collectOnce их просто не считал. См.
+        // src/lib/infra-pulse/infra-cost.ts, webhook-error-rate.ts,
+        // build-minutes.ts за источником и honesty-ограничениями каждого.
+        infraCostRub: infraCost ? (infraCost as unknown as Prisma.InputJsonValue) : undefined,
+        webhookErrorRates: webhookRate ? ({ payments: webhookRate } as unknown as Prisma.InputJsonValue) : undefined,
+        buildMinutesLeft: buildMinutesLeft,
+        // q_tech_response_p95 (ТЗ §5) — читаем последнее окно AppResponseTime,
+        // которое пишет сам процесс приложения (middleware.ts + cron flush в
+        // instrumentation.ts). См. response-time.ts.
+        responseP95Ms: responseP95Ms,
     };
 }
 

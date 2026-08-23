@@ -28,10 +28,18 @@ export type SendMessageOptions = {
     };
 };
 
-export async function sendTelegramMessage(chatId: string, text: string, options?: SendMessageOptions) {
+/**
+ * Возвращает true/false об исходе отправки (O-260817-16, ReminderOutbox) —
+ * раньше функция ничего не возвращала, и вызывающий код не мог узнать,
+ * дошло ли сообщение, не разбирая консольные логи. Добавление возврата не
+ * меняет поведение ни одного из существующих вызовов: все они либо не
+ * используют результат вовсе, либо цепочкой `.catch()` — то и другое
+ * совместимо с любым типом возврата.
+ */
+export async function sendTelegramMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<boolean> {
     if (!TELEGRAM_BOT_TOKEN) {
         console.warn('[Telegram] Отсутствует TELEGRAM_BOT_TOKEN, отправка пропущена.');
-        return;
+        return false;
     }
 
     const controller = new AbortController();
@@ -58,7 +66,7 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
                 const f = nodeFetch();
                 const res = await f(url, { ...fetchOpts, agent });
                 if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
-                return;
+                return res.ok;
             } catch (e: any) {
                 // Proxy attempt failed (incl. timeout) — fall through to a DIRECT
                 // send so a flaky VPN never silently drops a message.
@@ -68,12 +76,14 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
 
         const res = await fetch(url, fetchOpts);
         if (!res.ok) console.error('[Telegram] Ошибка при отправке сообщения:', await res.text());
+        return res.ok;
     } catch (error: any) {
         if (error.name === 'AbortError') {
             console.error('[Telegram] Таймаут при отправке сообщения в chatId:', chatId);
         } else {
             console.error('[Telegram] Исключение при вызове API:', error);
         }
+        return false;
     } finally {
         clearTimeout(timeout);
     }

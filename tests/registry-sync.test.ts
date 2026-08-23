@@ -9,15 +9,31 @@
 // name or prop set in either product repo must update the matching snapshot
 // below in the same change — a genuine live check would need multi-repo CI,
 // which is out of scope for this order.
+//
+// E4 (контракт контура v2 п.6): consent_updated and identity_linked are
+// added to both product snapshots here even though they are not (yet, as of
+// the 18.08.2026 snapshot) declared in either product repo's own schema
+// file — this is a receiver-side decision (E1: both events are registered
+// under all three products in events.yaml), not something synced FROM the
+// product repos. ЗАПИСКИ and МОМЕНТЫ must be able to send them regardless
+// of whether their own client-side registry already names them; whoever
+// adds them there in the same shape should find this assertion already
+// green, not something to now edit.
+//
+// def.product may be a single string OR a list (multi-product events) —
+// the check below is "product is among the allowed ones", not equality;
+// a single-product event with a mismatched product still fails it.
 
 import { describe, it, expect } from 'vitest';
-import { loadRegistry } from '@/lib/analytics/schema';
+import { loadRegistry, eventProducts } from '@/lib/analytics/schema';
 
 const ZAPISKI_SNAPSHOT: Record<string, string[]> = {
     note_saved: ['length_bucket', 'encrypted'],
     note_searched: ['query_length_bucket', 'results_count'],
     sync_completed: ['pushed', 'pulled', 'conflicts'],
     export_requested: ['format', 'notes_count'],
+    consent_updated: ['granted'],
+    identity_linked: [],
 };
 
 const MOMENTS_SNAPSHOT: Record<string, string[]> = {
@@ -25,6 +41,8 @@ const MOMENTS_SNAPSHOT: Record<string, string[]> = {
     practice_started: ['practice_id', 'group', 'is_sleep'],
     practice_finished: ['practice_id', 'group', 'is_sleep', 'completion_pct'],
     crossed_to_product: ['target_product'],
+    consent_updated: ['granted'],
+    identity_linked: [],
 };
 
 function assertSuperset(product: string, snapshot: Record<string, string[]>) {
@@ -32,7 +50,7 @@ function assertSuperset(product: string, snapshot: Record<string, string[]>) {
     for (const [eventName, props] of Object.entries(snapshot)) {
         const def = registry.events[eventName];
         expect(def, `central registry is missing ${product} event ${eventName}`).toBeDefined();
-        expect(def.product, `${eventName} is registered under the wrong product`).toBe(product);
+        expect(eventProducts(def), `${eventName} is not registered for product ${product}`).toContain(product);
         const centralProps = new Set([...def.required, ...def.optional]);
         for (const prop of props) {
             expect(centralProps.has(prop), `central registry is missing prop ${prop} on ${eventName}`).toBe(true);

@@ -2,8 +2,12 @@ import NextAuth from "next-auth"
 import Yandex from "next-auth/providers/yandex"
 import Nodemailer from "next-auth/providers/nodemailer"
 import { PrismaAdapter } from "@auth/prisma-adapter"
+import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { html, text } from "@/lib/email-template"
+import { linkVisitorAndTrackIdentity } from "@/lib/analytics/link-visitor"
+import { track } from "@/lib/analytics/track"
+import { VISITOR_ID_COOKIE } from "@/lib/analytics/visitor-cookie"
 // @ts-expect-error - nodemailer types not installed due to peer dep conflict
 import { createTransport } from "nodemailer"
 
@@ -118,6 +122,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     }
                 } catch (e) {
                     console.error("[auth] trial init failed (migration may be pending):", e);
+                }
+
+                // B5 (charter/13_TRACKING_PLAN.md §2): связываем визит с
+                // аккаунтом в момент, когда связь становится известна —
+                // здесь и только здесь. Обёрнуто отдельным try/catch по
+                // тому же принципу, что и блок триала выше: сбой этой
+                // связки (нет куки, миграция ещё не применена, что угодно)
+                // не должен мешать самому входу.
+                try {
+                    const cookieStore = await cookies();
+                    const visitorId = cookieStore.get(VISITOR_ID_COOKIE)?.value ?? null;
+                    await linkVisitorAndTrackIdentity(db, track, visitorId, user.id);
+                } catch (e) {
+                    console.error("[auth] visitor-account link failed:", e);
                 }
             }
             return true;

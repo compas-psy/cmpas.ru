@@ -159,3 +159,84 @@ describe('validateEvent against the real registry, one event per product (O-2608
         if (!result.valid) expect(result.reason).toMatch(/unknown product/);
     });
 });
+
+describe('validateEvent: события на несколько продуктов сразу (E1, контракт контура v2 п.6)', () => {
+    function consentEvent(product: string) {
+        return {
+            event: 'consent_updated',
+            ts: new Date().toISOString(),
+            product,
+            account_id: 'subject_1',
+            device_id: null,
+            schema_version: 1,
+            props: { granted: true },
+        };
+    }
+
+    it('consent_updated принимается под practice', () => {
+        expect(validateEvent(consentEvent('practice')).valid).toBe(true);
+    });
+
+    it('consent_updated принимается под zapiski', () => {
+        expect(validateEvent(consentEvent('zapiski')).valid).toBe(true);
+    });
+
+    it('consent_updated принимается под moments', () => {
+        expect(validateEvent(consentEvent('moments')).valid).toBe(true);
+    });
+
+    it('identity_linked тоже принадлежит всем трём продуктам', () => {
+        const event = {
+            event: 'identity_linked',
+            ts: new Date().toISOString(),
+            product: 'zapiski',
+            account_id: 'subject_1',
+            device_id: null,
+            schema_version: 1,
+            props: {},
+        };
+        expect(validateEvent(event).valid).toBe(true);
+    });
+
+    it('событие своего продукта (не consent_updated/identity_linked) по-прежнему принимается только под своим продуктом', () => {
+        const event = {
+            event: 'note_saved',
+            ts: new Date().toISOString(),
+            product: 'zapiski',
+            account_id: 'subject_1',
+            device_id: null,
+            schema_version: 1,
+            props: { length_bucket: 'm', encrypted: true },
+        };
+        expect(validateEvent(event).valid).toBe(true);
+    });
+
+    it('чужой продукт для однопродуктового события отвергается с внятной причиной', () => {
+        const event = {
+            event: 'note_saved',
+            ts: new Date().toISOString(),
+            product: 'moments',
+            account_id: 'subject_1',
+            device_id: null,
+            schema_version: 1,
+            props: { length_bucket: 'm', encrypted: true },
+        };
+        const result = validateEvent(event);
+        expect(result.valid).toBe(false);
+        if (!result.valid) expect(result.reason).toBe('event note_saved belongs to product zapiski, not moments');
+    });
+});
+
+describe('validateEvent + event_id (O-260817-17, идемпотентность)', () => {
+    it('event_id отсутствует — валиден как раньше', () => {
+        expect(validateEvent(baseEvent()).valid).toBe(true);
+    });
+
+    it('event_id — строка — валиден', () => {
+        expect(validateEvent(baseEvent({ event_id: 'evt_123' })).valid).toBe(true);
+    });
+
+    it('event_id — не строка — отказ', () => {
+        expect(validateEvent(baseEvent({ event_id: 12345 })).valid).toBe(false);
+    });
+});

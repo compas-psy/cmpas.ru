@@ -222,6 +222,14 @@ model VisitorAnalytics {
   fingerprintComponents String? // JSON string of all fingerprint components
   visits                Int       @default(1)
 
+  // Связка с аккаунтом (B5, q_sources — funnel.ts): проставляется один раз
+  // при входе/регистрации (src/auth.ts), когда становится известно, кем
+  // оказался этот отпечаток устройства — задним числом не переписывается
+  // (13_TRACKING_PLAN.md §2: "Задним числом идентификаторы не
+  // перезаписываются"). Не внешний ключ — тот же выбор, что уже сделан для
+  // PageView.visitorId ниже, см. миграцию 20260823100000.
+  accountId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -234,6 +242,7 @@ model VisitorAnalytics {
   @@index([osName])
   @@index([utmSource])
   @@index([createdAt])
+  @@index([accountId])
 }
 
 // Per-hit pageview log (for time-series charts, top pages, etc.)
@@ -894,11 +903,16 @@ model AnalyticsEvent {
   event         String
   ts            DateTime
   product       String
-  accountId     String? // null for a device without an account yet (O-260817-13)
+  accountId     String? // null for a device without an account yet (O-260817-13). No FK to User — practice's own User.id, or (E2) a ЗАПИСКИ/МОМЕНТЫ account_id written as-is; product tells them apart.
   deviceId      String? // null until consent is on file — for the account (analyticsConsentAt) or, absent an account, for the device (AnalyticsDeviceConsent)
   props         Json
   schemaVersion Int
   createdAt     DateTime @default(now())
+  // Идемпотентность POST /ingest (O-260817-17) — необязательный конверт-ID
+  // от отправителя. Уникален, но nullable: старые/несовместимые клиенты, не
+  // присылающие event_id, продолжают писать как раньше — Postgres не
+  // считает несколько NULL коллизией уникального индекса.
+  eventId       String?  @unique
 
   @@map("events")
   @@index([event])
@@ -970,9 +984,18 @@ model InfraPulse {
   // additive columns. All nullable: a collector that predates this migration
   // simply leaves them null, and the panel renders those blocks as no_data
   // rather than as zero.
-  webhookErrorRates Json? // { telegram: { rate, checkedAt }, max: { rate, checkedAt } }
+  // { payments: { rate, checkedAt, sampleSize } } — доля платежей Т-Банка со
+  // статусом 'failed' за сутки. Изначально задумывался как доля ошибок
+  // именно Telegram/MAX ботов (см. историю), но их доставка нигде не
+  // журналируется; см. src/lib/infra-pulse/webhook-error-rate.ts за полным
+  // обоснованием честной замены источника.
+  webhookErrorRates Json?
   buildMinutesLeft  Int? // remaining GitHub Actions minutes
   infraCostRub      Json? // { server, storage, domains, total, source: 'manual'|'api' }
+
+  // Ответ приложения (q_tech_response_p95, ТЗ §5) — переносится из
+  // AppResponseTime, см. комментарий там же.
+  responseP95Ms Int?
 
   @@index([collectedAt])
 }
@@ -998,10 +1021,84 @@ model DeployLog {
 // none at all, ЗАПИСКИ has no production login yet. Independent of
 // User.analyticsConsentAt — an account's consent doesn't retroactively cover
 // events the same device sent before the account existed, and vice versa.
+//
+// E2 (контракт контура v2 п.5): this table also holds consent for every
+// ЗАПИСКИ/МОМЕНТЫ subject, not only literal devices — ПРАКТИКА has no table
+// of their users, so their account_id can never be looked up in `User`.
+// `deviceId` is that subject's key, formatted as `${product}:${account_id
+// ?? device_id}` (src/lib/analytics/ingest.ts, subjectKeyFor) — for those
+// two products it is NOT always a physical device identifier, despite the
+// column name (kept as-is to avoid an unnecessary migration). Only
+// ПРАКТИКА's own device-only rows still use a raw, unprefixed device_id.
 model AnalyticsDeviceConsent {
-  deviceId  String    @id
+  deviceId  String    @id // ПРАКТИКА: raw device_id. ЗАПИСКИ/МОМЕНТЫ: subject key `${product}:${account_id ?? device_id}` — see comment above.
   consentAt DateTime?
   updatedAt DateTime  @updatedAt
 
   @@map("analytics_device_consent")
+}
+
+// Журнал фактических отправок напоминаний (O-260817-16). До этой модели
+// таблица не существовала: src/lib/infra-pulse/reminders-counters.ts уже
+// проверял её наличие через to_regclass('public."ReminderOutbox"') и отдавал
+// null, пока её нет — карточка «Рассылка» панели молчала как no_data не
+// потому, что коллектор не умел её читать, а потому, что писать в неё было
+// некому.
+//
+// Пишет processReminders() (src/lib/cron/reminders.ts) — в момент
+// фактической попытки отправки, а не заранее по расписанию: у ПРАКТИКИ нет
+// отдельного шага планирования напоминаний, cron каждые 15 минут сам
+// опрашивает DiarySession и шлёт то, что попало в 24-часовое/часовое окно.
+// Поэтому `dueAt` здесь — теоретический момент, когда напоминание должно
+// было уйти (время сессии минус 24ч/1ч), а не отдельно запланированная
+// метка; на практике он почти совпадает с `sentAt`, и это честно отражает
+// нынешнюю архитектуру, а не выдуманное планирование.
+//
+// Уникальность по (sessionId, type, channel) — не по id: повторный проход
+// cron по той же сессии и тому же каналу обновляет ту же строку и
+// увеличивает sendCount, а не плодит дубли; sendCount > 1 — это и есть
+// «отправлено дважды», карточка панели уже считает его так
+// (reminders-counters.ts: `sent_twice`).
+model ReminderOutbox {
+  id        String    @id @default(cuid())
+  type      String // 'session_24h_client' | 'session_24h_psychologist' | 'session_1h_client'
+  channel   String // 'telegram' | 'max'
+  recipient String // chat id получателя в этом канале
+  sessionId String? // DiarySession.id, если напоминание привязано к сессии
+  dueAt     DateTime // теоретический момент, когда напоминание должно было уйти
+  sentAt    DateTime? // когда фактически ушло; null, если последняя попытка не удалась
+  status    String    @default("pending") // 'pending' | 'sent' | 'error'
+  error     String?
+  sendCount Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([sessionId, type, channel])
+  @@index([dueAt])
+  @@index([status])
+}
+
+// Время ответа приложения (q_tech_response_p95, ТЗ §5, экран 6). Пишет сам
+// процесс Next.js через middleware.ts — у него уже есть полная запись, в
+// отличие от read-only коллектора, — а не infra-pulse-collector: тот только
+// читает эту таблицу, как он уже читает DeployLog и Payment, и переносит
+// последний p95 в свой снимок (src/lib/infra-pulse/response-time.ts). Это
+// сохраняет инвариант "InfraPulse пишет только коллектор" нетронутым.
+//
+// Одна строка на окно (~5 минут), не строка на запрос — middleware
+// накапливает длительности в памяти процесса
+// (src/lib/infra-pulse/response-time.ts, defaultDurationStore) и сбрасывает
+// агрегатом по расписанию (src/instrumentation.ts), тем же приёмом, что и
+// остальные cron-задачи в этом файле. Никакого внешнего APM.
+model AppResponseTime {
+  id          String   @id @default(cuid())
+  windowStart DateTime
+  windowEnd   DateTime
+  sampleCount Int
+  p50Ms       Int?
+  p95Ms       Int?
+  p99Ms       Int?
+  createdAt   DateTime @default(now())
+
+  @@index([windowEnd])
 }

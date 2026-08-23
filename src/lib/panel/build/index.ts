@@ -94,11 +94,26 @@ function buildMoney(): Promise<ScreenResult> {
 
 function buildProducts(product: ProductKey): Promise<ScreenResult> {
     if (product === 'zapiski') {
-        return Promise.resolve(finish(products.zapiskiBlocks()));
+        // Поток F: каждый блок — свой запрос к AnalyticsEvent (или честный
+        // no_data без обращения к базе, где определения нет), а не общий
+        // статический объект. Через collect(), как и остальные экраны:
+        // падение одного запроса не гасит соседние (guard() на блок).
+        return collect({
+            zapiskiNsm: products.qZapiskiNsm,
+            zapiskiWriters: products.qZapiskiWriters,
+            zapiskiNotesPerSession: products.qZapiskiNotesPerSession,
+            zapiskiSyncs: products.qZapiskiSyncs,
+            zapiskiConflicts: products.qZapiskiConflicts,
+            zapiskiSupport: products.qZapiskiSupport,
+        });
     }
     if (product === 'momenty') {
         return collect({
-            ...wrapStatic(products.momentyBlocks()),
+            momentyNsm: products.qMomentyNsm,
+            momentyInstalls: products.qMomentyInstalls,
+            momentyD1: products.qMomentyD1,
+            momentyD7: products.qMomentyD7,
+            momentyD30: products.qMomentyD30,
             crossProduct: products.qCrossProduct,
         });
     }
@@ -110,12 +125,6 @@ function buildProducts(product: ProductKey): Promise<ScreenResult> {
         bookingAuthor: products.qPracticeBookingAuthor,
         reminders: products.qPracticeReminders,
     });
-}
-
-function wrapStatic(blocks: Record<string, PanelBlock<unknown>>): Record<string, () => Promise<PanelBlock<unknown>>> {
-    const out: Record<string, () => Promise<PanelBlock<unknown>>> = {};
-    for (const [key, block] of Object.entries(blocks)) out[key] = () => Promise.resolve(block);
-    return out;
 }
 
 // ── Экран 4 — Путь и активация ────────────────────────────────────────────

@@ -34,6 +34,14 @@ export async function qMrrMonthly(): Promise<PanelBlock<MrrMonthly>> {
         select: { amount: true, createdAt: true, months: true },
     });
 
+    if (rows.length === 0) {
+        // Раньше здесь безусловно строились 12 бакетов по нулю и уходили как
+        // ok — неотличимо на экране от «выручка правда упала до нуля». Ни
+        // одного оплаченного платежа за год — это отсутствие данных, а не
+        // измеренный ноль (ТЗ §4: no_data никогда не рисуется нулём).
+        return noData('q_mrr_monthly', 'за 12 месяцев нет ни одного оплаченного платежа — выручку считать не из чего');
+    }
+
     const buckets = new Map<string, number>();
     for (let i = 11; i >= 0; i -= 1) buckets.set(monthStart(i).toISOString(), 0);
 
@@ -61,6 +69,25 @@ export interface PayingUsers {
 }
 
 export async function qPayingUsers(): Promise<PanelBlock<PayingUsers>> {
+    // Единственный блок «Денег», который читает ИСКЛЮЧИТЕЛЬНО Subscription
+    // (не Payment) и раньше не проверял, есть ли там вообще что читать —
+    // ok с active:0/trial:0/grace:0 приходил и тогда, когда Subscription
+    // была просто пуста (B1: запись раньше была за выключенным флагом), и
+    // тогда, когда платящих правда не было. Это два разных факта, и первый
+    // — no_data (ТЗ §4), а не ложный ноль.
+    //
+    // Subscription — намеренно источник для этого блока (её собственный
+    // топ-комментарий: «kept separate from the Payment/subscriptionEndsAt
+    // logic — mirrors state for measurement»), а не User/Payment: только в
+    // Subscription.status живёт различение active/trial/grace, которого на
+    // User нет вовсе. После B1 (пишет каждый платёж) и B2 (бэкафилл
+    // истории) эта таблица достоверна; guard здесь — по-прежнему нужная
+    // защита на случай, если backfill ещё не запускали.
+    const total = await db.subscription.count();
+    if (total === 0) {
+        return noData('q_paying_users', 'таблица Subscription пуста — обратное заполнение из Payment/User ещё не выполнено (scripts/backfill-subscriptions.ts)');
+    }
+
     const monthAgo = new Date(Date.now() - 30 * DAY_MS);
     const [active, trial, grace, startedThisMonth, churnedThisMonth] = await Promise.all([
         db.subscription.count({ where: { status: 'active' } }),

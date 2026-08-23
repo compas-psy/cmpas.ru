@@ -5,6 +5,14 @@
  * попасть в таблицу: всё, чего в нём нет, приёмник отвергает
  * (`src/lib/analytics/schema.ts`). Панель опирается на него, чтобы отличить
  * «событие не приходило» от «события не существует».
+ *
+ * Это независимый от src/lib/analytics/schema.ts построчный разбор (не
+ * js-yaml) — он не тянет за собой Prisma-типы в клиентский бандл панели.
+ * E1 (контракт контура v2 п.6): `product:` строки бывают либо простым
+ * значением (`product: practice`), либо списком в одну строку
+ * (`product: [practice, zapiski, moments]`) для consent_updated и
+ * identity_linked — вторая форма разбирается ниже отдельно и отображается
+ * как список через запятую, а не как одно значение.
  */
 
 import { readFileSync } from 'fs';
@@ -39,9 +47,15 @@ export function readEventRegistry(): Map<string, { product: string }> {
                 map.set(current, { product: 'unknown' });
                 continue;
             }
-            const productMatch = /^ {4}product:\s*(\S+)\s*$/.exec(line);
+            const productMatch = /^ {4}product:\s*(.+?)\s*$/.exec(line);
             if (productMatch && current) {
-                map.set(current, { product: productMatch[1] });
+                const value = productMatch[1];
+                // Список в одну строку — [practice, zapiski, moments]
+                // (E1) — иначе одно простое значение.
+                const product = value.startsWith('[') && value.endsWith(']')
+                    ? value.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean).join(', ')
+                    : value;
+                map.set(current, { product });
             }
         }
     } catch (error) {
@@ -55,4 +69,26 @@ export function readEventRegistry(): Map<string, { product: string }> {
 /** Только для тестов: сбросить разобранный реестр. */
 export function resetRegistryCache(): void {
     cache = null;
+}
+
+/**
+ * Разворачивает реестр в пары (событие, продукт) — по одной на каждого
+ * владельца события. Нужно для F4: `consent_updated`/`identity_linked`
+ * (E1) хранятся одной строкой `product: "practice, zapiski, moments"`, и
+ * без разворота `q_event_silence` считал бы их одной строкой на все три
+ * продукта сразу — живой поток одного маскировал бы тишину двух других
+ * под тем же именем события.
+ */
+export function registryPairs(registry: Map<string, { product: string }>): { event: string; product: string }[] {
+    const pairs: { event: string; product: string }[] = [];
+    for (const [event, meta] of registry) {
+        const products = meta.product
+            .split(',')
+            .map((p) => p.trim())
+            .filter(Boolean);
+        for (const product of products.length > 0 ? products : ['unknown']) {
+            pairs.push({ event, product });
+        }
+    }
+    return pairs;
 }

@@ -2,7 +2,18 @@ import Link from 'next/link';
 import { screen, countAllHonestHoles } from '@/lib/panel/build';
 import { pick } from '@/lib/panel/types';
 import { isProductKey, PRODUCTS, type ProductKey } from '@/lib/panel/screens';
-import type { PracticeActivation, PracticeActive, PracticeNsm, PracticeReschedule } from '@/lib/panel/queries/products';
+import type {
+    PracticeActivation,
+    PracticeActive,
+    PracticeNsm,
+    PracticeReschedule,
+    ZapiskiWriters,
+    ZapiskiSyncs,
+    ZapiskiConflicts,
+    MomentyActivation,
+    MomentyInstalls,
+    MomentyRetention,
+} from '@/lib/panel/queries/products';
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card } from '@/components/panel/block';
 import { StatTile, TrendPill } from '@/components/panel/stat';
@@ -129,57 +140,99 @@ function Practice({ blocks }: { blocks: Blocks }) {
 }
 
 function Zapiski({ blocks }: { blocks: Blocks }) {
-    const labels: Record<string, string> = {
-        zapiskiNsm: 'Сессий закрыто заметкой',
-        zapiskiWriters: 'Пишут хоть что-то',
-        zapiskiNotesPerSession: 'Заметок на сессию',
-        zapiskiSyncs: 'Синхронизаций',
-        zapiskiConflicts: 'Конфликтов',
-        zapiskiSupport: 'Бета: обращения',
-    };
+    const nsm = pick<never>(blocks, 'zapiskiNsm');
+    const writers = pick<ZapiskiWriters>(blocks, 'zapiskiWriters');
+    const notesPerSession = pick<never>(blocks, 'zapiskiNotesPerSession');
+    const syncs = pick<ZapiskiSyncs>(blocks, 'zapiskiSyncs');
+    const conflicts = pick<ZapiskiConflicts>(blocks, 'zapiskiConflicts');
+    const support = pick<never>(blocks, 'zapiskiSupport');
 
     return (
         <>
             <Card>
                 <div style={{ fontSize: 14, lineHeight: '20px' }}>
-                    У ЗАПИСОК отдельный сервер и своя база. Кросс-продуктового приёмника не существует, поэтому ни один
-                    показатель ниже не измеряется — это не сбой панели, а отсутствующая механика.
+                    Общий приёмник событий у ЗАПИСОК заработал: часть показателей ниже теперь считается по
+                    настоящим событиям. Оставшиеся — честная дыра не из-за отсутствия приёмника, а потому
+                    что под них нет определения, которое можно вычислить: заметка не привязана к сессии
+                    (нет `session_id`), обращения в поддержку в этот приёмник не отправляются.
                 </div>
             </Card>
             <Grid cols={3}>
-                {Object.entries(labels).map(([key, label]) => (
-                    <BlockFrame key={key} block={pick<never>(blocks, key)} label={label}>
-                        {() => null}
-                    </BlockFrame>
-                ))}
+                <BlockFrame block={nsm} label="Сессий закрыто заметкой">
+                    {() => null}
+                </BlockFrame>
+                <BlockFrame block={writers} label="Пишут хоть что-то">
+                    {(d) => <StatTile value={num(d.count)} delta={d.delta} note={`субъектов с заметкой за ${d.windowDays} дней`} />}
+                </BlockFrame>
+                <BlockFrame block={notesPerSession} label="Заметок на сессию">
+                    {() => null}
+                </BlockFrame>
+                <BlockFrame block={syncs} label="Синхронизаций">
+                    {(d) => (
+                        <StatTile
+                            value={num(d.count)}
+                            delta={d.delta}
+                            note={`push ${num(d.pushed)} · pull ${num(d.pulled)} · ${d.windowDays} дней`}
+                        />
+                    )}
+                </BlockFrame>
+                <BlockFrame block={conflicts} label="Конфликтов">
+                    {(d) => (
+                        <StatTile
+                            value={num(d.count)}
+                            delta={d.delta}
+                            note={`из ${num(d.syncsTotal)} синков${d.ratePercent !== null ? ` · ${dec(d.ratePercent)} %` : ''}`}
+                        />
+                    )}
+                </BlockFrame>
+                <BlockFrame block={support} label="Бета: обращения">
+                    {() => null}
+                </BlockFrame>
             </Grid>
         </>
     );
 }
 
 function Momenty({ blocks }: { blocks: Blocks }) {
-    const labels: Record<string, string> = {
-        momentyNsm: 'Завершили первую практику в первый день',
-        momentyInstalls: 'Установок в неделю',
-        momentyD1: 'D1',
-        momentyD7: 'D7',
-        momentyD30: 'D30',
-    };
+    const nsm = pick<MomentyActivation>(blocks, 'momentyNsm');
+    const installs = pick<MomentyInstalls>(blocks, 'momentyInstalls');
+    const d1 = pick<MomentyRetention>(blocks, 'momentyD1');
+    const d7 = pick<MomentyRetention>(blocks, 'momentyD7');
+    const d30 = pick<MomentyRetention>(blocks, 'momentyD30');
 
     return (
         <>
             <Card>
                 <div style={{ fontSize: 14, lineHeight: '20px' }}>
-                    У МОМЕНТОВ нет сервера: события копятся на устройстве и никуда не уходят. Пока сервера нет, эти
-                    показатели не появятся — сколько бы ни ждали.
+                    МОМЕНТЫ шлют события в общий приёмник с включённым транспортом: установки и активация
+                    считаются по ним. Удержание D1/D7/D30 появляется по когортам устройств по мере того,
+                    как для них наступает соответствующий день — до этого блок честно показывает нехватку
+                    истории, а не ноль процентов.
                 </div>
             </Card>
             <Grid cols={3}>
-                {Object.entries(labels).map(([key, label]) => (
-                    <BlockFrame key={key} block={pick<never>(blocks, key)} label={label}>
-                        {() => null}
-                    </BlockFrame>
-                ))}
+                <BlockFrame block={nsm} label="Завершили первую практику в первый день">
+                    {(d) => (
+                        <StatTile
+                            value={dec(d.rate)}
+                            unit="%"
+                            delta={d.delta}
+                            note={`${num(d.activated)} из ${num(d.cohort)} за ${d.windowDays} дней`}
+                        />
+                    )}
+                </BlockFrame>
+                <BlockFrame block={installs} label="Установок в неделю">
+                    {(d) => <StatTile value={num(d.count)} delta={d.delta} note={`за ${d.windowDays} дней`} />}
+                </BlockFrame>
+                <BlockFrame block={d1} label="D1">
+                    {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
+                </BlockFrame>
+                <BlockFrame block={d7} label="D7">
+                    {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
+                </BlockFrame>
+                <BlockFrame block={d30} label="D30">
+                    {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
+                </BlockFrame>
             </Grid>
             <Card>
                 <BlockFrame block={pick<{ count: number }>(blocks, 'crossProduct')} label="Переходы в другие продукты" minHeight={130}>

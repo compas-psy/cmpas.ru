@@ -26,6 +26,12 @@
 # O-260817-05), not to this /ingest — its events are consolidated here
 # regardless, per this order's instruction; retargeting its transport is a
 # separate decision this order does not make.
+#
+# E1 (контракт контура v2 п.6): `product` is normally a single string, but
+# consent_updated and identity_linked belong to all three products at
+# once — written below as a YAML list ([practice, zapiski, moments]).
+# src/lib/analytics/schema.ts accepts either shape; every other event
+# keeps one string because it genuinely belongs to one product.
 
 version: 1
 
@@ -36,15 +42,19 @@ products:
 
 events:
   # Identity (charter/12_ANALYTICS.md §2) — links a pre-login device to an
-  # account, written once at the moment of login.
+  # account, written once at the moment of login. All three products (E1,
+  # контракт контура v2 п.6).
   identity_linked:
-    product: practice
+    product: [practice, zapiski, moments]
     required: []
     optional: []
 
-  # Consent gate (this order's rule: no device_id before consent).
+  # Consent gate (this order's rule: no device_id before consent). All
+  # three products (E1, контракт контура v2 п.6) — ЗАПИСКИ and МОМЕНТЫ
+  # must be able to grant their own subject's consent themselves; see
+  # src/lib/analytics/ingest.ts for how that subject is keyed.
   consent_updated:
-    product: practice
+    product: [practice, zapiski, moments]
     required: [granted]
     optional: []
     props:

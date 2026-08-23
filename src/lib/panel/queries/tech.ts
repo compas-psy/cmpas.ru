@@ -69,9 +69,25 @@ export async function qTechServer(): Promise<PanelBlock<ServerCard>> {
     );
 }
 
-/** Ответ 95-го процентиля никто не измеряет — блок честно пуст (ТЗ §5, экран 6). */
-export async function qTechResponseP95(): Promise<PanelBlock<never>> {
-    return noData('q_tech_response_p95', 'время ответа никто не замеряет: ни APM, ни логов с длительностями');
+export interface ResponseP95Card {
+    p95Ms: number;
+}
+
+/**
+ * Источник появился (O-260817-12/§5): src/proxy.ts меряет каждый запрос,
+ * src/lib/cron/response-time.ts раз в ~5 минут пишет окно в AppResponseTime,
+ * а коллектор переносит последний ещё не устаревший p95 в свой снимок
+ * InfraPulse.responseP95Ms — читаем его так же, как остальные карточки
+ * этого экрана, тем же fromPulse.
+ */
+export async function qTechResponseP95(): Promise<PanelBlock<ResponseP95Card>> {
+    const pulse = await latestPulse();
+    if (!pulse) return noData('q_tech_response_p95', NO_PULSE_REASON);
+    const { row } = pulse;
+    if (row.responseP95Ms === null || row.responseP95Ms === undefined) {
+        return noData('q_tech_response_p95', 'приложение ещё не отдало ни одного полного окна замеров времени ответа');
+    }
+    return fromPulse<ResponseP95Card>('q_tech_response_p95', { p95Ms: row.responseP95Ms }, pulse);
 }
 
 export interface DbCard {
@@ -102,9 +118,22 @@ export async function qTechDb(): Promise<PanelBlock<DbCard>> {
     );
 }
 
-/** Хранилище ЗАПИСОК живёт на чужом сервере — своей базы у нас нет. */
+/**
+ * Хранилище ЗАПИСОК. Причина «общего приёмника ещё нет» устарела — приёмник
+ * есть и события ЗАПИСОК в него доезжают (потоки A/B/E). Не хватает другого,
+ * и это стоит называть точно: занятое место — не поведенческое событие, а
+ * состояние на чужом сервере, и в `analytics/schema/events.yaml` нет ни
+ * одного события про квоту или объём хранилища. Пока такое событие не
+ * объявлено в реестре и не начало отправляться сервером ЗАПИСОК, считать
+ * нечего — а лезть в чужую базу напрямую значит завести второй контур
+ * данных, чего `charter/12_ANALYTICS.md §3` прямо не велит («второй сервер
+ * не строим»).
+ */
 export async function qTechZapiskiStorage(): Promise<PanelBlock<never>> {
-    return noData('q_tech_zapiski_storage', 'хранилище живёт на сервере ЗАПИСОК, общего приёмника ещё нет');
+    return noData(
+        'q_tech_zapiski_storage',
+        'в реестре событий нет ни одного события про объём хранилища ЗАПИСОК — приёмник тут ни при чём, отправлять пока нечего',
+    );
 }
 
 export interface DeployCard {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
+import { VISITOR_ID_COOKIE } from '@/lib/analytics/visitor-cookie';
 
 interface VisitorData {
     visitorId: string;
@@ -144,6 +145,14 @@ export function useAnalytics() {
         const sendAnalytics = async () => {
             try {
                 const visitorData = await collectVisitorData();
+
+                // Кука (не localStorage — её сервер не видит): даёт
+                // src/auth.ts прочитать visitorId при входе/регистрации и
+                // связать эту запись VisitorAnalytics с аккаунтом (B5).
+                // 400 дней — предел, который сам браузер даёт первостороннней
+                // куке через document.cookie (Chrome режет более длинный
+                // max-age до этого значения молча).
+                document.cookie = `${VISITOR_ID_COOKIE}=${visitorData.visitorId}; path=/; max-age=${400 * 24 * 60 * 60}; SameSite=Lax`;
 
                 // Store in localStorage for persistence
                 const key = `cmpas_visitor_${visitorData.visitorId}`;
