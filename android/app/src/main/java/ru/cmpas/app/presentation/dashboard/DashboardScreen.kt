@@ -78,6 +78,36 @@ fun DashboardScreen(
                 }
             }
 
+            // Недоставленное названо вслух. Без счётчика молчаливая потеря просто
+            // превращается в молчаливое ожидание: специалист не узнает ни того,
+            // что запись не уехала, ни того, что она уехала потом.
+            if (uiState.undeliveredCount > 0) {
+                item {
+                    GlassCard(padding = 14.dp) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.CloudOff,
+                                null,
+                                Modifier.size(19.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "Не доставлено на сервер: ${uiState.undeliveredCount}",
+                                    style = tBody2,
+                                )
+                                Text(
+                                    "Записи сохранены на устройстве и уедут, когда появится связь",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             if (uiState.needsOnboarding) {
                 item {
                     OnboardingBridgeCard(

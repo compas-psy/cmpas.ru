@@ -40,6 +40,19 @@ interface CompasApi {
     @DELETE("sessions/{id}")
     suspend fun cancelSession(@Path("id") id: String): Response<Unit>
 
+    // Фактический исход напоминаний по сессии и повторная отправка.
+    // До появления этих двух вызовов экран показывал «Отправлено», как только
+    // проходил момент напоминания, — то есть по часам, а не по факту. Правду
+    // знает сервер: он пишет каждую попытку в ReminderOutbox.
+    @GET("sessions/{id}/reminders")
+    suspend fun getSessionReminders(@Path("id") id: String): Response<SessionRemindersResponse>
+
+    @POST("sessions/{id}/reminders")
+    suspend fun resendSessionReminder(
+        @Path("id") id: String,
+        @Body body: ResendReminderRequest,
+    ): Response<ResendReminderResponse>
+
     @GET("sessions/free-times")
     suspend fun getFreeTimes(
         @Query("date") date: String,
@@ -149,6 +162,10 @@ data class CreateSessionRequest(
     val format: SessionFormat = SessionFormat.ONLINE,
     val type: SessionType = SessionType.INDIVIDUAL,
     val duration: Int? = null,
+    // Ключ идемпотентности, рождённый очередью досылки в момент постановки
+    // записи, а не в момент отправки: повтор после потерянного ответа
+    // возвращает уже созданную сессию, а не создаёт вторую.
+    val clientRequestId: String? = null,
 )
 
 @kotlinx.serialization.Serializable
@@ -162,7 +179,14 @@ data class UpdateSessionRequest(
 )
 
 @kotlinx.serialization.Serializable
-data class CreateClientRequest(val name: String, val email: String? = null, val phone: String? = null, val gender: String? = null)
+data class CreateClientRequest(
+    val name: String,
+    val email: String? = null,
+    val phone: String? = null,
+    val gender: String? = null,
+    /** Ключ идемпотентности — см. CreateSessionRequest.clientRequestId. */
+    val clientRequestId: String? = null,
+)
 
 @kotlinx.serialization.Serializable
 data class UpdateClientRequest(val name: String? = null, val phone: String? = null, val email: String? = null, val status: String? = null)
@@ -181,6 +205,29 @@ data class SendMessageRequest(val type: String, val text: String? = null, val se
 
 @kotlinx.serialization.Serializable
 data class InviteRequest(val channel: String = "auto")
+
+@kotlinx.serialization.Serializable
+data class ResendReminderRequest(val kind: String)
+
+@kotlinx.serialization.Serializable
+data class ResendReminderResponse(
+    val sent: Boolean = false,
+    val reason: String? = null,
+    val message: String? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class SessionRemindersResponse(val reminders: List<ServerReminderStatus> = emptyList())
+
+/** Строка ReminderOutbox: что сервер ФАКТИЧЕСКИ сделал с напоминанием. */
+@kotlinx.serialization.Serializable
+data class ServerReminderStatus(
+    val kind: String,
+    val channel: String,
+    val status: String,
+    val sentAt: String? = null,
+    val sendCount: Int = 0,
+)
 
 @kotlinx.serialization.Serializable
 data class ChannelRequest(val channel: String)

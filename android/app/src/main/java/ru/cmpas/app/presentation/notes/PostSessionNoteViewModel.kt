@@ -52,12 +52,25 @@ class PostSessionNoteViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                if (sessionId.isRemoteSessionId()) {
+                // Заметка считается дошедшей до сервера, только если сессия
+                // серверная И ответ успешен. Раньше у этой проверки не было
+                // ветки else: при неуспешном ответе и при локальном sessionId
+                // заметка оседала на устройстве, а пользователю сообщалось
+                // «Заметка сохранена» — без единого признака, что на сервер
+                // ничего не ушло и никогда не уйдёт.
+                val delivered = if (sessionId.isRemoteSessionId()) {
                     val response = api.updateSession(
                         sessionId,
                         UpdateSessionRequest(notes = text, structuredNotes = structuredNotes),
                     )
-                    if (response.isSuccessful) response.body()?.let { localStore.upsertSession(it) }
+                    if (response.isSuccessful) {
+                        response.body()?.let { localStore.upsertSession(it) }
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
                 localStore.saveNote(sessionId = sessionId, text = text)
                 _uiState.update { state ->
@@ -68,7 +81,7 @@ class PostSessionNoteViewModel @Inject constructor(
                         session = state.session?.copy(notes = text, notesPlain = text, structuredNotes = structuredNotes),
                     )
                 }
-                onFinished(true, "Заметка сохранена")
+                onFinished(true, if (delivered) "Заметка сохранена" else "Заметка сохранена на устройстве")
             } catch (_: Exception) {
                 localStore.saveNote(sessionId = sessionId, text = text)
                 _uiState.update { state ->
@@ -78,7 +91,7 @@ class PostSessionNoteViewModel @Inject constructor(
                         session = state.session?.copy(notes = text, notesPlain = text),
                     )
                 }
-                onFinished(true, "Заметка сохранена локально")
+                onFinished(true, "Заметка сохранена на устройстве")
             }
         }
     }

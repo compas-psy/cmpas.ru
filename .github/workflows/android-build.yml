@@ -77,36 +77,34 @@ jobs:
       # но артефакты GitHub лежат в blob-хранилище, к которому из части сред
       # нет доступа (CONNECT tunnel failed, 403) — и тогда «тесты упали»
       # приходит без единого слова о том, какие именно.
+      #
+      # Разбор идёт grep/sed, без вложенного heredoc: heredoc внутри блока
+      # run: в YAML требует терминатора в нулевой колонке, а блок неизбежно
+      # с отступом — такой шаг молча не делает ничего.
       - name: Итог тестов
         if: always()
         working-directory: android
         shell: bash
         run: |
           results=app/build/test-results/testDebugUnitTest
-          [ -d "$results" ] || { echo "Результатов нет — тесты не запускались."; exit 0; }
+          if [ ! -d "$results" ]; then
+            echo "Результатов нет — тесты не запускались."
+            exit 0
+          fi
           echo "===== ИТОГ ТЕСТОВ ====="
-          for f in "$results"/*.xml; do
-            [ -e "$f" ] || continue
-            sed -n 's/.*<testsuite name="\([^"]*\)".*tests="\([0-9]*\)".*failures="\([0-9]*\)".*errors="\([0-9]*\)".*/\1: тестов \2, провалов \3, ошибок \4/p' "$f"
-          done
+          grep -h -o 'tests="[0-9]*"[^>]*failures="[0-9]*"[^>]*errors="[0-9]*"' "$results"/*.xml || true
           echo "===== ЧТО ИМЕННО УПАЛО ====="
-          found=0
-          for f in "$results"/*.xml; do
-            [ -e "$f" ] || continue
-            grep -q "<failure\|<error" "$f" || continue
-            found=1
-            python3 - "$f" <<'PYEOF'
-          import re, sys, html
-          text = open(sys.argv[1], encoding='utf-8').read()
-          for case in re.findall(r'<testcase\b[^>]*>.*?</testcase>|<testcase\b[^>]*/>', text, re.S):
-              name = re.search(r'name="([^"]*)"', case)
-              fail = re.search(r'<(?:failure|error)[^>]*message="([^"]*)"', case)
-              if name and fail:
-                  print(f"  ✗ {html.unescape(name.group(1))}")
-                  print(f"      {html.unescape(fail.group(1))[:400]}")
-          PYEOF
-          done
-          [ "$found" = 1 ] || echo "  (провалов нет)"
+          if grep -l '<failure\|<error' "$results"/*.xml >/dev/null 2>&1; then
+            for f in $(grep -l '<failure\|<error' "$results"/*.xml); do
+              echo "--- $(basename "$f")"
+              tr '<' '\n' < "$f" \
+                | sed -n -e 's/^testcase name="\([^"]*\)".*/  ТЕСТ: \1/p' \
+                         -e 's/^failure message="\([^"]*\)".*/      ПРИЧИНА: \1/p' \
+                         -e 's/^error message="\([^"]*\)".*/      ОШИБКА: \1/p'
+            done
+          else
+            echo "  (провалов нет)"
+          fi
 
       - name: Upload test reports
         if: always()

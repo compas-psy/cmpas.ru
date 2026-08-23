@@ -206,15 +206,45 @@ class QuickActionViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Серия повторов.
+     *
+     * Раньше эта функция не вызывала API ни разу: все повторы писались только
+     * в localStore, а пользователю сообщалось «Создано повторов: N». Сессии
+     * не появлялись ни в вебе, ни у клиента, и досылки не существовало.
+     * Теперь каждый повтор идёт тем же путём, что и одиночная запись
+     * (saveSession), и сообщение называет фактический исход, а не намерение.
+     */
     private suspend fun saveRepeatedSlot(client: Client?, date: String?, time: String?, secondary: String, comment: String): String {
         require(client != null) { "Выберите клиента" }
         require(!date.isNullOrBlank() && !time.isNullOrBlank()) { "Выберите дату и время" }
         val count = secondary.filter { it.isDigit() }.toIntOrNull()?.coerceIn(2, 12) ?: 4
+        val endTime = addMinutes(time!!, 50)
+        var delivered = 0
+        var local = 0
         repeat(count) { index ->
             val nextDate = java.time.LocalDate.parse(date).plusWeeks(index.toLong()).toString()
-            localStore.createSession(client!!, nextDate, time!!, addMinutes(time, 50), SessionFormat.ONLINE, SessionType.INDIVIDUAL, comment)
+            val session = try {
+                val response = api.createSession(
+                    CreateSessionRequest(client!!.id, nextDate, time, format = SessionFormat.ONLINE, type = SessionType.INDIVIDUAL),
+                )
+                if (response.isSuccessful) response.body() else null
+            } catch (_: Exception) {
+                null
+            }
+            if (session != null) {
+                localStore.upsertSession(session)
+                delivered++
+            } else {
+                localStore.createSession(client!!, nextDate, time, endTime, SessionFormat.ONLINE, SessionType.INDIVIDUAL, comment)
+                local++
+            }
         }
-        return "Создано повторов: $count"
+        return when {
+            local == 0 -> "Создано повторов: $delivered"
+            delivered == 0 -> "Повторы сохранены на устройстве: $local — сервер недоступен"
+            else -> "Создано повторов: $delivered, на устройстве: $local"
+        }
     }
 
     private fun buildLocalSlots(date: String): List<TimeSlot> = listOf("10:00", "12:00", "15:00", "17:00").map { TimeSlot(date, it, addMinutes(it, 50), true) }

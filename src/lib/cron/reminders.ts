@@ -106,6 +106,54 @@ async function recordOutcome(
     }
 }
 
+/**
+ * Адресаты клиента в двух каналах. Вынесено из processReminders, потому что
+ * повторная отправка (resendSessionReminder) обязана выбирать получателя ровно
+ * так же: разойдись эти две выборки — повтор ушёл бы не туда, куда ушёл
+ * оригинал, и ReminderOutbox писал бы про разных получателей под одним ключом.
+ */
+function clientTargets(client: any): { telegram: string | null; max: string | null } {
+    const telegramId = client?.telegramClient?.telegramUserId || client?.telegramChatId || null;
+    const maxId = client?.telegramClient?.telegramUserId?.startsWith('max_')
+        ? client.telegramClient.telegramUserId
+        : (client?.maxChatId || null);
+    // Один и тот же id в обоих полях означает MAX-пользователя: слать ему ещё и
+    // «в телеграм» по тому же id — это второе сообщение тому же человеку.
+    const telegramTarget = maxId && telegramId === maxId ? null : telegramId;
+    return { telegram: telegramTarget, max: maxId };
+}
+
+export type ClientReminderKind = 'session_24h_client' | 'session_1h_client';
+
+/**
+ * Текст клиентского напоминания. Один источник для рассылки по расписанию и
+ * для повторной отправки из приложения — иначе специалист, нажав «отправить
+ * ещё раз», отправил бы клиенту не то же самое сообщение.
+ */
+function buildClientReminderText(session: any, kind: ClientReminderKind): string {
+    const client = session.client;
+    const onlineLink = session.psychologist?.psychologistSettings?.onlineSessionLink;
+    if (kind === 'session_24h_client') {
+        return build24hReminderText({
+            clientName: client.name,
+            time: session.time,
+            format: session.format,
+            addressName: session.address?.name,
+            onlineLink,
+            confirmationRequired: session.status === 'pending',
+        });
+    }
+    const linkText = session.format === 'online' && onlineLink ? `\n🔗 Подключение: ${onlineLink}` : '';
+    const confirmationText = session.status === 'pending' ? '\nПодтвердите, пожалуйста, встречу.' : '';
+    return `Сессия начнётся через 1 час, в ${session.time}.${linkText}${confirmationText}`;
+}
+
+/** Момент, к которому напоминание привязано (для ReminderOutbox.dueAt). */
+function reminderDueAt(session: any, kind: ClientReminderKind): Date {
+    const offsetMs = kind === 'session_24h_client' ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
+    return new Date(session.date.getTime() - offsetMs);
+}
+
 function sessionActions(session: { id: string; psychologistId: string; clientId: string }, pending: boolean) {
     const token = clientActionToken(session.psychologistId, session.clientId);
     const actionUrl = (action: string) => `${publicBaseUrl()}/api/client/session-action?s=${session.id}&a=${action}&t=${token}`;
@@ -144,24 +192,13 @@ export async function processReminders() {
             const client = session.client;
             if (!client) continue;
 
-            const onlineLink = session.psychologist?.psychologistSettings?.onlineSessionLink;
-            const telegramId = client.telegramClient?.telegramUserId || client.telegramChatId;
-            const maxId = client.telegramClient?.telegramUserId?.startsWith('max_') ? client.telegramClient.telegramUserId : client.maxChatId;
-            const telegramTarget = maxId && telegramId === maxId ? null : telegramId;
+            const { telegram: telegramTarget, max: maxId } = clientTargets(client);
 
             if (telegramTarget || maxId) {
-                const message = build24hReminderText({
-                    clientName: client.name,
-                    time: session.time,
-                    format: session.format,
-                    addressName: session.address?.name,
-                    onlineLink,
-                    confirmationRequired: session.status === 'pending',
-                });
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
-                    message,
+                    buildClientReminderText(session, 'session_24h_client'),
                     sessionActions(session, session.status === 'pending'),
                 );
                 await recordOutcome(
@@ -169,7 +206,7 @@ export async function processReminders() {
                     'session_24h_client',
                     { telegram: telegramTarget, max: maxId },
                     session.id,
-                    new Date(session.date.getTime() - 24 * 60 * 60 * 1000),
+                    reminderDueAt(session, 'session_24h_client'),
                     now,
                 );
             }
@@ -220,19 +257,13 @@ export async function processReminders() {
             const client = session.client;
             if (!client) continue;
 
-            const onlineLink = session.psychologist?.psychologistSettings?.onlineSessionLink;
-            const linkText = session.format === 'online' && onlineLink ? `\n🔗 Подключение: ${onlineLink}` : '';
-            const telegramId = client.telegramClient?.telegramUserId || client.telegramChatId;
-            const maxId = client.telegramClient?.telegramUserId?.startsWith('max_') ? client.telegramClient.telegramUserId : client.maxChatId;
-            const telegramTarget = maxId && telegramId === maxId ? null : telegramId;
+            const { telegram: telegramTarget, max: maxId } = clientTargets(client);
 
             if (telegramTarget || maxId) {
-                const confirmationText = session.status === 'pending' ? '\nПодтвердите, пожалуйста, встречу.' : '';
-                const message = `Сессия начнётся через 1 час, в ${session.time}.${linkText}${confirmationText}`;
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
-                    message,
+                    buildClientReminderText(session, 'session_1h_client'),
                     sessionActions(session, session.status === 'pending'),
                 );
                 await recordOutcome(
@@ -240,7 +271,7 @@ export async function processReminders() {
                     'session_1h_client',
                     { telegram: telegramTarget, max: maxId },
                     session.id,
-                    new Date(session.date.getTime() - 60 * 60 * 1000),
+                    reminderDueAt(session, 'session_1h_client'),
                     now,
                 );
             }
@@ -253,4 +284,100 @@ export async function processReminders() {
     } catch (error) {
         console.error('[processReminders] Ошибка вызова CRON:', error);
     }
+}
+
+/**
+ * Повторная отправка клиентского напоминания по требованию специалиста.
+ *
+ * Зачем существует. В приложении кнопка «Отправить ещё раз» открывала окно
+ * ручного сообщения, а статус напоминания («Отправлено») экран вычислял из
+ * часов — если момент прошёл, значит отправлено. Сервер при этом знает
+ * фактический исход: он лежит в ReminderOutbox. Эта функция даёт приложению
+ * настоящую отправку тем же путём, каким шлёт рассылка по расписанию, и тот
+ * же журнал — вместо догадки по часам.
+ *
+ * Ключ ReminderOutbox — (sessionId, type, channel), поэтому повтор обновляет
+ * существующую строку и увеличивает sendCount, а не плодит дубли.
+ */
+export async function resendSessionReminder(params: {
+    sessionId: string;
+    psychologistId: string;
+    kind: ClientReminderKind;
+}): Promise<
+    | { ok: true; channels: { telegram: boolean | null; max: boolean | null } }
+    | { ok: false; reason: 'not_found' | 'no_channel' | 'send_failed' }
+> {
+    const { sessionId, psychologistId, kind } = params;
+
+    // Привязка к специалисту — часть выборки, а не проверка после неё:
+    // чужую сессию нельзя ни прочитать, ни разбудить.
+    const rawSession = await db.diarySession.findFirst({
+        where: { id: sessionId, psychologistId } as any,
+        include: {
+            client: { include: { telegramClient: true } },
+            psychologist: { include: { psychologistSettings: true } },
+            address: true,
+        },
+    });
+    if (!rawSession) return { ok: false, reason: 'not_found' };
+
+    const session = rawSession as any;
+    if (!session.client) return { ok: false, reason: 'not_found' };
+
+    const { telegram, max } = clientTargets(session.client);
+    if (!telegram && !max) return { ok: false, reason: 'no_channel' };
+
+    const outcome = await sendNotification(
+        telegram,
+        max,
+        buildClientReminderText(session, kind),
+        sessionActions(session, session.status === 'pending'),
+    );
+    await recordOutcome(
+        outcome,
+        kind,
+        { telegram, max },
+        session.id,
+        reminderDueAt(session, kind),
+        new Date(),
+    );
+
+    // Успех — если хотя бы один задействованный канал принял сообщение.
+    // Канал, который не был задействован (null), не считается отказом.
+    const attempted = [outcome.telegram, outcome.max].filter((v) => v !== null) as boolean[];
+    if (attempted.length === 0 || attempted.every((v) => !v)) {
+        return { ok: false, reason: 'send_failed' };
+    }
+    return { ok: true, channels: outcome };
+}
+
+/**
+ * Фактический исход напоминаний по сессии — из ReminderOutbox, а не из часов.
+ * Приложение показывало «Отправлено», как только момент напоминания проходил,
+ * даже если отправка провалилась; сервер знает правду и теперь ею делится.
+ */
+export async function readSessionReminderStatus(params: {
+    sessionId: string;
+    psychologistId: string;
+}): Promise<Array<{ kind: string; channel: string; status: string; sentAt: string | null; sendCount: number }>> {
+    const { sessionId, psychologistId } = params;
+    const session = await db.diarySession.findFirst({
+        where: { id: sessionId, psychologistId } as any,
+        select: { id: true },
+    });
+    if (!session) return [];
+
+    const rows = await (db as any).reminderOutbox.findMany({
+        where: { sessionId },
+        select: { type: true, channel: true, status: true, sentAt: true, sendCount: true },
+        orderBy: { dueAt: 'asc' },
+    }).catch(() => []);
+
+    return rows.map((r: any) => ({
+        kind: r.type,
+        channel: r.channel,
+        status: r.status,
+        sentAt: r.sentAt ? new Date(r.sentAt).toISOString() : null,
+        sendCount: r.sendCount,
+    }));
 }

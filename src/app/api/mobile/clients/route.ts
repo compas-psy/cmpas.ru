@@ -98,10 +98,32 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { name, email, phone, gender } = await req.json();
+        const { name, email, phone, gender, clientRequestId } = await req.json();
 
         if (!name || typeof name !== 'string') {
             return NextResponse.json({ error: 'Name required' }, { status: 400 });
+        }
+
+        // Идемпотентность досылки — см. DiarySession.clientRequestId. Проверка
+        // идёт до поиска по телефону: у клиента, заведённого без телефона,
+        // совпадать нечему, и повтор создавал бы вторую карточку.
+        const idempotencyKey = typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null;
+        if (idempotencyKey) {
+            const already = await db.diaryClient.findFirst({
+                where: { clientRequestId: idempotencyKey, psychologistId: auth.userId } as any,
+            });
+            if (already) {
+                const count = await db.diarySession.count({ where: { clientId: already.id } });
+                return NextResponse.json({
+                    id: already.id,
+                    name: already.name,
+                    email: already.email,
+                    phone: already.phone,
+                    gender: already.gender,
+                    status: (already.status || 'active').toUpperCase(),
+                    sessionsCount: count,
+                });
+            }
         }
 
         const normalizedPhone = normalizePhone(phone);
@@ -128,7 +150,8 @@ export async function POST(req: NextRequest) {
                     email: email || null,
                     phone: normalizedPhone,
                     gender: gender || null,
-                },
+                    clientRequestId: idempotencyKey,
+                } as any,
             });
 
         const sessionsCount = existing ? await db.diarySession.count({ where: { clientId: client.id } }) : 0;

@@ -50,6 +50,10 @@ fun SessionDetailScreen(
     var showCancelSheet by remember { mutableStateOf(false) }
     var showMessage by remember { mutableStateOf(false) }
     var messageText by remember { mutableStateOf("") }
+    // Исход отправки называется вслух. Раньше и повторная отправка, и ручное
+    // сообщение завершались молча: окно закрывалось одинаково при успехе и при
+    // отказе.
+    var notice by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
     LaunchedEffect(uiState.cancelled) { if (uiState.cancelled) onBack() }
@@ -117,15 +121,37 @@ fun SessionDetailScreen(
                             RemindersCard(
                                 reminders = uiState.reminders,
                                 bound = bound,
-                                onResend = {
-                                    messageText = it.text
-                                    showMessage = true
+                                onResend = { reminder ->
+                                    // Клиент в мессенджере — отправляем по-настоящему,
+                                    // через сервер, тем же путём, что и рассылка по
+                                    // расписанию. Нет канала — остаётся ручная отправка,
+                                    // и это честно названо кнопкой «Отправить».
+                                    if (bound) {
+                                        viewModel.resendReminder(session.id, reminder.id) { _, message ->
+                                            notice = message
+                                        }
+                                    } else {
+                                        messageText = reminder.text
+                                        showMessage = true
+                                    }
                                 },
                                 onManual = {
                                     messageText = it.text
                                     showMessage = true
                                 },
                             )
+                        }
+                    }
+
+                    notice?.let { text ->
+                        item {
+                            GlassCard(modifier = Modifier.fillMaxWidth(), padding = 13.dp) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Info, null, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(Modifier.width(9.dp))
+                                    Text(text, style = tBody2)
+                                }
+                            }
                         }
                     }
 
@@ -235,7 +261,11 @@ fun SessionDetailScreen(
                 bound = bound,
                 initialText = messageText,
                 onClose = { showMessage = false },
-                onSend = { viewModel.sendMessage(session.clientId, session.id, it) },
+                onSend = {
+                    viewModel.sendMessage(session.clientId, session.id, it) { _, message ->
+                        notice = message
+                    }
+                },
             )
         }
     }
