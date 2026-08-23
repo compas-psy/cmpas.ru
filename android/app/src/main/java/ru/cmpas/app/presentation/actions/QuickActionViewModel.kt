@@ -177,7 +177,20 @@ class QuickActionViewModel @Inject constructor(
         require(name.isNotBlank()) { "Укажите имя клиента" }
         require(email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { "Проверьте адрес электронной почты" }
         return try {
-            val response = api.createClient(CreateClientRequest(name.trim(), email.trim().ifBlank { null }, phone.trim().ifBlank { null }, gender))
+            // Ключ идемпотентности рождается ЗДЕСЬ, до отправки. Раньше прямой
+            // онлайн-путь ключа не слал вовсе: если сервер запрос выполнил, а
+            // ответ потерялся, код считал это отказом, писал запись локально, и
+            // очередь досылки отправляла её заново — с НОВЫМ ключом. Сцепить два
+            // запроса было нечем, и получался настоящий дубль.
+            val response = api.createClient(
+                CreateClientRequest(
+                    name = name.trim(),
+                    email = email.trim().ifBlank { null },
+                    phone = phone.trim().ifBlank { null },
+                    gender = gender,
+                    clientRequestId = java.util.UUID.randomUUID().toString(),
+                ),
+            )
             val client = if (response.isSuccessful) response.body() else null
             if (client != null) {
                 localStore.upsertClient(client)
@@ -206,7 +219,22 @@ class QuickActionViewModel @Inject constructor(
         require(!date.isNullOrBlank()) { "Выберите дату" }
         require(!time.isNullOrBlank()) { "Выберите время" }
         return try {
-            val response = api.createSession(CreateSessionRequest(client!!.id, date!!, time!!, format = format, type = type))
+            // Комментарий доезжает до сервера. Раньше поля notes в запросе не
+            // было вовсе, и введённый пользователем текст сохранялся ТОЛЬКО
+            // когда сервер отказал: на успешном пути он молча пропадал, а
+            // человеку сообщалось «Запись добавлена».
+            // Ключ идемпотентности — см. пояснение в saveClient.
+            val response = api.createSession(
+                CreateSessionRequest(
+                    clientId = client!!.id,
+                    date = date!!,
+                    startTime = time!!,
+                    format = format,
+                    type = type,
+                    clientRequestId = java.util.UUID.randomUUID().toString(),
+                    notes = comment.ifBlank { null },
+                ),
+            )
             val session = if (response.isSuccessful) response.body() else null
             val daysAheadBucket = calculateDaysAheadBucket(date)
             if (session != null) {
@@ -251,7 +279,15 @@ class QuickActionViewModel @Inject constructor(
             val daysAheadBucket = calculateDaysAheadBucket(nextDate)
             val session = try {
                 val response = api.createSession(
-                    CreateSessionRequest(client!!.id, nextDate, time, format = SessionFormat.ONLINE, type = SessionType.INDIVIDUAL),
+                    CreateSessionRequest(
+                        clientId = client!!.id,
+                        date = nextDate,
+                        startTime = time,
+                        format = SessionFormat.ONLINE,
+                        type = SessionType.INDIVIDUAL,
+                        clientRequestId = java.util.UUID.randomUUID().toString(),
+                        notes = comment.ifBlank { null },
+                    ),
                 )
                 if (response.isSuccessful) response.body() else null
             } catch (_: Exception) {

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { clientId, date, startTime, endTime, format, type, duration: durationReq, clientRequestId } = await req.json();
+        const { clientId, date, startTime, endTime, format, type, duration: durationReq, clientRequestId, notes } = await req.json();
         if (!clientId || !date || !startTime) return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
 
         // Идемпотентность досылки. Приложение рождает clientRequestId в момент
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         const createSessionRow = async () => {
             try {
                 return await db.diarySession.create({
-                    data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending', clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null } as any,
+                    data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending', clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null, notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null } as any,
                     include: { client: true },
                 });
             } catch (error) {

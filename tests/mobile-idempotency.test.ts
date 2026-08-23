@@ -150,6 +150,25 @@ describe('POST /api/mobile/sessions — повтор с тем же ключом
         expect((await res.json()).id).toBe('session-raced');
     });
 
+    it('комментарий доезжает до сервера, а не теряется на успешном пути', async () => {
+        // Поля notes в запросе не было вовсе: текст, введённый пользователем в
+        // «Комментарий», сохранялся ТОЛЬКО когда сервер отказал. На успешном
+        // пути он пропадал молча, под сообщением «Запись добавлена».
+        const { POST } = await import('../src/app/api/mobile/sessions/route');
+        await POST(post('https://cmpas.ru/api/mobile/sessions', {
+            clientId: 'c', date: '2026-09-01', startTime: '10:00', notes: '  первая встреча  ',
+        }) as any);
+        expect(store.sessions[0].notes).toBe('первая встреча');
+    });
+
+    it('пустой комментарий не превращается в пустую строку в базе', async () => {
+        const { POST } = await import('../src/app/api/mobile/sessions/route');
+        await POST(post('https://cmpas.ru/api/mobile/sessions', {
+            clientId: 'c', date: '2026-09-01', startTime: '10:00', notes: '   ',
+        }) as any);
+        expect(store.sessions[0].notes).toBeNull();
+    });
+
     it('разные ключи создают разные сессии', async () => {
         const { POST } = await import('../src/app/api/mobile/sessions/route');
         await POST(post('https://cmpas.ru/api/mobile/sessions', { clientId: 'c', date: '2026-09-01', startTime: '10:00', clientRequestId: 'op-1' }) as any);

@@ -37,7 +37,17 @@ class DashboardViewModel @Inject constructor(
         syncOutbox()
         startAnalytics()
         viewModelScope.launch {
-            PracticeRefreshBus.changes.collectLatest { loadDashboard(showLoader = false) }
+            // Любое изменение практики — повод попытаться дослать. Раньше здесь
+            // обновлялся только список, а очередь пробовала уехать лишь в init
+            // и в refresh(), который не вызывался ниоткуда. Значит специалист,
+            // создавший запись офлайн и дождавшийся связи не выходя из
+            // приложения, дослал бы её только после перезапуска — при том, что
+            // счётчик недоставленного всё это время показывал бы устаревшее
+            // число.
+            PracticeRefreshBus.changes.collectLatest {
+                loadDashboard(showLoader = false)
+                syncOutbox()
+            }
         }
     }
 

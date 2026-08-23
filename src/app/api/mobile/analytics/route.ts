@@ -53,8 +53,22 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const user = await db.user.findUnique({ where: { id: auth.userId }, select: { analyticsConsentAt: true } });
-    const consentGiven = !!user?.analyticsConsentAt;
+    // Согласие перечитывается на КАЖДОЕ событие пачки, а не один раз на всю.
+    //
+    // Пачка — до двухсот событий, и каждое из них уже идёт в базу отдельным
+    // запросом. Прочитанное один раз согласие означало бы окно: человек
+    // отзывает согласие в середине обработки, а остаток пачки всё равно
+    // записывается по устаревшему решению. Приёмник от этого не спасает —
+    // его ветка practice+account_id сегодня пишет событие и без согласия
+    // (намеренно не тронута, порядок учредителя иной), то есть ЭТА проверка
+    // и есть единственная линия защиты на мобильном пути.
+    //
+    // Цена — один индексированный чтение-запрос на событие. За закрытое окно
+    // отзыва это дёшево.
+    const consentAt = async (): Promise<boolean> => {
+        const user = await db.user.findUnique({ where: { id: auth.userId }, select: { analyticsConsentAt: true } });
+        return !!user?.analyticsConsentAt;
+    };
 
     const results: IngestResult[] = [];
     for (const item of body) {
@@ -64,7 +78,7 @@ export async function POST(req: NextRequest) {
             results.push({ accepted: false, reason: CONSENT_EVENT_BLOCKED_REASON });
             continue;
         }
-        if (!consentGiven) {
+        if (!(await consentAt())) {
             results.push({ accepted: false, reason: CONSENT_REQUIRED_REASON });
             continue;
         }

@@ -119,6 +119,14 @@ class OutboxSync @Inject constructor(
             store.markOutboxFailure(entry.localId, "клиент ещё не создан на сервере")
             return false
         }
+        // Комментарий уходит ВМЕСТЕ с созданием сессии, одним запросом.
+        //
+        // Раньше поля notes в запросе не было, и текст досылался отдельным
+        // updateSession уже после успеха — причём результат этой досылки
+        // отбрасывался целиком: ни в хранилище, ни в очередь. Если она падала
+        // (а падает она вероятнее всего именно в момент восстановления связи),
+        // комментарий пропадал навсегда, без записи в очереди и без слова
+        // пользователю. Одним запросом такой щели нет.
         val response = api.createSession(
             CreateSessionRequest(
                 clientId = local.clientId,
@@ -127,6 +135,7 @@ class OutboxSync @Inject constructor(
                 format = local.format,
                 type = local.type,
                 clientRequestId = entry.opId,
+                notes = local.notes,
             ),
         )
         val created = if (response.isSuccessful) response.body() else null
@@ -135,15 +144,18 @@ class OutboxSync @Inject constructor(
             return false
         }
         store.remapSessionId(entry.localId, created.id)
-        store.upsertSession(created)
+        // Сервер вернул сессию без комментария только если сам его не сохранил;
+        // в остальных случаях он придёт в ответе. Сохраняем локальный текст,
+        // если ответ его потерял, — перетереть непустое пустым значит снова
+        // потерять работу пользователя.
+        store.upsertSession(
+            if (created.notes.isNullOrBlank() && !local.notes.isNullOrBlank()) {
+                created.copy(notes = local.notes)
+            } else {
+                created
+            },
+        )
         store.removeFromOutbox(entry.localId)
-
-        // Заметка, написанная к ещё не созданной сессии, теперь может уехать.
-        if (!local.notes.isNullOrBlank()) {
-            runCatching {
-                api.updateSession(created.id, UpdateSessionRequest(notes = local.notes))
-            }
-        }
         return true
     }
 

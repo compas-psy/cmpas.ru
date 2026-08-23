@@ -47,11 +47,36 @@ export async function PUT(req: NextRequest) {
     const granted = body.granted as boolean;
     const now = new Date();
 
-    const ingestResult = await db.$transaction(async (tx) => {
+    // Согласие — РЕСУРС, и его запись обязана быть авторитетной, а не побочным
+    // эффектом записи события.
+    //
+    // Раньше отметку analyticsConsentAt ставил сам processIngestEvent по пути.
+    // Но он возвращает отказ ЗНАЧЕНИЕМ, а не исключением: при срабатывании
+    // ограничения частоты (счётчик общий с обычной отправкой событий, 600 за
+    // 60 секунд на аккаунт) транзакция не откатывалась — и получалось худшее
+    // из возможного: события уже удалены, согласие НЕ снято, журнальной записи
+    // нет, а клиенту отвечено «отозвано». Приложение кэшировало «согласия
+    // нет» и чистило очередь, сервер продолжал принимать события, а текст
+    // тумблера («сбор прекращается») становился ложью.
+    //
+    // Теперь отметка ставится здесь и явно, в той же транзакции, что и
+    // удаление событий. Журнальная запись — вторична: её отказ логируется, но
+    // не отменяет решения человека.
+    const applied = await db.$transaction(async (tx) => {
         if (!granted) {
             await tx.analyticsEvent.deleteMany({ where: { accountId: auth.userId, product: 'practice' } });
         }
-        return processIngestEvent(tx, {
+        const user = await tx.user.update({
+            where: { id: auth.userId },
+            data: { analyticsConsentAt: granted ? now : null },
+            select: { analyticsConsentAt: true },
+        });
+
+        // Порядок внутри транзакции: удаление прежних событий → отметка →
+        // журнальная запись. Запиши её раньше удаления, и она стёрла бы сама
+        // себя; поставь отметку позже журнала, и журнал зависел бы от того,
+        // что ещё не решено.
+        const journal = await processIngestEvent(tx, {
             event: 'consent_updated',
             ts: now.toISOString(),
             product: 'practice',
@@ -60,11 +85,18 @@ export async function PUT(req: NextRequest) {
             schema_version: CONSENT_EVENT_SCHEMA_VERSION,
             props: { granted },
         }, now);
+
+        return { consentAt: user.analyticsConsentAt, journal };
     });
 
-    if (!ingestResult.accepted) {
-        console.error('[mobile/analytics/consent] consent_updated не записан в журнал:', ingestResult.reason);
+    if (!applied.journal.accepted) {
+        console.error('[mobile/analytics/consent] consent_updated не записан в журнал:', applied.journal.reason);
     }
 
-    return NextResponse.json({ granted, since: granted ? now.toISOString() : null });
+    // Отвечаем ФАКТИЧЕСКИМ состоянием, а не тем, что попросил клиент: иначе
+    // следующий же GET противоречил бы этому ответу.
+    return NextResponse.json({
+        granted: applied.consentAt !== null,
+        since: applied.consentAt ? applied.consentAt.toISOString() : null,
+    });
 }
