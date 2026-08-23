@@ -141,7 +141,10 @@ for key in \
   SMTP_PORT \
   SMTP_USER \
   SMTP_PASSWORD \
-  SMTP_FROM; do
+  SMTP_FROM \
+  ANALYTICS_INGEST_SECRET \
+  INFRA_PULSE_GITHUB_TOKEN \
+  INFRA_PULSE_GITHUB_ORG; do
   value="${!key:-}"
   if [ -n "$value" ]; then
     upsert_env "$key" "$value"
