@@ -88,6 +88,20 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     exclude("**/Models.kt")
 }
 
+// Имена и причины упавших тестов печатаются в консоль, а не только в отчёт.
+// Отчёт выгружается артефактом, но артефакты лежат в blob-хранилище GitHub,
+// к которому из части сред нет доступа (CONNECT tunnel failed, 403) — и тогда
+// «тесты упали» приходит без единого слова о том, какие и почему.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
+}
+
 dependencies {
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
