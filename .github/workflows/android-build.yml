@@ -106,6 +106,46 @@ jobs:
             echo "  (провалов нет)"
           fi
 
+      # Стык приложения и приёмника — настоящим конвертом, а не пересказом.
+      #
+      # Зачем именно так. В репозитории уже был tests/cross-repo-contract.ts, и
+      # он сам про себя честно писал, что фикстура МОМЕНТОВ «ВЫВЕДЕНА ЧТЕНИЕМ»
+      # кода Kotlin, потому что Gradle в той среде не поднимался. Такая фикстура
+      # проверяет представление автора о своём же коде, а не сам код. Здесь
+      # Gradle есть: конверт собирает НАСТОЯЩИЙ билдер приложения, тест
+      # выкладывает его файлом, а дальше он проходит через НАСТОЯЩИЙ маршрут и
+      # НАСТОЯЩИЙ валидатор приёмника из этого же репозитория.
+      #
+      # Отсутствие файла — провал, а не пропуск: молча пройденная проверка
+      # выглядит как зелёная ровно так же, как выполненная.
+      - name: Проверить конверт аналитики против приёмника
+        if: success()
+        shell: bash
+        run: |
+          fixture=android/app/build/analytics-fixture/practice-android-envelopes.json
+          if [ ! -s "$fixture" ]; then
+            echo "Конверт не выложен приложением ($fixture отсутствует или пуст)."
+            echo "Тест приложения обязан его записать — иначе стык не проверяется вовсе."
+            exit 1
+          fi
+          mkdir -p tests/fixtures/android
+          cp "$fixture" tests/fixtures/android/practice-android-envelopes.json
+          echo "Конверт от приложения:"
+          cat tests/fixtures/android/practice-android-envelopes.json
+
+      - name: Set up Node
+        if: success()
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Прогнать конверт через приёмник
+        if: success()
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npx vitest run --config vitest.contract.mts
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -140,6 +140,24 @@ interface CompasApi {
 
     @DELETE("fcm")
     suspend fun unregisterFcmToken(): Response<Unit>
+
+    // ── Аналитика (Горизонт 1, этап 2б) ─────────────────────────────────
+    //
+    // Секрет ANALYTICS_INGEST_SECRET в APK не кладём — приложение шлёт
+    // события обычным пользовательским JWT (см. AuthInterceptor), сервер сам
+    // подставляет product:'practice' и account_id из токена. Согласие —
+    // обычный аутентифицированный ресурс, не событие: GET читает его
+    // состояние, PUT меняет. Конверт события в теле POST не несёт product,
+    // account_id и device_id — их сервер подставляет сам.
+
+    @GET("analytics/consent")
+    suspend fun getAnalyticsConsent(): Response<AnalyticsConsentDto>
+
+    @PUT("analytics/consent")
+    suspend fun setAnalyticsConsent(@Body body: AnalyticsConsentRequest): Response<AnalyticsConsentDto>
+
+    @POST("analytics")
+    suspend fun postAnalyticsEvents(@Body body: List<AnalyticsEventEnvelope>): Response<AnalyticsIngestResponse>
 }
 
 @kotlinx.serialization.Serializable
@@ -307,3 +325,33 @@ data class ScheduleMessageRequest(
     val text: String? = null,
     val sessionId: String? = null,
 )
+
+// ── Аналитика ────────────────────────────────────────────────────────────
+
+/** Ответ GET/PUT `analytics/consent` — состояние согласия, каким его знает сервер. */
+@kotlinx.serialization.Serializable
+data class AnalyticsConsentDto(val granted: Boolean, val since: String? = null)
+
+@kotlinx.serialization.Serializable
+data class AnalyticsConsentRequest(val granted: Boolean)
+
+/**
+ * Конверт события в теле POST `analytics` — ровно то, что провод ждёт от
+ * клиента: без product/account_id/device_id (их подставляет сервер) и без
+ * секрета. `eventId` рождается очередью в момент постановки, а не здесь.
+ */
+@kotlinx.serialization.Serializable
+data class AnalyticsEventEnvelope(
+    val event: String,
+    val ts: String,
+    val props: JsonObject,
+    @kotlinx.serialization.SerialName("schema_version") val schemaVersion: Int,
+    @kotlinx.serialization.SerialName("event_id") val eventId: String,
+)
+
+/** Один элемент `results[]` — отказ приходит здесь, при HTTP 200, а не через код ответа. */
+@kotlinx.serialization.Serializable
+data class AnalyticsIngestResult(val accepted: Boolean, val reason: String? = null)
+
+@kotlinx.serialization.Serializable
+data class AnalyticsIngestResponse(val results: List<AnalyticsIngestResult> = emptyList())
