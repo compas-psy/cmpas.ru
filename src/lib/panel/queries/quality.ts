@@ -6,7 +6,7 @@
 import { db } from '@/lib/db';
 import { noData, ok, type PanelBlock } from '../types';
 import { severityFor } from '../thresholds';
-import { readEventRegistry } from './registry';
+import { readEventRegistry, registryPairs } from './registry';
 import { latestPulse, parseRowCounts } from './infra';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -64,6 +64,14 @@ export interface SilenceRow {
  * Прекратившийся поток события почти всегда означает сломанную разметку,
  * а не изменившееся поведение, поэтому события из реестра проверяются все,
  * включая те, что не приходили ни разу.
+ *
+ * F4: группировка идёт по паре (событие, продукт), а не только по имени
+ * события. `consent_updated`/`identity_linked` (E1) разрешены всем трём
+ * продуктам сразу — группировка по одному имени события смешала бы их
+ * потоки в одну строку, и живой поток ПРАКТИКИ маскировал бы тишину
+ * ЗАПИСОК и МОМЕНТОВ под тем же именем события. `registryPairs`
+ * разворачивает такие события в три отдельные строки — по одной на
+ * продукт, каждая со своей собственной свежестью.
  */
 export async function qEventSilence(): Promise<PanelBlock<SilenceRow[]>> {
     const registry = readEventRegistry();
@@ -71,30 +79,35 @@ export async function qEventSilence(): Promise<PanelBlock<SilenceRow[]>> {
         return noData('q_event_silence', 'реестр событий analytics/schema/events.yaml не прочитан');
     }
 
+    const pairs = registryPairs(registry);
+
     const rows = await db.analyticsEvent.groupBy({
-        by: ['event'],
+        by: ['event', 'product'],
         _max: { ts: true },
     });
 
-    const lastSeen = new Map(rows.map((r) => [r.event, r._max.ts]));
+    const lastSeen = new Map<string, Date | null>();
+    for (const row of rows as { event: string; product: string; _max: { ts: Date | null } }[]) {
+        lastSeen.set(`${row.event} ${row.product}`, row._max.ts);
+    }
     const now = Date.now();
 
-    const result: SilenceRow[] = [...registry.entries()].map(([event, meta]) => {
-        const seen = lastSeen.get(event) ?? null;
+    const result: SilenceRow[] = pairs.map(({ event, product }) => {
+        const seen = lastSeen.get(`${event} ${product}`) ?? null;
         if (!seen) {
-            return { event, product: meta.product, silentHours: null, severity: 'never' as const };
+            return { event, product, silentHours: null, severity: 'never' as const };
         }
         const silentHours = (now - seen.getTime()) / (60 * 60 * 1000);
         return {
             event,
-            product: meta.product,
+            product,
             silentHours,
             severity: severityFor('eventSilenceHours', silentHours) ?? 'ok',
         };
     });
 
     const order = { serious: 0, never: 1, warning: 2, ok: 3 };
-    result.sort((a, b) => order[a.severity] - order[b.severity] || a.event.localeCompare(b.event));
+    result.sort((a, b) => order[a.severity] - order[b.severity] || a.event.localeCompare(b.event) || a.product.localeCompare(b.product));
 
     return ok('q_event_silence', result);
 }

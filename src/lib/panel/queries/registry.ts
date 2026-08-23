@@ -70,3 +70,25 @@ export function readEventRegistry(): Map<string, { product: string }> {
 export function resetRegistryCache(): void {
     cache = null;
 }
+
+/**
+ * Разворачивает реестр в пары (событие, продукт) — по одной на каждого
+ * владельца события. Нужно для F4: `consent_updated`/`identity_linked`
+ * (E1) хранятся одной строкой `product: "practice, zapiski, moments"`, и
+ * без разворота `q_event_silence` считал бы их одной строкой на все три
+ * продукта сразу — живой поток одного маскировал бы тишину двух других
+ * под тем же именем события.
+ */
+export function registryPairs(registry: Map<string, { product: string }>): { event: string; product: string }[] {
+    const pairs: { event: string; product: string }[] = [];
+    for (const [event, meta] of registry) {
+        const products = meta.product
+            .split(',')
+            .map((p) => p.trim())
+            .filter(Boolean);
+        for (const product of products.length > 0 ? products : ['unknown']) {
+            pairs.push({ event, product });
+        }
+    }
+    return pairs;
+}
