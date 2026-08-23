@@ -38,13 +38,23 @@ events:
   # Identity (charter/12_ANALYTICS.md §2) — links a pre-login device to an
   # account, written once at the moment of login.
   identity_linked:
-    product: practice
+    # Shared across products (O-260817-13): a device that later gains an
+    # account is linked from whichever product owns it. Any of the three
+    # may submit it under its own product name.
+    product: [practice, zapiski, moments]
     required: []
     optional: []
 
   # Consent gate (this order's rule: no device_id before consent).
+  # Shared across products (O-260817-14, контракт контура v2): every
+  # device/account product sets ITS OWN consent through this event —
+  # МОМЕНТЫ has no accounts and unlocks device_id-only events solely via
+  # consent_updated{product: moments} (writeDeviceOnlyEvent). Registered
+  # single-product ("practice") it deadlocked МОМЕНТЫ: the consent event
+  # was rejected as wrong-product, so no device consent could ever be set
+  # and every following event was rejected "consent required".
   consent_updated:
-    product: practice
+    product: [practice, zapiski, moments]
     required: [granted]
     optional: []
     props:

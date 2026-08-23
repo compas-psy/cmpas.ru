@@ -14,7 +14,14 @@ import path from 'path';
 import { load } from 'js-yaml';
 
 export interface EventDef {
-    product: string;
+    // Which product(s) may submit this event. A single string for an
+    // event owned by one product (the common case); a list for shared
+    // cross-product events — consent_updated and identity_linked — which
+    // every device/account product must be able to send for itself
+    // (O-260817-13/14: МОМЕНТЫ sets its own device consent via
+    // consent_updated). Submitting under a product not in this set is
+    // rejected the same as an unknown event.
+    product: string | string[];
     required: string[];
     optional: string[];
     props?: Record<string, 'string' | 'number' | 'boolean'>;
@@ -72,8 +79,9 @@ export function validateEvent(raw: RawEvent, registry: EventRegistry = loadRegis
 
     const def = registry.events[raw.event];
     if (!def) return { valid: false, reason: `unknown event: ${raw.event}` };
-    if (def.product !== raw.product) {
-        return { valid: false, reason: `event ${raw.event} belongs to product ${def.product}, not ${raw.product}` };
+    const owners = Array.isArray(def.product) ? def.product : [def.product];
+    if (!owners.includes(raw.product)) {
+        return { valid: false, reason: `event ${raw.event} belongs to product ${owners.join('/')}, not ${raw.product}` };
     }
 
     const props = (raw.props ?? {}) as Record<string, unknown>;
