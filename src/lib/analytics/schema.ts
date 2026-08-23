@@ -24,6 +24,18 @@ export interface EventDef {
     optional: string[];
     props?: Record<string, 'string' | 'number' | 'boolean'>;
     question?: string;
+    // Допустимые значения для перечисляемых props (решение учредителя:
+    // "Перечисления (surface, to, mode, channel, все *_bucket) валидируются
+    // НА СЕРВЕРЕ"). Необязательно — ЗАПИСКИ и МОМЕНТЫ не объявляют его
+    // вовсе, их события этой проверкой не затронуты. Проверяется ПОСЛЕ
+    // проверки типов (см. validateEvent), чтобы неверный тип отвечал своей
+    // причиной, а не "значение не в списке".
+    values?: Record<string, string[]>;
+    // Диапазон для целочисленных props, объявленных как `number` (например
+    // blocks_filled: 0..5) — то же самое решение учредителя, но для чисел,
+    // а не строк, поэтому отдельное поле от `values`. Тоже необязательное,
+    // тоже проверяется после проверки типов.
+    range?: Record<string, [number, number]>;
 }
 
 /** Normalizes `EventDef.product` (string or list) to the list of products allowed to send this event. */
@@ -105,6 +117,27 @@ export function validateEvent(raw: RawEvent, registry: EventRegistry = loadRegis
         for (const [key, expectedType] of Object.entries(def.props)) {
             if (key in props && typeof props[key] !== expectedType) {
                 return { valid: false, reason: `prop ${key} must be ${expectedType}` };
+            }
+        }
+    }
+
+    // Проверка перечислений — ПОСЛЕ проверки типов выше, иначе значение
+    // неверного типа отвечало бы "не в списке" вместо "не тот тип".
+    if (def.values) {
+        for (const [key, allowed] of Object.entries(def.values)) {
+            if (key in props && !allowed.includes(props[key] as string)) {
+                return { valid: false, reason: `prop ${key} must be one of: ${allowed.join(', ')}` };
+            }
+        }
+    }
+
+    if (def.range) {
+        for (const [key, [min, max]] of Object.entries(def.range)) {
+            if (key in props) {
+                const value = props[key] as number;
+                if (!Number.isInteger(value) || value < min || value > max) {
+                    return { valid: false, reason: `prop ${key} must be an integer between ${min} and ${max}` };
+                }
             }
         }
     }
