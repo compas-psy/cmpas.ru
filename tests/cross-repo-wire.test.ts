@@ -8,7 +8,10 @@
 // репозиториев этого не видел, потому что каждый проверял себя против
 // собственной заглушки другой стороны.
 //
-// Здесь обе стороны настоящие: класс `PracticeBridge` импортируется прямо из
+// Запускается только когда переменная окружения ZAPISKI_REPO_PATH указывает
+// на рабочую копию ЗАПИСОК — иначе весь файл честно пропускается (в CI этого
+// репозитория чужого дерева нет). Здесь обе стороны настоящие: PracticeBridge
+// импортируется прямо из
 // рабочего дерева ЗАПИСОК, обработчик `POST` — из этого репозитория, между
 // ними настоящий http-сервер и настоящий `fetch`.
 //
@@ -21,6 +24,8 @@
 
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import type { AddressInfo } from 'net';
 
 const SECRET = 'wire-test-secret';
@@ -80,21 +85,35 @@ beforeAll(async () => {
 
 afterAll(() => { server?.close(); });
 
-async function bridgeFor(secret: string) {
-    const { createPracticeBridge } = await import('/tmp/work/zapiski/server/src/services/practiceBridge.ts');
-    return createPracticeBridge({ PRACTICE_INGEST_URL: url, PRACTICE_INGEST_SECRET: secret });
+// Путь к рабочей копии ЗАПИСОК задаётся снаружи: в чужой машине и в CI этого
+// репозитория её нет, и тогда файл честно пропускается целиком, а не падает
+// и не делает вид, что проверил. Путь вычисляется в рантайме намеренно —
+// статический import чужого .ts сломал бы `tsc --noEmit` этого репозитория
+// (TS5097) ради теста, который в CI всё равно не запустится.
+const ZAPISKI_BRIDGE = process.env.ZAPISKI_REPO_PATH
+    ? path.join(process.env.ZAPISKI_REPO_PATH, 'server/src/services/practiceBridge.ts')
+    : null;
+const wireRunnable = ZAPISKI_BRIDGE !== null && fs.existsSync(ZAPISKI_BRIDGE);
+
+/** Форма, в которой мост отдаёт исход по каждому конверту (динамический импорт не типизируется). */
+type ForwardResult = { outcome: 'accepted' | 'rejected' | 'error' };
+type Bridge = { forwardBatch(envelopes: unknown[]): Promise<ForwardResult[]> } | null;
+
+async function bridgeFor(secret: string): Promise<Bridge> {
+    const module = await import(/* @vite-ignore */ ZAPISKI_BRIDGE as string);
+    return module.createPracticeBridge({ PRACTICE_INGEST_URL: url, PRACTICE_INGEST_SECRET: secret });
 }
 
 const ts = '2026-08-23T10:00:00.000Z';
 const consent = { event: 'consent_updated', ts, product: 'zapiski' as const, account_id: 'wire-user', device_id: null, props: { granted: true }, schema_version: 1, event_id: 'w1111111-1111-4111-8111-111111111111' };
 const note = { event: 'note_saved', ts, product: 'zapiski' as const, account_id: 'wire-user', device_id: null, props: { length_bucket: 'm', encrypted: true }, schema_version: 1, event_id: 'w2222222-2222-4222-8222-222222222222' };
 
-describe('мост ЗАПИСОК против настоящего обработчика /ingest', () => {
+describe.skipIf(!wireRunnable)('мост ЗАПИСОК против настоящего обработчика /ingest', () => {
     it('пачка уходит массивом, принимается поэлементно и доезжает до записи', async () => {
         const bridge = await bridgeFor(SECRET);
         expect(bridge).not.toBeNull();
         const results = await bridge!.forwardBatch([consent, note]);
-        expect(results.map((r) => r.outcome)).toEqual(['accepted', 'accepted']);
+        expect(results.map((r: ForwardResult) => r.outcome)).toEqual(['accepted', 'accepted']);
         expect(events.map((e) => e.event)).toEqual(['consent_updated', 'note_saved']);
         expect(userLookups).toBe(0);
     });
