@@ -127,3 +127,41 @@ echo "### Есть ли панель в запущенной сборке"
 docker exec cmpas-app sh -lc 'ls /app/.next/server/app/admin/ 2>/dev/null' 2>&1 | head -20
 echo "### Хвост журнала последней выкладки"
 tail -40 /tmp/cmpas-deploy.log 2>&1 | tail -40
+
+# ── Аналитический контур (проверка выкатки feature/analytics) ──────────────
+echo "### Флаги аналитики в /var/www/cmpas.ru/.env"
+for k in ANALYTICS_INGEST_ENABLED ANALYTICS_TRACKING_ENABLED ANALYTICS_INGEST_SECRET; do
+  v=$(grep -E "^${k}=" /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)
+  if [ -z "$v" ]; then echo "$k: НЕ задан"
+  elif [ "$k" = "ANALYTICS_INGEST_SECRET" ]; then echo "$k: задан (длина ${#v})"
+  else echo "$k=$v"; fi
+done
+
+echo "### Файлы с секретом приёмника"
+for f in /etc/simpas/ingest-secret /var/www/zapiski/.ingest-secret; do
+  if [ -f "$f" ]; then echo "$f: есть, $(stat -c '%s байт, права %a, владелец %U' "$f" 2>/dev/null)"
+  else echo "$f: ОТСУТСТВУЕТ"; fi
+done
+
+echo "### Контейнер infra-pulse"
+docker ps -a --filter 'name=infra-pulse' --format '{{.Names}} | {{.Status}} | {{.Image}}' 2>&1 | head -5
+docker ps -a --filter 'name=infra-pulse' -q 2>/dev/null | head -1 | grep -q . || echo "контейнера infra-pulse нет вовсе"
+
+echo "### Свежесть строк InfraPulse"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'строк всего=' || count(*) FROM \"InfraPulse\";" 2>&1 | head -2
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'последняя=' || COALESCE(max(\"collectedAt\")::text,'нет') || ' возраст_мин=' || COALESCE(round(extract(epoch from (now()-max(\"collectedAt\")))/60)::text,'-') FROM \"InfraPulse\";" 2>&1 | head -2
+
+echo "### Таблицы аналитического контура"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('ReminderOutbox','events','events_rejected','Subscription','analytics_device_consent') ORDER BY 1;" 2>&1 | head -8
+
+echo "### Наполнение событий и подписок"
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'events=' || count(*) FROM events;" 2>&1 | head -2
+docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+  "SELECT 'подписок=' || count(*) FROM \"Subscription\";" 2>&1 | head -2
+
+echo "### Приёмник изнутри сервера (без заголовка — ждём 401)"
+docker exec cmpas-app sh -lc "curl -sS -o /dev/null -w 'POST /api/ingest -> %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' --max-time 15 http://localhost:3000/api/ingest" 2>&1 | head -3

@@ -50,6 +50,18 @@ jobs:
           echo '===== НАЧАЛО ОТЧЁТА ====='
           cat /tmp/doctor.out
           echo '===== КОНЕЦ ОТЧЁТА ====='
+          # Проба приёмника СНАРУЖИ, с раннера: изнутри сервера она проверяет
+          # только приложение, а снаружи — ещё и то, что до него доходит
+          # запрос. Без заголовка ждём 401; 404 означает, что приёмник выключен
+          # флагом, 200 — что аутентификация не работает вовсе.
+          echo '===== ПРИЁМНИК СНАРУЖИ ====='
+          curl -sS -o /dev/null -w 'POST https://cmpas.ru/api/ingest (без заголовка) -> %{http_code}\n' \
+            -X POST -H 'Content-Type: application/json' -d '{}' --max-time 20 \
+            https://cmpas.ru/api/ingest || echo 'запрос не прошёл'
+          curl -sS -o /dev/null -w 'POST с неверным Bearer -> %{http_code}\n' \
+            -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer заведомо-неверный' \
+            -d '{}' --max-time 20 https://cmpas.ru/api/ingest || echo 'запрос не прошёл'
+          echo '===== КОНЕЦ ПРОБЫ ====='
           mkdir -p docs/ops
           {
             echo "# Состояние базы на боевом сервере"
