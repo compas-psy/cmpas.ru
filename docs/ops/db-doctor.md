@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32955799275. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32958784751. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -60,8 +60,8 @@ confirmed=3
 зарегистрировано за 30 дней=2
 зарегистрировано за 90 дней=7
 ### События приёмника по продуктам и свежести
-zapiski всего=1194 свежайшее=2026-08-26 09:56:41.121
-событий за 30 дней=1194
+zapiski всего=1197 свежайшее=2026-08-26 10:20:08.739
+событий за 30 дней=1197
 ### Согласие на аналитику
 пользователей с согласием=0
 ### Платежи и подписки по статусам
@@ -79,20 +79,20 @@ VisitorAnalytics всего=270
 из них с accountId=0
 из них с utmSource=9
 ### Последнее показание InfraPulse: какие поля заполнены
-collectedAt=2026-08-26 09:56:27.887
-certDaysLeft=37 | backupAgeHours=61.81548452718099 | backupReadable=true | responseP95Ms=NULL | remindersDue=0 | remindersSent=0 | migrationsApplied=38 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=60 | containers=[{"name": "zapiski-api", "running": true
+collectedAt=2026-08-26 10:31:31.25
+certDaysLeft=37 | backupAgeHours=62.39975452718099 | backupReadable=true | responseP95Ms=NULL | remindersDue=0 | remindersSent=0 | migrationsApplied=38 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=65.85365853658536 | containers=[{"name": "zapiski-api", "running": true
 ### События по имени (панель ищет узкие срезы)
 note_saved=748
-sync_completed=391
+sync_completed=394
 note_searched=52
 export_requested=2
 consent_updated=1
 ### Таблицы, из которых панель читает: пустые или нет
-InfraPulse=809
+InfraPulse=816
 DeployLog=9
 ReminderOutbox=0
-events=1194
-events_rejected=4
+events=1197
+events_rejected=5
 Subscription=1
 Payment=9
 ### Место на диске
@@ -101,141 +101,137 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda2        89G   24G   61G  29% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2056         343          56        5905        5885
-Swap:            511          65         446
+Mem:            7941        2314        1554          55        4434        5627
+Swap:            511          83         428
 ### Что занимает docker
-TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          7         7         12.17GB   12.17GB (100%)
-Containers      7         6         28.74MB   12.29kB (0%)
-Local Volumes   155       7         268.7MB   4.07MB (1%)
-Build Cache     133       0         9.692GB   9.069GB
+Error response from daemon: failed to calculate image disk usage: NotFound: snapshot xzt9gld4388b8uz785yy24k7v does not exist: not found
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-#38 naming to docker.io/library/cmpasru-infra-pulse:latest
-#38 naming to docker.io/library/cmpasru-infra-pulse:latest done
-#38 unpacking to docker.io/library/cmpasru-infra-pulse:latest
-#38 unpacking to docker.io/library/cmpasru-infra-pulse:latest 11.9s done
-#38 DONE 40.0s
+#17 5.547   libgdbm-compat4 libgdbm6 libgssapi-krb5-2 libk5crypto3 libkeyutils1
+#17 5.547   libkrb5-3 libkrb5support0 libldap-2.5-0 libperl5.36 libpq5 libreadline8
+#17 5.547   libsasl2-2 libsasl2-modules-db netbase perl perl-modules-5.36
+#17 5.547   postgresql-client postgresql-client-15 postgresql-client-common
+#17 5.547   readline-common sensible-utils
+#17 5.731 0 upgraded, 21 newly installed, 0 to remove and 13 not upgraded.
+#17 5.731 Need to get 10.5 MB of archives.
+#17 5.731 After this operation, 61.7 MB of additional disk space will be used.
+#17 5.731 Get:1 http://deb.debian.org/debian bookworm/main amd64 perl-modules-5.36 all 5.36.0-7+deb12u3 [2815 kB]
+#17 6.044 Get:2 http://deb.debian.org/debian bookworm/main amd64 libgdbm6 amd64 1.23-3 [72.2 kB]
+#17 6.047 Get:3 http://deb.debian.org/debian bookworm/main amd64 libgdbm-compat4 amd64 1.23-3 [48.2 kB]
+#17 6.056 Get:4 http://deb.debian.org/debian bookworm/main amd64 libperl5.36 amd64 5.36.0-7+deb12u3 [4196 kB]
+#17 6.275 Get:5 http://deb.debian.org/debian bookworm/main amd64 perl amd64 5.36.0-7+deb12u3 [239 kB]
+#17 6.291 Get:6 http://deb.debian.org/debian bookworm/main amd64 netbase all 6.4 [12.8 kB]
+#17 6.294 Get:7 http://deb.debian.org/debian bookworm/main amd64 readline-common all 8.2-1.3 [69.0 kB]
+#17 6.296 Get:8 http://deb.debian.org/debian bookworm/main amd64 sensible-utils all 0.0.17+nmu1 [19.0 kB]
+#17 6.296 Get:9 http://deb.debian.org/debian bookworm/main amd64 libkrb5support0 amd64 1.20.1-2+deb12u5 [33.2 kB]
+#17 6.298 Get:10 http://deb.debian.org/debian bookworm/main amd64 libk5crypto3 amd64 1.20.1-2+deb12u5 [79.7 kB]
+#17 6.318 Get:11 http://deb.debian.org/debian bookworm/main amd64 libkeyutils1 amd64 1.6.3-2 [8808 B]
+#17 6.321 Get:12 http://deb.debian.org/debian bookworm/main amd64 libkrb5-3 amd64 1.20.1-2+deb12u5 [332 kB]
+#17 6.329 Get:13 http://deb.debian.org/debian bookworm/main amd64 libgssapi-krb5-2 amd64 1.20.1-2+deb12u5 [135 kB]
+#17 6.335 Get:14 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg-10 [20.3 kB]
+#17 6.366 Get:15 http://deb.debian.org/debian bookworm/main amd64 libsasl2-2 amd64 2.1.28+dfsg-10 [59.7 kB]
+#17 6.368 Get:16 http://deb.debian.org/debian bookworm/main amd64 libldap-2.5-0 amd64 2.5.13+dfsg-5 [183 kB]
+#17 6.376 Get:17 http://deb.debian.org/debian-security bookworm-security/main amd64 libpq5 amd64 15.19-0+deb12u1 [203 kB]
+#17 6.382 Get:18 http://deb.debian.org/debian bookworm/main amd64 libreadline8 amd64 8.2-1.3 [166 kB]
+#17 6.388 Get:19 http://deb.debian.org/debian bookworm/main amd64 postgresql-client-common all 248+deb12u1 [35.2 kB]
+#17 6.412 Get:20 http://deb.debian.org/debian-security bookworm-security/main amd64 postgresql-client-15 amd64 15.19-0+deb12u1 [1759 kB]
+#17 6.462 Get:21 http://deb.debian.org/debian bookworm/main amd64 postgresql-client all 15+248+deb12u1 [10.2 kB]
+#17 6.884 debconf: delaying package configuration, since apt-utils is not installed
+#17 6.992 Fetched 10.5 MB in 1s (11.9 MB/s)
+#17 7.051 Selecting previously unselected package perl-modules-5.36.
+#17 7.051 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6593 files and directories currently installed.)
+#17 7.109 Preparing to unpack .../00-perl-modules-5.36_5.36.0-7+deb12u3_all.deb ...
+#17 7.123 Unpacking perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#17 7.951 Selecting previously unselected package libgdbm6:amd64.
+#17 7.958 Preparing to unpack .../01-libgdbm6_1.23-3_amd64.deb ...
+#17 7.984 Unpacking libgdbm6:amd64 (1.23-3) ...
+#17 8.059 Selecting previously unselected package libgdbm-compat4:amd64.
+#17 8.062 Preparing to unpack .../02-libgdbm-compat4_1.23-3_amd64.deb ...
+#17 8.067 Unpacking libgdbm-compat4:amd64 (1.23-3) ...
+#17 8.151 Selecting previously unselected package libperl5.36:amd64.
+#17 8.151 Preparing to unpack .../03-libperl5.36_5.36.0-7+deb12u3_amd64.deb ...
+#17 8.167 Unpacking libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#17 ...
 
-#40 [infra-pulse] resolving provenance for metadata file
-#40 DONE 0.0s
- Image cmpasru-app Built 
- Image cmpasru-infra-pulse Built 
-time="2026-08-23T23:09:41+03:00" level=warning msg="No services to build"
- Container cmpas-mailer Running 
- Container cmpas-postgres Running 
-[deploy] PostgreSQL is ready.
-[deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
-time="2026-08-23T23:09:41+03:00" level=warning msg="No services to build"
-time="2026-08-23T23:09:42+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-c6dcf72b9d2f Creating 
- Container cmpasru-app-run-c6dcf72b9d2f Created 
-Prisma schema loaded from prisma/schema.prisma
-Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
+#18 [app runner  5/20] COPY deploy/certs/ /usr/local/share/ca-certificates/max-ru/
+#18 CACHED
 
-38 migrations found in prisma/migrations
+#19 [app runner  6/20] RUN update-ca-certificates || true
+#19 CACHED
 
+#20 [app runner  8/20] RUN mkdir -p ./public/uploads/client-documents && chown -R nextjs:nodejs ./public
+#20 CACHED
 
-No pending migrations to apply.
-[deploy] Prisma migrations applied.
-[deploy] Applying beta schema safety net.
-psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "User" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:13: NOTICE:  column "documentVersion" of relation "LegalDocumentAcceptance" already exists, skipping
-ALTER TABLE
-UPDATE 26
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relation "DiarySession" already exists, skipping
-ALTER TABLE
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
-CREATE TABLE
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
-CREATE INDEX
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
-CREATE TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:59: NOTICE:  column "sessionId" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:60: NOTICE:  column "clientId" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
-ALTER TABLE
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
-CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
-[deploy] Running strict schema verification against the new image.
-time="2026-08-23T23:09:46+03:00" level=warning msg="No services to build"
-time="2026-08-23T23:09:46+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-d0c740bc4291 Creating 
- Container cmpasru-app-run-d0c740bc4291 Created 
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Starting the infra-pulse collector.
-time="2026-08-23T23:09:49+03:00" level=warning msg="No services to build"
- Container cmpas-postgres Running 
- Container cmpas-infra-pulse Recreate 
- Container cmpas-infra-pulse Recreated 
- Container cmpas-postgres Waiting 
- Container cmpas-postgres Healthy 
- Container cmpas-infra-pulse Starting 
- Container cmpas-infra-pulse Started 
-[deploy] Recreating only the application container.
-time="2026-08-23T23:09:53+03:00" level=warning msg="No services to build"
- Container cmpas-app Recreate 
- Container cmpas-app Recreated 
- Container cmpas-app Starting 
- Container cmpas-app Started 
-[deploy] New application is healthy.
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Auth endpoint status: 200
-[deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-08-23T23:10:00+03:00" level=warning msg="No services to build"
-time="2026-08-23T23:10:01+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-ce20ff2b6d18 Creating 
- Container cmpasru-infra-pulse-run-ce20ff2b6d18 Created 
-npm warn exec The following package was not found and will be installed: tsx@4.23.12
-[backfill-subscriptions] план: create=0 update=0 skip=1
-[backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
-curl: (28) Failed to connect to api.telegram.org port 443 after 136218 ms: Couldn't connect to server
-[deploy] WARNING: Telegram webhook registration failed.
-[deploy] Deployment completed successfully.
+#21 [app runner  3/20] RUN adduser --system --uid 1001 --home /home/nextjs nextjs
+#21 CACHED
+
+#22 [app runner  7/20] COPY --from=builder /app/public ./public
+#22 CACHED
+
+#23 [app runner  9/20] RUN mkdir .next
+#23 CACHED
+
+#24 [app runner  2/20] RUN addgroup --system --gid 1001 nodejs
+#24 CACHED
+
+#25 [app runner  4/20] RUN mkdir -p /home/nextjs && chown -R nextjs:nodejs /home/nextjs
+#25 CACHED
+
+#26 [app runner 10/20] RUN chown nextjs:nodejs .next
+#26 CACHED
+
+#27 [app runner 11/20] COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+#27 DONE 2.2s
+
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 9.081 Selecting previously unselected package perl.
+#17 9.085 Preparing to unpack .../04-perl_5.36.0-7+deb12u3_amd64.deb ...
+#17 9.106 Unpacking perl (5.36.0-7+deb12u3) ...
+#17 9.299 Selecting previously unselected package netbase.
+#17 9.302 Preparing to unpack .../05-netbase_6.4_all.deb ...
+#17 9.310 Unpacking netbase (6.4) ...
+#17 9.406 Selecting previously unselected package readline-common.
+#17 9.407 Preparing to unpack .../06-readline-common_8.2-1.3_all.deb ...
+#17 9.411 Unpacking readline-common (8.2-1.3) ...
+#17 9.477 Selecting previously unselected package sensible-utils.
+#17 9.481 Preparing to unpack .../07-sensible-utils_0.0.17+nmu1_all.deb ...
+#17 9.483 Unpacking sensible-utils (0.0.17+nmu1) ...
+#17 9.549 Selecting previously unselected package libkrb5support0:amd64.
+#17 9.554 Preparing to unpack .../08-libkrb5support0_1.20.1-2+deb12u5_amd64.deb ...
+#17 9.559 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+#17 9.622 Selecting previously unselected package libk5crypto3:amd64.
+#17 9.625 Preparing to unpack .../09-libk5crypto3_1.20.1-2+deb12u5_amd64.deb ...
+#17 9.629 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#17 9.732 Selecting previously unselected package libkeyutils1:amd64.
+#17 9.735 Preparing to unpack .../10-libkeyutils1_1.6.3-2_amd64.deb ...
+#17 9.740 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
+#17 9.909 Selecting previously unselected package libkrb5-3:amd64.
+#17 9.914 Preparing to unpack .../11-libkrb5-3_1.20.1-2+deb12u5_amd64.deb ...
+#17 9.928 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#17 10.45 Selecting previously unselected package libgssapi-krb5-2:amd64.
+#17 10.45 Preparing to unpack .../12-libgssapi-krb5-2_1.20.1-2+deb12u5_amd64.deb ...
+#17 10.46 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#17 10.57 Selecting previously unselected package libsasl2-modules-db:amd64.
+#17 ...
+
+#28 [app runner 12/20] COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+#28 DONE 0.3s
+
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 10.57 Preparing to unpack .../13-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
+#17 10.58 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+#17 10.65 Selecting previously unselected package libsasl2-2:amd64.
+#17 10.65 Preparing to unpack .../14-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
+#17 10.67 Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+#17 10.81 Selecting previously unselected package libldap-2.5-0:amd64.
+#17 10.81 Preparing to unpack .../15-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
+#17 10.81 Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#17 10.98 Selecting previously unselected package libpq5:amd64.
 ### Состояние контейнеров
-zapiski-api | Up 2 days (healthy)
+zapiski-api | Up 8 minutes (healthy)
 cmpas-app | Up 2 days
 cmpas-infra-pulse | Up 2 days
 zapiski-postgres | Up 5 days (healthy)
@@ -246,7 +242,7 @@ cmpas-singbox | Exited (1) 5 days ago
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.190379s
+код 405, время 0.159968s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -268,17 +264,23 @@ cmpas_cml2q6tfe0001kioc5j6tpyxu_f640f4f81b5009ea | pending | 99000 | site | 2026
 всего платежей=9
 ### Платежи: возраст и полнота записи (без секретов)
 pending | tinkoffPaymentId=true | terminal=site | возраст_ч=187
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2643
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2920
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3240
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3410
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3423
-paid | tinkoffPaymentId=true | terminal=site | возраст_ч=3424
-failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3424
-failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3424
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2644
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2921
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3241
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3411
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3424
+paid | tinkoffPaymentId=true | terminal=site | возраст_ч=3425
+failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3425
+failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3425
 ### Демонстрационный терминал: не подменяет ли он боевой (по журналу приложения)
 упоминаний в журнале контейнера: 0
 ### Журнал колбэков Т-Кассы за 7 суток (RebillId и Token вычищены построчно)
+### Куда Т-Касса должна слать колбэк (URL, не секрет)
+AUTH_URL=https://cmpas.ru
+### Живёт ли контейнер дольше, чем застрявшие платежи (иначе журнал ничего не покажет)
+запущен=2026-08-23T20:09:55.301957251Z
+### Достижим ли маршрут колбэка снаружи (безвредный запрос, без валидного токена)
+POST /api/payments/callback (снаружи, через cmpas.ru) -> 400
 ### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)
 TINKOFF_TERMINAL_KEY: задан
 TINKOFF_PASSWORD: задан
@@ -291,9 +293,9 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.181755s
-https://cmpas.ru/diary -> 307 за 0.130008s
-https://cmpas.ru/admin -> 307 за 0.283136s
+https://cmpas.ru/ -> 200 за 0.156094s
+https://cmpas.ru/diary -> 307 за 0.128304s
+https://cmpas.ru/admin -> 307 за 0.451334s
 ### Сертификат cmpas.ru
 notBefore=Jul  4 23:22:19 2026 GMT
 notAfter=Oct  2 23:22:18 2026 GMT
@@ -307,7 +309,6 @@ LISTEN 0      4096                                          [::]:3000          [
 LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=3955973,fd=13),("nginx",pid=3955970,fd=13),("nginx",pid=3955968,fd=13),("nginx",pid=3955967,fd=13),("nginx",pid=3955966,fd=13))                                  
 LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=3955973,fd=14),("nginx",pid=3955970,fd=14),("nginx",pid=3955968,fd=14),("nginx",pid=3955967,fd=14),("nginx",pid=3955966,fd=14))                                  
 ### Журнал приложения, последние 60 строк
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
 Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
@@ -319,54 +320,55 @@ Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
 Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+Error: Failed to find Server Action "d7abf88ab6d5c4dcff69f90704bc77efb631146c". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+⨯ Error: Failed to find Server Action. This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+    at async m (.next/server/chunks/ssr/_adf2bbda._.js:1:6738)
+    at async o (.next/server/chunks/ssr/_adf2bbda._.js:2:2712)
+    at async Module.I (.next/server/chunks/ssr/_adf2bbda._.js:2:7927)
+⨯ Error: Failed to find Server Action. This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+    at async m (.next/server/chunks/ssr/_adf2bbda._.js:1:6738)
+    at async o (.next/server/chunks/ssr/_adf2bbda._.js:2:2712)
+    at async Module.I (.next/server/chunks/ssr/_adf2bbda._.js:2:7927)
+⨯ Error: Failed to find Server Action. This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+    at async m (.next/server/chunks/ssr/_adf2bbda._.js:1:6738)
+    at async o (.next/server/chunks/ssr/_adf2bbda._.js:2:2712)
+    at async Module.I (.next/server/chunks/ssr/_adf2bbda._.js:2:7927)
+⨯ Error: Failed to find Server Action. This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
-Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
-Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
-    at ignore-listed frames
+    at async m (.next/server/chunks/ssr/_adf2bbda._.js:1:6738)
+    at async o (.next/server/chunks/ssr/_adf2bbda._.js:2:2712)
+    at async Module.I (.next/server/chunks/ssr/_adf2bbda._.js:2:7927)
+[Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"0000000000000000000000000000000000000000000000000000000000"}
+[Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
 ### Журнал контейнера в цикле перезапуска
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
@@ -402,13 +404,13 @@ Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
 запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-08-23T20:09:55.301957251Z
 ### Свободное место подробно
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   24G   61G  29% /
-/dev/vda2        89G   24G   61G  29% /
+/dev/vda2        89G   25G   60G  29% /
+/dev/vda2        89G   25G   60G  29% /
 ### Какой образ реально запущен
 образ=cmpasru-app создан=2026-08-23T20:09:53.861347468Z запущен=2026-08-23T20:09:55.301957251Z
 cmpasru-infra-pulse:latest 2edc39c80ed9 2 days ago
 cmpasru-app:latest dadef0c1993e 2 days ago
-zapiski-api:latest 9639553288de 2 days ago
+zapiski-api:latest f9cc805917ad 2 days ago
 postgres:16-alpine 57c72fd2a128 7 weeks ago
 ghcr.io/sagernet/sing-box:latest c8b67944345d 2 months ago
 boky/postfix:latest aafc77238423 7 months ago
@@ -419,46 +421,46 @@ RXep4MGGI6mMDCSCus77T### Есть ли панель в запущенной сб
 (chrome)
 panel
 ### Хвост журнала последней выкладки
- Container cmpasru-app-run-d0c740bc4291 Creating 
- Container cmpasru-app-run-d0c740bc4291 Created 
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Starting the infra-pulse collector.
-time="2026-08-23T23:09:49+03:00" level=warning msg="No services to build"
- Container cmpas-postgres Running 
- Container cmpas-infra-pulse Recreate 
- Container cmpas-infra-pulse Recreated 
- Container cmpas-postgres Waiting 
- Container cmpas-postgres Healthy 
- Container cmpas-infra-pulse Starting 
- Container cmpas-infra-pulse Started 
-[deploy] Recreating only the application container.
-time="2026-08-23T23:09:53+03:00" level=warning msg="No services to build"
- Container cmpas-app Recreate 
- Container cmpas-app Recreated 
- Container cmpas-app Starting 
- Container cmpas-app Started 
-[deploy] New application is healthy.
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[deploy] Auth endpoint status: 200
-[deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-08-23T23:10:00+03:00" level=warning msg="No services to build"
-time="2026-08-23T23:10:01+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-ce20ff2b6d18 Creating 
- Container cmpasru-infra-pulse-run-ce20ff2b6d18 Created 
-npm warn exec The following package was not found and will be installed: tsx@4.23.12
-[backfill-subscriptions] план: create=0 update=0 skip=1
-[backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
-curl: (28) Failed to connect to api.telegram.org port 443 after 136218 ms: Couldn't connect to server
-[deploy] WARNING: Telegram webhook registration failed.
-[deploy] Deployment completed successfully.
+#17 12.24 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+#17 12.26 Setting up perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#17 12.27 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#17 12.30 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+#17 12.32 Setting up sensible-utils (0.0.17+nmu1) ...
+#17 12.34 Setting up netbase (6.4) ...
+#17 12.40 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#17 12.41 Setting up readline-common (8.2-1.3) ...
+#17 12.42 Setting up libgdbm6:amd64 (1.23-3) ...
+#17 12.43 Setting up libreadline8:amd64 (8.2-1.3) ...
+#17 12.45 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#17 12.46 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#17 12.48 Setting up libgdbm-compat4:amd64 (1.23-3) ...
+#17 12.53 Setting up libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#17 ...
+
+#34 [app runner 18/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+#34 DONE 0.4s
+
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 12.61 Setting up libpq5:amd64 (15.19-0+deb12u1) ...
+#17 12.63 Setting up perl (5.36.0-7+deb12u3) ...
+#17 12.67 Setting up postgresql-client-common (248+deb12u1) ...
+#17 12.71 Setting up postgresql-client-15 (15.19-0+deb12u1) ...
+#17 ...
+
+#35 [app runner 19/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+#35 DONE 0.6s
+
+#36 [app runner 20/20] COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+#36 DONE 0.3s
+
+#17 [infra-pulse infra-pulse-collector 2/2] RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+#17 14.97 update-alternatives: using /usr/share/postgresql/15/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
+#17 15.14 Setting up postgresql-client (15+248+deb12u1) ...
+#17 15.17 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#17 DONE 15.4s
+
+#37 [app] exporting to image
+#37 exporting layers
 ### Флаги аналитики в /var/www/cmpas.ru/.env
 ANALYTICS_INGEST_ENABLED=true
 ANALYTICS_TRACKING_ENABLED=true
@@ -469,8 +471,8 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 ### Контейнер infra-pulse
 cmpas-infra-pulse | Up 2 days | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=809
-последняя=2026-08-26 09:56:27.887 возраст_мин=2
+строк всего=816
+последняя=2026-08-26 10:31:31.25 возраст_мин=2
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
@@ -478,7 +480,7 @@ analytics_device_consent
 events
 events_rejected
 ### Наполнение событий и подписок
-events=1194
+events=1197
 подписок=1
 ### Куда на самом деле слушает приложение
 HOSTNAME внутри контейнера: e82916877e3b
@@ -488,7 +490,7 @@ POST /api/ingest без Authorization -> 401
   ответ: {"accepted":false,"reason":"unauthorized"}
 ### Разделение секретов по продуктам
 ANALYTICS_INGEST_SECRET: задан, длина 64
-ANALYTICS_INGEST_SECRET_MOMENTS: НЕ ЗАДАН (МОМЕНТЫ получат 401 — как и сегодня)
+ANALYTICS_INGEST_SECRET_MOMENTS: задан, длина 64
 секретом ПРАКТИКИ шлём событие МОМЕНТОВ -> HTTP 200 {"accepted":false,"reason":"secret not allowed for product moments"}
 ПРИВЯЗКА РАБОТАЕТ: чужой продукт отвергнут
 ### Мобильные маршруты аналитики (без токена — ждём 401)
