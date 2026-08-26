@@ -72,7 +72,10 @@ export default function ClientBookingPage() {
         addressName?: string | null;
         addressFull?: string | null;
         onlineLink?: string | null;
+        sessionId?: string | null;
+        clientToken?: string | null;
     } | null>(null);
+    const [calendarTitle, setCalendarTitle] = useState('Личная встреча');
 
     // Auto-navigate to first available month
     const [startDate, setStartDate] = useState<Date | null>(null);
@@ -398,7 +401,9 @@ export default function ClientBookingPage() {
                 psyName: psy?.name || 'Специалист',
                 addressName,
                 addressFull,
-                onlineLink: psy?.psychologistSettings?.onlineSessionLink || null
+                onlineLink: psy?.psychologistSettings?.onlineSessionLink || null,
+                sessionId: res?.sessionId || null,
+                clientToken: res?.clientToken || null
             });
         } catch (e: any) {
             toast.error(e?.message || 'Ошибка записи');
@@ -501,6 +506,28 @@ export default function ClientBookingPage() {
                                 </div>
                             )}
                         </div>
+
+                        {/* CJM_booking_v1.md §1.3: client-chosen calendar title, off by
+                            default behind privateRemindersEnabled (O-260817-03) */}
+                        {psy?.privateRemindersEnabled && bookingSuccess.sessionId && bookingSuccess.clientToken && (
+                            <div className="bg-muted/30 rounded-2xl p-5 text-left mt-3 border border-border/50">
+                                <p className="text-xs font-medium text-muted-foreground mb-2">Добавить в свой календарь</p>
+                                <input
+                                    type="text"
+                                    value={calendarTitle}
+                                    onChange={(e) => setCalendarTitle(e.target.value)}
+                                    maxLength={100}
+                                    placeholder="Личная встреча"
+                                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground mb-2"
+                                />
+                                <a
+                                    href={`/api/client/session-ics?s=${encodeURIComponent(bookingSuccess.sessionId)}&t=${encodeURIComponent(bookingSuccess.clientToken)}&title=${encodeURIComponent(calendarTitle)}`}
+                                    className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+                                >
+                                    <Calendar className="w-4 h-4" /> Скачать событие (.ics)
+                                </a>
+                            </div>
+                        )}
 
                         {/* Issue #6: Navigate to client calendar instead of closing */}
                         <button

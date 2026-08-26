@@ -6,7 +6,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
-import { resolvePersonalClientToken } from '@/lib/client-workflow';
+import { resolvePersonalClientToken, clientActionToken } from '@/lib/client-workflow';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken). */
@@ -38,7 +38,7 @@ export async function getPsychologist(id: string) {
             name: true,
             image: true,
             psychologistSettings: {
-                select: { fullName: true, scheduleMode: true, timeSuggestEnabled: true }
+                select: { fullName: true, scheduleMode: true, timeSuggestEnabled: true, privateRemindersEnabled: true }
             }
         }
     });
@@ -49,7 +49,8 @@ export async function getPsychologist(id: string) {
         ...user,
         name: user.psychologistSettings?.fullName || user.name || 'Специалист',
         scheduleMode: user.psychologistSettings?.scheduleMode || 'private',
-        timeSuggestEnabled: user.psychologistSettings?.timeSuggestEnabled ?? false
+        timeSuggestEnabled: user.psychologistSettings?.timeSuggestEnabled ?? false,
+        privateRemindersEnabled: user.psychologistSettings?.privateRemindersEnabled ?? false
     };
 }
 
@@ -677,7 +678,14 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         console.error('Auto-sync after booking failed:', e);
     }
 
-    return { success: true, sessionId: session.id, clientId: client.id };
+    return {
+        success: true,
+        sessionId: session.id,
+        clientId: client.id,
+        // Lets the booking-success screen offer "add to my calendar" (§1.3)
+        // without a second round trip — same token session-action links use.
+        clientToken: clientActionToken(psychologistId, client.id),
+    };
 }
 
 // Direct client lookup by ID (for when MiniApp opens in browser without Telegram context)
