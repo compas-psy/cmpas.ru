@@ -142,10 +142,16 @@ export async function qFunnelBooking(): Promise<PanelBlock<FunnelData>> {
     const missing = BOOKING_FUNNEL_EVENTS.filter((s) => !registry.has(s.event)).map((s) => s.event);
 
     if (missing.length === BOOKING_FUNNEL_EVENTS.length) {
-        return noData('q_funnel_booking', 'события воронки записи не поступают: их нет в реестре analytics/schema/events.yaml');
+        return noData(
+            'q_funnel_booking',
+            `события воронки записи (${BOOKING_FUNNEL_EVENTS.map((s) => s.event).join(', ')}) нужно завести в analytics/schema/events.yaml и начать отправлять их из виджета самозаписи клиента (src/app/bot/book/[psychologistId]/page.tsx) — сейчас их нет ни в реестре, ни в коде`,
+        );
     }
     if (missing.length > 0) {
-        return noData('q_funnel_booking', `в реестре событий не хватает ступеней: ${missing.join(', ')}`);
+        return noData(
+            'q_funnel_booking',
+            `в реестре событий не хватает ступеней (${missing.join(', ')}) — добавить их в analytics/schema/events.yaml и в код виджета самозаписи клиента (src/app/bot/book/[psychologistId]/page.tsx)`,
+        );
     }
 
     const windowDays = 28;

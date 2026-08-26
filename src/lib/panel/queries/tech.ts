@@ -132,7 +132,7 @@ export async function qTechDb(): Promise<PanelBlock<DbCard>> {
 export async function qTechZapiskiStorage(): Promise<PanelBlock<never>> {
     return noData(
         'q_tech_zapiski_storage',
-        'в реестре событий нет ни одного события про объём хранилища ЗАПИСОК — приёмник тут ни при чём, отправлять пока нечего',
+        'нужно завести событие про объём хранилища ЗАПИСОК в analytics/schema/events.yaml и начать отправлять его с сервера ЗАПИСОК — приёмник тут ни при чём, отправлять пока нечего',
     );
 }
 
@@ -257,7 +257,10 @@ export async function qTechChannels(): Promise<PanelBlock<ChannelsCard>> {
 
 /** Версия приложения в магазине — ответа магазина нет, это «не проверено». */
 export async function qTechAppVersion(): Promise<PanelBlock<never>> {
-    return noData('q_tech_app_version', 'магазин приложений не опрашивается — версия в сторе неизвестна');
+    return noData(
+        'q_tech_app_version',
+        'нужно подключить периодический опрос Google Play (и App Store, если приложение там появится) за версией — сейчас магазин никто не опрашивает',
+    );
 }
 
 export interface InfraCostCard extends ManualInfraCost {

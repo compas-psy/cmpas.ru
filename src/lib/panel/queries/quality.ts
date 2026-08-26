@@ -76,7 +76,10 @@ export interface SilenceRow {
 export async function qEventSilence(): Promise<PanelBlock<SilenceRow[]>> {
     const registry = readEventRegistry();
     if (registry.size === 0) {
-        return noData('q_event_silence', 'реестр событий analytics/schema/events.yaml не прочитан');
+        return noData(
+            'q_event_silence',
+            'analytics/schema/events.yaml не читается процессом — проверить, что файл есть в собранном образе (рабочая директория контейнера), и посмотреть лог "[panel] реестр событий не прочитан"',
+        );
     }
 
     const pairs = registryPairs(registry);

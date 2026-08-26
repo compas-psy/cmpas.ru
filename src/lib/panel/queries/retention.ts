@@ -260,5 +260,8 @@ export async function qChurnCount(): Promise<PanelBlock<ChurnData>> {
 }
 
 export async function qChurnReasons(): Promise<PanelBlock<never>> {
-    return noData('q_churn_reasons', 'опроса при отмене подписки нет — причину ухода никто не спрашивает');
+    return noData(
+        'q_churn_reasons',
+        'нужно добавить опрос причины ухода в поток отмены подписки — в продукте сейчас нет ни самого потока отмены (подписка просто истекает), ни вопроса о причине',
+    );
 }

@@ -261,7 +261,10 @@ export async function qPracticeReschedule(): Promise<PanelBlock<PracticeReschedu
  * ровно то выдумывание данных, которое ТЗ §5 запрещает.
  */
 export async function qPracticeBookingAuthor(): Promise<PanelBlock<never>> {
-    return noData('q_practice_booking_author', 'признак автора записи не собирается: поля «кто создал запись» в схеме нет');
+    return noData(
+        'q_practice_booking_author',
+        'нужно добавить поле `createdBy` в модель `DiarySession` (prisma/schema.prisma) и заполнять его в коде создания записи — сейчас признак автора негде хранить',
+    );
 }
 
 export interface PracticeReminders {
@@ -436,7 +439,7 @@ export async function qPracticeMobile(): Promise<PanelBlock<PracticeMobile>> {
         return noData(
             'q_practice_mobile',
             consented === 0
-                ? 'от ПРАКТИКИ ещё не пришло ни одного события: согласие на аналитику не дал ни один специалист (не дело в окне 7 дней — при нулевом согласии оно будет пустым при любой ширине)'
+                ? 'от ПРАКТИКИ ещё не пришло ни одного события: согласие на аналитику дать негде — на веб-странице /diary/settings нет ни одной точки для него, есть только API для приложения (src/app/api/mobile/analytics/consent/route.ts); нужно добавить веб-виджет согласия в /diary/settings (не дело в окне 7 дней — без способа дать согласие оно будет пустым при любой ширине)'
                 : 'за 7 дней от ПРАКТИКИ не пришло ни одного события, хотя согласия на аналитику уже есть — сборка с аналитикой, вероятно, ещё не дошла до людей',
         );
     }
@@ -472,7 +475,7 @@ export async function qPracticeMobile(): Promise<PanelBlock<PracticeMobile>> {
 export async function qZapiskiNsm(): Promise<PanelBlock<never>> {
     return noData(
         'q_zapiski_nsm',
-        'North Star ЗАПИСОК (05_METRICS §2.2) — доля сессий ПРАКТИКИ, закрытых заметкой за 72 часа — не вычислить: у note_saved нет session_id, событие note_linked_to_session в реестр не попало, а accountId ЗАПИСОК нельзя сопоставлять с User ПРАКТИКИ',
+        'North Star ЗАПИСОК (05_METRICS §2.2) — доля сессий ПРАКТИКИ, закрытых заметкой за 72 часа — не вычислить: нужно добавить `session_id` в свойства события `note_saved` в analytics/schema/events.yaml и в код ЗАПИСОК, который его отправляет (accountId ЗАПИСОК сопоставлять с User ПРАКТИКИ по-прежнему нельзя)',
     );
 }
 
@@ -538,7 +541,7 @@ export async function qZapiskiWriters(): Promise<PanelBlock<ZapiskiWriters>> {
 export async function qZapiskiNotesPerSession(): Promise<PanelBlock<never>> {
     return noData(
         'q_zapiski_notes_per_session',
-        'заметок на сессию не посчитать: у note_saved нет session_id, а сопоставлять accountId ЗАПИСОК с сессиями ПРАКТИКИ запрещено',
+        'заметок на сессию не посчитать: нужно добавить `session_id` в свойства события `note_saved` в analytics/schema/events.yaml и в код ЗАПИСОК, который его отправляет (сопоставлять accountId ЗАПИСОК с сессиями ПРАКТИКИ по-прежнему запрещено)',
     );
 }
 
@@ -657,7 +660,7 @@ export async function qZapiskiConflicts(): Promise<PanelBlock<ZapiskiConflicts>>
 export async function qZapiskiSupport(): Promise<PanelBlock<never>> {
     return noData(
         'q_zapiski_support',
-        'обращения беты живут в базе ЗАПИСОК и не отправляются в общий приёмник — события для этого в реестре нет',
+        'нужно завести событие про обращение в поддержку в analytics/schema/events.yaml и начать отправлять его из кода ЗАПИСОК — сейчас обращения беты живут только в базе ЗАПИСОК и в общий приёмник не попадают',
     );
 }
 
