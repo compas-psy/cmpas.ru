@@ -150,6 +150,30 @@ docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
 docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
   "SELECT 'всего платежей=' || count(*) FROM \"Payment\";" 2>&1 | head -2
 
+# ── Платежи: почему 6 из 9 застряли в pending ─────────────────────────────
+#
+# КРАСНАЯ ЛИНИЯ: rebillId и пароль терминала не покидают модель Payment и
+# переменные окружения. Редакция происходит ЗДЕСЬ, на сервере, до того как
+# что-либо уйдёт по SSH — не постфактум в отчёте.
+
+echo "### Платежи: возраст и полнота записи (без секретов)"
+q "SELECT
+     coalesce(status,'(null)') || ' | tinkoffPaymentId=' || (\"tinkoffPaymentId\" IS NOT NULL)::text
+       || ' | terminal=' || terminal
+       || ' | возраст_ч=' || round(extract(epoch from (now()-\"createdAt\"))/3600)::text
+     FROM \"Payment\" ORDER BY \"createdAt\" DESC;"
+
+echo "### Демонстрационный терминал: не подменяет ли он боевой (по журналу приложения)"
+# tinkoff.ts сам кричит в лог при старте, если в production используется
+# демо-терминал вместо настоящего — ищем эту строку, а не гадаем по ключам.
+docker logs cmpas-app 2>&1 | grep -c "приём платежей работает на демонстрационном терминале"   | xargs -I{} echo "упоминаний в журнале контейнера: {}"
+
+echo "### Журнал колбэков Т-Кассы за 7 суток (RebillId и Token вычищены построчно)"
+# Редакция — регулярным выражением по вывод docker logs, ДО того как строки
+# покинут сервер: значения RebillId и Token заменяются меткой, ключи остаются
+# видны для диагностики (пришёл ли колбэк вообще, с каким статусом).
+docker logs --since 168h cmpas-app 2>&1   | grep -E "\[Tinkoff"   | sed -E 's/"RebillId":[0-9]+/"RebillId":"<скрыто>"/g; s/"Token":"[^"]*"/"Token":"<скрыто>"/g'   | tail -60
+
 echo "### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)"
 for k in TINKOFF_TERMINAL_KEY TINKOFF_PASSWORD TINKOFF_APP_TERMINAL_KEY TINKOFF_APP_PASSWORD SMTP_USER SMTP_PASSWORD; do
   if grep -q "^${k}=." /var/www/cmpas.ru/.env 2>/dev/null; then echo "$k: задан"; else echo "$k: НЕ задан"; fi
