@@ -174,6 +174,29 @@ echo "### Журнал колбэков Т-Кассы за 7 суток (RebillI
 # видны для диагностики (пришёл ли колбэк вообще, с каким статусом).
 docker logs --since 168h cmpas-app 2>&1   | grep -E "\[Tinkoff"   | sed -E 's/"RebillId":[0-9]+/"RebillId":"<скрыто>"/g; s/"Token":"[^"]*"/"Token":"<скрыто>"/g'   | tail -60
 
+echo "### Куда Т-Касса должна слать колбэк (URL, не секрет)"
+# notificationUrl строится как AUTH_URL + /api/payments/callback
+# (src/app/api/payments/create/route.ts). Если AUTH_URL на сервере не
+# cmpas.ru — Т-Касса физически не может достучаться, и все платежи
+# зависают в pending вне зависимости от того, что происходит в коде.
+grep -E '^AUTH_URL=' /var/www/cmpas.ru/.env 2>/dev/null || echo "AUTH_URL: НЕ задан в .env (упадёт на запасной https://cmpas.ru)"
+
+echo "### Живёт ли контейнер дольше, чем застрявшие платежи (иначе журнал ничего не покажет)"
+# Контейнер пересоздаётся при каждой выкладке (docker compose --force-recreate).
+# Если он моложе самого свежего застрявшего платежа — пустой журнал колбэков
+# выше означает «журнал не пережил выкладку», а не «колбэк не пришёл».
+docker inspect cmpas-app --format 'запущен={{.State.StartedAt}}' 2>&1
+
+echo "### Достижим ли маршрут колбэка снаружи (безвредный запрос, без валидного токена)"
+# OrderId заведомо не существует, Token заведомо неверный — verifyNotificationToken
+# отвергнет запрос ДО обращения к базе. Проверяем не логику приёма платежей,
+# а сам факт: доходит ли POST на этот путь вообще, или его режет прокси/WAF
+# раньше, чем код успевает ответить.
+curl -sS -o /dev/null -w 'POST /api/payments/callback (снаружи, через cmpas.ru) -> %{http_code}\n' --max-time 15 \
+  -X POST https://cmpas.ru/api/payments/callback \
+  -H 'Content-Type: application/json' \
+  -d '{"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"0000000000000000000000000000000000000000000000000000000000"}' 2>&1
+
 echo "### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)"
 for k in TINKOFF_TERMINAL_KEY TINKOFF_PASSWORD TINKOFF_APP_TERMINAL_KEY TINKOFF_APP_PASSWORD SMTP_USER SMTP_PASSWORD; do
   if grep -q "^${k}=." /var/www/cmpas.ru/.env 2>/dev/null; then echo "$k: задан"; else echo "$k: НЕ задан"; fi
