@@ -95,7 +95,9 @@ q "SELECT concat_ws(' | ',
      'remindersDue=' || coalesce(\"remindersDue\"::text,'NULL'),
      'remindersSent=' || coalesce(\"remindersSent\"::text,'NULL'),
      'migrationsApplied=' || coalesce(\"migrationsApplied\"::text,'NULL'),
-     'drift=' || coalesce(\"drift\"::text,'NULL'))
+     'migrationsDrift=' || coalesce(\"migrationsDrift\"::text,'NULL'),
+     'cpuPercent=' || coalesce(\"cpuPercent\"::text,'NULL'),
+     'containers=' || coalesce(left(\"containers\"::text,40),'NULL'))
    FROM \"InfraPulse\" ORDER BY \"collectedAt\" DESC LIMIT 1;"
 
 echo "### События по имени (панель ищет узкие срезы)"
