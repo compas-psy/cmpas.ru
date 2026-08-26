@@ -11,12 +11,54 @@ import { latestPulse, parseRowCounts } from './infra';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export interface KnownRejectionIssue {
+    reason: string;
+    count: number;
+    /** Что случилось и что с этим делать — а не только что случилось. */
+    summary: string;
+}
+
 export interface RejectedEvents {
     accepted: number;
     rejected: number;
     ratePercent: number;
     reasons: { reason: string; count: number }[];
     windowDays: number;
+    /**
+     * Причины отказа, у которых известны И источник, И лекарство — не
+     * общий словарь на любую причину: домысливать лекарство там, где мы
+     * его не знаем, — то же выдумывание данных, которое здесь запрещено
+     * (ТЗ §5). Рендерится наверху экрана строкой действия, а не прячется
+     * в таблицу (решение учредителя от 26.08): это самое полезное, что
+     * может сказать экран, если применимо.
+     */
+    knownIssues: KnownRejectionIssue[];
+}
+
+/**
+ * Секрет не из своего слота — единственная сегодня причина отказа, у
+ * которой известны и источник, и лекарство. Изолированный секрет есть
+ * только у МОМЕНТОВ (`ANALYTICS_INGEST_SECRET_MOMENTS`,
+ * src/lib/analytics/secrets.ts) — ПРАКТИКА и ЗАПИСКИ делят один секрет
+ * между собой, и для них эта причина означала бы нечто иное (не «секрет
+ * ещё не завели», а «кто-то шлёт не тем ключом»), поэтому лекарство
+ * называем только для МОМЕНТОВ, а не для любого продукта в этой причине.
+ */
+function knownRejectionIssues(reasons: { reason: string; count: number }[]): KnownRejectionIssue[] {
+    const issues: KnownRejectionIssue[] = [];
+    for (const r of reasons) {
+        const match = /^secret not allowed for product (\w+)$/.exec(r.reason);
+        if (match?.[1] === 'moments') {
+            issues.push({
+                reason: r.reason,
+                count: r.count,
+                summary:
+                    'МОМЕНТЫ шлют события, но не своим секретом — принят общий секрет ПРАКТИКИ/ЗАПИСОК. ' +
+                    'Нужно завести ANALYTICS_INGEST_SECRET_MOMENTS в CI и выпустить сборку, которая его использует — тогда отказ уйдёт сам.',
+            });
+        }
+    }
+    return issues;
 }
 
 /** `q_rejected_events` — отвергнуто при приёме, с разбивкой по причине. */
@@ -40,14 +82,17 @@ export async function qRejectedEvents(): Promise<PanelBlock<RejectedEvents>> {
         return noData('q_rejected_events', `за ${windowDays} дней приёмник не получил ни одного события`);
     }
 
+    const reasons = rejectedRows
+        .map((r) => ({ reason: r.reason, count: r._count._all }))
+        .sort((a, b) => b.count - a.count);
+
     return ok('q_rejected_events', {
         accepted,
         rejected,
         ratePercent: (rejected / total) * 100,
-        reasons: rejectedRows
-            .map((r) => ({ reason: r.reason, count: r._count._all }))
-            .sort((a, b) => b.count - a.count),
+        reasons,
         windowDays,
+        knownIssues: knownRejectionIssues(reasons),
     });
 }
 
@@ -57,6 +102,31 @@ export interface SilenceRow {
     /** Часы с последнего поступления. null — поток не начинался ни разу. */
     silentHours: number | null;
     severity: 'ok' | 'warning' | 'serious' | 'never';
+}
+
+/** Заголовки продуктов для строк тишины — по значению `product` из реестра/событий, не по ключу экрана (там `momenty`, здесь `moments`). */
+export const PRODUCT_TITLES: Record<string, string> = {
+    practice: 'ПРАКТИКА',
+    zapiski: 'ЗАПИСКИ',
+    moments: 'МОМЕНТЫ',
+};
+
+export interface EventSilenceData {
+    /**
+     * Потоки, которые хоть раз начинались, — живые и замолчавшие вместе.
+     * Замолчавший поток здесь — авария: разметку почти наверняка сломали,
+     * а не поведение изменилось.
+     */
+    outages: SilenceRow[];
+    /**
+     * Потоки, которые не начинались НИ РАЗУ, — план работ, а не авария.
+     * Разделены решением учредителя от 26.08: раньше обе категории лежали
+     * в одном списке, и десятки строк плана (события, которые ещё не
+     * подключили) топили одну-две строки настоящей аварии (поток шёл и
+     * замолчал) — просмотреть список и заметить разницу было почти
+     * невозможно.
+     */
+    notStarted: SilenceRow[];
 }
 
 /**
@@ -73,7 +143,7 @@ export interface SilenceRow {
  * разворачивает такие события в три отдельные строки — по одной на
  * продукт, каждая со своей собственной свежестью.
  */
-export async function qEventSilence(): Promise<PanelBlock<SilenceRow[]>> {
+export async function qEventSilence(): Promise<PanelBlock<EventSilenceData>> {
     const registry = readEventRegistry();
     if (registry.size === 0) {
         return noData(
@@ -109,10 +179,19 @@ export async function qEventSilence(): Promise<PanelBlock<SilenceRow[]>> {
         };
     });
 
-    const order = { serious: 0, never: 1, warning: 2, ok: 3 };
-    result.sort((a, b) => order[a.severity] - order[b.severity] || a.event.localeCompare(b.event) || a.product.localeCompare(b.product));
+    const outages = result.filter((r) => r.severity !== 'never');
+    const outageOrder = { serious: 0, warning: 1, ok: 2 } as const;
+    outages.sort(
+        (a, b) =>
+            outageOrder[a.severity as 'serious' | 'warning' | 'ok'] - outageOrder[b.severity as 'serious' | 'warning' | 'ok']
+            || a.event.localeCompare(b.event)
+            || a.product.localeCompare(b.product),
+    );
 
-    return ok('q_event_silence', result);
+    const notStarted = result.filter((r) => r.severity === 'never');
+    notStarted.sort((a, b) => a.event.localeCompare(b.event) || a.product.localeCompare(b.product));
+
+    return ok('q_event_silence', { outages, notStarted });
 }
 
 export interface SourceDiffRow {

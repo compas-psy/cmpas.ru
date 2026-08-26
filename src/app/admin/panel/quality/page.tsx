@@ -1,6 +1,6 @@
 import { screen, countAllHonestHoles } from '@/lib/panel/build';
-import { pick } from '@/lib/panel/types';
-import type { FreshnessRow, RejectedEvents, SilenceRow, SourceDiffRow } from '@/lib/panel/queries/quality';
+import { pick, type PanelBlock } from '@/lib/panel/types';
+import { PRODUCT_TITLES, type EventSilenceData, type FreshnessRow, type KnownRejectionIssue, type RejectedEvents, type SilenceRow, type SourceDiffRow } from '@/lib/panel/queries/quality';
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card, CapsLabel, StateGlyph } from '@/components/panel/block';
 import { dec, duration, num, pct, plural, timeOf } from '@/lib/panel/format';
@@ -21,6 +21,8 @@ export default async function QualityScreen() {
                 generatedAt={generatedAt}
             />
             <ScreenBody>
+                <KnownIssuesBanner block={pick<RejectedEvents>(blocks, 'rejected')} />
+
                 <Card>
                     <CapsLabel>Что мы не умеем измерять</CapsLabel>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -67,25 +69,60 @@ export default async function QualityScreen() {
                     </Card>
 
                     <Card tone="serious">
-                        <BlockFrame block={pick<SilenceRow[]>(blocks, 'silence')} label="Тишина данных" minHeight={180}>
-                            {(rows) => (
+                        <BlockFrame block={pick<EventSilenceData>(blocks, 'silence')} label="Тишина данных" minHeight={180}>
+                            {(data) => (
                                 <>
                                     <div style={{ fontSize: 12, color: 'var(--p-muted)' }}>
                                         Поток события прекратился — почти всегда сломанная разметка, а не изменившееся поведение.
                                     </div>
                                     <div data-scroll-x>
                                         <div style={{ minWidth: 320 }}>
-                                            {rows.map((r) => (
-                                                <div key={r.event} style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 8, fontSize: 12.5, padding: '6px 0', borderTop: '1px solid var(--p-border)', alignItems: 'center' }}>
-                                                    <span className="p-mono">{r.event}</span>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: silenceColor(r.severity), justifyContent: 'flex-end' }}>
-                                                        <StateGlyph state={silenceGlyph(r.severity)} size={13} />
-                                                        <span>{silenceLabel(r)}</span>
-                                                    </span>
+                                            {data.outages.length === 0 ? (
+                                                <div style={{ fontSize: 12.5, color: 'var(--ok-fg)', padding: '6px 0' }}>
+                                                    Ни один начавшийся поток не молчит.
                                                 </div>
-                                            ))}
+                                            ) : (
+                                                data.outages.map((r) => (
+                                                    <div
+                                                        key={`${r.event}::${r.product}`}
+                                                        style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 8, fontSize: 12.5, padding: '6px 0', borderTop: '1px solid var(--p-border)', alignItems: 'center' }}
+                                                    >
+                                                        <span className="p-mono">
+                                                            {r.event} <span style={{ color: 'var(--p-sub)' }}>· {PRODUCT_TITLES[r.product] ?? r.product}</span>
+                                                        </span>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: silenceColor(r.severity), justifyContent: 'flex-end' }}>
+                                                            <StateGlyph state={silenceGlyph(r.severity)} size={13} />
+                                                            <span>{silenceLabel(r)}</span>
+                                                        </span>
+                                                    </div>
+                                                ))
+                                            )}
                                         </div>
                                     </div>
+
+                                    {data.notStarted.length > 0 ? (
+                                        <div style={{ marginTop: 4 }}>
+                                            <div style={{ fontSize: 11.5, color: 'var(--p-sub)', paddingTop: 8, borderTop: '1px dashed var(--p-border)' }}>
+                                                План работ, не авария: событие в реестре есть, отправлять его пока некому — так и
+                                                должно быть, пока фича не выпущена.
+                                            </div>
+                                            <div data-scroll-x>
+                                                <div style={{ minWidth: 320 }}>
+                                                    {data.notStarted.map((r) => (
+                                                        <div
+                                                            key={`${r.event}::${r.product}`}
+                                                            style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 8, fontSize: 12, padding: '5px 0', color: 'var(--p-sub)', alignItems: 'center' }}
+                                                        >
+                                                            <span className="p-mono">
+                                                                {r.event} <span style={{ color: 'var(--p-sub)' }}>· {PRODUCT_TITLES[r.product] ?? r.product}</span>
+                                                            </span>
+                                                            <span style={{ textAlign: 'right' }}>не начат</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
                                 </>
                             )}
                         </BlockFrame>
@@ -145,10 +182,14 @@ export default async function QualityScreen() {
     );
 }
 
+// Один язык для одной шкалы (решение учредителя от 26.08): раньше «тихо 5 д
+// 6 ч» (метка-значение) и «поток не начинался» (полное предложение) были
+// двумя разными грамматическими формами одного и того же — давности
+// последнего события. Теперь оба ряда — короткие ярлыки одной формы;
+// «не начат» живёт в самой разметке (data.notStarted), не здесь.
 function silenceLabel(row: SilenceRow): string {
-    if (row.silentHours === null) return 'поток не начинался';
-    if (row.severity === 'ok') return 'поток идёт';
-    return `тихо ${duration(row.silentHours)}`;
+    if (row.severity === 'ok') return 'идёт';
+    return `тихо ${duration(row.silentHours ?? 0)}`;
 }
 
 function silenceColor(severity: SilenceRow['severity']): string {
@@ -163,6 +204,34 @@ function silenceGlyph(severity: SilenceRow['severity']): 'ok' | 'warning' | 'ser
     if (severity === 'warning') return 'warning';
     if (severity === 'never') return 'unverified';
     return 'ok';
+}
+
+/**
+ * Причина отказа с известным лекарством — наверх экрана строкой действия,
+ * а не в таблицу (решение учредителя от 26.08): «secret not allowed for
+ * product moments» значит «МОМЕНТЫ шлют, ждут выкатки правки приёмника» —
+ * самое полезное, что сегодня есть на экране, и место ему соответствующее.
+ * Молчит, если известных причин нет или блок ещё не в `ok` — не изобретает
+ * баннер там, где сказать нечего.
+ */
+function KnownIssuesBanner({ block }: { block: PanelBlock<RejectedEvents> }) {
+    if (block.state !== 'ok' || !block.data || block.data.knownIssues.length === 0) return null;
+
+    return (
+        <Card tone="ok">
+            {block.data.knownIssues.map((issue: KnownRejectionIssue) => (
+                <div key={issue.reason} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <StateGlyph state="ok" size={16} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ok-fg)' }}>
+                            {num(issue.count)} {plural(issue.count, 'отказ', 'отказа', 'отказов')} с известной причиной
+                        </div>
+                        <div style={{ fontSize: 12.5, color: 'var(--p-muted)' }}>{issue.summary}</div>
+                    </div>
+                </div>
+            ))}
+        </Card>
+    );
 }
 
 function freshnessColor(severity: FreshnessRow['severity']): string {
