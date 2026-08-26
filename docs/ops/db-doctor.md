@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32659101149. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32954617564. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -47,44 +47,94 @@ events_rejected
 User=15
 DiaryClient=20
 DiarySession=41
+### Сессии по статусам (панель считает NSM только по completed)
+completed=32
+pending=6
+confirmed=3
+### Сессии по свежести
+за 7 дней=0
+за 30 дней=0
+специалистов с сессией за 30 дней=0
+самая свежая сессия=2026-07-18 00:00:00
+### Специалисты по свежести регистрации
+зарегистрировано за 30 дней=2
+зарегистрировано за 90 дней=7
+### События приёмника по продуктам и свежести
+zapiski всего=1192 свежайшее=2026-08-26 09:43:42.873
+событий за 30 дней=1192
+### Согласие на аналитику
+пользователей с согласием=0
+### Платежи и подписки по статусам
+pending=6
+failed=2
+paid=1
+подписок всего=1
+### Триалы: панель видит их через Subscription, дашборд — через User
+User.trialEndsAt в будущем=2
+User.trialEndsAt задан вообще=11
+User.subscriptionEndsAt задан=1
+churned=1
+### Источники трафика: панель требует привязку к аккаунту, старая аналитика — нет
+VisitorAnalytics всего=270
+из них с accountId=0
+из них с utmSource=9
+### Последнее показание InfraPulse: какие поля заполнены
+collectedAt=2026-08-26 09:41:26.411
+ERROR:  column "drift" does not exist
+LINE 9:      'drift=' || coalesce("drift"::text,'NULL'))
+                                  ^
+### События по имени (панель ищет узкие срезы)
+note_saved=748
+sync_completed=389
+note_searched=52
+export_requested=2
+consent_updated=1
+### Таблицы, из которых панель читает: пустые или нет
+InfraPulse=806
+DeployLog=9
+ReminderOutbox=0
+events=1192
+events_rejected=2
+Subscription=1
+Payment=9
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   23G   62G  28% /
-/dev/vda2        89G   23G   62G  28% /
+/dev/vda2        89G   24G   61G  29% /
+/dev/vda2        89G   24G   61G  29% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        1905         953          55        5445        6036
-Swap:            511          11         500
+Mem:            7941        2034         402          56        5867        5906
+Swap:            511          65         446
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          7         7         11.5GB    11.5GB (100%)
-Containers      7         6         28.51MB   12.29kB (0%)
-Local Volumes   155       7         265.9MB   4.07MB (1%)
-Build Cache     118       0         8.794GB   8.171GB
+Images          7         7         12.17GB   12.17GB (100%)
+Containers      7         6         28.74MB   12.29kB (0%)
+Local Volumes   155       7         268.6MB   4.07MB (1%)
+Build Cache     133       0         9.692GB   9.069GB
 ### Убитые по нехватке памяти за сутки
 0
 0
 не удалось прочитать
 ### Хвост журнала последней выкладки (/tmp/cmpas-deploy.log)
-#38 exporting manifest list sha256:19c87410fa597db60d4fe4771404ef579d424681057c4fa16db947c8ec72cdcb 0.0s done
+#38 naming to docker.io/library/cmpasru-infra-pulse:latest
 #38 naming to docker.io/library/cmpasru-infra-pulse:latest done
 #38 unpacking to docker.io/library/cmpasru-infra-pulse:latest
-#38 unpacking to docker.io/library/cmpasru-infra-pulse:latest 11.4s done
-#38 DONE 39.5s
+#38 unpacking to docker.io/library/cmpasru-infra-pulse:latest 11.9s done
+#38 DONE 40.0s
 
 #40 [infra-pulse] resolving provenance for metadata file
 #40 DONE 0.0s
  Image cmpasru-app Built 
  Image cmpasru-infra-pulse Built 
-time="2026-08-23T21:43:12+03:00" level=warning msg="No services to build"
- Container cmpas-postgres Running 
+time="2026-08-23T23:09:41+03:00" level=warning msg="No services to build"
  Container cmpas-mailer Running 
+ Container cmpas-postgres Running 
 [deploy] PostgreSQL is ready.
 [deploy] Attempting Prisma migrations. A failure here is recorded and must be justified by strict schema verification below.
-time="2026-08-23T21:43:13+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:43:13+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-df7687bdf813 Creating 
- Container cmpasru-app-run-df7687bdf813 Created 
+time="2026-08-23T23:09:41+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:09:42+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-c6dcf72b9d2f Creating 
+ Container cmpasru-app-run-c6dcf72b9d2f Created 
 Prisma schema loaded from prisma/schema.prisma
 Datasource "db": PostgreSQL database "cmpas_db", schema "public" at "postgres:5432"
 
@@ -109,8 +159,8 @@ ALTER TABLE
 UPDATE 26
 CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
-CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
+CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
@@ -119,14 +169,14 @@ psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relat
 ALTER TABLE
 CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
-CREATE TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
+CREATE TABLE
+CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
-CREATE INDEX
-CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
 CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
 CREATE TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
@@ -141,20 +191,20 @@ psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation 
 ALTER TABLE
 CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
 CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
 [deploy] Running strict schema verification against the new image.
-time="2026-08-23T21:43:17+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:43:18+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-78e6db828749 Creating 
- Container cmpasru-app-run-78e6db828749 Created 
+time="2026-08-23T23:09:46+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:09:46+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-d0c740bc4291 Creating 
+ Container cmpasru-app-run-d0c740bc4291 Created 
 [schema] Все 47 таблиц и их колонки на месте.
 [schema] Чтение User через клиент Prisma прошло.
 [schema] Чтение DiaryClient через клиент Prisma прошло.
 [schema] Чтение DiarySession через клиент Prisma прошло.
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Starting the infra-pulse collector.
-time="2026-08-23T21:43:21+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:09:49+03:00" level=warning msg="No services to build"
  Container cmpas-postgres Running 
  Container cmpas-infra-pulse Recreate 
  Container cmpas-infra-pulse Recreated 
@@ -163,7 +213,7 @@ time="2026-08-23T21:43:21+03:00" level=warning msg="No services to build"
  Container cmpas-infra-pulse Starting 
  Container cmpas-infra-pulse Started 
 [deploy] Recreating only the application container.
-time="2026-08-23T21:43:24+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:09:53+03:00" level=warning msg="No services to build"
  Container cmpas-app Recreate 
  Container cmpas-app Recreated 
  Container cmpas-app Starting 
@@ -176,29 +226,29 @@ time="2026-08-23T21:43:24+03:00" level=warning msg="No services to build"
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Auth endpoint status: 200
 [deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-08-23T21:43:32+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:43:32+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-1db0abee0427 Creating 
- Container cmpasru-infra-pulse-run-1db0abee0427 Created 
+time="2026-08-23T23:10:00+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:10:01+03:00" level=warning msg="No services to build"
+ Container cmpasru-infra-pulse-run-ce20ff2b6d18 Creating 
+ Container cmpasru-infra-pulse-run-ce20ff2b6d18 Created 
 npm warn exec The following package was not found and will be installed: tsx@4.23.12
 [backfill-subscriptions] план: create=0 update=0 skip=1
 [backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
-curl: (28) Failed to connect to api.telegram.org port 443 after 134064 ms: Couldn't connect to server
+curl: (28) Failed to connect to api.telegram.org port 443 after 136218 ms: Couldn't connect to server
 [deploy] WARNING: Telegram webhook registration failed.
 [deploy] Deployment completed successfully.
 ### Состояние контейнеров
-cmpas-app | Up 3 minutes
-cmpas-infra-pulse | Up 3 minutes
-zapiski-api | Up 8 minutes (healthy)
-zapiski-postgres | Up 3 days (healthy)
-cmpas-mailer | Up 3 days (healthy)
-cmpas-postgres | Up 3 days (healthy)
-cmpas-singbox | Exited (1) 3 days ago
+zapiski-api | Up 2 days (healthy)
+cmpas-app | Up 2 days
+cmpas-infra-pulse | Up 2 days
+zapiski-postgres | Up 5 days (healthy)
+cmpas-mailer | Up 5 days (healthy)
+cmpas-postgres | Up 5 days (healthy)
+cmpas-singbox | Exited (1) 5 days ago
 ### Достижим ли Т-Банк с сервера
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.179060s
+код 405, время 0.137884s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -230,42 +280,82 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.197046s
-https://cmpas.ru/diary -> 307 за 0.232722s
-https://cmpas.ru/admin -> 307 за 0.577209s
+https://cmpas.ru/ -> 200 за 0.113706s
+https://cmpas.ru/diary -> 307 за 0.155396s
+https://cmpas.ru/admin -> 307 за 0.716027s
 ### Сертификат cmpas.ru
 notBefore=Jul  4 23:22:19 2026 GMT
 notAfter=Oct  2 23:22:18 2026 GMT
 subject=CN = cmpas.ru
 issuer=C = US, O = Let's Encrypt, CN = YE1
 ### Кто слушает 80 и 443
-LISTEN 0      4096                                       0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=2280600,fd=7))                                                                                                                                        
-LISTEN 0      511                                        0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=2140643,fd=11),("nginx",pid=2140642,fd=11),("nginx",pid=2140641,fd=11),("nginx",pid=2140640,fd=11),("nginx",pid=901,fd=11))                                  
-LISTEN 0      511                                        0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=2140643,fd=12),("nginx",pid=2140642,fd=12),("nginx",pid=2140641,fd=12),("nginx",pid=2140640,fd=12),("nginx",pid=901,fd=12))                                  
-LISTEN 0      4096                                          [::]:3000          [::]:*    users:(("docker-proxy",pid=2280606,fd=7))                                                                                                                                        
-LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=2140643,fd=13),("nginx",pid=2140642,fd=13),("nginx",pid=2140641,fd=13),("nginx",pid=2140640,fd=13),("nginx",pid=901,fd=13))                                  
-LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=2140643,fd=14),("nginx",pid=2140642,fd=14),("nginx",pid=2140641,fd=14),("nginx",pid=2140640,fd=14),("nginx",pid=901,fd=14))                                  
+LISTEN 0      4096                                       0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=2332097,fd=7))                                                                                                                                            
+LISTEN 0      511                                        0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=3955973,fd=11),("nginx",pid=3955970,fd=11),("nginx",pid=3955968,fd=11),("nginx",pid=3955967,fd=11),("nginx",pid=3955966,fd=11))                                  
+LISTEN 0      511                                        0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=3955973,fd=12),("nginx",pid=3955970,fd=12),("nginx",pid=3955968,fd=12),("nginx",pid=3955967,fd=12),("nginx",pid=3955966,fd=12))                                  
+LISTEN 0      4096                                          [::]:3000          [::]:*    users:(("docker-proxy",pid=2332103,fd=7))                                                                                                                                            
+LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=3955973,fd=13),("nginx",pid=3955970,fd=13),("nginx",pid=3955968,fd=13),("nginx",pid=3955967,fd=13),("nginx",pid=3955966,fd=13))                                  
+LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=3955973,fd=14),("nginx",pid=3955970,fd=14),("nginx",pid=3955968,fd=14),("nginx",pid=3955967,fd=14),("nginx",pid=3955966,fd=14))                                  
 ### Журнал приложения, последние 60 строк
-[startup] Verifying required production schema...
-[schema] Все 47 таблиц и их колонки на месте.
-[schema] Чтение User через клиент Prisma прошло.
-[schema] Чтение DiaryClient через клиент Prisma прошло.
-[schema] Чтение DiarySession через клиент Prisma прошло.
-[schema] Prisma migration history has no unfinished entries.
-[startup] Schema is ready. Starting Next.js...
-▲ Next.js 16.1.1
-- Local:         http://d836c94b3c45:3000
-- Network:       http://d836c94b3c45:3000
-
-✓ Starting...
-✓ Ready in 426ms
-[AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
-[CRON] Инструментация: cron-задачи зарегистрированы
-[AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
-[TG Bot] API root: https://api.telegram.org
-[MAX] Webhook registration on startup: {"success":true}
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
 [CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
 ### Журнал контейнера в цикле перезапуска
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
@@ -298,35 +388,35 @@ LISTEN 0      511                                           [::]:80            [
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 ### Почему перезапускался app (последний выход)
-запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-08-23T18:43:26.898391112Z
+запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-08-23T20:09:55.301957251Z
 ### Свободное место подробно
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   23G   62G  28% /
-/dev/vda2        89G   23G   62G  28% /
+/dev/vda2        89G   24G   61G  29% /
+/dev/vda2        89G   24G   61G  29% /
 ### Какой образ реально запущен
-образ=cmpasru-app создан=2026-08-23T18:43:25.621548191Z запущен=2026-08-23T18:43:26.898391112Z
-cmpasru-infra-pulse:latest 19c87410fa59 4 minutes ago
-cmpasru-app:latest 835202748009 4 minutes ago
-zapiski-api:latest da4efd9a685a 3 hours ago
-postgres:16-alpine 57c72fd2a128 6 weeks ago
-ghcr.io/sagernet/sing-box:latest c8b67944345d 8 weeks ago
+образ=cmpasru-app создан=2026-08-23T20:09:53.861347468Z запущен=2026-08-23T20:09:55.301957251Z
+cmpasru-infra-pulse:latest 2edc39c80ed9 2 days ago
+cmpasru-app:latest dadef0c1993e 2 days ago
+zapiski-api:latest 9639553288de 2 days ago
+postgres:16-alpine 57c72fd2a128 7 weeks ago
+ghcr.io/sagernet/sing-box:latest c8b67944345d 2 months ago
 boky/postfix:latest aafc77238423 7 months ago
 postgres:15-alpine b3968e348b48 8 months ago
 ### Метка сборки внутри контейнера
--rw-r--r-- 1 nextjs nodejs 21 Aug 23 18:42 /app/.next/BUILD_ID
-jZCF3uatsQH9cfcklPcgN### Есть ли панель в запущенной сборке
+-rw-r--r-- 1 nextjs nodejs 21 Aug 23 20:08 /app/.next/BUILD_ID
+RXep4MGGI6mMDCSCus77T### Есть ли панель в запущенной сборке
 (chrome)
 panel
 ### Хвост журнала последней выкладки
- Container cmpasru-app-run-78e6db828749 Creating 
- Container cmpasru-app-run-78e6db828749 Created 
+ Container cmpasru-app-run-d0c740bc4291 Creating 
+ Container cmpasru-app-run-d0c740bc4291 Created 
 [schema] Все 47 таблиц и их колонки на месте.
 [schema] Чтение User через клиент Prisma прошло.
 [schema] Чтение DiaryClient через клиент Prisma прошло.
 [schema] Чтение DiarySession через клиент Prisma прошло.
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Starting the infra-pulse collector.
-time="2026-08-23T21:43:21+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:09:49+03:00" level=warning msg="No services to build"
  Container cmpas-postgres Running 
  Container cmpas-infra-pulse Recreate 
  Container cmpas-infra-pulse Recreated 
@@ -335,7 +425,7 @@ time="2026-08-23T21:43:21+03:00" level=warning msg="No services to build"
  Container cmpas-infra-pulse Starting 
  Container cmpas-infra-pulse Started 
 [deploy] Recreating only the application container.
-time="2026-08-23T21:43:24+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:09:53+03:00" level=warning msg="No services to build"
  Container cmpas-app Recreate 
  Container cmpas-app Recreated 
  Container cmpas-app Starting 
@@ -348,14 +438,14 @@ time="2026-08-23T21:43:24+03:00" level=warning msg="No services to build"
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Auth endpoint status: 200
 [deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-08-23T21:43:32+03:00" level=warning msg="No services to build"
-time="2026-08-23T21:43:32+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-1db0abee0427 Creating 
- Container cmpasru-infra-pulse-run-1db0abee0427 Created 
+time="2026-08-23T23:10:00+03:00" level=warning msg="No services to build"
+time="2026-08-23T23:10:01+03:00" level=warning msg="No services to build"
+ Container cmpasru-infra-pulse-run-ce20ff2b6d18 Creating 
+ Container cmpasru-infra-pulse-run-ce20ff2b6d18 Created 
 npm warn exec The following package was not found and will be installed: tsx@4.23.12
 [backfill-subscriptions] план: create=0 update=0 skip=1
 [backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
-curl: (28) Failed to connect to api.telegram.org port 443 after 134064 ms: Couldn't connect to server
+curl: (28) Failed to connect to api.telegram.org port 443 after 136218 ms: Couldn't connect to server
 [deploy] WARNING: Telegram webhook registration failed.
 [deploy] Deployment completed successfully.
 ### Флаги аналитики в /var/www/cmpas.ru/.env
@@ -366,10 +456,10 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 /etc/simpas/ingest-secret: есть, 65 байт, права 600, владелец root
 /var/www/zapiski/.ingest-secret: есть, 65 байт, права 600, владелец root
 ### Контейнер infra-pulse
-cmpas-infra-pulse | Up 3 minutes | cmpasru-infra-pulse
+cmpas-infra-pulse | Up 2 days | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=51
-последняя=2026-08-23 18:43:35.529 возраст_мин=3
+строк всего=806
+последняя=2026-08-26 09:41:26.411 возраст_мин=4
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
@@ -377,10 +467,10 @@ analytics_device_consent
 events
 events_rejected
 ### Наполнение событий и подписок
-events=503
+events=1192
 подписок=1
 ### Куда на самом деле слушает приложение
-HOSTNAME внутри контейнера: d836c94b3c45
+HOSTNAME внутри контейнера: e82916877e3b
 IP контейнера: 172.18.0.2 
 ### Приёмник без ключа (ждём 401)
 POST /api/ingest без Authorization -> 401
