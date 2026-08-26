@@ -13,7 +13,7 @@
 import { db } from '@/lib/db';
 import { noData, ok, stale, type PanelBlock } from '../types';
 import { deltaAbs, deltaPoints, deltaPercent, type Delta } from '../format';
-import { latestPulse, NO_PULSE_REASON, staleReason } from './infra';
+import { latestPulse, NO_PULSE_REASON, readReminders, staleReason } from './infra';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -24,8 +24,20 @@ export interface PracticeNsm {
     delta: Delta;
     sessions: number;
     activeSpecialists: number;
+    /** Контекст на случай честного нуля недели: когда была последняя завершённая сессия вообще. */
+    lastSessionAt?: string | null;
+    daysSinceLastSession?: number | null;
 }
 
+/**
+ * `q_practice_nsm` — сессий на активного специалиста в неделю.
+ *
+ * 0 специалистов с сессией за неделю — честный измеренный ноль, если
+ * завершённые сессии в базе вообще есть (просто не на этой неделе): вместо
+ * пунктира показываем 0 и дату последней сессии — иначе панель прячет ровно
+ * тот факт («последняя сессия 39 дней назад»), который объясняет ноль.
+ * Таблица `DiarySession` пустая целиком — другой случай, остаётся `no_data`.
+ */
 export async function qPracticeNsm(): Promise<PanelBlock<PracticeNsm>> {
     const now = Date.now();
     const measure = async (fromDays: number, toDays: number) => {
@@ -43,7 +55,24 @@ export async function qPracticeNsm(): Promise<PanelBlock<PracticeNsm>> {
     const [current, previous] = await Promise.all([measure(7, 0), measure(14, 7)]);
 
     if (current.specialists === 0) {
-        return noData('q_practice_nsm', 'за неделю ни один специалист не провёл сессию — делить не на кого');
+        const last = await db.diarySession.findFirst({
+            where: { status: 'completed' },
+            orderBy: { date: 'desc' },
+            select: { date: true },
+        });
+        if (!last) {
+            return noData('q_practice_nsm', 'ни одной завершённой сессии в базе ещё не было — делить не на кого');
+        }
+        const prev = previous.specialists > 0 ? previous.sessions / previous.specialists : 0;
+        return ok('q_practice_nsm', {
+            value: 0,
+            previous: prev,
+            delta: deltaPercent(0, prev, true),
+            sessions: 0,
+            activeSpecialists: 0,
+            lastSessionAt: last.date.toISOString(),
+            daysSinceLastSession: Math.floor((now - last.date.getTime()) / DAY_MS),
+        });
     }
 
     const value = current.sessions / current.specialists;
@@ -64,8 +93,18 @@ export interface PracticeActive {
     /** Липкость WAU/MAU. */
     stickiness: number;
     delta: Delta;
+    /** Контекст на случай честного нуля месяца: когда была последняя сессия вообще (любого статуса). */
+    lastSessionAt?: string | null;
+    daysSinceLastSession?: number | null;
 }
 
+/**
+ * `q_practice_active` — WAU/MAU специалистов по сессиям.
+ * 0 за 30 дней — честный ноль, если сессии в базе вообще есть: показываем
+ * его с давностью последней сессии, а не гасим блок (тот же приём, что у
+ * `q_practice_nsm` выше — тот же корень: последняя сессия в базе старше
+ * обоих окон).
+ */
 export async function qPracticeActive(): Promise<PanelBlock<PracticeActive>> {
     const now = Date.now();
     const activeIn = async (days: number) => {
@@ -90,7 +129,18 @@ export async function qPracticeActive(): Promise<PanelBlock<PracticeActive>> {
     ]);
 
     if (mau === 0) {
-        return noData('q_practice_active', 'за 30 дней ни один специалист не завёл сессию');
+        const last = await db.diarySession.findFirst({ orderBy: { date: 'desc' }, select: { date: true } });
+        if (!last) {
+            return noData('q_practice_active', 'сессий в базе ещё не было ни разу');
+        }
+        return ok('q_practice_active', {
+            wau: 0,
+            mau: 0,
+            stickiness: 0,
+            delta: deltaAbs(0, wauPrev, true),
+            lastSessionAt: last.date.toISOString(),
+            daysSinceLastSession: Math.floor((now - last.date.getTime()) / DAY_MS),
+        });
     }
 
     return ok('q_practice_active', {
@@ -107,12 +157,20 @@ export interface PracticeActivation {
     delta: Delta;
     activated: number;
     cohort: number;
+    /** Контекст на случай пустой когорты: когда была последняя регистрация вообще. */
+    lastRegisteredAt?: string | null;
+    daysSinceLastRegistered?: number | null;
 }
 
 /**
  * `q_practice_activation` — доля новых специалистов, заведших первую сессию
  * за 7 дней после регистрации. Когорта берётся с запасом в 7 дней, чтобы
  * у всех в ней срок уже истёк.
+ *
+ * Пустая когорта (0 регистраций в этом 30-дневном срезе) — тот же корень,
+ * что у `q_funnel_practice`: узкое окно на редких регистрациях, а не
+ * отсутствие специалистов вообще. Честный ноль с датой последней
+ * регистрации вместо пунктира — если хоть кто-то когда-то регистрировался.
  */
 export async function qPracticeActivation(): Promise<PanelBlock<PracticeActivation>> {
     const now = Date.now();
@@ -145,7 +203,20 @@ export async function qPracticeActivation(): Promise<PanelBlock<PracticeActivati
     const [current, previous] = await Promise.all([measure(37, 7), measure(67, 37)]);
 
     if (current.cohort === 0) {
-        return noData('q_practice_activation', 'за прошлый месяц не зарегистрировался ни один специалист');
+        const last = await db.user.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+        if (!last) {
+            return noData('q_practice_activation', 'специалистов в базе ещё нет — регистрироваться было некому');
+        }
+        const prev = previous.cohort > 0 ? (previous.activated / previous.cohort) * 100 : 0;
+        return ok('q_practice_activation', {
+            rate: 0,
+            previous: prev,
+            delta: deltaPoints(0, prev, true),
+            activated: 0,
+            cohort: 0,
+            lastRegisteredAt: last.createdAt.toISOString(),
+            daysSinceLastRegistered: Math.floor((now - last.createdAt.getTime()) / DAY_MS),
+        });
     }
 
     const rate = (current.activated / current.cohort) * 100;
@@ -210,13 +281,19 @@ export interface PracticeReminders {
  * InfraPulse читается ещё раз (панель только читает готовый снимок, ТЗ §1,
  * §11 — второй коллектор не заводим), под продуктовым углом: доля
  * долетевших напоминаний, а не техническое здоровье канала.
+ *
+ * Читает то же показание через `readReminders()` (queries/infra.ts), что и
+ * `q_lamp_reminders` (morning.ts) — раньше эти два блока по-разному отвечали
+ * на `remindersDue === 0` (этот всегда говорил `ok`, лампа — `no_data`).
+ * Общая функция не даёт им разойтись снова, см.
+ * `tests/panel-reminders-source-agreement.test.ts`.
  */
 export async function qPracticeReminders(): Promise<PanelBlock<PracticeReminders>> {
     const pulse = await latestPulse();
     if (!pulse) return noData('q_practice_reminders', NO_PULSE_REASON);
-    const { row } = pulse;
 
-    if (row.remindersDue === null) {
+    const reminders = readReminders(pulse.row);
+    if (!reminders) {
         return noData(
             'q_practice_reminders',
             'коллектор ещё не снимал показания журнала отправок (ReminderOutbox)',
@@ -224,13 +301,10 @@ export async function qPracticeReminders(): Promise<PanelBlock<PracticeReminders
         );
     }
 
-    const due = row.remindersDue;
-    const sent = row.remindersSent ?? 0;
-    const sentTwice = row.remindersSentTwice ?? 0;
-    const data: PracticeReminders = { due, sent, sentTwice, sentRate: due > 0 ? (sent / due) * 100 : null };
     const at = pulse.collectedAt.toISOString();
-
-    return pulse.isStale ? stale('q_practice_reminders', data, staleReason(pulse.ageMinutes), at) : ok('q_practice_reminders', data, at);
+    return pulse.isStale
+        ? stale('q_practice_reminders', reminders, staleReason(pulse.ageMinutes), at)
+        : ok('q_practice_reminders', reminders, at);
 }
 
 /**
@@ -354,9 +428,16 @@ export async function qPracticeMobile(): Promise<PanelBlock<PracticeMobile>> {
     ]);
 
     if (events.length === 0) {
+        // Смешанный случай (не наш B — намеренно не трогаем логику): пока
+        // согласий на аналитику нет вовсе, `events` будет пуст при ЛЮБОЙ
+        // ширине окна — это не 7-дневное окно виновато, а нулевое согласие.
+        // Если согласия когда-нибудь появятся, а событий за неделю всё
+        // равно не будет — вот тогда причина станет про окно, а не раньше.
         return noData(
             'q_practice_mobile',
-            'событий из приложения ещё не приходило: либо согласие никто не давал, либо сборка с аналитикой не вышла',
+            consented === 0
+                ? 'от ПРАКТИКИ ещё не пришло ни одного события: согласие на аналитику не дал ни один специалист (не дело в окне 7 дней — при нулевом согласии оно будет пустым при любой ширине)'
+                : 'за 7 дней от ПРАКТИКИ не пришло ни одного события, хотя согласия на аналитику уже есть — сборка с аналитикой, вероятно, ещё не дошла до людей',
         );
     }
 
@@ -580,6 +661,20 @@ export async function qZapiskiSupport(): Promise<PanelBlock<never>> {
     );
 }
 
+/**
+ * Находка сверх аудита: шесть карточек МОМЕНТОВ (эта секция и
+ * `q_retention_momenty` в retention.ts) были пусты по ШЕСТИ слегка разным
+ * текстам, хотя причина ровно одна — транспорт МОМЕНТОВ только что
+ * включили, `app_installed` от продукта ещё не приходило ни разу. «Если у
+ * группы блоков одна причина пустоты, она называется один раз» (решение
+ * учредителя) — по аналогии с `NO_PULSE_REASON` в infra.ts. Используется
+ * везде, где отсутствие данных сводится именно к «установок не было ни
+ * разу», а не к более специфичной причине (например «истории мало, но она
+ * есть» у D1/D7/D30 — та причина другая и остаётся отдельной).
+ */
+export const MOMENTY_NOT_LAUNCHED_REASON =
+    'МОМЕНТЫ только что включили транспорт событий: app_installed от продукта ещё не приходило ни разу — это одна причина сразу на все карточки МОМЕНТОВ (установки, активация, D1/D7/D30, удержание), а не пять разных';
+
 async function measureMomentyD0(fromDays: number, toDays: number): Promise<{ cohort: number; activated: number }> {
     const now = Date.now();
     const installs = await db.analyticsEvent.findMany({
@@ -644,10 +739,7 @@ export async function qMomentyNsm(): Promise<PanelBlock<MomentyActivation>> {
     ]);
 
     if (current.cohort === 0) {
-        return noData(
-            'q_momenty_nsm',
-            `за последние ${windowDays} дней (плюс сутки на созревание когорты) МОМЕНТЫ не прислали ни одного app_installed`,
-        );
+        return noData('q_momenty_nsm', MOMENTY_NOT_LAUNCHED_REASON);
     }
 
     const rate = (current.activated / current.cohort) * 100;
@@ -690,7 +782,7 @@ export async function qMomentyInstalls(): Promise<PanelBlock<MomentyInstalls>> {
     ]);
 
     if (current === 0) {
-        return noData('q_momenty_installs', `за ${windowDays} дней МОМЕНТЫ не прислали ни одного app_installed`);
+        return noData('q_momenty_installs', MOMENTY_NOT_LAUNCHED_REASON);
     }
 
     return ok('q_momenty_installs', { count: current, previous, delta: deltaAbs(current, previous, true), windowDays });
@@ -707,19 +799,20 @@ export interface MomentyRetention {
 const RETENTION_COHORT_DAYS = 28;
 
 /**
- * Физически ли возможно посчитать D`n`: нужно, чтобы самое старое событие
- * `app_installed` МОМЕНТОВ было старше `n+1` суток — иначе ни одна когорта
- * ещё не могла дожить до дня `n`. Это не измеренный ноль, а недостаточная
- * история (условие задачи, F2) — таблица пуста или младше окна.
+ * Самое старое `app_installed` МОМЕНТОВ вообще — или `null`, если ни одной
+ * установки ещё не было. Раньше эта проверка и «нет ни одной установки
+ * вообще» (находка №2 — MOMENTY_NOT_LAUNCHED_REASON), и «установки есть, но
+ * когорте ещё рано» смешивались в одну причину «таблица событий пока
+ * моложе» — неверную формулировку для первого случая: моложе нечему, если
+ * строк нет вовсе. Разделены, чтобы каждая причина называла свою правду.
  */
-async function momentyHistoryTooShortFor(days: number): Promise<boolean> {
+async function momentyOldestInstall(): Promise<Date | null> {
     const oldest = await db.analyticsEvent.findFirst({
         where: { product: 'moments', event: 'app_installed' },
         orderBy: { ts: 'asc' },
         select: { ts: true },
     });
-    if (!oldest) return true;
-    return Date.now() - (oldest as { ts: Date }).ts.getTime() < (days + 1) * DAY_MS;
+    return oldest ? (oldest as { ts: Date }).ts : null;
 }
 
 /**
@@ -733,7 +826,16 @@ async function momentyHistoryTooShortFor(days: number): Promise<boolean> {
 async function measureMomentyRetention(days: number): Promise<PanelBlock<MomentyRetention>> {
     const source = `q_momenty_d${days}`;
 
-    if (await momentyHistoryTooShortFor(days)) {
+    const oldest = await momentyOldestInstall();
+    if (!oldest) {
+        // Ни одной установки не было НИ РАЗУ — тот же корень, что у
+        // q_momenty_nsm/q_momenty_installs/q_retention_momenty (находка №2).
+        return noData(source, MOMENTY_NOT_LAUNCHED_REASON);
+    }
+    if (Date.now() - oldest.getTime() < (days + 1) * DAY_MS) {
+        // Установки уже есть, просто самой старой ещё не хватает возраста —
+        // это ДРУГАЯ причина (продукт растёт, а не «не запущен»), и остаётся
+        // отдельной формулировкой, а не сливается с находкой №2.
         return noData(
             source,
             `для D${days} нужно ${days + 1} дней истории с первой установки МОМЕНТОВ — таблица событий пока моложе`,

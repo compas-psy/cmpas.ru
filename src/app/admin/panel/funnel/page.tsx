@@ -1,10 +1,10 @@
 import { screen } from '@/lib/panel/build';
 import { pick } from '@/lib/panel/types';
-import type { FunnelData } from '@/lib/panel/queries/funnel';
+import type { FunnelData, SourcesData } from '@/lib/panel/queries/funnel';
 import { ScreenBody, ScreenHeader } from '@/components/panel/chrome';
 import { BlockFrame, Card } from '@/components/panel/block';
 import { FunnelRow } from '@/components/panel/meters';
-import { dec, num } from '@/lib/panel/format';
+import { dateOf, dec, num, plural } from '@/lib/panel/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,7 @@ export default async function FunnelScreen() {
 
     const practice = pick<FunnelData>(blocks, 'practiceFunnel');
     const booking = pick<FunnelData>(blocks, 'bookingFunnel');
-    const sources = pick<never>(blocks, 'sources');
+    const sources = pick<SourcesData>(blocks, 'sources');
 
     return (
         <>
@@ -43,7 +43,7 @@ export default async function FunnelScreen() {
 
                 <Card>
                     <BlockFrame block={sources} label="Источники привлечения" minHeight={140}>
-                        {() => null}
+                        {(d) => <Sources data={d} />}
                     </BlockFrame>
                 </Card>
             </ScreenBody>
@@ -78,6 +78,50 @@ function Funnel({ data, slot, height = 36 }: { data: FunnelData; slot: string; h
                     height={height}
                 />
             ))}
+            {/* Честный ноль верхней ступени: воронка вся нулевая не потому, что
+                специалистов нет, а потому что окно (28 дней) уже, чем интервал
+                между редкими регистрациями. Дата рядом — то самое число, которое
+                объясняет ноль (B4). */}
+            {top === 0 && data.lastRegisteredAt ? (
+                <div style={{ fontSize: 12, color: 'var(--p-muted)' }}>
+                    последняя регистрация — {dateOf(data.lastRegisteredAt)} ({num(data.daysSinceLastRegistered ?? 0)} дн назад)
+                </div>
+            ) : null}
         </>
+    );
+}
+
+/** Источники привлечения. Пустая привязка к аккаунту ≠ отсутствие источников (B5). */
+function Sources({ data }: { data: SourcesData }) {
+    if (data.totalLinked === 0) {
+        return (
+            <div style={{ fontSize: 13, color: 'var(--p-muted)', lineHeight: 1.5 }}>
+                0 визитов привязано к аккаунту — связка появилась несколько дней
+                назад и ещё не набралась.
+                {data.visitsWithUtm > 0 ? (
+                    <>
+                        {' '}
+                        Но {num(data.visitsWithUtm)} {plural(data.visitsWithUtm, 'визит', 'визита', 'визитов')} несут utm-метку — источники
+                        известны, просто пока не с деньгами.
+                    </>
+                ) : null}
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, color: 'var(--p-muted)' }}>
+                {num(data.totalLinked)} {plural(data.totalLinked, 'аккаунт', 'аккаунта', 'аккаунтов')} привязано к визиту (first-touch)
+            </div>
+            {data.sources.map((s) => (
+                <div key={s.source} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--p-muted)' }}>{s.source}</span>
+                    <span className="p-mono" style={{ fontWeight: 600 }}>
+                        {num(s.accounts)}
+                    </span>
+                </div>
+            ))}
+        </div>
     );
 }

@@ -25,6 +25,14 @@ export interface FunnelStep {
 export interface FunnelData {
     steps: FunnelStep[];
     windowDays: number;
+    /**
+     * Когда за окно не зарегистрировался никто (0 на верхней ступени) —
+     * контекст вместо голой пустоты: когда была последняя регистрация и
+     * сколько дней назад. `undefined`, если окно не пустое — полю нечего
+     * добавить к уже ненулевой воронке.
+     */
+    lastRegisteredAt?: string | null;
+    daysSinceLastRegistered?: number | null;
 }
 
 /**
@@ -32,6 +40,13 @@ export interface FunnelData {
  * Каждая ступень — подмножество предыдущей, поэтому считаем по одному
  * набору идентификаторов, а не пятью независимыми count'ами: иначе доли
  * могут перевалить за 100 %.
+ *
+ * 0 регистраций за 28 дней — это ЧЕСТНЫЙ измеренный ноль, если специалисты
+ * вообще когда-нибудь регистрировались (просто не в это окно): рисуем
+ * нулевую воронку и подписываем её датой последней регистрации, а не гасим
+ * блок пунктиром — иначе панель прячет ровно то число (7 регистраций за 90
+ * дней), которое и объясняет, почему 28-дневное окно сейчас пусто.
+ * Полное отсутствие специалистов в базе — другой случай и остаётся `no_data`.
  */
 export async function qFunnelPractice(): Promise<PanelBlock<FunnelData>> {
     const windowDays = 28;
@@ -44,7 +59,23 @@ export async function qFunnelPractice(): Promise<PanelBlock<FunnelData>> {
     const ids = users.map((u) => u.id);
 
     if (ids.length === 0) {
-        return noData('q_funnel_practice', `за ${windowDays} дней не зарегистрировался ни один специалист`);
+        const last = await db.user.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+        if (!last) {
+            return noData('q_funnel_practice', 'специалистов в базе ещё нет — регистрироваться было некому');
+        }
+        const emptySteps: { key: string; label: string; value: number }[] = [
+            { key: 'registered', label: 'Регистрация', value: 0 },
+            { key: 'profile', label: 'Заполнил профиль', value: 0 },
+            { key: 'first_booking', label: 'Создал первую запись', value: 0 },
+            { key: 'session_done', label: 'Провёл сессию', value: 0 },
+            { key: 'paid', label: 'Оплатил', value: 0 },
+        ];
+        return ok('q_funnel_practice', {
+            steps: withDrops(emptySteps),
+            windowDays,
+            lastRegisteredAt: last.createdAt.toISOString(),
+            daysSinceLastRegistered: Math.floor((Date.now() - last.createdAt.getTime()) / DAY_MS),
+        });
     }
 
     const [withProfile, withSession, withCompleted, withPayment] = await Promise.all([
@@ -145,6 +176,14 @@ export interface SourcesData {
     sources: { source: string; accounts: number }[];
     /** Сколько всего аккаунтов вообще удалось привязать к визиту. */
     totalLinked: number;
+    /**
+     * Визитов с utm-меткой вообще, независимо от привязки к аккаунту.
+     * Контекст на случай `totalLinked === 0`: колонка `accountId` появилась
+     * несколько дней назад (B5), и привязка ещё не набралась, но источники
+     * на самих визитах уже видны — это честный ноль привязки, а не
+     * отсутствие источников.
+     */
+    visitsWithUtm: number;
 }
 
 /**
@@ -166,17 +205,27 @@ export async function qSources(): Promise<PanelBlock<SourcesData>> {
     // не строки VisitorAnalytics, иначе один человек с двух устройств
     // задвоился бы в двух источниках сразу. Источник — по самому раннему
     // связанному визиту (first-touch, charter/13_TRACKING_PLAN.md §5.3).
-    const linked = await db.visitorAnalytics.findMany({
-        where: { accountId: { not: null } },
-        select: { accountId: true, utmSource: true },
-        orderBy: { createdAt: 'asc' },
-    });
+    const [linked, visitsWithUtm] = await Promise.all([
+        db.visitorAnalytics.findMany({
+            where: { accountId: { not: null } },
+            select: { accountId: true, utmSource: true },
+            orderBy: { createdAt: 'asc' },
+        }),
+        db.visitorAnalytics.count({ where: { utmSource: { not: null } } }),
+    ]);
 
     if (linked.length === 0) {
-        return noData(
-            'q_sources',
-            'ни один визит ещё не связан с аккаунтом — связка проставляется при входе (B5), задним числом старые визиты не восстанавливаются',
-        );
+        if (visitsWithUtm === 0) {
+            return noData(
+                'q_sources',
+                'ни один визит ещё не связан с аккаунтом, и ни у одного визита нет utm-метки — привязывать пока нечего',
+            );
+        }
+        // Честный ноль привязки, а не отсутствие источников: колонка
+        // accountId появилась несколько дней назад (B5) и ещё не набралась,
+        // но utm на самих визитах уже есть — источники известны, просто пока
+        // не с деньгами.
+        return ok('q_sources', { sources: [], totalLinked: 0, visitsWithUtm });
     }
 
     const bySource = new Map<string, Set<string>>();
@@ -195,5 +244,5 @@ export async function qSources(): Promise<PanelBlock<SourcesData>> {
         .map(([source, accounts]) => ({ source, accounts: accounts.size }))
         .sort((a, b) => b.accounts - a.accounts);
 
-    return ok('q_sources', { sources, totalLinked: seenAccounts.size });
+    return ok('q_sources', { sources, totalLinked: seenAccounts.size, visitsWithUtm });
 }

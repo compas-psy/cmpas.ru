@@ -7,8 +7,9 @@ import { db } from '@/lib/db';
 import { broken, guard, noData, ok, stale, type AttentionItem, type LampData, type PanelBlock } from '../types';
 import { severityFor, THRESHOLDS } from '../thresholds';
 import { deltaPercent, dateOf, dec, duration, num, pct, type Delta } from '../format';
-import { latestPulse, NO_PULSE_REASON, parseContainers, parseDrift, staleReason } from './infra';
+import { latestPulse, NO_PULSE_REASON, parseContainers, parseDrift, readReminders, staleReason } from './infra';
 import { backupDrillAt } from './config';
+import { PAYMENTS_WINDOW_DAYS } from './money';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -53,9 +54,19 @@ export async function qSessionsWeekly(): Promise<PanelBlock<SessionsWeekly>> {
     });
 }
 
-/** `q_lamp_money` — доля успешных списаний за сутки. */
+/**
+ * `q_lamp_money` — доля успешных списаний за окно.
+ *
+ * Окно — то же `PAYMENTS_WINDOW_DAYS`, что у `q_payments_daily` (money.ts):
+ * это один и тот же платёжный вопрос («доля успешных списаний»), заданный
+ * дважды на двух экранах. Раньше здесь стояли отдельные сутки, и при девяти
+ * платежах за всю историю лампа почти всегда гасла как `no_data`, пока
+ * экран «Деньги» рядом уже показывал число — одна и та же панель спорила
+ * сама с собой. Импорт константы, а не второе магическое число, не даёт им
+ * снова разойтись.
+ */
 export async function qLampMoney(): Promise<PanelBlock<LampData>> {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const since = new Date(Date.now() - PAYMENTS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const rows = await db.payment.groupBy({
         by: ['status'],
         where: { createdAt: { gte: since } },
@@ -65,7 +76,7 @@ export async function qLampMoney(): Promise<PanelBlock<LampData>> {
     const total = rows.reduce((acc, r) => acc + r._count._all, 0);
     if (total === 0) {
         // Ноль попыток — это не «списания на нуле», это отсутствие измерения.
-        return noData('q_lamp_money', 'за сутки не было ни одной попытки списания — доли считать не из чего');
+        return noData('q_lamp_money', `за ${PAYMENTS_WINDOW_DAYS} дней не было ни одной попытки списания — доли считать не из чего`);
     }
 
     const paid = rows.find((r) => r.status === 'paid')?._count._all ?? 0;
@@ -183,33 +194,39 @@ export async function qLampBackup(): Promise<PanelBlock<LampData>> {
 }
 
 /**
- * `q_lamp_reminders` — зависит от `ReminderOutbox`.
- * Модели в схеме нет, коллектор пишет в счётчики null — блок честно пуст.
+ * `q_lamp_reminders` — зависит от `ReminderOutbox` через показание `InfraPulse`.
+ *
+ * Читает то же показание через `readReminders()`, что и `q_practice_reminders`
+ * (products.ts) — раньше эти два блока расходились ровно на `remindersDue
+ * === 0`: этот отвечал `no_data` («за сутки не было ни одного напоминания к
+ * отправке»), а `q_practice_reminders` на тех же цифрах — `ok`. Оба неверными
+ * быть не могут: `remindersDue = 0` — это ЧЕСТНЫЙ измеренный ноль (день без
+ * дедлайнов на отправку), а не отсутствие данных, поэтому лампа теперь тоже
+ * зелёная, а не гаснет пунктиром. `tests/panel-reminders-source-agreement.test.ts`
+ * не даёт этому разойтись снова.
  */
 export async function qLampReminders(): Promise<PanelBlock<LampData>> {
     const pulse = await latestPulse();
     if (!pulse) return noData('q_lamp_reminders', NO_PULSE_REASON);
 
-    const { row } = pulse;
-    if (row.remindersDue === null && row.remindersSent === null) {
+    const reminders = readReminders(pulse.row);
+    if (!reminders) {
         return noData('q_lamp_reminders', 'журнал отправок не заведён', pulse.collectedAt.toISOString());
     }
 
-    const due = row.remindersDue ?? 0;
-    if (due === 0) {
-        return noData('q_lamp_reminders', 'за сутки не было ни одного напоминания к отправке', pulse.collectedAt.toISOString());
+    let lamp: LampData['lamp'];
+    let detail: string;
+    if (reminders.due === 0) {
+        lamp = 'ok';
+        detail = 'сегодня напоминаний к отправке нет';
+    } else {
+        const rate = reminders.sentRate ?? 0;
+        const severity = severityFor('remindersOnTime', rate);
+        lamp = severity === 'serious' ? 'serious' : severity === 'warning' ? 'warning' : 'ok';
+        detail = `вовремя ${pct(rate)} · цель ровно 100 %`;
     }
 
-    const sent = row.remindersSent ?? 0;
-    const rate = (sent / due) * 100;
-    const severity = severityFor('remindersOnTime', rate);
-
-    const data: LampData = {
-        label: 'Рассылка',
-        lamp: severity === 'serious' ? 'serious' : severity === 'warning' ? 'warning' : 'ok',
-        detail: `вовремя ${pct(rate)} · цель ровно 100 %`,
-        href: '/admin/panel/tech',
-    };
+    const data: LampData = { label: 'Рассылка', lamp, detail, href: '/admin/panel/tech' };
     return pulse.isStale
         ? stale('q_lamp_reminders', data, staleReason(pulse.ageMinutes), pulse.collectedAt.toISOString())
         : ok('q_lamp_reminders', data, pulse.collectedAt.toISOString());

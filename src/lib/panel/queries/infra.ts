@@ -47,6 +47,38 @@ export async function pulseHistory(days = 30) {
 
 export const NO_PULSE_REASON = 'коллектор показаний ещё не присылал данных';
 
+export interface RemindersReading {
+    due: number;
+    sent: number;
+    sentTwice: number;
+    /** % от due, что реально ушло. null — due=0, делить не на что (честный ноль, не отсутствие данных). */
+    sentRate: number | null;
+}
+
+/**
+ * Общее чтение remindersDue/remindersSent/remindersSentTwice из одного
+ * показания `InfraPulse`.
+ *
+ * Раньше «Утро» (`q_lamp_reminders`) и «Продукты» (`q_practice_reminders`)
+ * читали эти три поля каждый по-своему и по-разному отвечали на
+ * `remindersDue === 0`: один блок говорил `no_data`, другой — `ok`. Панель
+ * спорила сама с собой на одних и тех же цифрах одного показания. Теперь
+ * оба зовут эту функцию, так что у них физически не может остаться два
+ * разных мнения о том же показании — это же проверяет
+ * `tests/panel-reminders-source-agreement.test.ts`.
+ *
+ * `null` — коллектор ещё ни разу не снимал журнал отправок (`remindersDue`
+ * в показании ещё не заполнен). `remindersDue === 0` — это не тот случай:
+ * журнал снят, и в нём честно ноль напоминаний к отправке за сутки.
+ */
+export function readReminders(row: { remindersDue: number | null; remindersSent: number | null; remindersSentTwice: number | null }): RemindersReading | null {
+    if (row.remindersDue === null) return null;
+    const due = row.remindersDue;
+    const sent = row.remindersSent ?? 0;
+    const sentTwice = row.remindersSentTwice ?? 0;
+    return { due, sent, sentTwice, sentRate: due > 0 ? (sent / due) * 100 : null };
+}
+
 export function staleReason(ageMinutes: number): string {
     const hours = ageMinutes / 60;
     return hours >= 1

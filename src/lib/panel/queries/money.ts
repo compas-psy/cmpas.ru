@@ -210,16 +210,33 @@ export async function qRevenueChurn(): Promise<PanelBlock<RevenueChurn>> {
     });
 }
 
+/**
+ * Окно денежных блоков, читающих `Payment` напрямую (не через `Subscription`).
+ *
+ * Было суточным — с девятью платежами за всю историю проекта сутки почти
+ * всегда пусты, и блок был `no_data` не потому что списаний нет, а потому
+ * что окно уже, чем интервал между ними. Соседние блоки этого экрана
+ * (`q_arpu`, `q_trial_conversion`) уже считают тридцатидневными окнами —
+ * приводим сюда, вместо того чтобы придумывать третье число. Общая
+ * константа не только документирует выбор, но и физически не даёт двум
+ * блокам разойтись на разные окна снова (как разошлись `q_lamp_reminders`
+ * и `q_practice_reminders` — см. tests/panel-reminders-source-agreement.test.ts):
+ * `q_lamp_money` (morning.ts) и коллектор `webhook-error-rate.ts` (тот же
+ * платёжный вопрос под другим углом) обязаны использовать то же число дней.
+ */
+export const PAYMENTS_WINDOW_DAYS = 30;
+
 export interface PaymentsDaily {
     rate: number;
     paid: number;
     total: number;
+    windowDays: number;
     /** Разбивка по терминалам: сайт и приложение считаются отдельно. */
     terminals: { terminal: string; rate: number; paid: number; total: number }[];
 }
 
 export async function qPaymentsDaily(): Promise<PanelBlock<PaymentsDaily>> {
-    const since = new Date(Date.now() - DAY_MS);
+    const since = new Date(Date.now() - PAYMENTS_WINDOW_DAYS * DAY_MS);
     const rows = await db.payment.groupBy({
         by: ['terminal', 'status'],
         where: { createdAt: { gte: since } },
@@ -228,7 +245,7 @@ export async function qPaymentsDaily(): Promise<PanelBlock<PaymentsDaily>> {
 
     const total = rows.reduce((acc, r) => acc + r._count._all, 0);
     if (total === 0) {
-        return noData('q_payments_daily', 'за сутки не было ни одной попытки списания');
+        return noData('q_payments_daily', `за ${PAYMENTS_WINDOW_DAYS} дней не было ни одной попытки списания`);
     }
 
     const paid = rows.filter((r) => r.status === 'paid').reduce((acc, r) => acc + r._count._all, 0);
@@ -245,6 +262,7 @@ export async function qPaymentsDaily(): Promise<PanelBlock<PaymentsDaily>> {
         rate: (paid / total) * 100,
         paid,
         total,
+        windowDays: PAYMENTS_WINDOW_DAYS,
         terminals: [...byTerminal.entries()].map(([terminal, v]) => ({
             terminal,
             rate: v.total > 0 ? (v.paid / v.total) * 100 : 0,

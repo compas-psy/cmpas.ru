@@ -9,6 +9,7 @@
 import { db } from '@/lib/db';
 import { noData, ok, type PanelBlock } from '../types';
 import { dateOf } from '../format';
+import { MOMENTY_NOT_LAUNCHED_REASON } from './products';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
@@ -29,6 +30,13 @@ export interface CohortsData {
     /** Подписи колонок: W0…W5. */
     columns: string[];
     rows: CohortRow[];
+    /**
+     * Когда `rows` пуст (в окно наблюдения никто не зарегистрировался) —
+     * контекст вместо голой пустоты: дата последней регистрации вообще и
+     * сколько дней назад. `undefined`, если строки есть — полю нечего добавить.
+     */
+    lastRegisteredAt?: string | null;
+    daysSinceLastRegistered?: number | null;
 }
 
 const COHORT_COUNT = 4;
@@ -38,6 +46,13 @@ const WEEK_COUNT = 6;
  * `q_cohorts_practice` — недельные когорты специалистов.
  * Когорта — все, кто зарегистрировался на одной неделе; удержание на неделе N —
  * доля из них, у кого на этой неделе была хоть одна сессия.
+ *
+ * Тот же корень, что у `q_funnel_practice`: окно наблюдения (9 недель) на
+ * редких регистрациях (7 специалистов за 90 дней) может не поймать ни
+ * одной. Пустая таблица когорт — честный ноль этого окна, а не «данных
+ * нет», если специалисты вообще когда-то регистрировались: возвращаем `ok`
+ * с пустыми строками и датой последней регистрации, которую страница может
+ * показать вместо шести пунктирных клеток.
  */
 export async function qCohortsPractice(): Promise<PanelBlock<CohortsData>> {
     const now = Date.now();
@@ -50,7 +65,16 @@ export async function qCohortsPractice(): Promise<PanelBlock<CohortsData>> {
     });
 
     if (users.length === 0) {
-        return noData('q_cohorts_practice', 'за окно наблюдения не зарегистрировался ни один специалист');
+        const last = await db.user.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+        if (!last) {
+            return noData('q_cohorts_practice', 'специалистов в базе ещё нет — когортам не из кого сложиться');
+        }
+        return ok('q_cohorts_practice', {
+            columns: Array.from({ length: WEEK_COUNT }, (_, i) => `W${i}`),
+            rows: [],
+            lastRegisteredAt: last.createdAt.toISOString(),
+            daysSinceLastRegistered: Math.floor((now - last.createdAt.getTime()) / DAY_MS),
+        });
     }
 
     const sessions = await db.diarySession.findMany({
@@ -141,10 +165,10 @@ export async function qRetentionMomenty(): Promise<PanelBlock<CohortsData>> {
     });
 
     if (installs.length === 0) {
-        return noData(
-            'q_retention_momenty',
-            `за ${MOMENTY_COHORT_COUNT + MOMENTY_WEEK_COUNT - 1} недель от МОМЕНТОВ не пришло ни одного app_installed — приёмник работает, устанавливать сборку с включённым транспортом ещё не начали`,
-        );
+        // Находка №2 (сверх аудита): тот же корень, что у q_momenty_nsm /
+        // q_momenty_installs / q_momenty_d1/d7/d30 в products.ts — одна
+        // причина на все карточки МОМЕНТОВ, а не своя формулировка на каждой.
+        return noData('q_retention_momenty', MOMENTY_NOT_LAUNCHED_REASON);
     }
 
     // Первая установка на устройство: повтор app_installed (переустановка,

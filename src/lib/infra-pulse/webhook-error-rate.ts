@@ -12,12 +12,18 @@
 // Единственный по-настоящему вебхучный и при этом честно измеримый сигнал,
 // который уже есть в базе, — приёмник платежей Т-Банка
 // (src/app/api/payments/callback/route.ts): это тоже вебхук, и Payment.status
-// после его обработки объективно известен. Берём долю платежей за последние
-// сутки со статусом 'failed' — значения статусов буквально из схемы
-// (prisma/schema.prisma, модель Payment: 'pending' | 'paid' | 'failed' |
-// 'cancelled'), не выдуманы. Разбивка по конкретно Telegram/MAX, которую
-// описывал TZ, остаётся будущей работой — здесь честный источник вместо
-// придуманного.
+// после его обработки объективно известен. Берём долю платежей со статусом
+// 'failed' — значения статусов буквально из схемы (prisma/schema.prisma,
+// модель Payment: 'pending' | 'paid' | 'failed' | 'cancelled'), не выдуманы.
+// Разбивка по конкретно Telegram/MAX, которую описывал TZ, остаётся будущей
+// работой — здесь честный источник вместо придуманного.
+//
+// Окно — WINDOW_DAYS (30), а не сутки: было суточным, но при девяти платежах
+// за всю историю проекта сутки почти всегда пусты, и панель («Техника», карточка
+// «Каналы») гасла без единого платежа для расчёта в тот же момент, когда
+// «Деньги» и «Утро» рядом уже показывали число по 30-дневному окну
+// (src/lib/panel/queries/money.ts, PAYMENTS_WINDOW_DAYS) — тот же платёжный
+// вопрос не может отвечать на два разных окна одновременно.
 
 import type { PrismaClient } from '@prisma/client';
 
@@ -38,8 +44,11 @@ export function computePaymentFailureRate(
 
 type Db = Pick<PrismaClient, 'payment'>;
 
+/** Согласовано с `PAYMENTS_WINDOW_DAYS` в `src/lib/panel/queries/money.ts` — тот же платёжный вопрос, то же окно. */
+export const WEBHOOK_ERROR_RATE_WINDOW_DAYS = 30;
+
 export async function readPaymentFailureRate(db: Db, now: Date = new Date()): Promise<WebhookErrorRateReading | null> {
-    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const since = new Date(now.getTime() - WEBHOOK_ERROR_RATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const [total, failed] = await Promise.all([
         db.payment.count({ where: { createdAt: { gte: since } } }),
         db.payment.count({ where: { createdAt: { gte: since }, status: 'failed' } }),

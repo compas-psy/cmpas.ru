@@ -9,17 +9,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findMany = vi.fn();
-vi.mock('@/lib/db', () => ({ db: { visitorAnalytics: { findMany: (...args: unknown[]) => findMany(...args) } } }));
+const count = vi.fn();
+vi.mock('@/lib/db', () => ({
+    db: {
+        visitorAnalytics: {
+            findMany: (...args: unknown[]) => findMany(...args),
+            count: (...args: unknown[]) => count(...args),
+        },
+    },
+}));
 
 import { qSources } from '@/lib/panel/queries/funnel';
 
 beforeEach(() => {
     findMany.mockReset();
+    count.mockReset();
+    count.mockResolvedValue(0); // по умолчанию: utm-визитов тоже нет, если тест не переопределил
 });
 
 describe('qSources (B5)', () => {
-    it('ни один визит не связан с аккаунтом — no_data, а не пустая таблица источников', async () => {
+    it('ни один визит не связан с аккаунтом и ни у одного визита нет utm — no_data, а не пустая таблица источников', async () => {
         findMany.mockResolvedValue([]);
+        count.mockResolvedValue(0);
         const block = await qSources();
         expect(block.state).toBe('no_data');
         expect(block.data).toBeNull();
@@ -31,6 +42,7 @@ describe('qSources (B5)', () => {
             { accountId: 'u2', utmSource: 'vk' },
             { accountId: 'u3', utmSource: null },
         ]);
+        count.mockResolvedValue(3);
         const block = await qSources();
         expect(block.state).toBe('ok');
         expect(block.data?.totalLinked).toBe(3);
@@ -46,9 +58,18 @@ describe('qSources (B5)', () => {
             { accountId: 'u1', utmSource: 'vk' }, // первый визит этого аккаунта — источник vk
             { accountId: 'u1', utmSource: 'telegram_ads' }, // второе устройство того же человека, позже
         ]);
+        count.mockResolvedValue(2);
         const block = await qSources();
         expect(block.state).toBe('ok');
         expect(block.data?.totalLinked).toBe(1);
         expect(block.data?.sources).toEqual([{ source: 'vk', accounts: 1 }]);
+    });
+
+    it('B-класс: 0 визитов привязано к аккаунту, но 9 несут utm-метку — ok с честным нулём привязки, не no_data', async () => {
+        findMany.mockResolvedValue([]); // accountId ещё ни у одного визита не проставлен
+        count.mockResolvedValue(9); // но utmSource на визитах уже есть
+        const block = await qSources();
+        expect(block.state).toBe('ok');
+        expect(block.data).toMatchObject({ totalLinked: 0, sources: [], visitsWithUtm: 9 });
     });
 });

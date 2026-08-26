@@ -38,10 +38,11 @@ beforeEach(() => {
 });
 
 describe('q_practice_mobile', () => {
-    it('без событий — честная дыра, а не ноль', async () => {
+    it('без событий и без единого согласия — честная дыра, и причина явно не про окно в 7 дней', async () => {
         const { qPracticeMobile } = await import('@/lib/panel/queries/products');
         state.sessionCount = 40;
         state.sessionRows = [{ psychologistId: 'p1' }];
+        state.consented = 0;
 
         const block = await qPracticeMobile();
 
@@ -49,6 +50,21 @@ describe('q_practice_mobile', () => {
         expect(block.data).toBeNull();
         expect(block.reason).toBeTruthy();
         expect(block.reason).toContain('согласие');
+        // Класс B (узкое окно) и класс C (согласий нет вовсе) — разные причины;
+        // при нулевом согласии окно ни при чём, и текст обязан явно это отрицать.
+        expect(block.reason).toContain('не дело в окне');
+    });
+
+    it('согласия уже есть, но событий за неделю всё равно нет — причина другая: про доставку, не про согласие', async () => {
+        const { qPracticeMobile } = await import('@/lib/panel/queries/products');
+        state.sessionCount = 40;
+        state.sessionRows = [{ psychologistId: 'p1' }];
+        state.consented = 2;
+
+        const block = await qPracticeMobile();
+
+        expect(block.state).toBe('no_data');
+        expect(block.reason).toContain('согласия на аналитику уже есть');
     });
 
     it('доля согласий едет вместе с числами, а не отдельно', async () => {

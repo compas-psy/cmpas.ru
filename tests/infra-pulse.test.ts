@@ -251,14 +251,15 @@ describe('webhook-error-rate (O-260817-12, коллектор наконец з�
         expect(result?.checkedAt).toBe(now.toISOString());
     });
 
-    it('readPaymentFailureRate counts only the last 24h and only status = failed', async () => {
+    it('readPaymentFailureRate counts the last 30 days (aligned with money.ts PAYMENTS_WINDOW_DAYS) and only status = failed', async () => {
         const now = new Date('2026-08-18T12:00:00Z');
+        const since = new Date('2026-07-19T12:00:00Z'); // now - 30d
         const count = vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(2);
         const result = await readPaymentFailureRate({ payment: { count } } as any, now);
 
-        expect(count).toHaveBeenNthCalledWith(1, { where: { createdAt: { gte: new Date('2026-08-17T12:00:00Z') } } });
+        expect(count).toHaveBeenNthCalledWith(1, { where: { createdAt: { gte: since } } });
         expect(count).toHaveBeenNthCalledWith(2, {
-            where: { createdAt: { gte: new Date('2026-08-17T12:00:00Z') }, status: 'failed' },
+            where: { createdAt: { gte: since }, status: 'failed' },
         });
         expect(result).toEqual({ rate: 0.2, checkedAt: now.toISOString(), sampleSize: 10 });
     });

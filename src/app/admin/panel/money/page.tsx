@@ -65,7 +65,7 @@ export default async function MoneyScreen() {
                                     value={dec(d.rate)}
                                     unit="%"
                                     tone={severity === 'serious' ? 'serious' : severity === 'warning' ? 'warning' : 'plain'}
-                                    note={`${num(d.paid)} из ${num(d.total)} за сутки`}
+                                    note={`${num(d.paid)} из ${num(d.total)} за ${d.windowDays} дней`}
                                 />
                             );
                         }}
@@ -148,7 +148,7 @@ export default async function MoneyScreen() {
                 <Grid cols={2} gap={12}>
                     {/* Списания с порогами внутри счётчика */}
                     <Card>
-                        <BlockFrame block={payments} label="Списания за сутки" minHeight={180}>
+                        <BlockFrame block={payments} label="Списания за 30 дней" minHeight={180}>
                             {(d) => (
                                 <>
                                     <ThresholdBar

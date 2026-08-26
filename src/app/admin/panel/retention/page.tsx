@@ -3,7 +3,7 @@ import { pick } from '@/lib/panel/types';
 import type { ChurnData, CohortsData } from '@/lib/panel/queries/retention';
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card } from '@/components/panel/block';
-import { dec, num, plural } from '@/lib/panel/format';
+import { dateOf, dec, num, plural } from '@/lib/panel/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,20 @@ export default async function RetentionScreen() {
             <ScreenBody>
                 <Card>
                     <BlockFrame block={cohorts} label="Когорты специалистов" minHeight={220}>
-                        {(d) => <Heatmap data={d} />}
+                        {(d) => (
+                            <>
+                                <Heatmap data={d} />
+                                {/* Честный ноль окна наблюдения (B4, тот же корень, что у
+                                    воронки ПРАКТИКИ рядом): пустые строки — не «данных нет»,
+                                    если специалисты вообще когда-то регистрировались. */}
+                                {d.rows.length === 0 && d.lastRegisteredAt ? (
+                                    <div style={{ fontSize: 12, color: 'var(--p-muted)' }}>
+                                        в окно наблюдения никто не зарегистрировался — последняя регистрация {dateOf(d.lastRegisteredAt)} (
+                                        {num(d.daysSinceLastRegistered ?? 0)} дн назад)
+                                    </div>
+                                ) : null}
+                            </>
+                        )}
                     </BlockFrame>
                 </Card>
 

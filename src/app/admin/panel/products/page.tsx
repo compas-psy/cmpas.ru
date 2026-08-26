@@ -2,24 +2,25 @@ import Link from 'next/link';
 import { screen, countAllHonestHoles } from '@/lib/panel/build';
 import { pick } from '@/lib/panel/types';
 import { isProductKey, PRODUCTS, type ProductKey } from '@/lib/panel/screens';
-import type {
-    PracticeActivation,
-    PracticeActive,
-    PracticeNsm,
-    PracticeReschedule,
-    ZapiskiWriters,
-    ZapiskiSyncs,
-    ZapiskiConflicts,
-    MomentyActivation,
-    MomentyInstalls,
-    MomentyRetention,
-    PracticeMobile,
+import {
+    MOMENTY_NOT_LAUNCHED_REASON,
+    type PracticeActivation,
+    type PracticeActive,
+    type PracticeNsm,
+    type PracticeReschedule,
+    type ZapiskiWriters,
+    type ZapiskiSyncs,
+    type ZapiskiConflicts,
+    type MomentyActivation,
+    type MomentyInstalls,
+    type MomentyRetention,
+    type PracticeMobile,
 } from '@/lib/panel/queries/products';
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card } from '@/components/panel/block';
 import { StatTile, TrendPill } from '@/components/panel/stat';
 import { HonestZero } from '@/components/panel/meters';
-import { dec, num, plural } from '@/lib/panel/format';
+import { dateOf, dec, num, plural } from '@/lib/panel/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,16 +99,26 @@ function Practice({ blocks }: { blocks: Blocks }) {
             <Card>
                 <BlockFrame block={nsm} label="Главная метрика ПРАКТИКИ" minHeight={110}>
                     {(d) => (
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
-                                <span className="p-mono" style={{ fontSize: 38, fontWeight: 700, letterSpacing: '-.03em' }}>
-                                    {dec(d.value)}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+                                    <span className="p-mono" style={{ fontSize: 38, fontWeight: 700, letterSpacing: '-.03em' }}>
+                                        {dec(d.value)}
+                                    </span>
+                                    <span style={{ fontSize: 14, color: 'var(--p-muted)' }}>сессии на активного специалиста в неделю</span>
+                                </div>
+                                <span style={{ marginLeft: 'auto' }}>
+                                    <TrendPill delta={d.delta} />
                                 </span>
-                                <span style={{ fontSize: 14, color: 'var(--p-muted)' }}>сессии на активного специалиста в неделю</span>
                             </div>
-                            <span style={{ marginLeft: 'auto' }}>
-                                <TrendPill delta={d.delta} />
-                            </span>
+                            {/* Честный ноль недели: делить не на кого не потому, что
+                                сессий нет вообще, а потому что последняя была раньше
+                                этого 7-дневного окна. */}
+                            {d.activeSpecialists === 0 && d.lastSessionAt ? (
+                                <div style={{ fontSize: 12.5, color: 'var(--p-muted)' }}>
+                                    последняя сессия — {dateOf(d.lastSessionAt)} ({num(d.daysSinceLastSession ?? 0)} дн назад)
+                                </div>
+                            ) : null}
                         </div>
                     )}
                 </BlockFrame>
@@ -115,10 +126,31 @@ function Practice({ blocks }: { blocks: Blocks }) {
 
             <Grid cols={3}>
                 <BlockFrame block={active} label="Активные специалисты">
-                    {(d) => <StatTile value={`${num(d.wau)} / ${num(d.mau)}`} delta={d.delta} note={`WAU / MAU · липкость ${dec(d.stickiness, 0)} %`} />}
+                    {(d) =>
+                        d.mau === 0 && d.lastSessionAt ? (
+                            <StatTile
+                                value="0 / 0"
+                                delta={d.delta}
+                                note={`WAU / MAU · последняя сессия ${dateOf(d.lastSessionAt)} (${num(d.daysSinceLastSession ?? 0)} дн назад)`}
+                            />
+                        ) : (
+                            <StatTile value={`${num(d.wau)} / ${num(d.mau)}`} delta={d.delta} note={`WAU / MAU · липкость ${dec(d.stickiness, 0)} %`} />
+                        )
+                    }
                 </BlockFrame>
                 <BlockFrame block={activation} label="Активация за 7 дней">
-                    {(d) => <StatTile value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.activated)} из ${num(d.cohort)}`} />}
+                    {(d) =>
+                        d.cohort === 0 && d.lastRegisteredAt ? (
+                            <StatTile
+                                value="0"
+                                unit="%"
+                                delta={d.delta}
+                                note={`регистраций нет · последняя ${dateOf(d.lastRegisteredAt)} (${num(d.daysSinceLastRegistered ?? 0)} дн назад)`}
+                            />
+                        ) : (
+                            <StatTile value={dec(d.rate)} unit="%" delta={d.delta} note={`${num(d.activated)} из ${num(d.cohort)}`} />
+                        )
+                    }
                 </BlockFrame>
                 <BlockFrame block={reschedule} label="Переносы и отмены">
                     {(d) => <StatTile value={dec(d.rate)} unit="%" note={`${num(d.cancelled)} из ${num(d.total)} записей за 28 дней`} />}
@@ -248,40 +280,61 @@ function Momenty({ blocks }: { blocks: Blocks }) {
     const d7 = pick<MomentyRetention>(blocks, 'momentyD7');
     const d30 = pick<MomentyRetention>(blocks, 'momentyD30');
 
+    // Находка №2: пять карточек ниже пусты по ОДНОЙ причине (транспорт
+    // МОМЕНТОВ только что включили, установок не было ни разу) — если это
+    // прямо сейчас так у всех пяти, одна общая плашка честнее пяти
+    // одинаковых пунктирных рамок подряд. Как только хоть одна оживёт
+    // (появится первая установка), кластер вернётся к обычной сетке.
+    const cluster = [nsm, installs, d1, d7, d30];
+    const allNotLaunched = cluster.every((b) => b.state === 'no_data' && b.reason === MOMENTY_NOT_LAUNCHED_REASON);
+
     return (
         <>
             <Card>
                 <div style={{ fontSize: 14, lineHeight: '20px' }}>
-                    МОМЕНТЫ шлют события в общий приёмник с включённым транспортом: установки и активация
-                    считаются по ним. Удержание D1/D7/D30 появляется по когортам устройств по мере того,
-                    как для них наступает соответствующий день — до этого блок честно показывает нехватку
-                    истории, а не ноль процентов.
+                    МОМЕНТЫ отправляют события в общий приёмник — транспорт включён на стороне продукта.
+                    Установки, активация и удержание D1/D7/D30 считаются по ним и появятся, как только
+                    придёт первая установка.
                 </div>
             </Card>
-            <Grid cols={3}>
-                <BlockFrame block={nsm} label="Завершили первую практику в первый день">
-                    {(d) => (
-                        <StatTile
-                            value={dec(d.rate)}
-                            unit="%"
-                            delta={d.delta}
-                            note={`${num(d.activated)} из ${num(d.cohort)} за ${d.windowDays} дней`}
-                        />
-                    )}
-                </BlockFrame>
-                <BlockFrame block={installs} label="Установок в неделю">
-                    {(d) => <StatTile value={num(d.count)} delta={d.delta} note={`за ${d.windowDays} дней`} />}
-                </BlockFrame>
-                <BlockFrame block={d1} label="D1">
-                    {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
-                </BlockFrame>
-                <BlockFrame block={d7} label="D7">
-                    {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
-                </BlockFrame>
-                <BlockFrame block={d30} label="D30">
-                    {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
-                </BlockFrame>
-            </Grid>
+            {allNotLaunched ? (
+                <Card tone="unverified">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--un-fg)' }}>
+                            Установки, активация, D1 / D7 / D30 — данных нет
+                        </div>
+                        <div style={{ fontSize: 12.5, color: 'var(--p-muted)' }}>{MOMENTY_NOT_LAUNCHED_REASON}</div>
+                        <div className="p-mono" style={{ fontSize: 11, color: 'var(--p-sub)' }}>
+                            источники: q_momenty_nsm · q_momenty_installs · q_momenty_d1 · q_momenty_d7 · q_momenty_d30
+                        </div>
+                    </div>
+                </Card>
+            ) : (
+                <Grid cols={3}>
+                    <BlockFrame block={nsm} label="Завершили первую практику в первый день">
+                        {(d) => (
+                            <StatTile
+                                value={dec(d.rate)}
+                                unit="%"
+                                delta={d.delta}
+                                note={`${num(d.activated)} из ${num(d.cohort)} за ${d.windowDays} дней`}
+                            />
+                        )}
+                    </BlockFrame>
+                    <BlockFrame block={installs} label="Установок в неделю">
+                        {(d) => <StatTile value={num(d.count)} delta={d.delta} note={`за ${d.windowDays} дней`} />}
+                    </BlockFrame>
+                    <BlockFrame block={d1} label="D1">
+                        {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
+                    </BlockFrame>
+                    <BlockFrame block={d7} label="D7">
+                        {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
+                    </BlockFrame>
+                    <BlockFrame block={d30} label="D30">
+                        {(d) => <StatTile value={dec(d.percent)} unit="%" note={`${num(d.retained)} из ${num(d.cohort)}`} />}
+                    </BlockFrame>
+                </Grid>
+            )}
             <Card>
                 <BlockFrame block={pick<{ count: number }>(blocks, 'crossProduct')} label="Переходы в другие продукты" minHeight={130}>
                     {(d) =>

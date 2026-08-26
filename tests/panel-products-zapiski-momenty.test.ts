@@ -190,11 +190,15 @@ describe('qMomentyNsm — активация: завершили практик�
 });
 
 describe('qMomentyD1/D7/D30 — когорты устройств (F2 задания)', () => {
-    it('таблица пустая → no_data с причиной про недостаточную историю, а не 0%', async () => {
+    it('таблица пустая (установок не было ни разу) → no_data с единой причиной находки №2, а не про историю и не 0%', async () => {
+        // Находка №2: «установок не было НИ РАЗУ» — это тот же корень, что у
+        // q_momenty_nsm/q_momenty_installs/q_retention_momenty, и текст
+        // причины теперь буквально совпадает с ними (MOMENTY_NOT_LAUNCHED_REASON),
+        // а не «таблица пока моложе» — моложе нечему, если строк нет вовсе.
         findFirst.mockResolvedValue(null);
         const d1 = await qMomentyD1();
         expect(d1.state).toBe('no_data');
-        expect(d1.reason).toMatch(/истори/i);
+        expect(d1.reason).toMatch(/не приходило ни разу/i);
     });
 
     it('таблица моложе окна D7 → no_data про недостаточную историю', async () => {
