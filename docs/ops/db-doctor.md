@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32954617564. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32954735702. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -80,9 +80,7 @@ VisitorAnalytics всего=270
 из них с utmSource=9
 ### Последнее показание InfraPulse: какие поля заполнены
 collectedAt=2026-08-26 09:41:26.411
-ERROR:  column "drift" does not exist
-LINE 9:      'drift=' || coalesce("drift"::text,'NULL'))
-                                  ^
+certDaysLeft=37 | backupAgeHours=61.56506647162544 | backupReadable=true | responseP95Ms=NULL | remindersDue=0 | remindersSent=0 | migrationsApplied=38 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=51.08695652173913 | containers=[{"name": "zapiski-api", "running": true
 ### События по имени (панель ищет узкие срезы)
 note_saved=748
 sync_completed=389
@@ -94,7 +92,7 @@ InfraPulse=806
 DeployLog=9
 ReminderOutbox=0
 events=1192
-events_rejected=2
+events_rejected=3
 Subscription=1
 Payment=9
 ### Место на диске
@@ -103,13 +101,13 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda2        89G   24G   61G  29% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2034         402          56        5867        5906
+Mem:            7941        2047         353          56        5903        5893
 Swap:            511          65         446
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
 Images          7         7         12.17GB   12.17GB (100%)
 Containers      7         6         28.74MB   12.29kB (0%)
-Local Volumes   155       7         268.6MB   4.07MB (1%)
+Local Volumes   155       7         268.7MB   4.07MB (1%)
 Build Cache     133       0         9.692GB   9.069GB
 ### Убитые по нехватке памяти за сутки
 0
@@ -248,7 +246,7 @@ cmpas-singbox | Exited (1) 5 days ago
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.137884s
+код 405, время 0.206595s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -280,9 +278,9 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.113706s
-https://cmpas.ru/diary -> 307 за 0.155396s
-https://cmpas.ru/admin -> 307 за 0.716027s
+https://cmpas.ru/ -> 200 за 0.172040s
+https://cmpas.ru/diary -> 307 за 0.121276s
+https://cmpas.ru/admin -> 307 за 0.233379s
 ### Сертификат cmpas.ru
 notBefore=Jul  4 23:22:19 2026 GMT
 notAfter=Oct  2 23:22:18 2026 GMT
@@ -459,7 +457,7 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 cmpas-infra-pulse | Up 2 days | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
 строк всего=806
-последняя=2026-08-26 09:41:26.411 возраст_мин=4
+последняя=2026-08-26 09:41:26.411 возраст_мин=5
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
