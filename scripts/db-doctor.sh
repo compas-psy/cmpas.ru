@@ -69,6 +69,38 @@ echo "### Платежи и подписки по статусам"
 q "SELECT coalesce(status,'(null)') || '=' || count(*) FROM \"Payment\" GROUP BY status ORDER BY count(*) DESC;"
 q "SELECT 'подписок всего=' || count(*) FROM \"Subscription\";"
 
+echo "### Триалы: панель видит их через Subscription, дашборд — через User"
+# Расхождение №1 из аудита: дашборд считает User.trialEndsAt напрямую, а
+# панель — только Subscription.status='trial'. Subscription пополняется
+# бэкафиллом лишь для тех, у кого есть subscriptionEndsAt или оплата.
+q "SELECT 'User.trialEndsAt в будущем=' || count(*) FROM \"User\" WHERE \"trialEndsAt\" > now();"
+q "SELECT 'User.trialEndsAt задан вообще=' || count(*) FROM \"User\" WHERE \"trialEndsAt\" IS NOT NULL;"
+q "SELECT 'User.subscriptionEndsAt задан=' || count(*) FROM \"User\" WHERE \"subscriptionEndsAt\" IS NOT NULL;"
+q "SELECT coalesce(status,'(null)') || '=' || count(*) FROM \"Subscription\" GROUP BY status;"
+
+echo "### Источники трафика: панель требует привязку к аккаунту, старая аналитика — нет"
+# Расхождение №3 из аудита.
+q "SELECT 'VisitorAnalytics всего=' || count(*) FROM \"VisitorAnalytics\";"
+q "SELECT 'из них с accountId=' || count(*) FROM \"VisitorAnalytics\" WHERE \"accountId\" IS NOT NULL;"
+q "SELECT 'из них с utmSource=' || count(*) FROM \"VisitorAnalytics\" WHERE \"utmSource\" IS NOT NULL;"
+
+echo "### Последнее показание InfraPulse: какие поля заполнены"
+# Панель гасит лампы, когда поля показания пусты. Нужно знать, какие именно.
+q "SELECT 'collectedAt=' || coalesce(max(\"collectedAt\")::text,'нет') FROM \"InfraPulse\";"
+q "SELECT concat_ws(' | ',
+     'certDaysLeft=' || coalesce(\"certDaysLeft\"::text,'NULL'),
+     'backupAgeHours=' || coalesce(\"backupAgeHours\"::text,'NULL'),
+     'backupReadable=' || coalesce(\"backupReadable\"::text,'NULL'),
+     'responseP95Ms=' || coalesce(\"responseP95Ms\"::text,'NULL'),
+     'remindersDue=' || coalesce(\"remindersDue\"::text,'NULL'),
+     'remindersSent=' || coalesce(\"remindersSent\"::text,'NULL'),
+     'migrationsApplied=' || coalesce(\"migrationsApplied\"::text,'NULL'),
+     'drift=' || coalesce(\"drift\"::text,'NULL'))
+   FROM \"InfraPulse\" ORDER BY \"collectedAt\" DESC LIMIT 1;"
+
+echo "### События по имени (панель ищет узкие срезы)"
+q "SELECT event || '=' || count(*) FROM events GROUP BY event ORDER BY count(*) DESC LIMIT 25;"
+
 echo "### Таблицы, из которых панель читает: пустые или нет"
 for t in InfraPulse DeployLog ReminderOutbox events events_rejected Subscription Payment; do
   q "SELECT '$t=' || count(*) FROM \"$t\";" 2>/dev/null || echo "$t: нет таблицы"
