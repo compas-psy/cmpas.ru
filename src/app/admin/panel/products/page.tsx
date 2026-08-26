@@ -153,7 +153,17 @@ function Practice({ blocks }: { blocks: Blocks }) {
                     }
                 </BlockFrame>
                 <BlockFrame block={reschedule} label="Переносы и отмены">
-                    {(d) => <StatTile value={dec(d.rate)} unit="%" note={`${num(d.cancelled)} из ${num(d.total)} записей за 28 дней`} />}
+                    {(d) =>
+                        d.total === 0 && d.lastSessionAt ? (
+                            <StatTile
+                                value={dec(0)}
+                                unit="%"
+                                note={`0 из 0 записей за 28 дней · последняя запись ${dateOf(d.lastSessionAt)} (${num(d.daysSinceLastSession ?? 0)} дн назад)`}
+                            />
+                        ) : (
+                            <StatTile value={dec(d.rate)} unit="%" note={`${num(d.cancelled)} из ${num(d.total)} записей за 28 дней`} />
+                        )
+                    }
                 </BlockFrame>
             </Grid>
 

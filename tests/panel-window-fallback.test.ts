@@ -16,6 +16,7 @@ const userFindFirst = vi.fn();
 const psychologistSettingsFindMany = vi.fn();
 const diarySessionFindMany = vi.fn();
 const diarySessionFindFirst = vi.fn();
+const diarySessionGroupBy = vi.fn();
 const paymentFindMany = vi.fn();
 
 vi.mock('@/lib/db', () => ({
@@ -28,13 +29,14 @@ vi.mock('@/lib/db', () => ({
         diarySession: {
             findMany: (...args: unknown[]) => diarySessionFindMany(...args),
             findFirst: (...args: unknown[]) => diarySessionFindFirst(...args),
+            groupBy: (...args: unknown[]) => diarySessionGroupBy(...args),
         },
         payment: { findMany: (...args: unknown[]) => paymentFindMany(...args) },
     },
 }));
 
 import { qFunnelPractice } from '@/lib/panel/queries/funnel';
-import { qPracticeNsm, qPracticeActive, qPracticeActivation } from '@/lib/panel/queries/products';
+import { qPracticeNsm, qPracticeActive, qPracticeActivation, qPracticeReschedule } from '@/lib/panel/queries/products';
 import { qCohortsPractice } from '@/lib/panel/queries/retention';
 
 beforeEach(() => {
@@ -43,6 +45,7 @@ beforeEach(() => {
     psychologistSettingsFindMany.mockReset();
     diarySessionFindMany.mockReset();
     diarySessionFindFirst.mockReset();
+    diarySessionGroupBy.mockReset();
     paymentFindMany.mockReset();
 });
 
@@ -197,5 +200,45 @@ describe('q_cohorts_practice — B4: окно наблюдения (9 недел
         expect(block.state).toBe('ok');
         expect(block.data?.rows.length).toBeGreaterThan(0);
         expect(block.data?.lastRegisteredAt).toBeUndefined();
+    });
+});
+
+// q_practice_reschedule (products.ts) — тот же корень, что у q_practice_nsm/
+// q_practice_active выше: узкое окно (28 дней) на редких записях. Пропущен
+// при первой правке класса B — добавлен отдельно (сверка этапа 4).
+describe('qPracticeReschedule — окно не должно прятать историю, если записи в базе есть', () => {
+    it('записей в базе нет вообще — no_data', async () => {
+        diarySessionGroupBy.mockResolvedValue([]);
+        diarySessionFindFirst.mockResolvedValue(null);
+
+        const block = await qPracticeReschedule();
+        expect(block.state).toBe('no_data');
+    });
+
+    it('за 28 дней ноль записей, но записи в базе есть — ok с честным нулём и датой последней записи', async () => {
+        diarySessionGroupBy.mockResolvedValue([]);
+        const last = new Date(Date.now() - 39 * DAY_MS);
+        diarySessionFindFirst.mockResolvedValue({ date: last });
+
+        const block = await qPracticeReschedule();
+
+        expect(block.state).toBe('ok');
+        expect(block.data?.total).toBe(0);
+        expect(block.data?.lastSessionAt).toBe(last.toISOString());
+        expect(block.data?.daysSinceLastSession).toBe(39);
+    });
+
+    it('есть записи в окне — обычный ok с измеренной долей отмен', async () => {
+        diarySessionGroupBy.mockResolvedValue([
+            { status: 'completed', _count: { _all: 8 } },
+            { status: 'cancelled', _count: { _all: 2 } },
+        ]);
+
+        const block = await qPracticeReschedule();
+
+        expect(block.state).toBe('ok');
+        expect(block.data?.total).toBe(10);
+        expect(block.data?.cancelled).toBe(2);
+        expect(block.data?.rate).toBe(20);
     });
 });

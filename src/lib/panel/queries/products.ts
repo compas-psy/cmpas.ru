@@ -235,8 +235,20 @@ export interface PracticeReschedule {
     rate: number;
     cancelled: number;
     total: number;
+    /** Контекст на случай честного нуля окна: когда была последняя запись вообще (любого статуса). */
+    lastSessionAt?: string | null;
+    daysSinceLastSession?: number | null;
 }
 
+/**
+ * `q_practice_reschedule` — доля отменённых записей за 28 дней.
+ *
+ * Тот же корень, что у `q_practice_nsm`/`q_practice_active` выше: узкое
+ * окно на редких записях (последняя — 39+ дней назад на момент правки).
+ * 0 записей за окно — честный измеренный ноль, если записи в базе вообще
+ * есть: показываем 0 + дату последней записи, а не гасим блок пунктиром.
+ * Полное отсутствие записей в базе — другой случай, остаётся `no_data`.
+ */
 export async function qPracticeReschedule(): Promise<PanelBlock<PracticeReschedule>> {
     const since = new Date(Date.now() - 28 * DAY_MS);
     const rows = await db.diarySession.groupBy({
@@ -247,7 +259,17 @@ export async function qPracticeReschedule(): Promise<PanelBlock<PracticeReschedu
 
     const total = rows.reduce((acc, r) => acc + r._count._all, 0);
     if (total === 0) {
-        return noData('q_practice_reschedule', 'за 28 дней нет ни одной записи — доли считать не из чего');
+        const last = await db.diarySession.findFirst({ orderBy: { date: 'desc' }, select: { date: true } });
+        if (!last) {
+            return noData('q_practice_reschedule', 'записей в базе ещё нет — отменять пока нечего');
+        }
+        return ok('q_practice_reschedule', {
+            rate: 0,
+            cancelled: 0,
+            total: 0,
+            lastSessionAt: last.date.toISOString(),
+            daysSinceLastSession: Math.floor((Date.now() - last.date.getTime()) / DAY_MS),
+        });
     }
 
     const cancelled = rows.find((r) => r.status === 'cancelled')?._count._all ?? 0;
