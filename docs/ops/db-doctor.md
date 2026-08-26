@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 32954735702. Файл перезаписывается каждой диагностикой.
+Снято прогоном 32955799275. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -60,8 +60,8 @@ confirmed=3
 зарегистрировано за 30 дней=2
 зарегистрировано за 90 дней=7
 ### События приёмника по продуктам и свежести
-zapiski всего=1192 свежайшее=2026-08-26 09:43:42.873
-событий за 30 дней=1192
+zapiski всего=1194 свежайшее=2026-08-26 09:56:41.121
+событий за 30 дней=1194
 ### Согласие на аналитику
 пользователей с согласием=0
 ### Платежи и подписки по статусам
@@ -79,20 +79,20 @@ VisitorAnalytics всего=270
 из них с accountId=0
 из них с utmSource=9
 ### Последнее показание InfraPulse: какие поля заполнены
-collectedAt=2026-08-26 09:41:26.411
-certDaysLeft=37 | backupAgeHours=61.56506647162544 | backupReadable=true | responseP95Ms=NULL | remindersDue=0 | remindersSent=0 | migrationsApplied=38 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=51.08695652173913 | containers=[{"name": "zapiski-api", "running": true
+collectedAt=2026-08-26 09:56:27.887
+certDaysLeft=37 | backupAgeHours=61.81548452718099 | backupReadable=true | responseP95Ms=NULL | remindersDue=0 | remindersSent=0 | migrationsApplied=38 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=60 | containers=[{"name": "zapiski-api", "running": true
 ### События по имени (панель ищет узкие срезы)
 note_saved=748
-sync_completed=389
+sync_completed=391
 note_searched=52
 export_requested=2
 consent_updated=1
 ### Таблицы, из которых панель читает: пустые или нет
-InfraPulse=806
+InfraPulse=809
 DeployLog=9
 ReminderOutbox=0
-events=1192
-events_rejected=3
+events=1194
+events_rejected=4
 Subscription=1
 Payment=9
 ### Место на диске
@@ -101,7 +101,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda2        89G   24G   61G  29% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2047         353          56        5903        5893
+Mem:            7941        2056         343          56        5905        5885
 Swap:            511          65         446
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
@@ -246,7 +246,7 @@ cmpas-singbox | Exited (1) 5 days ago
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.206595s
+код 405, время 0.190379s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -266,6 +266,19 @@ cmpas_cml3mp4xd0006hgrnbw9v9jnl_3f86dcb647887e91 | pending | 99000 | site | 2026
 cmpas_cml2q6tfe0001kioc5j6tpyxu_1c2fea9fbc778f8d | pending | 99000 | site | 2026-04-06 07:38:00.896
 cmpas_cml2q6tfe0001kioc5j6tpyxu_f640f4f81b5009ea | pending | 99000 | site | 2026-04-05 18:50:14.401
 всего платежей=9
+### Платежи: возраст и полнота записи (без секретов)
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=187
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2643
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2920
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3240
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3410
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3423
+paid | tinkoffPaymentId=true | terminal=site | возраст_ч=3424
+failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3424
+failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3424
+### Демонстрационный терминал: не подменяет ли он боевой (по журналу приложения)
+упоминаний в журнале контейнера: 0
+### Журнал колбэков Т-Кассы за 7 суток (RebillId и Token вычищены построчно)
 ### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)
 TINKOFF_TERMINAL_KEY: задан
 TINKOFF_PASSWORD: задан
@@ -278,9 +291,9 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.172040s
-https://cmpas.ru/diary -> 307 за 0.121276s
-https://cmpas.ru/admin -> 307 за 0.233379s
+https://cmpas.ru/ -> 200 за 0.181755s
+https://cmpas.ru/diary -> 307 за 0.130008s
+https://cmpas.ru/admin -> 307 за 0.283136s
 ### Сертификат cmpas.ru
 notBefore=Jul  4 23:22:19 2026 GMT
 notAfter=Oct  2 23:22:18 2026 GMT
@@ -294,66 +307,66 @@ LISTEN 0      4096                                          [::]:3000          [
 LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=3955973,fd=13),("nginx",pid=3955970,fd=13),("nginx",pid=3955968,fd=13),("nginx",pid=3955967,fd=13),("nginx",pid=3955966,fd=13))                                  
 LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=3955973,fd=14),("nginx",pid=3955970,fd=14),("nginx",pid=3955968,fd=14),("nginx",pid=3955967,fd=14),("nginx",pid=3955966,fd=14))                                  
 ### Журнал приложения, последние 60 строк
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "s2". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at ignore-listed frames
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-The width(-1) and height(-1) of chart should be greater than 0,
-       please check the style of container, or the props width(100%) and height(100%),
-       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
-       height and width.
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "mo". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
 ### Журнал контейнера в цикле перезапуска
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
 [31mFATAL[0m[0000] decode config at /etc/sing-box/config.json: outbounds[0]: unknown outbound type: mieru
@@ -456,8 +469,8 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 ### Контейнер infra-pulse
 cmpas-infra-pulse | Up 2 days | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=806
-последняя=2026-08-26 09:41:26.411 возраст_мин=5
+строк всего=809
+последняя=2026-08-26 09:56:27.887 возраст_мин=2
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
@@ -465,7 +478,7 @@ analytics_device_consent
 events
 events_rejected
 ### Наполнение событий и подписок
-events=1192
+events=1194
 подписок=1
 ### Куда на самом деле слушает приложение
 HOSTNAME внутри контейнера: e82916877e3b
