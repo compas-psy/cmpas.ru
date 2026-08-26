@@ -35,6 +35,45 @@ q "SELECT 'User=' || count(*) FROM \"User\";"
 q "SELECT 'DiaryClient=' || count(*) FROM \"DiaryClient\";"
 q "SELECT 'DiarySession=' || count(*) FROM \"DiarySession\";"
 
+# ── Сырьё, из которого панель считает показатели ──────────────────────────
+#
+# Учредитель смотрит /admin/panel и видит пустоту, а старая админка по тем же
+# предметам показывает числа. Чтобы отличить «данных действительно нет» от
+# «фильтр их отрезал», нужны СЫРЫЕ распределения, а не итоги панели.
+#
+# Живой случай: q_practice_nsm считает только сессии со статусом completed и
+# на их отсутствие отвечает «ни один специалист не провёл сессию» — при том
+# что сессии в базе есть, просто ни одну не отметили завершённой вручную
+# (status по умолчанию pending).
+echo "### Сессии по статусам (панель считает NSM только по completed)"
+q "SELECT coalesce(status,'(null)') || '=' || count(*) FROM \"DiarySession\" GROUP BY status ORDER BY count(*) DESC;"
+
+echo "### Сессии по свежести"
+q "SELECT 'за 7 дней=' || count(*) FROM \"DiarySession\" WHERE date >= now() - interval '7 days';"
+q "SELECT 'за 30 дней=' || count(*) FROM \"DiarySession\" WHERE date >= now() - interval '30 days';"
+q "SELECT 'специалистов с сессией за 30 дней=' || count(DISTINCT \"psychologistId\") FROM \"DiarySession\" WHERE date >= now() - interval '30 days';"
+q "SELECT 'самая свежая сессия=' || coalesce(max(date)::text,'нет') FROM \"DiarySession\";"
+
+echo "### Специалисты по свежести регистрации"
+q "SELECT 'зарегистрировано за 30 дней=' || count(*) FROM \"User\" WHERE \"createdAt\" >= now() - interval '30 days';"
+q "SELECT 'зарегистрировано за 90 дней=' || count(*) FROM \"User\" WHERE \"createdAt\" >= now() - interval '90 days';"
+
+echo "### События приёмника по продуктам и свежести"
+q "SELECT product || ' всего=' || count(*) || ' свежайшее=' || coalesce(max(ts)::text,'нет') FROM events GROUP BY product ORDER BY count(*) DESC;"
+q "SELECT 'событий за 30 дней=' || count(*) FROM events WHERE ts >= now() - interval '30 days';"
+
+echo "### Согласие на аналитику"
+q "SELECT 'пользователей с согласием=' || count(*) FROM \"User\" WHERE \"analyticsConsentAt\" IS NOT NULL;"
+
+echo "### Платежи и подписки по статусам"
+q "SELECT coalesce(status,'(null)') || '=' || count(*) FROM \"Payment\" GROUP BY status ORDER BY count(*) DESC;"
+q "SELECT 'подписок всего=' || count(*) FROM \"Subscription\";"
+
+echo "### Таблицы, из которых панель читает: пустые или нет"
+for t in InfraPulse DeployLog ReminderOutbox events events_rejected Subscription Payment; do
+  q "SELECT '$t=' || count(*) FROM \"$t\";" 2>/dev/null || echo "$t: нет таблицы"
+done
+
 echo "### Место на диске"
 df -h / /var 2>/dev/null | head -5
 
