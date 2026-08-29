@@ -16,6 +16,7 @@ import ru.cmpas.app.domain.model.AttentionItem
 import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.PracticeNotification
 import ru.cmpas.app.domain.model.Session
+import ru.cmpas.app.domain.model.SessionStatus
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -135,6 +136,43 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Отметить реальный исход сессии («Была» / «Не пришли») прямо из
+     * «вечернего списка», без захода в детали каждой сессии по отдельности —
+     * по образцу markPaid() выше: тот же паттерн busy-флага на sessionId и
+     * тот же api.updateSession(...). Бизнес-логика не дублируется с
+     * SessionDetailViewModel.complete()/noShow() — это два независимых
+     * экрана, вызывающих один и тот же серверный эндпоинт; аналитика здесь
+     * намеренно не пишется, тем же образом, что и markPaid() не пишет её для
+     * оплаты.
+     *
+     * Запрос и разбор ответа вынесены в [outcomeUpdateRequest] и
+     * [outcomeErrorMessage] — по тому же соображению, что и mergeBookingLink()
+     * в SettingsViewModel: сам DashboardViewModel в JVM unit-тесте не
+     * собрать (AnalyticsSession — final-класс с настоящим Context и
+     * DataStore-хранилищем внутри, без тестового шва), а эти две чистые
+     * функции — можно.
+     */
+    fun markSessionOutcome(sessionId: String, status: SessionStatus) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(outcomeUpdatingSessionId = sessionId) }
+            try {
+                val response = api.updateSession(sessionId, outcomeUpdateRequest(status))
+                val error = outcomeErrorMessage(response)
+                if (error == null) {
+                    PracticeRefreshBus.notifyChanged()
+                    loadDashboard(showLoader = false)
+                } else {
+                    _uiState.update { it.copy(error = error) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.localizedMessage ?: "Не удалось отметить исход сессии") }
+            } finally {
+                _uiState.update { it.copy(outcomeUpdatingSessionId = null) }
+            }
+        }
+    }
+
     private fun loadProfile() {
         viewModelScope.launch {
             try {
@@ -161,9 +199,23 @@ data class DashboardUiState(
     val error: String? = null,
     val isDataLoaded: Boolean = false,
     val paymentUpdatingSessionId: String? = null,
+    /** id сессии, чей исход (была/не пришли) сейчас отправляется на сервер. */
+    val outcomeUpdatingSessionId: String? = null,
     /** Сколько записей ещё не доставлено на сервер (очередь досылки). */
     val undeliveredCount: Int = 0,
     val todayFormatted: String = LocalDate.now()
         .format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")))
         .replaceFirstChar { it.uppercase() },
 )
+
+/** Тело запроса для markSessionOutcome() — вынесено, чтобы проверяться без ViewModel. */
+internal fun outcomeUpdateRequest(status: SessionStatus): UpdateSessionRequest = UpdateSessionRequest(status = status)
+
+/**
+ * Разбор ответа updateSession() для markSessionOutcome() — null означает
+ * успех, непустая строка — текст actionError. По образцу mergeBookingLink()
+ * в SettingsViewModel: чистая функция над Response, проверяемая без
+ * настоящего ViewModel.
+ */
+internal fun outcomeErrorMessage(response: retrofit2.Response<Session>): String? =
+    if (response.isSuccessful) null else "Не удалось отметить исход сессии"

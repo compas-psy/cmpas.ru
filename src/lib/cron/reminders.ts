@@ -171,14 +171,20 @@ export async function processReminders() {
         const now = new Date();
         const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         const in1Hour = new Date(now.getTime() + 60 * 60 * 1000);
-        const min24 = new Date(in24Hours.getTime() - 15 * 60 * 1000);
+        // O-260829 §4.4: cron живёт в том же процессе, что и веб-сервер — рестарт
+        // при деплое (git push → main) внутри ±15-минутного окна раньше означал
+        // "напоминание потеряно навсегда": notifiedXh так и не выставлялся, а
+        // следующий проход (через 15 мин) уже не находил сессию — она выпадала
+        // из нижней границы окна. Верхняя граница (не напоминать заранее, если
+        // до сессии ещё больше суток) остаётся; нижняя убрана — окно теперь "уже
+        // пора и ещё не отправлено", а не "ровно сейчас".
         const max24 = new Date(in24Hours.getTime() + 15 * 60 * 1000);
 
         const sessions24 = await db.diarySession.findMany({
             where: {
                 status: { in: ['pending', 'confirmed'] },
                 notified24h: false,
-                date: { gte: min24, lte: max24 },
+                date: { lte: max24 },
             } as any,
             include: {
                 client: { include: { telegramClient: true } },
@@ -193,6 +199,21 @@ export async function processReminders() {
             if (!client) continue;
 
             const { telegram: telegramTarget, max: maxId } = clientTargets(client);
+            // O-260829 §4.4: раньше notified24h выставлялся в true безусловно
+            // после цикла — сессия, у которой отправка провалилась на всех
+            // задействованных каналах, помечалась "уведомлена" точно так же,
+            // как и успешно отправленная, и следующий проход cron (через 15
+            // мин) её уже не трогал: провал был неотличим от успеха и не
+            // повторялся. Сессия без единого задействованного канала (нет ни
+            // telegram, ни max ни у клиента, ни у специалиста) по-прежнему
+            // считается обработанной — повторять нечего, поведение для этого
+            // случая не меняется.
+            let anyAttempted = false;
+            let anySucceeded = false;
+            const noteOutcome = (outcome: { telegram: boolean | null; max: boolean | null }) => {
+                if (outcome.telegram !== null) { anyAttempted = true; if (outcome.telegram) anySucceeded = true; }
+                if (outcome.max !== null) { anyAttempted = true; if (outcome.max) anySucceeded = true; }
+            };
 
             if (telegramTarget || maxId) {
                 const outcome = await sendNotification(
@@ -201,6 +222,7 @@ export async function processReminders() {
                     buildClientReminderText(session, 'session_24h_client'),
                     sessionActions(session, session.status === 'pending'),
                 );
+                noteOutcome(outcome);
                 await recordOutcome(
                     outcome,
                     'session_24h_client',
@@ -221,6 +243,7 @@ export async function processReminders() {
                         inline_keyboard: [[{ text: '👤 Профиль клиента', url: `https://cmpas.ru/diary/clients?clientId=${client.id}` }]],
                     },
                 });
+                noteOutcome(outcome);
                 await recordOutcome(
                     outcome,
                     'session_24h_psychologist',
@@ -233,17 +256,16 @@ export async function processReminders() {
 
             await db.diarySession.update({
                 where: { id: session.id },
-                data: { notified24h: true } as any,
+                data: { notified24h: !anyAttempted || anySucceeded } as any,
             });
         }
 
-        const min1 = new Date(in1Hour.getTime() - 15 * 60 * 1000);
         const max1 = new Date(in1Hour.getTime() + 15 * 60 * 1000);
         const sessions1 = await db.diarySession.findMany({
             where: {
                 status: { in: ['pending', 'confirmed'] },
                 notified1h: false,
-                date: { gte: min1, lte: max1 },
+                date: { lte: max1 },
             } as any,
             include: {
                 client: { include: { telegramClient: true } },
@@ -259,6 +281,9 @@ export async function processReminders() {
 
             const { telegram: telegramTarget, max: maxId } = clientTargets(client);
 
+            let anyAttempted = false;
+            let anySucceeded = false;
+
             if (telegramTarget || maxId) {
                 const outcome = await sendNotification(
                     telegramTarget,
@@ -266,6 +291,8 @@ export async function processReminders() {
                     buildClientReminderText(session, 'session_1h_client'),
                     sessionActions(session, session.status === 'pending'),
                 );
+                if (outcome.telegram !== null) { anyAttempted = true; if (outcome.telegram) anySucceeded = true; }
+                if (outcome.max !== null) { anyAttempted = true; if (outcome.max) anySucceeded = true; }
                 await recordOutcome(
                     outcome,
                     'session_1h_client',
@@ -278,7 +305,7 @@ export async function processReminders() {
 
             await db.diarySession.update({
                 where: { id: session.id },
-                data: { notified1h: true } as any,
+                data: { notified1h: !anyAttempted || anySucceeded } as any,
             });
         }
     } catch (error) {

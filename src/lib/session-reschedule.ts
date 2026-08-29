@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
+import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
 
 export class RescheduleConflictError extends Error {}
 
@@ -70,6 +71,10 @@ export async function rescheduleSessionAtomic(psychologistId: string, sessionId:
     if (fullSession) {
         autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
     }
+
+    // O-260829 §5.2: старый час (existing.date/time, ДО обновления) освободился —
+    // молча предлагаем его самой старой подходящей заявке листа ожидания.
+    notifyWaitlistOnFreedSlot(psychologistId, existing.date, existing.time).catch(console.error);
 
     return session;
 }

@@ -175,4 +175,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // Позволяет тестировать viewModelScope.launch { ... } на JVM: без него
+    // Dispatchers.Main не инициализирован в unit-тесте и падает с
+    // IllegalStateException при первом launch на ViewModel.
+    testImplementation(libs.coroutines.test)
 }

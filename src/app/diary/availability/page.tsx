@@ -35,6 +35,7 @@ import {
     getAvailableTimes,
 } from '@/app/bot/actions';
 import { ShareButton } from '@/components/psidairy/ShareSheet';
+import { humanizeUrl } from '@/lib/share/buildShareUrls';
 
 type ScheduleRule = {
     id: string; name: string; priority: number; isActive: boolean;
@@ -94,7 +95,19 @@ function addMinutes(time: string, mins: number): string {
 }
 
 function BookingLinkCard({ psychologistId, isPrivate }: { psychologistId: string; isPrivate: boolean }) {
-    const bookingUrl = `https://cmpas.ru/bot/book/${psychologistId}`;
+    // §5.1 (O-260829): human-readable /u/<slug> link instead of the raw id.
+    // Starts on the old id-based URL (always valid) and swaps in the
+    // slug-based one once resolved/lazily created — no loading flicker either way.
+    const [bookingUrl, setBookingUrl] = useState(`https://cmpas.ru/bot/book/${psychologistId}`);
+
+    useEffect(() => {
+        let cancelled = false;
+        import('../actions/booking-link').then(({ getMyBookingUrl }) => {
+            getMyBookingUrl().then(url => { if (!cancelled) setBookingUrl(url); }).catch(() => { });
+        });
+        return () => { cancelled = true; };
+    }, [psychologistId]);
+
     return (
         <div className={`bg-card border border-border rounded-2xl shadow-card p-5 ${isPrivate ? 'opacity-60' : ''}`}>
             <div className="flex items-center gap-2 mb-3">
@@ -114,7 +127,7 @@ function BookingLinkCard({ psychologistId, isPrivate }: { psychologistId: string
             ) : (
                 <>
                     <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
-                        <span className="flex-1 text-[13px] font-medium text-foreground truncate">cmpas.ru/bot/book/{psychologistId}</span>
+                        <span className="flex-1 text-[13px] font-medium text-foreground truncate">{humanizeUrl(bookingUrl)}</span>
                     </div>
                     <ShareButton
                         url={bookingUrl}

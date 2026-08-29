@@ -14,8 +14,8 @@ import FinalCTA from '@/components/landing/FinalCTA';
 import LandingFooter from '@/components/landing/Footer';
 
 export const metadata: Metadata = {
-    title: "КОМПАС — онлайн-кабинет психолога для записи, клиентов и заметок",
-    description: "КОМПАС помогает психологам вести расписание, клиентскую базу, запись на сессии, заметки и уведомления через Telegram и MAX.",
+    title: "ПРАКТИКА — онлайн-кабинет психолога для записи, клиентов и заметок",
+    description: "ПРАКТИКА помогает психологам вести расписание, клиентскую базу, запись на сессии, заметки и уведомления через Telegram и MAX.",
     keywords: [
         "кабинет психолога",
         "запись на сессию онлайн",
@@ -26,16 +26,16 @@ export const metadata: Metadata = {
         "telegram бот психолога",
     ],
     openGraph: {
-        title: "КОМПАС — умный кабинет психолога",
+        title: "ПРАКТИКА — умный кабинет психолога",
         description: "Клиенты сами записываются, а вы видите день, клиентов и заметки в одном спокойном рабочем пространстве.",
         url: 'https://cmpas.ru',
-        siteName: 'КОМПАС',
+        siteName: 'ПРАКТИКА',
         locale: 'ru_RU',
         type: 'website',
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'КОМПАС — умный кабинет психолога',
+        title: 'ПРАКТИКА — умный кабинет психолога',
         description: 'Запись, клиенты, заметки и уведомления в одном спокойном рабочем пространстве.',
     },
     alternates: {
@@ -47,7 +47,7 @@ export default function HomePage() {
     const jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'SoftwareApplication',
-        name: 'КОМПАС',
+        name: 'ПРАКТИКА',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web',
         description: 'Онлайн-кабинет для психологов: запись клиентов, расписание, заметки и уведомления через Telegram и MAX.',
@@ -65,7 +65,7 @@ export default function HomePage() {
         },
         author: {
             '@type': 'Organization',
-            name: 'КОМПАС',
+            name: 'ПРАКТИКА',
         },
     };
 

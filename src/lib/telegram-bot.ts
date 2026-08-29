@@ -81,7 +81,7 @@ export function setupBot() {
         const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
         if (psy) {
             return ctx.reply(
-                '✅ Ваш Telegram уже привязан к КОМПАС.\n\nЧтобы также подключить MAX мессенджер — откройте страницу интеграций.',
+                '✅ Ваш Telegram уже привязан к ПРАКТИКЕ.\n\nЧтобы также подключить MAX мессенджер — откройте страницу интеграций.',
                 Markup.inlineKeyboard([[Markup.button.webApp('⚙️ Интеграции', `${TELEGRAM_APP_URL}/diary/integrations`)]])
             );
         }

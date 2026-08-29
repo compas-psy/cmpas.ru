@@ -6,7 +6,7 @@ export default function FinalCTA() {
             <div className="max-w-[1240px] mx-auto px-5 md:px-8">
                 <div className="max-w-[640px] mx-auto text-center">
                     <h2 className="text-[28px] md:text-[40px] font-bold leading-[1.12] tracking-[-0.015em] text-[#142018] mb-4">
-                        Попробуйте провести первую запись через&nbsp;КОМПАС
+                        Попробуйте провести первую запись через&nbsp;ПРАКТИКУ
                     </h2>
                     <p className="text-[15px] md:text-[16px] text-[#5F6C64] leading-[1.6] mb-8 max-w-[480px] mx-auto">
                         Настройте расписание, отправьте ссылку клиенту и&nbsp;посмотрите, как выглядит рабочий день без лишней переписки.

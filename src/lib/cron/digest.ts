@@ -98,7 +98,9 @@ export async function processWeeklyDigest() {
             // Если сессий не было — молчим
             if (allSessions.length === 0) continue;
 
-            const completed = allSessions.filter(s => s.status === 'completed' || s.status === 'confirmed').length;
+            // no_show — сессия состоялась по расписанию, просто без клиента;
+            // для "сколько встреч было на этой неделе" считаем наравне с completed.
+            const completed = allSessions.filter(s => s.status === 'completed' || s.status === 'confirmed' || s.status === 'no_show').length;
             const cancelled = allSessions.filter(s => s.status === 'cancelled').length;
             const uniqueClients = new Set(allSessions.map(s => s.clientId)).size;
 

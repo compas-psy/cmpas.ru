@@ -266,12 +266,15 @@ export async function createTimeBlock(data: {
         });
 
         if (data.cancelIntersectingSessions) {
-            // Find and cancel all intersecting sessions in this range
+            // Find and cancel all intersecting sessions in this range.
+            // 'no_show' excluded alongside 'completed' (O-260829): a session
+            // already marked "не пришёл" already happened (or didn't) — it's
+            // not an open booking to auto-cancel with a client notification.
             const sessionsToCancel = await db.diarySession.findMany({
                 where: {
                     psychologistId,
                     date: { gte: start, lte: end },
-                    status: { notIn: ['cancelled', 'completed'] }
+                    status: { notIn: ['cancelled', 'completed', 'no_show'] }
                 },
                 include: { client: { include: { telegramClient: true } } }
             });
@@ -336,7 +339,7 @@ export async function checkBlockIntersections(startDate: string, endDate: string
                     gte: start,
                     lte: end
                 },
-                status: { notIn: ['cancelled', 'completed'] }
+                status: { notIn: ['cancelled', 'completed', 'no_show'] }
             },
             include: { client: true }
         });

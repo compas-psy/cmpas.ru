@@ -100,9 +100,15 @@ export function resolvePersonalClientToken(token: string | null | undefined): { 
     return null;
 }
 
-export function clientBookingLink(psychologistId: string, clientId: string) {
-    const base = `${publicBaseUrl()}/bot/book/${psychologistId}`;
-    return clientId ? `${base}?c=${personalClientToken(clientId)}` : base;
+/**
+ * `base` overrides the default `/bot/book/<id>` URL — pass a slug-resolved
+ * `/u/<slug>` URL (see src/lib/booking/slug.ts) at call sites that want the
+ * human-readable address (§5.1, O-260829). Omitted, this keeps the id-based
+ * link every other caller (reminders, auto-sent messages, mobile API) relies on.
+ */
+export function clientBookingLink(psychologistId: string, clientId: string, base?: string) {
+    const linkBase = base || `${publicBaseUrl()}/bot/book/${psychologistId}`;
+    return clientId ? `${linkBase}?c=${personalClientToken(clientId)}` : linkBase;
 }
 
 export function clientDocumentLink(deliveryId: string) {
@@ -228,7 +234,7 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
         settings.paymentText || '',
         settings.paymentLink ? `Ссылка на оплату: ${settings.paymentLink}` : '',
         settings.paymentQrUrl ? `QR-код для оплаты: ${settings.paymentQrUrl}` : '',
-        'КОМПАС не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
+        'ПРАКТИКА не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
     ];
 
     return lines.filter(Boolean).join('\n');

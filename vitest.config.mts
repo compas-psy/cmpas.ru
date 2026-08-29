@@ -9,6 +9,7 @@ export default defineConfig({
     },
     test: {
         environment: 'node',
+        setupFiles: ['./vitest.setup.ts'],
         include: ['tests/**/*.test.ts', 'src/**/*.test.ts', 'src/**/*.test.tsx'],
         // Стыковочный тест конверта приложения исключён из обычного прогона
         // намеренно: его вход производит прогон тестов Android, которого без

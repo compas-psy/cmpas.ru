@@ -63,12 +63,12 @@ export const PLANS = {
     practice: {
         name: 'Практика',
         price: 99000, // kopecks = 990 руб
-        description: 'Подписка КОМПАС «Практика» — 1 месяц',
+        description: 'Подписка «Практика» — 1 месяц',
     },
     practice_plus: {
         name: 'Практика+',
         price: 199000, // kopecks = 1990 руб
-        description: 'Подписка КОМПАС «Практика+» — 1 месяц',
+        description: 'Подписка «Практика+» — 1 месяц',
     },
 } as const;
 

@@ -33,7 +33,7 @@ export default function HelpLayout({ children }: { children: React.ReactNode }) 
         <div className="max-w-6xl mx-auto">
             <div className="mb-6">
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Помощь</h1>
-                <p className="text-muted-foreground text-sm mt-1">Краткая инструкция по работе с КОМПАС. Выберите тему слева.</p>
+                <p className="text-muted-foreground text-sm mt-1">Краткая инструкция по работе с ПРАКТИКОЙ. Выберите тему слева.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">

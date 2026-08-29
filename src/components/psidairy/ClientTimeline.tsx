@@ -41,11 +41,11 @@ type TimelineFilter = 'all' | 'sessions' | 'notes' | 'homework';
 
 const statusLabels: Record<string, string> = {
     confirmed: 'Подтверждена', pending: 'Ожидает',
-    completed: 'Завершена', cancelled: 'Отменена',
+    completed: 'Завершена', no_show: 'Не пришёл', cancelled: 'Отменена',
 };
 const statusDot: Record<string, string> = {
     confirmed: 'bg-green-500', pending: 'bg-amber-500',
-    completed: 'bg-muted-foreground', cancelled: 'bg-destructive',
+    completed: 'bg-muted-foreground', no_show: 'bg-muted-foreground', cancelled: 'bg-destructive',
 };
 
 function formatSessionDate(d: Date) {

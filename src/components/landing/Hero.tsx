@@ -19,7 +19,7 @@ function SidebarMock() {
                 <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center">
                     <Image src="/icon.png" alt="" width={18} height={18} className="rounded" />
                 </div>
-                <span className="text-white/90 text-[13px] font-bold tracking-wider uppercase">КОМПАС</span>
+                <span className="text-white/90 text-[13px] font-bold tracking-wider uppercase">ПРАКТИКА</span>
             </div>
             {items.map(item => (
                 <div key={item.label} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${

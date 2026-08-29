@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         return new NextResponse(
             `<!DOCTYPE html>
             <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>КОМПАС</title>
+            <title>ПРАКТИКА</title>
             <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#F7F8F4;color:#142018}
             .card{background:#fff;padding:2rem;border-radius:16px;max-width:400px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
             h2{color:#1D4735;margin-bottom:0.5rem} a{color:#1D4735;font-weight:600}</style></head>
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(
         `<!DOCTYPE html>
         <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Вход в КОМПАС</title>
+        <title>Вход в ПРАКТИКУ</title>
         <style>
         body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#F7F8F4;color:#142018}
         .card{background:#fff;padding:2rem;border-radius:16px;max-width:400px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
@@ -72,13 +72,13 @@ export async function GET(req: NextRequest) {
         </style></head>
         <body><div class="card">
         <div class="spinner" id="spinner"></div>
-        <h2>Открываем КОМПАС...</h2>
+        <h2>Открываем ПРАКТИКУ...</h2>
         <p>Если приложение не открылось автоматически:</p>
         <a class="btn" href="compas://auth/callback?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}&expiresIn=${expiresIn}">
         Открыть приложение</a>
         <div class="fallback" id="fallback">
         <p>Приложение не установлено?</p>
-        <a href="https://cmpas.ru">Скачать КОМПАС</a>
+        <a href="https://cmpas.ru">Скачать ПРАКТИКУ</a>
         </div>
         <script>
         // Try to open via custom scheme

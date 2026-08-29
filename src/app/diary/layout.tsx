@@ -61,9 +61,9 @@ function SidebarContent({
             <div className="px-6 pt-6 pb-4">
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white/8 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        <img src="/icon.png" alt="Компаc" className="w-full h-full object-contain" />
+                        <img src="/icon.png" alt="ПРАКТИКА" className="w-full h-full object-contain" />
                     </div>
-                    <p className="text-[17px] font-bold text-white tracking-[0.12em] uppercase">КОМПАС</p>
+                    <p className="text-[17px] font-bold text-white tracking-[0.12em] uppercase">ПРАКТИКА</p>
                 </div>
             </div>
 

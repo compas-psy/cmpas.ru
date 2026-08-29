@@ -217,6 +217,41 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Специалист называет реальный исход: клиент не пришёл.
+     *
+     * Раньше этот метод не вызывался НИОТКУДА — UpdateSessionRequest умел
+     * послать NO_SHOW, а экран умел только показать его пассивным чипом.
+     * Перезаписывает статус безусловно, в том числе автоматически
+     * проставленный сервером COMPLETED (settlePastSessionsForPsychologist) —
+     * специалист просто уточняет исход задним числом, риска "испортить"
+     * корректный статус нет.
+     *
+     * Аналитика session_status_changed НЕ пишется здесь: реестр допустимых
+     * значений `to` — CONFIRMED/COMPLETED/CANCELLED/RESCHEDULED, ровно
+     * зеркало analytics/schema/events.yaml (`to: [confirmed, completed,
+     * cancelled, rescheduled]`, вне android/, править не в этой задаче).
+     * NO_SHOW там не объявлен, а AnalyticsRecorder намеренно не даёт месту
+     * вызова придумывать значения сверх реестра — сервер такое событие всё
+     * равно бы отбросил при валидации (см. src/lib/analytics/schema.ts).
+     */
+    fun noShow(sessionId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, actionError = null) }
+            try {
+                val response = api.updateSession(sessionId, UpdateSessionRequest(status = SessionStatus.NO_SHOW))
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(isActionLoading = false, session = response.body()) }
+                    PracticeRefreshBus.notifyChanged()
+                } else {
+                    _uiState.update { it.copy(isActionLoading = false, actionError = "Ошибка") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isActionLoading = false, actionError = e.localizedMessage) }
+            }
+        }
+    }
+
     fun cancel(sessionId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true, actionError = null) }
@@ -282,6 +317,7 @@ class SessionDetailViewModel @Inject constructor(
             "CONFIRMED" -> confirm(sessionId)
             "COMPLETED" -> complete(sessionId)
             "CANCELLED" -> cancel(sessionId)
+            "NO_SHOW" -> noShow(sessionId)
         }
     }
 }

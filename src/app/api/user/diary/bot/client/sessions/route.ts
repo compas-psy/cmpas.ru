@@ -28,29 +28,18 @@ async function resolveClientId(params: URLSearchParams) {
     return linked?.diaryClientId ?? null;
 }
 
-export async function GET(req: NextRequest) {
-    const clientId = await resolveClientId(req.nextUrl.searchParams);
-    if (!clientId) return NextResponse.json([]);
-
-    const sessions = await db.diarySession.findMany({
-        where: {
-            clientId,
-            date: { gte: startOfToday() },
-            status: { not: 'cancelled' },
+const sessionInclude = {
+    psychologist: {
+        select: {
+            name: true,
+            psychologistSettings: { select: { fullName: true, onlineSessionLink: true } },
         },
-        include: {
-            psychologist: {
-                select: {
-                    name: true,
-                    psychologistSettings: { select: { fullName: true, onlineSessionLink: true } },
-                },
-            },
-            address: { select: { name: true, address: true } },
-        },
-        orderBy: [{ date: 'asc' }, { time: 'asc' }],
-    });
+    },
+    address: { select: { name: true, address: true } },
+} as const;
 
-    return NextResponse.json(sessions.map((session) => ({
+function mapSession(session: any) {
+    return {
         id: session.id,
         clientId: session.clientId,
         clientToken: clientActionToken(session.psychologistId, session.clientId),
@@ -63,5 +52,38 @@ export async function GET(req: NextRequest) {
         psychologistName: session.psychologist.psychologistSettings?.fullName || session.psychologist.name || 'Специалист',
         onlineSessionLink: session.psychologist.psychologistSettings?.onlineSessionLink || null,
         address: session.address ? { name: session.address.name, fullAddress: session.address.address } : null,
-    })));
+    };
+}
+
+export async function GET(req: NextRequest) {
+    const clientId = await resolveClientId(req.nextUrl.searchParams);
+    if (!clientId) return NextResponse.json({ upcoming: [], past: [] });
+
+    const todayStart = startOfToday();
+
+    const [upcoming, past] = await Promise.all([
+        db.diarySession.findMany({
+            where: {
+                clientId,
+                date: { gte: todayStart },
+                status: { not: 'cancelled' },
+            },
+            include: sessionInclude,
+            orderBy: [{ date: 'asc' }, { time: 'asc' }],
+        }),
+        db.diarySession.findMany({
+            where: {
+                clientId,
+                date: { lt: todayStart },
+                status: { not: 'cancelled' },
+            },
+            include: sessionInclude,
+            orderBy: [{ date: 'desc' }, { time: 'desc' }],
+        }),
+    ]);
+
+    return NextResponse.json({
+        upcoming: upcoming.map(mapSession),
+        past: past.map(mapSession),
+    });
 }

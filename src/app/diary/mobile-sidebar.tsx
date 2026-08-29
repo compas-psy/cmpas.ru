@@ -35,9 +35,9 @@ export function MobileSidebar({ children }: { children: React.ReactNode }) {
                 </button>
                 <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0">
-                        <img src="/icon.png" alt="Компас" className="w-full h-full object-contain" />
+                        <img src="/icon.png" alt="ПРАКТИКА" className="w-full h-full object-contain" />
                     </div>
-                    <span className="text-[15px] font-bold text-foreground tracking-[0.12em] uppercase">КОМПАС</span>
+                    <span className="text-[15px] font-bold text-foreground tracking-[0.12em] uppercase">ПРАКТИКА</span>
                 </div>
             </div>
 

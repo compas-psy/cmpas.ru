@@ -59,7 +59,7 @@ fun LoginScreen(
             // Logo — tree from website
             Image(
                 painter = painterResource(id = R.drawable.logo_tree),
-                contentDescription = "КОМПАС",
+                contentDescription = "ПРАКТИКА",
                 modifier = Modifier.size(80.dp),
                 contentScale = ContentScale.Fit,
             )
@@ -67,7 +67,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "КОМПАС",
+                text = "ПРАКТИКА",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,

@@ -40,8 +40,8 @@ type Session = {
     structuredNotes?: any; privateNotes?: any; clientSummary?: string | null;
 };
 
-const statusLabels: Record<string, string> = { confirmed: 'Подтверждено', pending: 'Ожидает', completed: 'Завершено', cancelled: 'Отменено' };
-const statusDot: Record<string, string> = { confirmed: 'bg-green-500', pending: 'bg-amber-500', completed: 'bg-muted-foreground', cancelled: 'bg-destructive' };
+const statusLabels: Record<string, string> = { confirmed: 'Подтверждено', pending: 'Ожидает', completed: 'Завершено', no_show: 'Не пришёл', cancelled: 'Отменено' };
+const statusDot: Record<string, string> = { confirmed: 'bg-green-500', pending: 'bg-amber-500', completed: 'bg-muted-foreground', no_show: 'bg-muted-foreground', cancelled: 'bg-destructive' };
 
 export default function ClientsPage() {
     const [clients, setClients] = useState<Client[]>([]);

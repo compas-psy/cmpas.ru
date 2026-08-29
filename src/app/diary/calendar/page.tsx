@@ -47,6 +47,7 @@ const statusDotColor: Record<string, string> = {
     confirmed: 'bg-success-500',
     pending: 'bg-orange-500',
     completed: 'bg-muted-foreground',
+    no_show: 'bg-muted-foreground',
     cancelled: 'bg-red-500',
 };
 
@@ -54,6 +55,7 @@ const statusBadge: Record<string, string> = {
     confirmed: 'bg-success-soft text-success-500',
     pending: 'bg-orange-soft text-orange-500',
     completed: 'bg-sage-100 text-muted-foreground',
+    no_show: 'bg-sage-100 text-muted-foreground',
     cancelled: 'bg-red-soft text-red-500',
 };
 
@@ -61,6 +63,7 @@ const statusLabels: Record<string, string> = {
     confirmed: 'Подтверждено',
     pending: 'Ожидает',
     completed: 'Завершено',
+    no_show: 'Не пришёл',
     cancelled: 'Отменено',
 };
 

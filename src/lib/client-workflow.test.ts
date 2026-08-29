@@ -91,4 +91,21 @@ describe('clientBookingLink', () => {
         expect(token).toMatch(/^st1_/);
         expect(resolvePersonalClientToken(token)).toEqual({ clientId: 'client-123', legacy: false });
     });
+
+    // §5.1 (O-260829): an explicit `base` (a resolved /u/<slug> URL) overrides
+    // the default /bot/book/<id> base — callers that have a human-readable
+    // address use it, everyone else keeps the id-based link unchanged.
+    it('an explicit base overrides the default /bot/book/<id> URL', () => {
+        withoutBaseUrlEnv();
+        expect(clientBookingLink('psy-1', '', 'https://cmpas.ru/u/anna-volkova'))
+            .toBe('https://cmpas.ru/u/anna-volkova');
+    });
+
+    it('the c= token still appends correctly onto an explicit base', () => {
+        withoutBaseUrlEnv();
+        const link = clientBookingLink('psy-1', 'client-123', 'https://cmpas.ru/u/anna-volkova');
+        const url = new URL(link);
+        expect(url.pathname).toBe('/u/anna-volkova');
+        expect(resolvePersonalClientToken(url.searchParams.get('c'))).toEqual({ clientId: 'client-123', legacy: false });
+    });
 });

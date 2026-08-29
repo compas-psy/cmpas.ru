@@ -56,7 +56,7 @@ export function ConnectClient(props: {
                         {channelName ? `Подключите уведомления в ${channelName}` : 'Куда присылать уведомления?'}
                     </h1>
                     <p className="mt-4 text-[15px] leading-6 text-[#53645D]">
-                        КОМПАС будет присылать только подтверждения, напоминания, переносы и отмены встреч со специалистом {props.psychologistName}.
+                        ПРАКТИКА будет присылать только подтверждения, напоминания, переносы и отмены встреч со специалистом {props.psychologistName}.
                     </p>
 
                     <div className="mt-7 space-y-3">

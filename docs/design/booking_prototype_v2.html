@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ПРАКТИКА · запись на сессию · прототип v2 (без денег с клиента)</title>
+<style>
+  :root{
+    --paper:#F7F5F1; --ink:#1B1F1D; --muted:#6B7370; --line:#E2DDD4;
+    --accent:#2F5D50; --accent-soft:#EAF0ED; --warn:#8A6A3B; --card:#FFFFFF;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1160px;margin:0 auto;padding:40px 24px 72px}
+  header h1{font-size:26px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+  header p{margin:0;color:var(--muted);max-width:74ch}
+  header .flag{
+    display:inline-block;margin-top:14px;font-size:12.5px;font-weight:600;color:var(--warn);
+    background:#FBF4E7;border:1px solid #EBDDBB;border-radius:8px;padding:7px 12px;
+  }
+  .layout{display:grid;grid-template-columns:390px 1fr;gap:44px;margin-top:36px;align-items:start}
+  @media(max-width:900px){.layout{grid-template-columns:1fr;gap:28px}}
+
+  /* телефон */
+  .phone{
+    background:var(--card);border:1px solid var(--line);border-radius:28px;
+    padding:26px 22px 24px;box-shadow:0 1px 2px rgba(27,31,29,.04),0 12px 32px rgba(27,31,29,.06);
+    min-height:600px;display:flex;flex-direction:column;position:sticky;top:24px;
+  }
+  .brand{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;margin-bottom:18px}
+  .brand span.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block}
+  .screen{flex:1;display:none;animation:in .28s ease both}
+  .screen.on{display:block}
+  @media (prefers-reduced-motion: reduce){ .screen{animation:none} }
+  @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2.s{font-size:20px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+  p.s{margin:0 0 18px;color:var(--muted);font-size:14.5px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+  .chip{
+    border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;
+    font-size:14px;cursor:pointer;transition:.16s;color:var(--ink)
+  }
+  .chip:hover{border-color:var(--accent)}
+  .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  .slot{
+    width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:14px;
+    padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:.16s;display:flex;justify-content:space-between;align-items:center;gap:12px
+  }
+  .slot:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .slot b{font-weight:600;font-size:15.5px}
+  .slot small{color:var(--muted);display:block;font-size:13px;margin-top:2px}
+  .slot .tag{font-size:12px;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:4px 9px;white-space:nowrap}
+
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .field input,.field select{
+    width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;
+    background:#fff;color:var(--ink);font-family:inherit
+  }
+  .field input:focus,.field select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+
+  .rule{
+    background:#FBF9F5;border:1px solid var(--line);border-left:3px solid var(--warn);
+    border-radius:10px;padding:12px 14px;font-size:13.5px;color:#4A4F4C;margin:16px 0 18px
+  }
+  .rule b{color:var(--ink);font-weight:600}
+
+  .btn{
+    width:100%;border:0;border-radius:14px;background:var(--accent);color:#fff;
+    padding:14px 18px;font-size:15.5px;font-weight:500;cursor:pointer;font-family:inherit;transition:.16s
+  }
+  .btn:hover{background:#26493F}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line);margin-top:9px}
+  .btn.ghost:hover{border-color:var(--accent);color:var(--accent);background:#fff}
+
+  .done{text-align:center;padding:16px 0 4px}
+  .done .mark{
+    width:52px;height:52px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px
+  }
+  .card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;margin-bottom:12px;text-align:left}
+  .card .k{font-size:12.5px;color:var(--muted)}
+  .card .v{font-size:15px;margin-top:2px}
+
+  .notif{
+    border:1px solid var(--line);border-radius:14px;padding:13px 15px;background:#fff;
+    font-size:14px;margin-bottom:12px;text-align:left
+  }
+  .notif .from{font-size:12px;color:var(--muted);margin-bottom:5px}
+  .row{display:flex;gap:8px;margin-top:11px}
+  .row .btn{padding:10px 12px;font-size:14px}
+
+  .share{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  .share button{
+    display:flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:12px;
+    padding:11px 10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--ink);background:var(--accent-soft)
+  }
+  .qr{
+    width:132px;height:132px;margin:14px auto 4px;border-radius:12px;border:1px solid var(--line);
+    background:
+      repeating-linear-gradient(0deg,var(--ink) 0 6px,transparent 6px 12px) 0 0/36px 36px,
+      repeating-linear-gradient(90deg,var(--ink) 0 6px,transparent 6px 12px) 0 0/36px 36px,
+      #fff;
+    background-blend-mode:multiply;
+    opacity:.85;
+  }
+  .linkpill{
+    display:flex;align-items:center;gap:8px;background:var(--accent-soft);border:1px solid var(--line);
+    border-radius:12px;padding:11px 13px;font-size:14px;color:var(--accent);font-weight:600;margin-bottom:14px;
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;letter-spacing:-.01em;
+  }
+  .oldlink{color:var(--muted);text-decoration:line-through;font-size:12.5px;margin:-8px 0 16px;font-family:monospace}
+
+  .tabs{display:flex;gap:4px;background:#F0EEE8;border-radius:12px;padding:4px;margin-bottom:16px}
+  .tabs button{flex:1;border:0;background:transparent;border-radius:9px;padding:9px 0;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit}
+  .tabs button[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(27,31,29,.08)}
+
+  .checkrow{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);
+    border-radius:14px;padding:12px 14px;margin-bottom:9px;background:#fff
+  }
+  .checkrow .who{font-size:14.5px;font-weight:600}
+  .checkrow .when{font-size:12.5px;color:var(--muted);margin-top:1px}
+  .mini{display:flex;gap:5px}
+  .mini button{
+    border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 9px;font-size:12px;
+    cursor:pointer;font-family:inherit;color:var(--ink);white-space:nowrap
+  }
+  .mini button.ok:hover{border-color:var(--accent);color:var(--accent)}
+  .mini button.bad:hover{border-color:var(--warn);color:var(--warn)}
+  .mini button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  /* правая колонка */
+  .note{border-left:2px solid var(--line);padding-left:22px}
+  .step{display:none}
+  .step.on{display:block;animation:in .28s ease both}
+  @media (prefers-reduced-motion: reduce){ .step{animation:none} }
+  .step .eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:8px}
+  .step h3{margin:0 0 10px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+  .step p{margin:0 0 12px;color:#414744;max-width:64ch}
+  .step ul{margin:0 0 12px;padding-left:18px;color:#414744;max-width:64ch}
+  .step li{margin-bottom:6px}
+  .market{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 15px;font-size:14px;color:#414744;max-width:64ch;margin-bottom:10px}
+  .market b{color:var(--ink)}
+  .code{
+    background:#20302B;color:#CFE3DA;border-radius:12px;padding:12px 15px;font-size:12.5px;
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;max-width:64ch;line-height:1.6;
+  }
+  .code b{color:#fff}
+  .code .new{color:#E8C97A}
+
+  .nav{display:flex;align-items:center;gap:10px;margin-top:26px}
+  .nav button{
+    border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 15px;font-size:14px;
+    cursor:pointer;font-family:inherit;color:var(--ink);transition:.16s
+  }
+  .nav button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .nav button:disabled{opacity:.4;cursor:default}
+  .dots{display:flex;gap:6px;margin-left:6px;flex-wrap:wrap}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--line);display:block;transition:.2s}
+  .dots i.on{background:var(--accent);width:18px;border-radius:3px}
+  footer{margin-top:44px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px;max-width:84ch}
+  footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Запись на сессию — версия 2, без денег с клиента</h1>
+    <p>Кликабельный прототип. Слева — экраны в порядке пути клиента, справа — что именно меняет каждый экран и какой файл в коде это чинит. Заменяет <code>booking_prototype.html</code> (v1) — та версия строилась вокруг серии «Своё время» и денежного удержания, которые учредитель отменил 17.08.2026.</p>
+    <span class="flag">⚠ Этот файл ни разу не попадал в репозиторий — только в чат. Первая задача агента: положить его в <code>docs/design/booking_prototype_v2.html</code> и свериться с ним, а не додумывать вид по тексту ТЗ.</span>
+  </header>
+
+  <div class="layout">
+    <!-- ЭКРАНЫ -->
+    <div class="phone">
+      <div class="brand"><span class="dot"></span> Анна Волкова · психолог</div>
+
+      <!-- 0: ссылка + поделиться -->
+      <div class="screen on" data-s="0">
+        <h2 class="s">Ссылка, которую не стыдно дать</h2>
+        <p class="s">Одна и та же кнопка «Поделиться» — на главном экране, в расписании, в карточке клиента и в приложении.</p>
+        <div class="oldlink">cmpas.ru/bot/book/clzk8f2p90001qw3h5x9k2m4v</div>
+        <div class="linkpill">cmpas.ru/у/анна-волкова</div>
+        <div class="share">
+          <button>▶ Max</button>
+          <button>▶ Telegram</button>
+          <button>▶ WhatsApp</button>
+          <button>⧉ Скопировать</button>
+        </div>
+        <button class="btn ghost">▤ Показать QR</button>
+        <div class="qr" aria-hidden="true"></div>
+        <button class="btn" onclick="go(1)" style="margin-top:16px">Дальше: клиент открыл ссылку</button>
+      </div>
+
+      <!-- 1: подбор времени -->
+      <div class="screen" data-s="1">
+        <h2 class="s">Когда вам удобнее?</h2>
+        <p class="s">Отметьте, а я подберу ближайшее время. Это ни к чему не обязывает.</p>
+        <div class="chips">
+          <button class="chip" aria-pressed="false">Будни, вечер</button>
+          <button class="chip" aria-pressed="true">Будни, день</button>
+          <button class="chip" aria-pressed="false">Выходные, утро</button>
+          <button class="chip" aria-pressed="false">Мне всё равно</button>
+        </div>
+        <button class="slot" onclick="go(3)">
+          <span><b>Вторник, 19 августа · 19:00</b><small>Онлайн · 50 минут · МСК+0</small></span>
+          <span class="tag">ближайшее</span>
+        </button>
+        <button class="slot" onclick="go(3)">
+          <span><b>Четверг, 21 августа · 19:00</b><small>Онлайн · 50 минут · МСК+0</small></span>
+        </button>
+        <button class="slot" onclick="go(3)">
+          <span><b>Вторник, 26 августа · 18:00</b><small>Онлайн · 50 минут · МСК+0</small></span>
+        </button>
+        <button class="btn ghost" onclick="go(2)">Показать все свободные времена</button>
+      </div>
+
+      <!-- 2: возврат -->
+      <div class="screen" data-s="2">
+        <div class="card" style="border-style:dashed;margin-bottom:16px">
+          <div class="k">Та же ссылка, открыта через четыре дня</div>
+          <div class="v">Записи не было — человек смотрел и ушёл думать</div>
+        </div>
+        <h2 class="s">С возвращением</h2>
+        <p class="s">Вы смотрели: будни, день. Вот что свободно сейчас.</p>
+        <button class="slot" onclick="go(3)"><span><b>Вторник, 26 августа · 19:00</b><small>Онлайн · 50 минут</small></span><span class="tag">ближайшее</span></button>
+        <button class="slot" onclick="go(3)"><span><b>Четверг, 28 августа · 19:00</b><small>Онлайн · 50 минут</small></span></button>
+        <button class="btn ghost">Начать заново</button>
+        <button class="btn ghost">Не запоминать меня на этом устройстве</button>
+      </div>
+
+      <!-- 3: бронь -->
+      <div class="screen" data-s="3">
+        <h2 class="s">Вторник, 19 августа, 19:00</h2>
+        <p class="s">Осталось два поля. Аккаунт заводить не нужно.</p>
+        <div class="field">
+          <label>Как к вам обращаться</label>
+          <input value="Мария" spellcheck="false">
+        </div>
+        <div class="field">
+          <label>Телефон</label>
+          <input value="+7 9__ ___-__-__" spellcheck="false">
+        </div>
+        <div class="field">
+          <label>Как назвать встречу в вашем календаре</label>
+          <select>
+            <option>Личная встреча</option>
+            <option>Занято</option>
+            <option>Сессия с Анной</option>
+          </select>
+        </div>
+        <div class="rule">
+          <b>Если планы изменятся.</b> Перенести или отменить можно в один тап прямо из напоминания — до времени, которое установит специалист.
+        </div>
+        <button class="btn" onclick="go(4)">Записаться</button>
+      </div>
+
+      <!-- 4: подтверждение -->
+      <div class="screen" data-s="4">
+        <div class="done">
+          <div class="mark">✓</div>
+          <h2 class="s">Вы записаны</h2>
+          <p class="s" data-channel>Уведомление придёт в Max — туда, откуда вы пришли.</p>
+        </div>
+        <div class="card"><div class="k">Когда</div><div class="v">Вторник, 19 августа, 19:00 (ваш часовой пояс)</div></div>
+        <div class="card"><div class="k">В вашем календаре</div><div class="v">Личная встреча · 50 минут</div></div>
+        <div class="notif">
+          <div class="from">Max · за 24 часа</div>
+          Напоминаю о встрече завтра в 19:00.
+          <div class="row">
+            <button class="btn">Буду</button>
+            <button class="btn ghost" style="margin-top:0">Не смогу</button>
+          </div>
+        </div>
+        <div class="chips" style="margin-top:2px">
+          <button class="chip" aria-pressed="true" onclick="setChannel('Max', this)">показать как Max</button>
+          <button class="chip" aria-pressed="false" onclick="setChannel('Telegram', this)">показать как Telegram</button>
+        </div>
+        <button class="btn ghost" onclick="go(5)">Дальше: перенос</button>
+      </div>
+
+      <!-- 5: перенос без денег -->
+      <div class="screen" data-s="5">
+        <h2 class="s">Не сможете во вторник?</h2>
+        <p class="s">Объяснять ничего не нужно. Одно действие — и старое время сразу освобождается.</p>
+        <button class="slot" onclick="go(6)"><span><b>Перенести на четверг, 19:00</b><small>эта же неделя</small></span></button>
+        <button class="slot" onclick="go(6)"><span><b>Перенести на пятницу, 12:00</b><small>эта же неделя</small></span></button>
+        <button class="btn ghost">Другое время</button>
+        <div class="rule">
+          <b>Деньги тут ни при чём.</b> ПРАКТИКА их не берёт и не держит. Если кто-то ждёт вторник, 19:00 в тихом листе ожидания — предложим ему одним сообщением, как только вы перенесётесь.
+        </div>
+      </div>
+
+      <!-- 6: готово -->
+      <div class="screen" data-s="6">
+        <div class="done">
+          <div class="mark">✓</div>
+          <h2 class="s">Перенесено</h2>
+          <p class="s">Новое время: четверг, 19:00. Специалист уже видит изменение.</p>
+        </div>
+        <div class="notif">
+          <div class="from">Другому клиенту, тихо, без гонки</div>
+          Вторник, 19:00 у Анны освободился — вы были в списке ожидания на это время. Записать вас?
+        </div>
+        <button class="btn ghost" onclick="go(7)">Дальше: «Мои встречи»</button>
+      </div>
+
+      <!-- 7: мои встречи -->
+      <div class="screen" data-s="7">
+        <h2 class="s">Мои встречи</h2>
+        <p class="s">Открыто по личной ссылке — работает в любом браузере, без входа.</p>
+        <div class="tabs">
+          <button aria-selected="true">Предстоящие</button>
+          <button aria-selected="false">Прошедшие</button>
+        </div>
+        <div class="card"><div class="k">Чт, 21 августа · 19:00</div><div class="v">Анна Волкова · онлайн</div></div>
+        <div class="card"><div class="k">Вт, 26 августа · 19:00</div><div class="v">Анна Волкова · онлайн</div></div>
+        <button class="btn ghost">Записаться снова</button>
+      </div>
+
+      <!-- 8: специалисту вечером -->
+      <div class="screen" data-s="8">
+        <h2 class="s">Сегодняшние встречи</h2>
+        <p class="s">Один тап на каждую. От отметки зависит, что уйдёт клиенту дальше.</p>
+        <div class="checkrow">
+          <div><div class="who">Мария К.</div><div class="when">14:00 · онлайн</div></div>
+          <div class="mini">
+            <button class="ok" aria-pressed="true">Была</button>
+            <button class="bad">Не пришла</button>
+            <button>Перенесли</button>
+          </div>
+        </div>
+        <div class="checkrow">
+          <div><div class="who">Игорь П.</div><div class="when">16:00 · очно</div></div>
+          <div class="mini">
+            <button class="ok">Был</button>
+            <button class="bad" aria-pressed="true">Не пришёл</button>
+            <button>Перенесли</button>
+          </div>
+        </div>
+        <div class="checkrow">
+          <div><div class="who">Мария К. (повторно)</div><div class="when">19:00 · онлайн</div></div>
+          <div class="mini">
+            <button class="ok">Была</button>
+            <button class="bad">Не пришла</button>
+            <button>Перенесли</button>
+          </div>
+        </div>
+        <div class="rule"><b>До отметки</b> — сессия считается состоявшейся, но письмо клиенту ждёт эти два часа именно ради этой отметки.</div>
+      </div>
+
+      <!-- 9: клиенту через 2 часа -->
+      <div class="screen" data-s="9">
+        <h2 class="s">Через 2 часа после встречи</h2>
+        <p class="s">Только тем, кого отметили «была» / «был». Один тап, ничего не переспрашиваем.</p>
+        <div class="notif">
+          <div class="from">Max · клиенту</div>
+          Спасибо за встречу. Если захотите продолжить — вот ближайшее время у Анны.
+          <div class="row"><button class="btn">Вторник, 26 августа, 19:00</button></div>
+        </div>
+        <button class="btn ghost" onclick="go(10)">Дальше: если не ответил</button>
+      </div>
+
+      <!-- 10: через неделю -->
+      <div class="screen" data-s="10">
+        <h2 class="s">Через неделю без следующей записи</h2>
+        <p class="s">Одно сообщение и тишина. Не ответили — больше не пишем.</p>
+        <div class="notif">
+          <div class="from">Max · клиенту, через 7 дней</div>
+          Если решите продолжить — ваша ссылка на запись всегда здесь.
+          <div class="row"><button class="btn ghost" style="margin-top:0">Открыть запись к Анне</button></div>
+        </div>
+        <div class="rule"><b>И всё.</b> Второго сообщения не будет, вернуться можно когда угодно по той же ссылке.</div>
+        <button class="btn ghost" onclick="go(0)" style="margin-top:18px">Пройти путь заново</button>
+      </div>
+    </div>
+
+    <!-- КОММЕНТАРИЙ -->
+    <div class="note">
+      <div class="step on" data-n="0">
+        <div class="eyebrow">Экран 0 · Ссылка и «Поделиться»</div>
+        <h3>Человеческий адрес вместо cuid</h3>
+        <p>Специалист выбирает адрес при первом входе; старый адрес продолжает работать вечно и ведёт на новый. Кнопка «Поделиться» одинаковая во всех четырёх местах, где её могут искать: главный экран, расписание (включая мобильную ширину), карточка клиента, приложение.</p>
+        <div class="market"><b>Сейчас в проде:</b> адрес — сырой <code>cuid</code> психолога (<code>cmpas.ru/bot/book/&lt;id&gt;</code>) везде, включая уже готовый компонент «Поделиться». Слот под слаг в БД не заведён.</div>
+        <div class="code">psychologistSettings — нет поля <b class="new">slug</b><br>src/lib/share/buildShareUrls.ts — строит URL из <b>сырого id</b>, слаг не участвует<br>src/app/diary/availability/page.tsx:97 — <b>bookingUrl хардкодит /bot/book/${'{'}id{'}'}</b></div>
+      </div>
+
+      <div class="step" data-n="1">
+        <div class="eyebrow">Экран 1 · Подбор времени</div>
+        <h3>Не сетка на месяц, а три времени</h3>
+        <p>Уже реализовано и работает правильно: чипы предпочтения, три подобранных времени, лист ожидания на пустом состоянии. Единственное, чего не хватает — часового пояса клиента при показе времени.</p>
+        <div class="market"><b>Статус:</b> механика в коде верна. Это единственный экран прототипа, который можно взять как образец правильной реализации для остальных.</div>
+        <div class="code">src/lib/booking/suggested-times.ts — <b>готово, не трогать</b><br>src/app/bot/book/[psychologistId]/page.tsx — время без явного часового пояса, <b class="new">добавить подпись</b></div>
+      </div>
+
+      <div class="step" data-n="2">
+        <div class="eyebrow">Экран 2 · Возврат по ссылке (S1-R)</div>
+        <h3>Спокойное узнавание вместо чистого листа</h3>
+        <p>Человек ушёл подумать — это норма, а не отвал воронки. Запоминаем только предпочтение и дату визита на 30 дней, ничего личного. Ни слова «вы не завершили», специалист не видит, что кто-то заходил.</p>
+        <div class="market"><b>Сейчас в проде:</b> экран отсутствует полностью. Возврат по ссылке показывает чистый первый экран, как будто визита не было.</div>
+        <div class="code"><b class="new">не существует</b> — ни компонента, ни хранения preference/last_seen (localStorage или link_session), нигде в src/app/bot/book</div>
+      </div>
+
+      <div class="step" data-n="3">
+        <div class="eyebrow">Экран 3 · Бронь</div>
+        <h3>Два поля, без анкеты о себе</h3>
+        <p>Реализовано верно: имя, телефон, согласие по-настоящему (не мелким шрифтом), ничего о запросе и состоянии не спрашивается.</p>
+        <div class="market"><b>Статус:</b> в целом готово. Проверить только текст правила отмены — сейчас формулировка ссылается на удержание, которого больше нет.</div>
+      </div>
+
+      <div class="step" data-n="4">
+        <div class="eyebrow">Экран 4 · Подтверждение</div>
+        <h3>Канал называется настоящим именем</h3>
+        <p>Экран после записи должен называть канал, из которого человек на самом деле пришёл — Max, Telegram, что угодно ещё. Переключатель слева наглядно показывает разницу с текущим поведением.</p>
+        <div class="market"><b>Сейчас в проде:</b> текст захардкожен на «Уведомление придёт в Telegram» для всех, включая пришедших из Max.</div>
+        <div class="code">src/app/bot/book/[psychologistId]/page.tsx:464 — <b>«Уведомление придёт в Telegram»</b> без условия<br>src/app/bot/book/[psychologistId]/page.tsx:768 — тот же текст повторно, тоже безусловно</div>
+      </div>
+
+      <div class="step" data-n="5">
+        <div class="eyebrow">Экран 5 · Перенос без денег</div>
+        <h3>Перенос — это перенос, а не вторая бронь</h3>
+        <p>Старое время снимается ровно в момент подтверждения нового. Курьерская вежливость к листу ожидания — без денег, без гонки, одним сообщением.</p>
+        <div class="market"><b>Статус:</b> сам перенос уже атомарный и написан хорошо. Уведомление листа ожидания при отмене/переносе — отдельная, отсутствующая часть.</div>
+        <div class="code">src/lib/session-reschedule.ts — <b>rescheduleSessionAtomic, готово, не трогать</b><br>src/app/client/reschedule/[sessionId]/ — <b>клиентский перенос по подписанной ссылке, готово, не трогать</b><br>уведомление листа ожидания при освобождении часа — <b class="new">не существует</b></div>
+      </div>
+
+      <div class="step" data-n="6">
+        <div class="eyebrow">Экран 6 · Итог переноса</div>
+        <h3>Тихий лист ожидания</h3>
+        <p>«Тихий» в буквальном смысле: ни счётчиков «осталось мест», ни давления кто-то другому. Одно сообщение тому, кто ждал именно это время.</p>
+        <div class="market"><b>Сейчас в проде:</b> лист ожидания принимает заявки (<code>submitWaitlistInterest</code>), но ничего не делает с ними при освобождении часа.</div>
+      </div>
+
+      <div class="step" data-n="7">
+        <div class="eyebrow">Экран 7 · «Мои встречи»</div>
+        <h3>Постоянная дверь, а не тупик</h3>
+        <p>Работает по подписанной ссылке в любом браузере и на любом устройстве — не только внутри Telegram. Показывает будущие встречи и, впервые, прошедшие.</p>
+        <div class="market"><b>Сейчас в проде:</b> страница <code>/bot/client</code> узнаёт клиента только внутри Telegram WebApp или по <code>localStorage</code> на том же устройстве. Прошедших встреч не показывает вовсе.</div>
+        <div class="code">src/app/bot/client/page.tsx — <b>нет чтения токена из URL</b>, только tg.initDataUnsafe и localStorage<br>src/lib/client-workflow.ts — personalClientToken <b>уже есть и подписан</b>, но эта страница им не пользуется<br>вкладка «Прошедшие» — <b class="new">не существует</b></div>
+      </div>
+
+      <div class="step" data-n="8">
+        <div class="eyebrow">Экран 8 · Специалисту вечером</div>
+        <h3>Дальше всё зависит от факта, а не от расписания</h3>
+        <p>Клиенту, который не пришёл, писать «спасибо за встречу» — оскорбительно. Отметка специалиста — развилка перед следующим экраном, и должна существовать до него, а не вычисляться из часов.</p>
+        <div class="market"><b>Сейчас в проде:</b> такого списка нет. Единственная пост-сессионная механика — старый опрос самочувствия смайликами, выключенный по умолчанию.</div>
+        <div class="code">src/lib/cron/post-session.ts — <b>это опрос настроения (mood_1..5), не механика v2</b><br>одним тапом «Была / Не пришла / Перенесли» на сегодняшние сессии — <b class="new">не существует</b><br>нет статуса <b class="new">no_show</b> в используемых значениях DiarySession.status</div>
+      </div>
+
+      <div class="step" data-n="9">
+        <div class="eyebrow">Экран 9 · Клиенту через 2 часа</div>
+        <h3>Главный источник повторных встреч</h3>
+        <p>Короткое сообщение с одной кнопкой на конкретное время — не опрос, не оценка. Отправляется только после отметки «была/был» с экрана 8.</p>
+        <div class="market"><b>По приоритету продукта:</b> это заявлено v2 как «главный WOW» механики (§2.4) — и полностью отсутствует в текущей реализации.</div>
+      </div>
+
+      <div class="step" data-n="10">
+        <div class="eyebrow">Экран 10 · Через неделю</div>
+        <h3>Одно сообщение и тишина</h3>
+        <p>Право не продолжать — это право, а не проблема воронки. Ровно одно сообщение, если через неделю нет следующей брони; дальше — молчание.</p>
+        <div class="market"><b>Сейчас в проде:</b> отсутствует. <code>ScheduledClientMessage</code> — общий механизм рассылки, годится как транспорт, но триггер «нет записи через 7 дней» нигде не создаёт для него запись.</div>
+      </div>
+
+      <div class="nav">
+        <button id="prev" onclick="go(cur-1)">Назад</button>
+        <button id="next" onclick="go(cur+1)">Дальше</button>
+        <div class="dots" id="dots"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Прототип показывает механику, порядок решений и текст сообщений — не финальную вёрстку. Цвета и радиусы — рабочие значения токенов из <code>PRACTICE_handoff_booking.md §4</code>, а не приблизительные: экраны в проде сейчас используют три разных оттенка зелёного (<code>#1e3a2f</code> на экране записи, <code>#1a4d3a</code> на экране переноса) вместо одного <code>--accent:#2F5D50</code> — сверяйте пипеткой, а не на глаз.
+  </footer>
+</div>
+
+<script>
+  var cur = 0, total = 11;
+  var dots = document.getElementById('dots');
+  for (var i = 0; i < total; i++) { var d = document.createElement('i'); dots.appendChild(d); }
+  function go(n){
+    if (n < 0 || n >= total) return;
+    cur = n;
+    document.querySelectorAll('.screen').forEach(function(el){ el.classList.toggle('on', +el.dataset.s === n); });
+    document.querySelectorAll('.step').forEach(function(el){ el.classList.toggle('on', +el.dataset.n === n); });
+    dots.querySelectorAll('i').forEach(function(el, i){ el.classList.toggle('on', i === n); });
+    document.getElementById('prev').disabled = n === 0;
+    document.getElementById('next').disabled = n === total - 1;
+  }
+  document.querySelectorAll('.chip').forEach(function(c){
+    c.addEventListener('click', function(){
+      var group = c.closest('.chips');
+      group.querySelectorAll('.chip').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+      c.setAttribute('aria-pressed','true');
+    });
+  });
+  document.querySelectorAll('.tabs').forEach(function(t){
+    t.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){
+        t.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-selected','false'); });
+        b.setAttribute('aria-selected','true');
+      });
+    });
+  });
+  document.querySelectorAll('.mini').forEach(function(m){
+    m.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){
+        m.querySelectorAll('button').forEach(function(x){ x.removeAttribute('aria-pressed'); });
+        b.setAttribute('aria-pressed','true');
+      });
+    });
+  });
+  function setChannel(name, btn){
+    document.querySelector('[data-channel]').textContent = 'Уведомление придёт в ' + name + ' — туда, откуда вы пришли.';
+    document.querySelector('.notif .from').textContent = name + ' · за 24 часа';
+    btn.closest('.chips').querySelectorAll('.chip').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+    btn.setAttribute('aria-pressed','true');
+  }
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight') go(cur + 1);
+    if (e.key === 'ArrowLeft') go(cur - 1);
+  });
+  go(0);
+</script>
+</body>
+</html>

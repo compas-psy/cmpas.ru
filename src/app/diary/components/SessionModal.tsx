@@ -299,7 +299,7 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
                                 <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><CreditCard className="w-4 h-4" /></div>
                                 <div className="flex-1">
                                     <div className="text-sm font-bold text-foreground">Оплата сессии</div>
-                                    <div className="text-xs text-muted-foreground mt-0.5">КОМПАС только фиксирует отметку. Деньги принимает специалист вне сервиса.</div>
+                                    <div className="text-xs text-muted-foreground mt-0.5">ПРАКТИКА только фиксирует отметку. Деньги принимает специалист вне сервиса.</div>
                                 </div>
                                 <span className={`text-[11px] px-2 py-1 rounded-lg font-bold ${paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : paymentStatus === 'unpaid' ? 'bg-amber-50 text-amber-700' : 'bg-muted text-muted-foreground'}`}>{paymentLoading ? 'Загрузка…' : paymentLabel(paymentStatus)}</span>
                             </div>

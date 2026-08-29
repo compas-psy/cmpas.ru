@@ -30,7 +30,7 @@ export default function PositioningBand() {
                         <span className="text-white/80">Рабочее пространство</span>
                     </h2>
                     <p className="text-[15px] md:text-[16px] text-white/60 max-w-[520px] mx-auto leading-[1.6]">
-                        КОМПАС убирает рутину вокруг практики, чтобы у&nbsp;психолога оставалось больше внимания на&nbsp;контакт с&nbsp;клиентом.
+                        ПРАКТИКА убирает рутину вокруг работы, чтобы у&nbsp;психолога оставалось больше внимания на&nbsp;контакт с&nbsp;клиентом.
                     </p>
                 </div>
 

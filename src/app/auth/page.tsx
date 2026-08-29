@@ -85,7 +85,7 @@ export default function AuthPage() {
                             className="object-contain"
                         />
                         <span className="text-[22px] font-bold text-forest-800 tracking-wide uppercase">
-                            КОМПАС
+                            ПРАКТИКА
                         </span>
                     </Link>
 

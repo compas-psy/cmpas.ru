@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
         return new NextResponse(
             `<!DOCTYPE html>
             <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>Вход в КОМПАС</title>
+            <title>Вход в ПРАКТИКУ</title>
             <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#F7F8F4;color:#142018}
             .card{background:#fff;padding:2rem;border-radius:16px;max-width:400px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
             h2{color:#1D4735} .btn{display:inline-block;background:#1D4735;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:1rem;font-weight:600}
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
             @keyframes spin{to{transform:rotate(360deg)}}</style></head>
             <body><div class="card">
             <div class="spinner"></div>
-            <h2>Открываем КОМПАС...</h2>
+            <h2>Открываем ПРАКТИКУ...</h2>
             <a class="btn" href="${deepLink}">Открыть приложение</a>
             <script>window.location.href="${deepLink}";</script>
             </div></body></html>`,

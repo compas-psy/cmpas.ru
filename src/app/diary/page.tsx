@@ -53,6 +53,9 @@ const statusColors: Record<string, string> = {
     confirmed: 'bg-success-soft text-success-500 border-success-500/20',
     pending: 'bg-orange-soft text-orange-500 border-orange-500/20',
     completed: 'bg-sage-100 text-muted-foreground border-border',
+    // O-260829: тот же нейтральный цвет, что у completed — не пришедший
+    // клиент это не "ошибка", которую нужно подсвечивать тревожным красным.
+    no_show: 'bg-sage-100 text-muted-foreground border-border',
     cancelled: 'bg-red-soft text-red-500 border-red-500/20',
 };
 
@@ -60,6 +63,7 @@ const statusLabels: Record<string, string> = {
     confirmed: 'Подтверждено',
     pending: 'Ожидает',
     completed: 'Завершено',
+    no_show: 'Не пришёл',
     cancelled: 'Отменено',
 };
 
@@ -193,6 +197,17 @@ export default function DiaryCalendarPage() {
         }
     };
 
+    // O-260829 §5.4: вечерняя отметка специалиста ("была"/"не пришёл").
+    const handleMarkOutcome = async (id: string, outcome: 'completed' | 'no_show') => {
+        try {
+            const { markSessionOutcome } = await import('./actions/sessions');
+            await markSessionOutcome(id, outcome);
+            fetchSessions();
+        } catch {
+            toast.error('Не удалось отметить сессию');
+        }
+    };
+
     // ── Derived data ──
     const now = useMemo(() => new Date(), [sessions.length]); // recalculate on session data changes
     const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -217,7 +232,9 @@ export default function DiaryCalendarPage() {
             .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0] || null;
     }, [todaySessions, currentTimeStr, sessions, now]);
 
-    const completedToday = todaySessions.filter(s => s.status === 'completed').length;
+    // no_show считается "пройденной" наравне с completed для прогресса дня —
+    // это тоже разрешённая, а не открытая сессия (O-260829).
+    const completedToday = todaySessions.filter(s => s.status === 'completed' || s.status === 'no_show').length;
     const totalToday = todaySessions.length;
 
     const pendingSessions = sessions.filter(s => s.status === 'pending');
@@ -332,7 +349,10 @@ export default function DiaryCalendarPage() {
                     </p>
                     {userId && (
                         <ShareButton
-                            url={`https://cmpas.ru/bot/book/${userId}`}
+                            url={async () => {
+                                const { getMyBookingUrl } = await import('./actions/booking-link');
+                                return getMyBookingUrl();
+                            }}
                             text="Запишитесь на сессию:"
                             label="Отправить ссылку клиенту"
                             icon={<Share2 className="w-3.5 h-3.5" />}
@@ -574,13 +594,26 @@ export default function DiaryCalendarPage() {
                             <div className="divide-y divide-border/50">
                                 {filteredTodaySessions.map((s, idx) => {
                                     const cn = s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
-                                    const done = s.status === 'completed';
+                                    // no_show визуально трактуется как "пройдено", как и completed —
+                                    // оба означают "час решён", просто с разным исходом (O-260829).
+                                    const done = s.status === 'completed' || s.status === 'no_show';
                                     const isN = nextSession?.id === s.id;
                                     const mu = isN ? getMinutesUntil(s.time) : 0;
                                     const FormatInfo = formatLabels[s.format] || formatLabels.online;
                                     const FormatIcon = FormatInfo.icon;
                                     const noConsent = !s.client?.consentDate;
                                     const isLast = idx === filteredTodaySessions.length - 1;
+                                    // O-260829 §5.4 (правка по android_booking_v2.md §1): вечерняя отметка
+                                    // читается из status, а не из отдельного поля outcome. Кнопки остаются
+                                    // видимыми и для уже 'completed' сессий (не только pending/confirmed) —
+                                    // settlePastSessionsForPsychologist (src/lib/session-maintenance.ts)
+                                    // уже автоматически проставляет 'completed' через 15 минут после конца
+                                    // сессии с мобильных эндпоинтов, так что к вечернему просмотру
+                                    // большинство сегодняшних сессий на вебе тоже могут прийти уже
+                                    // 'completed' — специалист должен суметь поправить это на "не пришёл"
+                                    // задним числом, а не только пока сессия formally 'confirmed'.
+                                    const sessionEndStr = s.endTime || s.time;
+                                    const awaitingOutcome = sessionEndStr <= currentTimeStr && s.status !== 'cancelled' && s.status !== 'no_show';
 
                                     return (
                                         <div key={s.id} onClick={() => setEditingSession(s)}
@@ -612,6 +645,26 @@ export default function DiaryCalendarPage() {
                                                     <span>{s.duration} мин</span>
                                                     {noConsent && <span className="px-1 py-0.5 rounded text-[9px] font-bold text-red-600 bg-red-50 ml-1">Нет согласия</span>}
                                                 </div>
+                                                {awaitingOutcome && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap mt-2" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => handleMarkOutcome(s.id, 'completed')}
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors">
+                                                            Была/Был
+                                                        </button>
+                                                        {/* Нейтральный, не тревожный цвет — не пришедший клиент не "ошибка" (O-260829). */}
+                                                        <button
+                                                            onClick={() => handleMarkOutcome(s.id, 'no_show')}
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-muted-foreground border border-sage-200 transition-colors">
+                                                            Не пришла/Не пришёл
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setRescheduleTarget(s)}
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-forest-700 border border-sage-200 transition-colors">
+                                                            Перенести
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                             {/* Status badge */}
                                             <div className="shrink-0 flex flex-col items-end gap-1 pt-0.5">

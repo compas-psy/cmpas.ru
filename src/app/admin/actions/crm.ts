@@ -142,7 +142,7 @@ export async function sendAdminMessage(toUserId: string, channel: 'telegram' | '
             await sendMaxMessage(user.maxChatId, content)
         } else if (channel === 'email') {
             if (!user.email) throw new Error('У пользователя нет email')
-            await sendEmail(user.email, subject || 'Сообщение от КОМПАС', content)
+            await sendEmail(user.email, subject || 'Сообщение от ПРАКТИКИ', content)
         }
         status = 'delivered'
     } catch (err: any) {
@@ -421,7 +421,7 @@ export async function sendMassCommunication(
                 await sendMaxMessage(user.maxChatId, personalizedContent)
             } else if (channel === 'email') {
                 if (!user.email) { failed++; continue }
-                await sendEmail(user.email, personalizedSubject || 'Сообщение от КОМПАС', personalizedContent)
+                await sendEmail(user.email, personalizedSubject || 'Сообщение от ПРАКТИКИ', personalizedContent)
             }
 
             // Record message

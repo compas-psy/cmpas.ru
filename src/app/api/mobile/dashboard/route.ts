@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { clientBookingLink } from '@/lib/client-workflow';
+import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { listNotifications } from '@/lib/notifications';
 import { compareSessionStart, hasSessionNotes, isSessionFuture, settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 
@@ -118,7 +119,11 @@ export async function GET(req: NextRequest) {
             unread: !item.readAt,
         }));
 
-        const bookingLink = clientBookingLink(auth.userId, '');
+        // §5.1 (O-260829): human-readable /u/<slug> link for the Android app's
+        // "Ссылка для записи" — assigns a slug on first use, falls back to
+        // the old /bot/book/<id> form if slug resolution fails.
+        const slugBase = await getPsychologistBookingUrl(auth.userId).catch(() => null);
+        const bookingLink = clientBookingLink(auth.userId, '', slugBase || undefined);
         const baseBookingLink = bookingLink.replace(/\/c\/[^?]+/, '');
         const clientIds = new Set(weekSessions.map(s => s.clientId).filter(Boolean));
 
