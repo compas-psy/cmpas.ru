@@ -39,12 +39,18 @@ vi.mock('@/lib/client-workflow', () => ({
 vi.mock('@/lib/session-reschedule', () => ({
     rescheduleSessionAtomic: vi.fn(),
 }));
+// O-260829 §7: track() — реальный модуль не нужен этим тестам markSessionOutcome
+// (о самой отправке события пишет tests/track-session-outcome.test.ts).
+vi.mock('@/lib/analytics/track', () => ({ track: vi.fn() }));
 
 function baseSession(overrides: Record<string, unknown> = {}) {
     return {
         id: 'session_1',
         psychologistId: 'psy_1',
         clientId: 'client_1',
+        date: new Date(Date.now() - 3 * 60 * 60 * 1000),
+        time: '10:00',
+        endTime: '10:50',
         outcome: null,
         outcomeMarkedAt: null,
         ...overrides,

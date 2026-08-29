@@ -219,6 +219,54 @@ events:
       surface: [android]
       channel: [telegram, max, auto]
 
+  # O-260829 §7 (ПРАКТИКА · CJM записи: пакетное ТЗ на исправление, v2) —
+  # пост-сессионный каскад (§5.4). ТЗ ссылается на handoff §7 (PRACTICE_
+  # handoff_booking.md), которого в репозитории нет (см. §1 самого ТЗ:
+  # "PRACTICE_handoff_booking.md — подтверждено, в репозитории НЕТ") — как и
+  # событий booking_confirmed/booking_cancelled/slot_resold, которые ТЗ
+  # просит только точечно поправить (убрать/переименовать prop), считая их
+  # уже существующими. Ни в этом реестре, ни где-либо в коде их нет — весь
+  # клиентский путь записи (бот/веб) сегодня не инструментирован аналитикой
+  # вовсе, инструментирован только Android-путь выше. Не изобретаю
+  # недостающие booking_confirmed/booking_cancelled/waitlist_slot_offered
+  # целиком (required/optional за пределами того, что назвало само ТЗ) —
+  # это была бы аналитика для несуществующей интеграции, а не правка
+  # существующей. Ниже — только то, что описано ТЗ полностью и опирается на
+  # реально реализованный в этом заходе код (§5.4): факт вечерней отметки
+  # специалиста и факт отправки двух новых сообщений каскада. no_show
+  # ("добавить, если отсутствует — нужен для нового поля outcome из §5.4")
+  # добавлен явно по этой инструкции, с единственным названным ТЗ prop'ом.
+  session_outcome_marked:
+    product: practice
+    question: "Как часто и через сколько после конца сессии специалист отмечает её исход?"
+    required: [outcome, hours_after_end]
+    optional: []
+    props:
+      outcome: string
+      hours_after_end: number
+    values:
+      outcome: [completed, no_show]
+
+  rebooking_nudge_sent:
+    product: practice
+    question: "Как часто клиенту уходит предложение ближайшего времени через 2 часа после сессии?"
+    required: []
+    optional: []
+
+  weekly_followup_sent:
+    product: practice
+    question: "Как часто клиенту уходит напоминание о записи через неделю без новой брони?"
+    required: []
+    optional: []
+
+  no_show:
+    product: practice
+    question: "Не пришедший клиент — новый или уже бывавший?"
+    required: [is_returning]
+    optional: []
+    props:
+      is_returning: boolean
+
   # ЗАПИСКИ (source of truth for the client: zapiski's own
   # packages/core/src/analytics/schema.ts). Snapshot taken 18.08.2026.
   # `length_bucket`/`query_length_bucket`/`format` are enums client-side

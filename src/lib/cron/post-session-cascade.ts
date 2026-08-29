@@ -27,6 +27,7 @@ import { getPsychologistBookingUrl } from '../booking/slug';
 import { getSuggestedTimes } from '@/app/bot/actions';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { track } from '../analytics/track';
 
 /** Тот же приём, что clientTargets() в reminders.ts — вынесен сюда отдельно,
  * а не импортирован оттуда, чтобы не тянуть в этот файл всю рассылочную
@@ -125,6 +126,14 @@ export async function processNextBookingNudge(): Promise<void> {
                 const link = clientBookingLink(session.psychologistId, client.id, bookingBase);
                 const text = `Спасибо за встречу. Если захотите продолжить — вот ближайшее время у ${psychologistName}${timeLabel}.\n${link}`;
                 await sendToClient(client, text);
+
+                // O-260829 §7: rebooking_nudge_sent — факт отправки, без
+                // содержимого сообщения.
+                await track(db, {
+                    event: 'rebooking_nudge_sent',
+                    product: 'practice',
+                    accountId: session.psychologistId,
+                });
             }
 
             // Одноразово: провал отправки или отсутствие канала — тоже финал,
@@ -181,6 +190,13 @@ export async function processWeeklyFollowup(): Promise<void> {
                     const link = clientBookingLink(session.psychologistId, client.id, bookingBase);
                     const text = `Если решите продолжить — ваша ссылка на запись всегда здесь.\n${link}`;
                     await sendToClient(client, text);
+
+                    // O-260829 §7: weekly_followup_sent — факт отправки, без содержимого.
+                    await track(db, {
+                        event: 'weekly_followup_sent',
+                        product: 'practice',
+                        accountId: session.psychologistId,
+                    });
                 }
             }
 

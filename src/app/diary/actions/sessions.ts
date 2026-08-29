@@ -8,6 +8,7 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 import { rescheduleSessionAtomic } from '@/lib/session-reschedule';
+import { track } from '@/lib/analytics/track';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -252,9 +253,23 @@ export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_
 
     // Отметку можно поставить заново (специалист передумал) — ТЗ не запрещает
     // менять исход, поэтому update, а не guard на "уже отмечено".
+    const now = new Date();
     const session = await db.diarySession.update({
         where: { id },
-        data: { outcome, outcomeMarkedAt: new Date() },
+        data: { outcome, outcomeMarkedAt: now },
+    });
+
+    // O-260829 §7: session_outcome_marked — факт вечерней отметки, без
+    // содержимого (только исход и через сколько часов после конца сессии).
+    const [h, m] = (existing.endTime || existing.time).split(':').map(Number);
+    const sessionEnd = new Date(existing.date);
+    sessionEnd.setHours(h, m, 0, 0);
+    const hoursAfterEnd = Math.round((now.getTime() - sessionEnd.getTime()) / (60 * 60 * 1000));
+    await track(db, {
+        event: 'session_outcome_marked',
+        product: 'practice',
+        accountId: psychologistId,
+        props: { outcome, hours_after_end: hoursAfterEnd },
     });
 
     revalidatePath('/diary');
