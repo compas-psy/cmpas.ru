@@ -90,7 +90,7 @@ export default function PsychologistDay() {
                         Рабочий день психолога
                     </h2>
                     <p className="text-[15px] md:text-[16px] text-[#5F6C64] max-w-[480px] mx-auto leading-[1.6]">
-                        КОМПАС помогает не забыть важное до, во&nbsp;время и&nbsp;после сессии.
+                        ПРАКТИКА помогает не забыть важное до, во&nbsp;время и&nbsp;после сессии.
                     </p>
                 </div>
 

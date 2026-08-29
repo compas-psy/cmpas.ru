@@ -98,7 +98,7 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
     return (
         <main className="practice-booking-theme min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
             <div className="mx-auto max-w-md rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8">
-                <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--booking-accent)]">КОМПАС · перенос встречи</p>
+                <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--booking-accent)]">ПРАКТИКА · перенос встречи</p>
                 <h1 className="text-xl font-bold leading-tight tracking-tight mb-4">Выберите новое время</h1>
 
                 <div className="bg-[#f4f1ea] rounded-2xl p-4 mb-5 border border-[#e6dfd1]">

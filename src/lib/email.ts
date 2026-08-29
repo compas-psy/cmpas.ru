@@ -16,7 +16,7 @@ const transporter = nodemailer.createTransport({
 const FROM = process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@cmpas.ru';
 
 /**
- * Send a branded email using the КОМПАС template style
+ * Send a branded email using the ПРАКТИКА template style
  */
 export async function sendEmail(to: string, subject: string, htmlContent: string): Promise<void> {
     const brandColor = '#1a4d3a';
@@ -85,7 +85,7 @@ export async function sendEmail(to: string, subject: string, htmlContent: string
 </html>`;
 
     await transporter.sendMail({
-        from: `"КОМПАС" <${FROM}>`,
+        from: `"ПРАКТИКА" <${FROM}>`,
         to,
         subject,
         html: fullHtml,

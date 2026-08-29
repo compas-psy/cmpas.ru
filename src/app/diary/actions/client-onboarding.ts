@@ -172,7 +172,7 @@ export async function sendClientOnboarding(
         const firstName = extractFirstName(client.name) || client.name;
         await sendTelegramMessage(
             psych.telegramChatId,
-            `${firstName}, подключите уведомления о записях.\n\nКОМПАС будет присылать только подтверждения, напоминания, переносы и отмены встреч.`,
+            `${firstName}, подключите уведомления о записях.\n\nПРАКТИКА будет присылать только подтверждения, напоминания, переносы и отмены встреч.`,
             {
                 parse_mode: 'HTML',
                 disable_web_page_preview: true,

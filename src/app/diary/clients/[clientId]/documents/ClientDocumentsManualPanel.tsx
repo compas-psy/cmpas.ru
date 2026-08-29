@@ -87,7 +87,7 @@ export function ClientDocumentsManualPanel({ clientId }: { clientId: string }) {
                     <div>
                         <h2 className="text-lg font-bold text-foreground">Ручная отправка клиенту</h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Нажмите кнопку — КОМПАС создаст доставки активных документов, сформирует текст и скопирует его. Дальше отправьте сообщение в Telegram, MAX, WhatsApp или любой другой канал.
+                            Нажмите кнопку — ПРАКТИКА создаст доставки активных документов, сформирует текст и скопирует его. Дальше отправьте сообщение в Telegram, MAX, WhatsApp или любой другой канал.
                         </p>
                     </div>
                     <button onClick={buildMessage} disabled={building} className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-forest-700 disabled:opacity-50">

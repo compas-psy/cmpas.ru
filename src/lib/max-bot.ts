@@ -104,7 +104,7 @@ async function handleStart(userId: number, payload: string | undefined) {
     const psy = await db.user.findFirst({ where: { maxChatId: mid } });
     if (psy) {
         return sendMaxMessage(userId,
-            `Добро пожаловать в КОМПАС, ${psy.name || 'Специалист'}!\n\nВыберите действие:`,
+            `Добро пожаловать в ПРАКТИКУ, ${psy.name || 'Специалист'}!\n\nВыберите действие:`,
             [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '🔗 Ссылка на запись', url: `${APP_URL}/bot/book/${psy.id}` }]]
         );
     }
@@ -210,7 +210,7 @@ async function handleStart(userId: number, payload: string | undefined) {
     }
 
     return sendMaxMessage(userId,
-        'Добро пожаловать в КОМПАС!\n\nЕсли вы психолог — войдите в кабинет и привяжите MAX через раздел Интеграции.',
+        'Добро пожаловать в ПРАКТИКУ!\n\nЕсли вы психолог — войдите в кабинет и привяжите MAX через раздел Интеграции.',
         [[{ text: '💼 Войти в кабинет', url: `${APP_URL}/diary/integrations` }]]
     );
 }
@@ -224,7 +224,7 @@ async function handleConnect(userId: number) {
             body: JSON.stringify({ maxUserId: mid }),
         });
         const data = await res.json();
-        if (data.url) return sendMaxMessage(userId, 'Нажмите кнопку ниже, чтобы привязать ваш MAX аккаунт к КОМПАС.\n\n⚠️ Ссылка действует 15 минут.', [[{ text: '🔗 Привязать аккаунт', url: data.url }]]);
+        if (data.url) return sendMaxMessage(userId, 'Нажмите кнопку ниже, чтобы привязать ваш MAX аккаунт к ПРАКТИКЕ.\n\n⚠️ Ссылка действует 15 минут.', [[{ text: '🔗 Привязать аккаунт', url: data.url }]]);
     } catch (e) {
         console.error('[MAX Bot] /connect error:', e);
     }
@@ -271,7 +271,7 @@ async function handleHelp(userId: number) {
             [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '📅 Календарь', url: `${APP_URL}/diary/calendar` }]]
         );
     }
-    return sendMaxMessage(userId, '📋 Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n/connect — привязать аккаунт психолога', [[{ text: '💼 Открыть КОМПАС', url: `${APP_URL}/diary` }]]);
+    return sendMaxMessage(userId, '📋 Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n/connect — привязать аккаунт психолога', [[{ text: '💼 Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
 }
 
 async function handleShareLink(userId: number) {
@@ -416,7 +416,7 @@ export async function handleMaxUpdate(update: MaxUpdate) {
                         [{ text: '🗓 Мои сессии', payload: '/sessions' }],
                     ]);
                 } else {
-                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/help — помощь', [[{ text: '💼 Открыть КОМПАС', url: `${APP_URL}/diary` }]]);
+                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/help — помощь', [[{ text: '💼 Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
                 }
             }
         }

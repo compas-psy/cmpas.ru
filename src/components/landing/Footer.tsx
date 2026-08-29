@@ -31,7 +31,7 @@ export default function LandingFooter() {
                     <div className="col-span-2 md:col-span-1">
                         <div className="flex items-center gap-2.5 mb-3">
                             <Image src="/icon.png" alt="" width={28} height={28} className="rounded-lg" />
-                            <span className="text-[15px] font-bold tracking-wider uppercase">КОМПАС</span>
+                            <span className="text-[15px] font-bold tracking-wider uppercase">ПРАКТИКА</span>
                         </div>
                         <p className="text-[13px] text-white/50 leading-snug max-w-[200px]">
                             Умный кабинет психолога в мессенджере
@@ -81,7 +81,7 @@ export default function LandingFooter() {
 
                 {/* Bottom */}
                 <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <p className="text-[12px] text-white/40">© 2026 КОМПАС. Все права защищены.</p>
+                    <p className="text-[12px] text-white/40">© 2026 ПРАКТИКА. Все права защищены.</p>
                     <div className="flex items-center gap-4">
                         <a href="https://t.me/psy_notebook" target="_blank" rel="noopener noreferrer" className="text-[12px] text-white/40 hover:text-white/70 transition-colors">Telegram</a>
                     </div>

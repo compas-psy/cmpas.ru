@@ -61,7 +61,7 @@ const changelog: ChangelogEntry[] = [
             { emoji: '💬', text: 'Оценка самочувствия клиента после сессии', tag: 'new' },
             { emoji: '🔗', text: 'Кнопка «Отправить ссылку клиенту» на Dashboard', tag: 'new' },
             { emoji: '📅', text: 'Календарь в нижнем меню на мобильном', tag: 'improved' },
-            { emoji: '📲', text: 'КОМПАС можно установить как приложение (PWA)', tag: 'new' },
+            { emoji: '📲', text: 'ПРАКТИКУ можно установить как приложение (PWA)', tag: 'new' },
             { emoji: '🔔', text: 'Настройки: дайджест, сводка, mood-check, напоминания', tag: 'new' },
         ],
     },

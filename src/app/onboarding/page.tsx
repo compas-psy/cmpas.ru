@@ -167,7 +167,7 @@ export default function OnboardingPage() {
         <main className="min-h-screen bg-[#faf8f5] p-4 lg:p-8">
             <section className="mx-auto flex min-h-[640px] max-w-5xl overflow-hidden rounded-[40px] bg-white shadow-2xl">
                 <aside className="hidden w-[38%] bg-[#1a4d3a] p-10 text-white md:block">
-                    <div className="mb-10 text-xl font-medium tracking-[0.22em]">КОМПАС</div>
+                    <div className="mb-10 text-xl font-medium tracking-[0.22em]">ПРАКТИКА</div>
                     <h1 className="mb-4 text-3xl font-bold leading-tight">Настройка практики без лишних шагов</h1>
                     <p className="text-white/70">Профиль, расписание, документы, мессенджер и первый клиент — ровно то, что нужно для старта беты.</p>
                     <div className="mt-10 space-y-3">

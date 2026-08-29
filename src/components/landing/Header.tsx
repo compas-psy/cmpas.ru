@@ -35,8 +35,8 @@ export default function LandingHeader() {
             <div className="max-w-[1240px] mx-auto px-5 md:px-8 h-[72px] md:h-[80px] flex items-center justify-between">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2.5 shrink-0">
-                    <Image src="/icon.png" alt="КОМПАС" width={32} height={32} className="w-8 h-8 rounded-lg" />
-                    <span className="text-[17px] font-bold tracking-[0.12em] text-forest-800 uppercase">КОМПАС</span>
+                    <Image src="/icon.png" alt="ПРАКТИКА" width={32} height={32} className="w-8 h-8 rounded-lg" />
+                    <span className="text-[17px] font-bold tracking-[0.12em] text-forest-800 uppercase">ПРАКТИКА</span>
                 </Link>
 
                 {/* Desktop nav */}

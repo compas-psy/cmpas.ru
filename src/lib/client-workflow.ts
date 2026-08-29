@@ -234,7 +234,7 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
         settings.paymentText || '',
         settings.paymentLink ? `Ссылка на оплату: ${settings.paymentLink}` : '',
         settings.paymentQrUrl ? `QR-код для оплаты: ${settings.paymentQrUrl}` : '',
-        'КОМПАС не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
+        'ПРАКТИКА не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
     ];
 
     return lines.filter(Boolean).join('\n');

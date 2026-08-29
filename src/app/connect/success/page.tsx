@@ -48,7 +48,7 @@ export default async function ConnectSuccessPage({
                 <p className="mt-3 text-[15px] leading-6 text-[#60716A]">{item.text}</p>
                 <div className="mt-7 pt-5 border-t border-[#E7ECE9] flex items-start gap-3 text-left text-xs leading-5 text-[#71807A]">
                     <ShieldCheck className="w-5 h-5 text-[#2F6B5A] shrink-0" />
-                    <p>КОМПАС использует подключение только для сервисных сообщений, связанных с вашими записями.</p>
+                    <p>ПРАКТИКА использует подключение только для сервисных сообщений, связанных с вашими записями.</p>
                 </div>
                 <p className="mt-5 text-xs text-[#85918C]">Эту страницу можно закрыть.</p>
             </section>

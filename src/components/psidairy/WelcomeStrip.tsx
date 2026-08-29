@@ -113,7 +113,7 @@ export function WelcomeStrip() {
                     <Sparkles className="w-5 h-5" strokeWidth={1.5} />
                 </div>
                 <div>
-                    <h2 className="font-bold text-foreground text-base md:text-lg">Добро пожаловать в КОМПАС</h2>
+                    <h2 className="font-bold text-foreground text-base md:text-lg">Добро пожаловать в ПРАКТИКУ</h2>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         Три шага — и кабинет готов к работе.
                     </p>

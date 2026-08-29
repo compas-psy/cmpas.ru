@@ -53,7 +53,7 @@ function MaxConnectContent() {
                     }
                 } catch {
                     setStatus('error');
-                    setErrorMsg('Вы не авторизованы в КОМПАС. Войдите и перейдите по ссылке снова.');
+                    setErrorMsg('Вы не авторизованы в ПРАКТИКЕ. Войдите и перейдите по ссылке снова.');
                 }
             })
             .catch(() => {

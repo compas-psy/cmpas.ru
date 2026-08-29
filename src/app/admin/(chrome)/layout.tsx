@@ -57,7 +57,7 @@ export default async function AdminLayout({
                             К
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-white tracking-wider">КОМПАС</p>
+                            <p className="text-sm font-bold text-white tracking-wider">ПРАКТИКА</p>
                             <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">Admin</p>
                         </div>
                     </div>

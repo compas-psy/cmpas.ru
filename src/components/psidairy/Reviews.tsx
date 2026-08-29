@@ -191,7 +191,7 @@ export default function Reviews() {
                 {/* CTA */}
                 <div className="mt-12 text-center">
                     <p className="text-foreground/60 text-sm mb-4">
-                        Присоединяйтесь к сообществу специалистов, которые уже используют Компас
+                        Присоединяйтесь к сообществу специалистов, которые уже используют ПРАКТИКУ
                     </p>
                     <a
                         href="#order"

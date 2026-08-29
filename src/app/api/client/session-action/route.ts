@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
             sessionId: session.id,
             clientId: session.clientId,
         });
-        return resultPage('Встреча отменена', 'Специалист увидит изменение в КОМПАС.', 'danger');
+        return resultPage('Встреча отменена', 'Специалист увидит изменение в ПРАКТИКЕ.', 'danger');
     }
 
     if (action === 'reschedule') {

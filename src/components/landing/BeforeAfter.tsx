@@ -28,7 +28,7 @@ export default function BeforeAfter() {
                     {/* Before */}
                     <div className="bg-white rounded-[24px] border border-[#E4E9E3] p-6 md:p-7 relative">
                         <div className="flex items-center gap-3 mb-5">
-                            <div className="text-[11px] font-bold uppercase tracking-wider text-[#5F6C64]">До КОМПАСА</div>
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-[#5F6C64]">До ПРАКТИКИ</div>
                         </div>
                         <div className="space-y-3.5">
                             {[
@@ -60,7 +60,7 @@ export default function BeforeAfter() {
 
                         <div className="relative">
                             <div className="flex items-center gap-2 mb-5">
-                                <div className="text-[11px] font-bold uppercase tracking-wider text-forest-800">С КОМПАСОМ</div>
+                                <div className="text-[11px] font-bold uppercase tracking-wider text-forest-800">С ПРАКТИКОЙ</div>
                                 <Star className="w-3.5 h-3.5 text-[#CC9E50] fill-[#CC9E50]" />
                             </div>
                             <div className="space-y-3.5">

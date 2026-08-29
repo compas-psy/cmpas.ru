@@ -72,13 +72,13 @@ export default function BillingPage() {
             <div className="w-full max-w-md flex flex-col items-center">
 
                 <Link href="/diary" className="flex items-center gap-3 mb-8 hover:opacity-90 transition-opacity">
-                    <Image src="/logo-tree.png" alt="КОМПАС" width={36} height={36} className="object-contain" />
-                    <span className="text-xl font-semibold text-[#1a4d3a] tracking-wide">КОМПАС</span>
+                    <Image src="/logo-tree.png" alt="ПРАКТИКА" width={36} height={36} className="object-contain" />
+                    <span className="text-xl font-semibold text-[#1a4d3a] tracking-wide">ПРАКТИКА</span>
                 </Link>
 
                 <div className="text-center mb-6">
                     <h1 className="text-2xl font-bold text-[#1a1a1a] mb-1">
-                        {isForever ? 'Бесплатный доступ' : subscriptionEndsAt ? 'Подписка активна' : isExpired ? 'Пробный период завершён' : 'Подписка КОМПАС'}
+                        {isForever ? 'Бесплатный доступ' : subscriptionEndsAt ? 'Подписка активна' : isExpired ? 'Пробный период завершён' : 'Подписка ПРАКТИКА'}
                     </h1>
                     <p className="text-sm text-[#1a1a1a]/60">
                         {loading ? '...' : isForever
@@ -146,7 +146,7 @@ export default function BillingPage() {
                                             <p className="text-white font-semibold">Практика+</p>
                                             <span className="text-xs bg-[#c9a961] text-[#1a4d3a] font-semibold px-2 py-0.5 rounded-full">Скоро</span>
                                         </div>
-                                        <p className="text-white/60 text-xs">Таймлайн, документы, оплата через КОМПАС</p>
+                                        <p className="text-white/60 text-xs">Таймлайн, документы, оплата через ПРАКТИКУ</p>
                                     </div>
                                     <p className="text-white font-bold text-lg">1990 ₽<span className="text-white/50 text-xs font-normal">/мес</span></p>
                                 </div>

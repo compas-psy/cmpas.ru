@@ -17,10 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://cmpas.ru'),
   title: {
-    default: "КОМПАС — онлайн-кабинет психолога для записи, клиентов и заметок",
-    template: "%s | КОМПАС"
+    default: "ПРАКТИКА — онлайн-кабинет психолога для записи, клиентов и заметок",
+    template: "%s | ПРАКТИКА"
   },
-  description: "КОМПАС помогает психологам вести расписание, клиентскую базу, запись на сессии, заметки и уведомления через Telegram и MAX.",
+  description: "ПРАКТИКА помогает психологам вести расписание, клиентскую базу, запись на сессии, заметки и уведомления через Telegram и MAX.",
   keywords: ["кабинет психолога", "запись на сессию", "онлайн запись психолог", "crm психолога", "расписание психолога", "клиенты психолога", "заметки после сессии"],
   icons: {
     icon: "/icon.png?v=2",
@@ -55,7 +55,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#1a4d3a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="КОМПАС" />
+        <meta name="apple-mobile-web-app-title" content="ПРАКТИКА" />
         {/* Yandex.Metrika counter */}
         <Script id="yandex-metrika" strategy="afterInteractive">
           {`

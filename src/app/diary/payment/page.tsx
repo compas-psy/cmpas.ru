@@ -78,7 +78,7 @@ export default function DiaryPaymentPage() {
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Оплата клиентом</h1>
-                    <p className="text-muted-foreground text-sm mt-1 max-w-2xl">КОМПАС не принимает оплату и не проверяет поступление денег. Здесь вы настраиваете текст, ссылку или QR, которые будут отправляться клиенту от вашего имени.</p>
+                    <p className="text-muted-foreground text-sm mt-1 max-w-2xl">ПРАКТИКА не принимает оплату и не проверяет поступление денег. Здесь вы настраиваете текст, ссылку или QR, которые будут отправляться клиенту от вашего имени.</p>
                 </div>
                 <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:bg-forest-700 transition-all shadow-card disabled:opacity-50">
                     <Save className="w-4 h-4" /> {saving ? 'Сохраняю...' : 'Сохранить'}
@@ -88,7 +88,7 @@ export default function DiaryPaymentPage() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <div>
-                    <b>Важно:</b> статус оплаты в КОМПАСе является ручной отметкой специалиста, если нет отдельной банковской интеграции. Сервис только передаёт клиенту вашу инструкцию по оплате.
+                    <b>Важно:</b> статус оплаты в ПРАКТИКЕ является ручной отметкой специалиста, если нет отдельной банковской интеграции. Сервис только передаёт клиенту вашу инструкцию по оплате.
                 </div>
             </div>
 
@@ -141,7 +141,7 @@ settings.paymentDueText ? `Срок оплаты: ${settings.paymentDueText}` : 
 settings.paymentText || '',
 settings.paymentLink ? `Ссылка на оплату: ${settings.paymentLink}` : '',
 settings.paymentQrUrl ? `QR-код для оплаты: ${settings.paymentQrUrl}` : '',
-'КОМПАС не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
+'ПРАКТИКА не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
 ].filter(Boolean).join('\n')}
                     </pre>
                 </div>

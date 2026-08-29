@@ -64,7 +64,7 @@ export default function ImportClientsPage() {
                     Вставить списком
                 </h1>
                 <p className="text-muted-foreground text-sm mt-2">
-                    Скопируйте клиентов из заметок, таблицы или старого списка — КОМПАС сам разберёт строки.
+                    Скопируйте клиентов из заметок, таблицы или старого списка — ПРАКТИКА сама разберёт строки.
                 </p>
             </div>
 
@@ -73,7 +73,7 @@ export default function ImportClientsPage() {
                 <h2 className="font-semibold text-foreground mb-2 text-sm">Формат</h2>
                 <p className="text-muted-foreground text-sm mb-3">
                     Одна строка — один клиент. Поля разделяются запятой, точкой с запятой или табом. Порядок полей не важен:
-                    имя, телефон и email КОМПАС определит сам.
+                    имя, телефон и email ПРАКТИКА определит сама.
                 </p>
                 <pre className="bg-background border border-border/50 rounded-lg p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
 {EXAMPLE}

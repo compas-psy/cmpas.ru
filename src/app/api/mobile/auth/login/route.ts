@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         await transport.sendMail({
             to: email,
             from: process.env.EMAIL_FROM || 'noreply@cmpas.ru',
-            subject: 'Вход в КОМПАС',
+            subject: 'Вход в ПРАКТИКУ',
             text: text({ url: magicLink, host: 'cmpas.ru' }),
             html: html({ url: magicLink, host: 'cmpas.ru', theme: {} }),
         });

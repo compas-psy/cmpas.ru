@@ -44,7 +44,7 @@ export default async function ClientDocumentPage({ params, searchParams }: { par
         <main className="min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
             <div className="mx-auto max-w-2xl rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8">
                 <div className="mb-6 border-b border-[#e6dfd1] pb-5">
-                    <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-[#1a4d3a]">КОМПАС · документ специалиста</p>
+                    <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-[#1a4d3a]">ПРАКТИКА · документ специалиста</p>
                     <h1 className="text-2xl font-bold leading-tight tracking-tight">{delivery.documentTitle}</h1>
                     <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-[#5d665f]">
                         <dt className="text-[#8a8f88]">Специалист</dt>
