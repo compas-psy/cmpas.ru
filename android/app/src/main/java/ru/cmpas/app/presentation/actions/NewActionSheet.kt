@@ -162,7 +162,7 @@ private fun documentMessage(document: DocumentTemplate): String = buildString {
     append(document.title)
     append("»: https://cmpas.ru/d/")
     append(document.id)
-    if (document.requiresAck) append(". Пожалуйста, ознакомьтесь и подтвердите принятие в КОМПАС.")
+    if (document.requiresAck) append(". Пожалуйста, ознакомьтесь и подтвердите принятие в ПРАКТИКУ.")
 }
 
 private enum class QuickClientMode { OPEN, MESSAGE, DOCUMENT }

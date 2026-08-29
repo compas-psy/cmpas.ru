@@ -151,7 +151,7 @@ fun InviteSheet(
     }
 
     CompasBottomSheet(onClose = onClose) {
-        SheetHead("Пригласить в КОМПАС", clientName)
+        SheetHead("Пригласить в ПРАКТИКУ", clientName)
         Spacer(Modifier.height(14.dp))
 
         when {
@@ -255,7 +255,7 @@ fun InviteSheet(
                 PrimaryButton(
                     text = "Поделиться приглашением",
                     icon = Icons.Outlined.Share,
-                    onClick = { shareText(context, "Приглашение в КОМПАС", invite.shareText ?: invite.inviteLink) },
+                    onClick = { shareText(context, "Приглашение в ПРАКТИКУ", invite.shareText ?: invite.inviteLink) },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
