@@ -44,7 +44,8 @@ fun GlassDock(
         modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 14.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         // A bounded, full-width container makes the four labels adaptive on
@@ -57,7 +58,7 @@ fun GlassDock(
                 Modifier
                     .fillMaxWidth()
                     .glassDock(30.dp)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.getOrNull(0)?.let { tab ->
@@ -92,7 +93,7 @@ private fun DockBtn(
     val tint = if (active) Forest800 else CompasMutedFg
     Box(
         modifier
-            .height(54.dp)
+            .height(48.dp)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -107,19 +108,19 @@ private fun DockBtn(
                 if (active) {
                     Box(
                         Modifier
-                            .size(width = 38.dp, height = 30.dp)
-                            .clip(RoundedCornerShape(13.dp))
+                            .size(width = 36.dp, height = 34.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(Forest700.copy(alpha = 0.12f)),
                     )
                 }
                 Icon(tab.icon, tab.label, Modifier.size(22.dp), tint = tint)
             }
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(3.dp))
             Text(
                 text = tab.label,
                 fontFamily = GeistFontFamily,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
+                fontSize = 10.5.sp,
+                lineHeight = 13.sp,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
                 color = tint,
                 maxLines = 1,
