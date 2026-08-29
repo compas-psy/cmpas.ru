@@ -35,6 +35,7 @@ import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.notifications.NotificationCenterSheet
 import ru.cmpas.app.presentation.theme.*
 import ru.cmpas.app.presentation.util.PersonName
+import ru.cmpas.app.presentation.util.canRecordSessionOutcome
 import java.time.Duration
 import java.time.LocalTime
 
@@ -173,9 +174,12 @@ fun DashboardScreen(
                     ScheduleRow(
                         s = s,
                         isUpdatingPayment = uiState.paymentUpdatingSessionId == s.id,
+                        isUpdatingOutcome = uiState.outcomeUpdatingSessionId == s.id,
                         onClick = { onSessionClick(s.id) },
                         onNote = { onNoteClick(s.id) },
                         onPaid = { viewModel.markPaid(s.id) },
+                        onComplete = { viewModel.markSessionOutcome(s.id, SessionStatus.COMPLETED) },
+                        onNoShow = { viewModel.markSessionOutcome(s.id, SessionStatus.NO_SHOW) },
                     )
                 }
             }
@@ -278,12 +282,19 @@ private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () 
 private fun ScheduleRow(
     s: Session,
     isUpdatingPayment: Boolean,
+    isUpdatingOutcome: Boolean,
     onClick: () -> Unit,
     onNote: () -> Unit,
     onPaid: () -> Unit,
+    onComplete: () -> Unit,
+    onNoShow: () -> Unit,
 ) {
     val dur = durationMin(s.startTime, s.endTime)
     val passed = s.status == SessionStatus.COMPLETED
+    // Тот же вечерний список, тот же критерий, что и на экране деталей
+    // сессии (canRecordSessionOutcome) — специалист должен суметь пройти
+    // весь сегодняшний день здесь, не открывая каждую запись по отдельности.
+    val canRecordOutcome = canRecordSessionOutcome(s.date, s.status)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Column(Modifier.width(46.dp), horizontalAlignment = Alignment.End) {
             Text(s.startTime, style = tBody.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = CompasFg)
@@ -335,6 +346,27 @@ private fun ScheduleRow(
                             onClick = onPaid,
                         )
                     }
+                }
+            }
+            if (canRecordOutcome) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton(
+                        text = "Была",
+                        icon = Icons.Outlined.CheckCircle,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isUpdatingOutcome,
+                        onClick = onComplete,
+                    )
+                    // Безличная форма, как и в SessionHero: гадать пол
+                    // клиента ради грамматики здесь ни к чему.
+                    GhostButton(
+                        text = if (isUpdatingOutcome) "Отмечаем…" else "Не пришли",
+                        icon = Icons.Outlined.PersonOff,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isUpdatingOutcome,
+                        onClick = onNoShow,
+                    )
                 }
             }
         }

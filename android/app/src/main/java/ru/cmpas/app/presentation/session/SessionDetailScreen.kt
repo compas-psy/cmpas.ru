@@ -25,6 +25,7 @@ import ru.cmpas.app.domain.model.*
 import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
+import ru.cmpas.app.presentation.util.canRecordSessionOutcome
 import ru.cmpas.app.presentation.util.handleVideoLink
 import java.time.Instant
 import java.time.LocalDate
@@ -93,7 +94,11 @@ fun SessionDetailScreen(
                         SessionHero(
                             session = session,
                             clientDetail = clientDetail,
+                            isActionLoading = uiState.isActionLoading,
                             onClient = { onClientClick(session.clientId) },
+                            onComplete = { viewModel.complete(session.id) },
+                            onNoShow = { viewModel.noShow(session.id) },
+                            onReschedule = viewModel::openRescheduleDialog,
                         )
                     }
 
@@ -301,8 +306,20 @@ private fun SessionPushHeader(
 private fun SessionHero(
     session: Session,
     clientDetail: ClientDetail?,
+    isActionLoading: Boolean,
     onClient: () -> Unit,
+    onComplete: () -> Unit,
+    onNoShow: () -> Unit,
+    onReschedule: () -> Unit,
 ) {
+    // Была/не пришёл можно назвать, пока это ещё не решено окончательно.
+    // COMPLETED — тоже сюда: сервер сам переводит прошедший CONFIRMED в
+    // COMPLETED (settlePastSessionsForPsychologist), и вечером, когда
+    // специалист обычно и смотрит список, почти все сегодняшние сессии уже
+    // в этом статусе — без него кнопка «Не пришли» была бы почти всегда
+    // недоступна именно тогда, когда она нужна. Подробности — в
+    // canRecordSessionOutcome().
+    val canRecordOutcome = canRecordSessionOutcome(session.date, session.status)
     GlassCard(modifier = Modifier.fillMaxWidth(), strong = true, padding = 18.dp) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
@@ -326,12 +343,45 @@ private fun SessionHero(
                 value = if (session.format == SessionFormat.ONLINE) "Онлайн" else "В кабинете",
                 modifier = Modifier.weight(1f),
             )
-            InfoChip(
-                icon = confirmationIcon(session.status),
-                label = "Подтверждение",
-                value = confirmationLabel(session.status),
-                modifier = Modifier.weight(1f),
-            )
+            if (!canRecordOutcome) {
+                InfoChip(
+                    icon = confirmationIcon(session.status),
+                    label = "Подтверждение",
+                    value = confirmationLabel(session.status),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (canRecordOutcome) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton(
+                    text = "Была",
+                    icon = Icons.Outlined.CheckCircle,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isActionLoading,
+                    onClick = onComplete,
+                )
+                // "Не пришли" — намеренно безличная форма (как и уже
+                // существующее "Перенесли" рядом), а не "Не пришёл/Не
+                // пришла": в кодовой базе нигде больше не выбирают текст по
+                // ClientDetail.gender, и гадать пол клиента ради грамматики
+                // рискованнее, чем один раз обойти её.
+                GhostButton(
+                    text = "Не пришли",
+                    icon = Icons.Outlined.PersonOff,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isActionLoading,
+                    onClick = onNoShow,
+                )
+                GhostButton(
+                    text = "Перенесли",
+                    icon = Icons.Outlined.Schedule,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isActionLoading,
+                    onClick = onReschedule,
+                )
+            }
         }
         if (session.status == SessionStatus.PENDING) {
             Spacer(Modifier.height(10.dp))
