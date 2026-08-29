@@ -237,6 +237,30 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
     return session;
 }
 
+// O-260829 §5.4: вечерняя отметка специалиста ("была"/"не пришёл") — тот же
+// приём владения, что и rescheduleSessionAtomic (src/lib/session-reschedule.ts):
+// сессия сначала ищется по id одна, затем сверяется psychologistId, и только
+// потом мутируется — а не совмещается в одном findMany/updateMany filter, чтобы
+// чужая сессия давала внятную ошибку, а не молчаливый no-op.
+export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_show') {
+    const psychologistId = await getPsychologistId();
+
+    const existing = await db.diarySession.findUnique({ where: { id } });
+    if (!existing || existing.psychologistId !== psychologistId) {
+        throw new Error('Сессия не найдена');
+    }
+
+    // Отметку можно поставить заново (специалист передумал) — ТЗ не запрещает
+    // менять исход, поэтому update, а не guard на "уже отмечено".
+    const session = await db.diarySession.update({
+        where: { id },
+        data: { outcome, outcomeMarkedAt: new Date() },
+    });
+
+    revalidatePath('/diary');
+    return session;
+}
+
 export async function getAvailableDatesForReschedule(year: number, month: number) {
     const psychologistId = await getPsychologistId();
     const { getAvailableDates } = await import('@/app/bot/actions');

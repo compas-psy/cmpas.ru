@@ -4,6 +4,7 @@ export async function register() {
         const { processReminders } = await import('./lib/cron/reminders');
         const { processMorningDigest, processWeeklyDigest } = await import('./lib/cron/digest');
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
+        const { processNextBookingNudge, processWeeklyFollowup } = await import('./lib/cron/post-session-cascade');
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
         const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
         const { pruneOldAnalyticsEvents } = await import('./lib/cron/analytics-retention');
@@ -44,6 +45,29 @@ export async function register() {
                 await processPostSessionNudge();
             } catch (error) {
                 console.error('[CRON] Ошибка пост-сессионного nudge:', error);
+            }
+        });
+
+        // O-260829 §5.4: пост-сессионный каскад — предложение ближайшего
+        // времени через 2 часа после конца сессии. Тем же периодом, что
+        // старый processPostSessionNudge (mood-check v1, выключен по
+        // умолчанию и не связан с этим новым каскадом).
+        cron.schedule('*/30 * * * *', async () => {
+            try {
+                await processNextBookingNudge();
+            } catch (error) {
+                console.error('[CRON] Ошибка каскада "ближайшее время":', error);
+            }
+        });
+
+        // O-260829 §5.4: сообщение через неделю без новой записи — раз в
+        // сутки, в тихое время (03:10 МСК = 00:10 UTC), рядом со сроком
+        // хранения аналитики ниже.
+        cron.schedule('10 0 * * *', async () => {
+            try {
+                await processWeeklyFollowup();
+            } catch (error) {
+                console.error('[CRON] Ошибка недельного напоминания:', error);
             }
         });
 

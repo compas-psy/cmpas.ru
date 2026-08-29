@@ -7,6 +7,7 @@ import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract-name';
 import { clientBookingLink } from '@/lib/client-workflow';
+import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -19,7 +20,9 @@ export async function getClientBookingLink(clientId: string) {
     const psychologistId = await getPsychologistId();
     const client = await db.diaryClient.findFirst({ where: { id: clientId, psychologistId }, select: { id: true } });
     if (!client) throw new Error('Клиент не найден');
-    return clientBookingLink(psychologistId, client.id);
+    // §5.1 (O-260829): human-readable /u/<slug> base instead of the raw id.
+    const base = await getPsychologistBookingUrl(psychologistId);
+    return clientBookingLink(psychologistId, client.id, base);
 }
 
 export async function getClients(search?: string, statusFilter?: string) {

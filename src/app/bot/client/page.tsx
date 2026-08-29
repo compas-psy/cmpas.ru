@@ -1,43 +1,98 @@
 'use client';
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Video, MapPin, X, Calendar as CalendarIcon } from 'lucide-react';
 import { CancelSessionDialog } from '@/components/psidairy/CancelSessionDialog';
+import { resolveClientLinkParam } from '@/app/bot/actions';
+
+type Tab = 'upcoming' | 'past';
+
+function groupByDate(list: any[]) {
+    return list.reduce((acc, curr) => {
+        const dateStr = format(new Date(curr.date), 'yyyy-MM-dd');
+        if (!acc[dateStr]) acc[dateStr] = [];
+        acc[dateStr].push(curr);
+        return acc;
+    }, {} as Record<string, any[]>);
+}
 
 function ClientCalendar() {
+    const searchParams = useSearchParams();
     const [clientContext, setClientContext] = useState<{ id: string, name: string, isTelegram: boolean } | null>(null);
-    const [sessions, setSessions] = useState<any[]>([]);
+    const [contextLoading, setContextLoading] = useState(true);
+    const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
+    const [pastSessions, setPastSessions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
+    const [tab, setTab] = useState<Tab>('upcoming');
     const [sessionToCancel, setSessionToCancel] = useState<any>(null);
     const [selectedSession, setSelectedSession] = useState<any>(null);
 
+    // Три источника контекста клиента, в порядке приоритета:
+    // 1) Telegram mini-app (window.Telegram.WebApp) — самый богатый контекст;
+    // 2) подписанный токен `?c=` (личная ссылка — Max, любой другой браузер);
+    // 3) localStorage на этом же устройстве (было записано раньше в этом же браузере).
+    // Раньше localStorage тоже проверялся только ВНУТРИ `if (twa)`, то есть
+    // вне Telegram WebApp ни токен, ни localStorage не читались вовсе —
+    // отсюда тупиковое сообщение (или бесконечный спиннер) при открытии из Max.
     useEffect(() => {
-        // @ts-ignore
-        const twa = window.Telegram?.WebApp;
-        if (twa) {
-            twa.ready();
-            twa.expand();
-            setTheme(twa.colorScheme || 'light');
-            if (twa.colorScheme === 'dark') {
-                document.documentElement.classList.add('dark');
-            }
-            if (twa.initDataUnsafe?.user) {
-                setClientContext({
-                    id: String(twa.initDataUnsafe.user.id),
-                    name: twa.initDataUnsafe.user.first_name || 'Клиент',
-                    isTelegram: true
-                });
-            } else {
-                const savedClientId = localStorage.getItem('compas_clientId');
-                if (savedClientId) {
-                    setClientContext({ id: savedClientId, name: 'Мои записи', isTelegram: false });
+        let cancelled = false;
+
+        async function resolveContext() {
+            // @ts-ignore
+            const twa = window.Telegram?.WebApp;
+            if (twa) {
+                twa.ready();
+                twa.expand();
+                setTheme(twa.colorScheme || 'light');
+                if (twa.colorScheme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                }
+                if (twa.initDataUnsafe?.user) {
+                    if (!cancelled) {
+                        setClientContext({
+                            id: String(twa.initDataUnsafe.user.id),
+                            name: twa.initDataUnsafe.user.first_name || 'Клиент',
+                            isTelegram: true
+                        });
+                    }
+                    return;
                 }
             }
+
+            const token = searchParams.get('c');
+            if (token) {
+                try {
+                    const resolved = await resolveClientLinkParam(token);
+                    if (resolved?.clientId) {
+                        if (!cancelled) {
+                            setClientContext({ id: resolved.clientId, name: 'Мои записи', isTelegram: false });
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Failed to resolve client link token', e);
+                }
+            }
+
+            const savedClientId = localStorage.getItem('compas_clientId');
+            if (savedClientId) {
+                if (!cancelled) {
+                    setClientContext({ id: savedClientId, name: 'Мои записи', isTelegram: false });
+                }
+                return;
+            }
         }
-    }, []);
+
+        resolveContext().finally(() => {
+            if (!cancelled) setContextLoading(false);
+        });
+
+        return () => { cancelled = true; };
+    }, [searchParams]);
 
     const fetchSessions = useCallback(async () => {
         if (!clientContext) return;
@@ -51,7 +106,8 @@ function ClientCalendar() {
             const response = await fetch(`/api/user/diary/bot/client/sessions?${params.toString()}`);
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const data = await response.json();
-            setSessions(Array.isArray(data) ? data : []);
+            setUpcomingSessions(Array.isArray(data?.upcoming) ? data.upcoming : []);
+            setPastSessions(Array.isArray(data?.past) ? data.past : []);
         } catch (e) {
             console.error('Failed to fetch sessions', e);
         } finally {
@@ -63,15 +119,9 @@ function ClientCalendar() {
         fetchSessions();
     }, [fetchSessions]);
 
-    // Grouping sessions by date
-    const groupedSessions = sessions.reduce((acc, curr) => {
-        const dateStr = format(new Date(curr.date), 'yyyy-MM-dd');
-        if (!acc[dateStr]) acc[dateStr] = [];
-        acc[dateStr].push(curr);
-        return acc;
-    }, {} as Record<string, any[]>);
-
-    const sortedDates = Object.keys(groupedSessions).sort();
+    const activeSessions = tab === 'upcoming' ? upcomingSessions : pastSessions;
+    const groupedSessions = groupByDate(activeSessions);
+    const sortedDates = Object.keys(groupedSessions).sort((a, b) => tab === 'upcoming' ? a.localeCompare(b) : b.localeCompare(a));
 
     const getDateLabel = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -80,7 +130,7 @@ function ClientCalendar() {
         return format(date, 'd MMMM, EEEE', { locale: ru });
     };
 
-    if (loading && !sessions.length) {
+    if (contextLoading || (loading && !upcomingSessions.length && !pastSessions.length && clientContext)) {
         return (
             <div className="flex items-center justify-center min-h-screen p-4 bg-background">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -97,7 +147,7 @@ function ClientCalendar() {
     }
 
     return (
-        <div className="min-h-screen bg-background text-foreground pb-20">
+        <div className="practice-booking-theme min-h-screen bg-background text-foreground pb-20">
             {/* Header */}
             <div className="bg-card px-4 py-5 shadow-sm sticky top-0 z-20 border-b border-border/50">
                 <h1 className="text-xl font-bold text-primary mb-1">Мои записи</h1>
@@ -105,6 +155,30 @@ function ClientCalendar() {
                     {clientContext.isTelegram ? `${clientContext.name}, здесь отображается ваше расписание. ` : 'Здесь отображается расписание всех ваших сессий. '}
                     <span className="font-bold text-foreground">Нажмите на карточку сессии</span>, чтобы отменить или перенести её.
                 </p>
+
+                {/* Tabs: Предстоящие / Прошедшие */}
+                <div className="flex gap-1 mt-4 p-1 rounded-xl" style={{ background: 'var(--booking-accent-soft)' }}>
+                    <button
+                        onClick={() => setTab('upcoming')}
+                        aria-selected={tab === 'upcoming'}
+                        className="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                        style={tab === 'upcoming'
+                            ? { background: 'var(--booking-card)', color: 'var(--booking-accent)' }
+                            : { color: 'var(--booking-muted)' }}
+                    >
+                        Предстоящие
+                    </button>
+                    <button
+                        onClick={() => setTab('past')}
+                        aria-selected={tab === 'past'}
+                        className="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                        style={tab === 'past'
+                            ? { background: 'var(--booking-card)', color: 'var(--booking-accent)' }
+                            : { color: 'var(--booking-muted)' }}
+                    >
+                        Прошедшие
+                    </button>
+                </div>
             </div>
 
             <div className="px-4 pt-6 space-y-6">
@@ -150,24 +224,30 @@ function ClientCalendar() {
                 ))}
             </div>
 
-            {sessions.length === 0 && !loading && (
+            {activeSessions.length === 0 && !loading && (
                 <div className="text-center py-16 px-6">
                     <div className="text-4xl mb-4 opacity-50 flex justify-center">
                         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                             <CalendarIcon className="w-8 h-8 text-muted-foreground" />
                         </div>
                     </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2">Нет предстоящих сессий</h3>
-                    <p className="text-sm text-muted-foreground mb-8">У вас пока нет запланированных встреч.</p>
-                    <button
-                        onClick={() => {
-                            // @ts-ignore
-                            window.Telegram?.WebApp?.close();
-                        }}
-                        className="w-full max-w-xs mx-auto py-3.5 rounded-xl border-2 font-bold text-base transition-all haptic-light border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 active:scale-[0.98]"
-                    >
-                        Вернуться в бот
-                    </button>
+                    <h3 className="text-lg font-bold text-foreground mb-2">
+                        {tab === 'upcoming' ? 'Нет предстоящих сессий' : 'Нет прошедших встреч'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-8">
+                        {tab === 'upcoming' ? 'У вас пока нет запланированных встреч.' : 'Здесь появятся встречи после того, как они состоятся.'}
+                    </p>
+                    {tab === 'upcoming' && (
+                        <button
+                            onClick={() => {
+                                // @ts-ignore
+                                window.Telegram?.WebApp?.close();
+                            }}
+                            className="w-full max-w-xs mx-auto py-3.5 rounded-xl border-2 font-bold text-base transition-all haptic-light border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 active:scale-[0.98]"
+                        >
+                            Вернуться в бот
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -210,9 +290,9 @@ function ClientCalendar() {
                             </div>
                         </div>
 
-                        {selectedSession.format === 'online' && selectedSession.onlineSessionLink && (
+                        {tab === 'upcoming' && selectedSession.format === 'online' && selectedSession.onlineSessionLink && (
                             <div className="px-6 pb-4">
-                                <a 
+                                <a
                                     href={selectedSession.onlineSessionLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -223,26 +303,41 @@ function ClientCalendar() {
                             </div>
                         )}
 
-                        <div className="px-6 pb-6 grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => {
-                                    setSelectedSession(null);
-                                    window.location.href = `/bot/book/${selectedSession.psychologistId}`;
-                                }}
-                                className="py-3 rounded-xl border-2 font-bold transition-colors text-sm hover:bg-muted haptic-light border-border text-foreground bg-transparent"
-                            >
-                                Перенести
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setSessionToCancel(selectedSession);
-                                    setSelectedSession(null);
-                                }}
-                                className="py-3 rounded-xl border-2 font-bold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light"
-                            >
-                                Отменить
-                            </button>
-                        </div>
+                        {tab === 'upcoming' ? (
+                            <div className="px-6 pb-6 grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => {
+                                        setSelectedSession(null);
+                                        window.location.href = `/bot/book/${selectedSession.psychologistId}`;
+                                    }}
+                                    className="py-3 rounded-xl border-2 font-bold transition-colors text-sm hover:bg-muted haptic-light border-border text-foreground bg-transparent"
+                                >
+                                    Перенести
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setSessionToCancel(selectedSession);
+                                        setSelectedSession(null);
+                                    }}
+                                    className="py-3 rounded-xl border-2 font-bold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light"
+                                >
+                                    Отменить
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="px-6 pb-6">
+                                <button
+                                    onClick={() => {
+                                        setSelectedSession(null);
+                                        window.location.href = `/bot/book/${selectedSession.psychologistId}`;
+                                    }}
+                                    className="w-full py-3 rounded-xl border-2 font-bold transition-colors text-sm haptic-light text-white"
+                                    style={{ borderColor: 'var(--booking-accent)', background: 'var(--booking-accent)' }}
+                                >
+                                    Записаться снова
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

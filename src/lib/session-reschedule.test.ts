@@ -15,6 +15,16 @@ vi.mock('@/lib/calendar/auto-sync', () => ({
     autoDeleteSessionFromCalendars: vi.fn().mockResolvedValue(undefined),
 }));
 
+// O-260829 §5.2: rescheduleSessionAtomic теперь also fire-and-forgets a
+// waitlist notification for the freed slot — mocked out here since this file
+// tests the reschedule logic itself, not the notification pipeline (covered
+// by tests/waitlist-notify.test.ts and tests/waitlist-notify-wiring.test.ts).
+// Without this mock, importing the real module pulls in @/lib/telegram and
+// @/lib/max, which transitively resolve next-auth and break under vitest.
+vi.mock('@/lib/waitlist-notify', () => ({
+    notifyWaitlistOnFreedSlot: vi.fn().mockResolvedValue({ notified: false }),
+}));
+
 const { rescheduleSessionAtomic, RescheduleConflictError } = await import('./session-reschedule');
 
 const PSYCHOLOGIST_ID = 'psy-1';

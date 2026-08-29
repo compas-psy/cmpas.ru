@@ -4,6 +4,7 @@ import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { verifyClientActionToken } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
 import { canClientCancel, clientCancelBlockedMessage, isClientLinkExpired } from '@/lib/client-cancellation';
+import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
 
 function escapeHtml(value: string) {
     return value
@@ -90,6 +91,9 @@ export async function GET(req: NextRequest) {
             data: { status: 'cancelled' },
         });
         autoDeleteSessionFromCalendars(session.psychologistId, session.id).catch(console.error);
+        // O-260829 §5.2: этот час освободился — молча предлагаем его самой
+        // старой подходящей заявке листа ожидания.
+        notifyWaitlistOnFreedSlot(session.psychologistId, session.date, session.time).catch(console.error);
         const date = session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
         await createNotification({
             psychologistId: session.psychologistId,
