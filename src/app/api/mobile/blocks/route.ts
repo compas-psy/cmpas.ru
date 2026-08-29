@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
                 where: {
                     psychologistId: auth.userId,
                     date: { gte: start, lte: dayEnd(endDate) },
-                    status: { notIn: ['cancelled', 'completed'] },
+                    status: { notIn: ['cancelled', 'completed', 'no_show'] },
                 },
                 include: { client: true },
             });

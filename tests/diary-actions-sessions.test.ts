@@ -1,7 +1,9 @@
-// O-260829 §5.4: вечерняя отметка специалиста — markSessionOutcome.
-// Проверяем: (1) 'completed' проставляет outcomeMarkedAt; (2) чужую сессию
-// отметить нельзя (ownership-проверка, тот же приём, что rescheduleSessionAtomic);
-// (3) повторная отметка (передумал) разрешена и перезаписывает исход.
+// O-260829 §5.4 (правка по дополняющему Android-ТЗ, android_booking_v2.md
+// §1): вечерняя отметка специалиста — markSessionOutcome — пишет ПРЯМО в
+// DiarySession.status ('completed' | 'no_show'), а не в отдельное поле
+// outcome. Проверяем: (1) 'completed'/'no_show' проставляют status;
+// (2) чужую сессию отметить нельзя; (3) повторная отметка (передумал)
+// разрешена и перезаписывает status; (4) отменённую сессию отметить нельзя.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -51,8 +53,7 @@ function baseSession(overrides: Record<string, unknown> = {}) {
         date: new Date(Date.now() - 3 * 60 * 60 * 1000),
         time: '10:00',
         endTime: '10:50',
-        outcome: null,
-        outcomeMarkedAt: null,
+        status: 'confirmed',
         ...overrides,
     };
 }
@@ -66,7 +67,7 @@ describe('markSessionOutcome (§5.4 вечерняя отметка специа
         diarySessionUpdate.mockReset();
     });
 
-    it("'completed' проставляет outcome и outcomeMarkedAt", async () => {
+    it("'completed' проставляет status='completed'", async () => {
         auth.mockResolvedValue({ user: { id: 'psy_1' } });
         diarySessionFindUnique.mockResolvedValue(baseSession());
         diarySessionUpdate.mockImplementation(({ data }: any) => ({ ...baseSession(), ...data }));
@@ -76,14 +77,13 @@ describe('markSessionOutcome (§5.4 вечерняя отметка специа
 
         expect(diarySessionUpdate).toHaveBeenCalledWith({
             where: { id: 'session_1' },
-            data: { outcome: 'completed', outcomeMarkedAt: expect.any(Date) },
+            data: { status: 'completed' },
         });
-        expect(result.outcome).toBe('completed');
-        expect(result.outcomeMarkedAt).toBeInstanceOf(Date);
+        expect(result.status).toBe('completed');
         expect(revalidatePath).toHaveBeenCalledWith('/diary');
     });
 
-    it("'no_show' тоже проставляет outcomeMarkedAt", async () => {
+    it("'no_show' проставляет status='no_show'", async () => {
         auth.mockResolvedValue({ user: { id: 'psy_1' } });
         diarySessionFindUnique.mockResolvedValue(baseSession());
         diarySessionUpdate.mockImplementation(({ data }: any) => ({ ...baseSession(), ...data }));
@@ -91,8 +91,18 @@ describe('markSessionOutcome (§5.4 вечерняя отметка специа
         const { markSessionOutcome } = await import('../src/app/diary/actions/sessions');
         const result = await markSessionOutcome('session_1', 'no_show');
 
-        expect(result.outcome).toBe('no_show');
-        expect(result.outcomeMarkedAt).toBeInstanceOf(Date);
+        expect(result.status).toBe('no_show');
+    });
+
+    it("можно отметить сессию, уже автоматически переведённую в 'completed' settlePastSessionsForPsychologist, на 'no_show' задним числом", async () => {
+        auth.mockResolvedValue({ user: { id: 'psy_1' } });
+        diarySessionFindUnique.mockResolvedValue(baseSession({ status: 'completed' }));
+        diarySessionUpdate.mockImplementation(({ data }: any) => ({ ...baseSession(), ...data }));
+
+        const { markSessionOutcome } = await import('../src/app/diary/actions/sessions');
+        const result = await markSessionOutcome('session_1', 'no_show');
+
+        expect(result.status).toBe('no_show');
     });
 
     it('чужую сессию отметить нельзя — бросает ошибку, update не вызывается', async () => {
@@ -114,15 +124,24 @@ describe('markSessionOutcome (§5.4 вечерняя отметка специа
         expect(diarySessionUpdate).not.toHaveBeenCalled();
     });
 
-    it('повторная отметка (специалист передумал) разрешена и перезаписывает исход', async () => {
+    it('отменённую сессию отметить нельзя — бросает ошибку, update не вызывается', async () => {
         auth.mockResolvedValue({ user: { id: 'psy_1' } });
-        diarySessionFindUnique.mockResolvedValue(baseSession({ outcome: 'completed', outcomeMarkedAt: new Date('2026-01-01') }));
+        diarySessionFindUnique.mockResolvedValue(baseSession({ status: 'cancelled' }));
+
+        const { markSessionOutcome } = await import('../src/app/diary/actions/sessions');
+        await expect(markSessionOutcome('session_1', 'completed')).rejects.toThrow('отменена');
+        expect(diarySessionUpdate).not.toHaveBeenCalled();
+    });
+
+    it('повторная отметка (специалист передумал) разрешена и перезаписывает status', async () => {
+        auth.mockResolvedValue({ user: { id: 'psy_1' } });
+        diarySessionFindUnique.mockResolvedValue(baseSession({ status: 'completed' }));
         diarySessionUpdate.mockImplementation(({ data }: any) => ({ ...baseSession(), ...data }));
 
         const { markSessionOutcome } = await import('../src/app/diary/actions/sessions');
         const result = await markSessionOutcome('session_1', 'no_show');
 
-        expect(result.outcome).toBe('no_show');
+        expect(result.status).toBe('no_show');
         expect(diarySessionUpdate).toHaveBeenCalledTimes(1);
     });
 

@@ -543,7 +543,9 @@ function DiaryTab({ user }: { user: any }) {
                                     <p className="text-xs text-[#64748b]">{s.client?.name || 'Клиент'} · {s.format}</p>
                                 </div>
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    s.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                    s.status === 'confirmed' ? 'bg-green-100 text-green-700'
+                                        : s.status === 'completed' || s.status === 'no_show' ? 'bg-slate-100 text-slate-600'
+                                            : 'bg-amber-100 text-amber-700'
                                 }`}>{s.status}</span>
                             </div>
                         ))}

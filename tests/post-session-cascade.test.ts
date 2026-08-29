@@ -1,9 +1,11 @@
-// O-260829 §5.4: пост-сессионный каскад — "главный WOW и главный источник
-// повторных записей" по формулировке самого ТЗ v2. Проверяем три вещи,
-// названные в приёмке:
+// O-260829 §5.4 (правка по дополняющему Android-ТЗ, android_booking_v2.md
+// §1): пост-сессионный каскад читает исход из DiarySession.status
+// ('completed' | 'no_show'), а не из отдельного поля outcome. Проверяем:
 // 1. no_show подавляет сообщение через 2 часа; обычная/неотмеченная сессия — нет.
 // 2. сообщение через неделю не уходит, если у клиента уже есть будущая запись.
 // 3. ни одно из двух сообщений не отправляется дважды при повторных проходах cron.
+// 4. слишком старые сессии (включая всю историю status='completed' до этой
+//    фичи) не разлетаются задним числом при первом проходе cron.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -53,6 +55,9 @@ vi.mock('@/app/bot/actions', () => ({
     getSuggestedTimes: (...args: unknown[]) => getSuggestedTimes(...args),
 }));
 
+const track = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/analytics/track', () => ({ track: (...args: unknown[]) => track(...args) }));
+
 function baseSession(overrides: Record<string, unknown> = {}) {
     return {
         id: 'session_1',
@@ -62,12 +67,15 @@ function baseSession(overrides: Record<string, unknown> = {}) {
         time: '13:00',
         endTime: '13:50',
         status: 'confirmed',
-        outcome: null,
         nextBookingNudgeSent: false,
         weeklyFollowupSent: false,
         client: { id: 'client_1', name: 'Клиент', telegramClient: null, telegramChatId: 'tg_client', maxChatId: null },
         ...overrides,
     };
+}
+
+function timeStrOf(d: Date): string {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 describe('processNextBookingNudge (O-260829 §5.4)', () => {
@@ -80,7 +88,7 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
 
     it('сессия завершилась 3 часа назад и не отмечена — сообщение уходит', async () => {
         const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
-        diarySessionFindMany.mockResolvedValue([baseSession({ date: threeHoursAgo, time: '00:00', endTime: threeHoursAgoTimeStr(threeHoursAgo) })]);
+        diarySessionFindMany.mockResolvedValue([baseSession({ date: threeHoursAgo, time: '00:00', endTime: timeStrOf(threeHoursAgo) })]);
 
         const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
@@ -90,9 +98,23 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { nextBookingNudgeSent: true } });
     });
 
-    it('сессия отмечена no_show — сообщение НЕ уходит, но флаг всё равно закрывается', async () => {
+    it('сессия уже автоматически completed (settlePastSessionsForPsychologist) — сообщение всё равно уходит', async () => {
+        // status='completed' не значит "специалист явно подтвердил" — это
+        // тоже могло быть автоматическим settle-переходом. Раз не no_show,
+        // считаем встречу состоявшейся (v2 §5.4).
         const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
-        diarySessionFindMany.mockResolvedValue([]); // outcome: {not: 'no_show'} в запросе — Prisma сам не вернёт эту сессию
+        diarySessionFindMany.mockResolvedValue([
+            baseSession({ date: threeHoursAgo, time: '00:00', endTime: timeStrOf(threeHoursAgo), status: 'completed' }),
+        ]);
+
+        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
+        await processNextBookingNudge();
+
+        expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('сессия отмечена no_show — сообщение НЕ уходит, но флаг всё равно закрывается', async () => {
+        diarySessionFindMany.mockResolvedValue([]); // status: {notIn: [...,'no_show']} в запросе — Prisma сам не вернёт эту сессию
 
         const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
@@ -100,12 +122,12 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         expect(sendTelegramMessage).not.toHaveBeenCalled();
         // Запрос должен явно исключать no_show, а не полагаться на код после выборки.
         const where = diarySessionFindMany.mock.calls[0][0].where;
-        expect(where.outcome).toEqual({ not: 'no_show' });
+        expect(where.status.notIn).toContain('no_show');
     });
 
     it('слишком старая сессия (заведена до этого релиза) — закрывается без отправки', async () => {
         const veryOld = new Date(Date.now() - 90 * 60 * 60 * 1000); // 90 часов назад
-        diarySessionFindMany.mockResolvedValue([baseSession({ date: veryOld, time: '00:00', endTime: threeHoursAgoTimeStr(veryOld) })]);
+        diarySessionFindMany.mockResolvedValue([baseSession({ date: veryOld, time: '00:00', endTime: timeStrOf(veryOld) })]);
 
         const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
@@ -135,7 +157,7 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
     it('неделя прошла, будущей записи нет — сообщение уходит', async () => {
         const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
         diarySessionFindMany.mockResolvedValue([
-            baseSession({ date: eightDaysAgo, time: '00:00', endTime: threeHoursAgoTimeStr(eightDaysAgo), outcome: 'completed' }),
+            baseSession({ date: eightDaysAgo, time: '00:00', endTime: timeStrOf(eightDaysAgo), status: 'completed' }),
         ]);
         diarySessionFindFirst.mockResolvedValue(null); // нет будущей записи
         sendTelegramMessage.mockResolvedValue(true);
@@ -151,7 +173,7 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
     it('у клиента уже есть будущая запись — сообщение НЕ уходит, но флаг закрывается', async () => {
         const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
         diarySessionFindMany.mockResolvedValue([
-            baseSession({ date: eightDaysAgo, time: '00:00', endTime: threeHoursAgoTimeStr(eightDaysAgo), outcome: 'completed' }),
+            baseSession({ date: eightDaysAgo, time: '00:00', endTime: timeStrOf(eightDaysAgo), status: 'completed' }),
         ]);
         diarySessionFindFirst.mockResolvedValue({ id: 'future_session' }); // уже записался
 
@@ -173,17 +195,32 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
         expect(where.weeklyFollowupSent).toBe(false);
     });
 
-    it('сессия без отметки специалиста (outcome=null) не попадает под еженедельное сообщение', async () => {
-        diarySessionFindMany.mockResolvedValue([]); // запрос фильтрует outcome: 'completed', null не пройдёт
+    it('сессия без отметки специалиста (status не completed) не попадает под еженедельное сообщение', async () => {
+        diarySessionFindMany.mockResolvedValue([]); // запрос фильтрует status: 'completed'
 
         const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         const where = diarySessionFindMany.mock.calls[0][0].where;
-        expect(where.outcome).toBe('completed');
+        expect(where.status).toBe('completed');
+    });
+
+    it('сессия старше 37 дней (существовала до этой фичи, status=completed от settle) — закрывается без отправки', async () => {
+        // До правки по Android-ТЗ поле фильтровало outcome (новое, всегда
+        // null у истории). Теперь это status='completed' — значение, которое
+        // settlePastSessionsForPsychologist проставляло годами до этой
+        // фичи. Без нижней границы первый ночной проход разослал бы письмо
+        // по каждой когда-либо состоявшейся сессии.
+        const veryOld = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 дней назад
+        diarySessionFindMany.mockResolvedValue([
+            baseSession({ date: veryOld, time: '00:00', endTime: timeStrOf(veryOld), status: 'completed' }),
+        ]);
+
+        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
+        await processWeeklyFollowup();
+
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
+        expect(diarySessionFindFirst).not.toHaveBeenCalled(); // даже будущую запись не проверяем — сразу закрываем
+        expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { weeklyFollowupSent: true } });
     });
 });
-
-function threeHoursAgoTimeStr(d: Date): string {
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}

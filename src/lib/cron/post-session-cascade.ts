@@ -18,6 +18,15 @@
 // "отправлено", и напоминание должно повториться) — там пропуск письма
 // напрямую вредит (человек не узнает о встрече), здесь второе письмо было бы
 // давлением, которое v2 явно запрещает ("нет ответа — нет второго письма").
+//
+// "Отметка исхода" здесь читается из DiarySession.status ('completed' |
+// 'no_show'), а не из отдельного поля outcome — правка по дополняющему
+// Android-ТЗ (android_booking_v2.md §1): рабочий контракт status уже
+// наполовину существовал в Android-коде и на сервере, заводить второе
+// представление того же факта было бы двоевластием. 'completed' для status
+// не новый — settlePastSessionsForPsychologist (src/lib/session-maintenance.ts)
+// уже проставляет его автоматически через 15 минут после конца сессии;
+// явная отметка специалиста лишь подтверждает или поправляет это значение.
 
 import { db } from '@/lib/db';
 import { sendTelegramMessage } from '../telegram';
@@ -88,9 +97,8 @@ export async function processNextBookingNudge(): Promise<void> {
 
         const sessions = await db.diarySession.findMany({
             where: {
-                status: { not: 'cancelled' },
+                status: { notIn: ['cancelled', 'no_show'] },
                 nextBookingNudgeSent: false,
-                outcome: { not: 'no_show' },
                 date: { lte: now },
             } as any,
             include: {
@@ -156,10 +164,22 @@ export async function processWeeklyFollowup(): Promise<void> {
     try {
         const now = new Date();
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // O-260829: до правки по Android-ТЗ это поле читало outcome — новое
+        // поле, которое у всей истории продукта было null, поэтому не имело
+        // нижней границы риска. Теперь это status='completed' — значение,
+        // которое settlePastSessionsForPsychologist уже проставляло годами
+        // ДО этой фичи, то есть матчит всю историю продукта разом. Без этой
+        // границы первый же ночной проход разослал бы "если решите
+        // продолжить" по каждой когда-либо состоявшейся сессии. 30 дней
+        // сверх недельной отметки — щедрый запас на любой разумный простой
+        // cron, не трогающий многолетнюю историю (тот же приём, что
+        // staleCutoff в processNextBookingNudge выше, только с масштабом
+        // недельного, а не двухчасового окна).
+        const staleCutoff = new Date(now.getTime() - 37 * 24 * 60 * 60 * 1000);
 
         const sessions = await db.diarySession.findMany({
             where: {
-                outcome: 'completed',
+                status: 'completed',
                 weeklyFollowupSent: false,
                 date: { lte: now },
             } as any,
@@ -172,6 +192,16 @@ export async function processWeeklyFollowup(): Promise<void> {
             const session = rawSession;
             const end = sessionEndAt(session);
             if (end > sevenDaysAgo) continue; // неделя ещё не прошла
+
+            if (end < staleCutoff) {
+                // Слишком старая (существовала до этой фичи, либо cron не
+                // работал слишком долго) — не шлём задним числом.
+                await db.diarySession.update({
+                    where: { id: session.id },
+                    data: { weeklyFollowupSent: true } as any,
+                });
+                continue;
+            }
 
             const futureBooking = await db.diarySession.findFirst({
                 where: {

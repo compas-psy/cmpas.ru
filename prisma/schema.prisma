@@ -367,7 +367,7 @@ model DiarySession {
   type            String   @default("individual") // individual, couple, family
   format          String   @default("online") // online, offline
   addressId       String? // nullable reference to a PsychologistAddress
-  status          String   @default("pending") // pending, confirmed, completed, cancelled
+  status          String   @default("pending") // pending, confirmed, completed, cancelled, no_show
   notes           String? // Legacy flat notes
   structuredNotes Json? // Array of smart tags/blocks (e.g. Anamnesis, Request)
   privateNotes    Json? // Array of private blocks for the psychologist only
@@ -378,14 +378,28 @@ model DiarySession {
   postSessionNudged  Boolean @default(false)
   clientMoodRating   Int?
 
-  // O-260829 §5.4: пост-сессионный каскад. `outcome` — отдельное поле, а не
-  // переиспользование `status` ('pending'/'confirmed'/'completed'/'cancelled'):
-  // "проведена/не пришёл" — это факт из вечерней отметки специалиста, который
-  // не отменяет и не завершает саму запись. null = ещё не отмечено; до отметки
-  // встреча по умолчанию считается состоявшейся (ТЗ §5.4) — сообщение через 2ч
-  // уходит, если только явно не 'no_show'.
-  outcome              String? // 'completed' | 'no_show'
-  outcomeMarkedAt      DateTime?
+  // O-260829 §5.4: пост-сессионный каскад — вечерняя отметка специалиста
+  // "была/не пришёл" пишется ПРЯМО в status ('completed' | 'no_show'), а не в
+  // отдельное поле outcome. Первая версия этой миграции завела отдельные
+  // outcome/outcomeMarkedAt, решив, что "проведена/не пришёл" — факт вечерней
+  // отметки, отдельный от самой записи. Дополняющее Android-ТЗ (O-260829,
+  // android_booking_v2.md §1) проверило код мобильного приложения и
+  // показало: рабочий контракт уже наполовину существует — Android-й
+  // SessionStatus уже объявляет NO_SHOW как значение статуса,
+  // UpdateSessionRequest уже умеет его отправлять, серверный обработчик
+  // /api/mobile/sessions/[id] уже принимает любую строку статуса без
+  // валидации. Заводить второе, отдельное представление того же факта было
+  // бы двоевластием: web писал бы в outcome, Android — в status, и это два
+  // разных источника правды для одного и того же "была/не пришёл". Отдельного
+  // outcomeMarkedAt тоже не нужно — момент отметки уже есть в обычном
+  // updatedAt записи.
+  //
+  // 'completed' для этого поля не новый — settlePastSessionsForPsychologist
+  // (src/lib/session-maintenance.ts) уже переводит сюда сессии автоматически
+  // через 15 минут после конца (вызывается с мобильных эндпоинтов). Явная
+  // отметка специалиста (веб или Android) просто перезаписывает то же поле —
+  // либо подтверждая автоматическое предположение, либо поправляя его на
+  // no_show. 'no_show' — единственное по-настоящему новое значение status.
   nextBookingNudgeSent Boolean @default(false)
   weeklyFollowupSent   Boolean @default(false)
 

@@ -44,8 +44,7 @@ function baseSession(overrides: Record<string, unknown> = {}) {
         date: new Date('2026-09-10T00:00:00Z'),
         time: '10:00',
         endTime: '10:50',
-        outcome: null,
-        outcomeMarkedAt: null,
+        status: 'confirmed',
         ...overrides,
     };
 }
@@ -54,7 +53,7 @@ describe('markSessionOutcome пишет session_outcome_marked (O-260829 §7)', 
     beforeEach(() => {
         vi.clearAllMocks();
         auth.mockResolvedValue({ user: { id: 'psy_1' } });
-        diarySessionUpdate.mockResolvedValue(baseSession({ outcome: 'completed' }));
+        diarySessionUpdate.mockResolvedValue(baseSession({ status: 'completed' }));
     });
 
     it('completed — событие несёт outcome и положительное hours_after_end', async () => {

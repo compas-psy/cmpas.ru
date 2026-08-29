@@ -238,11 +238,19 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
     return session;
 }
 
-// O-260829 §5.4: вечерняя отметка специалиста ("была"/"не пришёл") — тот же
-// приём владения, что и rescheduleSessionAtomic (src/lib/session-reschedule.ts):
-// сессия сначала ищется по id одна, затем сверяется psychologistId, и только
-// потом мутируется — а не совмещается в одном findMany/updateMany filter, чтобы
-// чужая сессия давала внятную ошибку, а не молчаливый no-op.
+// O-260829 §5.4 (правка по дополняющему Android-ТЗ, android_booking_v2.md
+// §1): вечерняя отметка специалиста ("была"/"не пришёл") пишется ПРЯМО в
+// status ('completed' | 'no_show'), а не в отдельное поле outcome — рабочий
+// контракт status уже наполовину существовал (Android SessionStatus.NO_SHOW,
+// серверный /api/mobile/sessions/[id] принимает любую строку статуса).
+// Заводить отдельное поле было бы двоевластием: web писал бы в outcome,
+// Android — в status, для одного и того же факта.
+//
+// Тот же приём владения, что и rescheduleSessionAtomic
+// (src/lib/session-reschedule.ts): сессия сначала ищется по id одна, затем
+// сверяется psychologistId, и только потом мутируется — а не совмещается в
+// одном findMany/updateMany filter, чтобы чужая сессия давала внятную
+// ошибку, а не молчаливый no-op.
 export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_show') {
     const psychologistId = await getPsychologistId();
 
@@ -250,13 +258,20 @@ export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_
     if (!existing || existing.psychologistId !== psychologistId) {
         throw new Error('Сессия не найдена');
     }
+    // Отменённой сессии не было — "была"/"не пришёл" тут не имеет смысла и
+    // перезаписывать status='cancelled' было бы неверно.
+    if (existing.status === 'cancelled') {
+        throw new Error('Эта сессия отменена');
+    }
 
-    // Отметку можно поставить заново (специалист передумал) — ТЗ не запрещает
-    // менять исход, поэтому update, а не guard на "уже отмечено".
+    // Отметку можно поставить заново (специалист передумал, либо поправляет
+    // автоматическое status='completed' от settlePastSessionsForPsychologist
+    // на 'no_show' задним числом) — ТЗ не запрещает менять исход, поэтому
+    // update, а не guard на "уже отмечено".
     const now = new Date();
     const session = await db.diarySession.update({
         where: { id },
-        data: { outcome, outcomeMarkedAt: now },
+        data: { status: outcome },
     });
 
     // O-260829 §7: session_outcome_marked — факт вечерней отметки, без

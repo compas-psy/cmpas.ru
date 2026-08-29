@@ -42,7 +42,6 @@ function baseSession(overrides: Record<string, unknown> = {}) {
         time: '13:00',
         endTime: '13:50',
         status: 'confirmed',
-        outcome: null,
         nextBookingNudgeSent: false,
         weeklyFollowupSent: false,
         client: { id: 'client_1', name: 'Клиент', telegramClient: null, telegramChatId: 'tg_client', maxChatId: null },
@@ -95,7 +94,7 @@ describe('processWeeklyFollowup пишет weekly_followup_sent (O-260829 §7)',
     it('сообщение реально ушло (нет будущей записи) — событие пишется', async () => {
         const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
         diarySessionFindMany.mockResolvedValue([
-            baseSession({ date: eightDaysAgo, time: '00:00', endTime: endTimeStrFor(eightDaysAgo), outcome: 'completed' }),
+            baseSession({ date: eightDaysAgo, time: '00:00', endTime: endTimeStrFor(eightDaysAgo), status: 'completed' }),
         ]);
         diarySessionFindFirst.mockResolvedValue(null);
 
@@ -113,7 +112,7 @@ describe('processWeeklyFollowup пишет weekly_followup_sent (O-260829 §7)',
     it('у клиента уже есть будущая запись — событие НЕ пишется (сообщение не уходило)', async () => {
         const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
         diarySessionFindMany.mockResolvedValue([
-            baseSession({ date: eightDaysAgo, time: '00:00', endTime: endTimeStrFor(eightDaysAgo), outcome: 'completed' }),
+            baseSession({ date: eightDaysAgo, time: '00:00', endTime: endTimeStrFor(eightDaysAgo), status: 'completed' }),
         ]);
         diarySessionFindFirst.mockResolvedValue({ id: 'future' });
 
