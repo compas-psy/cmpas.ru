@@ -59,7 +59,15 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # jsdom@30 (компонентные тесты страницы записи, добавлены в CJM v2)
+          # требует Node ^22.22.2 || ^24.15.0 || >=26 — на Node 20 падает при
+          # инициализации CacheStorage ("webidl.util.markAsUncloneable is not
+          # a function"). channel-binding-ci.yml уже использует Node 22 —
+          # эта версия принесена сюда же, а не понижением jsdom, чтобы не
+          # тащить обратно устаревшие версии тестовых библиотек. Это только
+          # версия Node для CI-проверки (typecheck/тесты/build), не рантайм
+          # продакшен-образа — тот задаётся отдельно в Dockerfile.
+          node-version: '22'
           cache: npm
 
       - name: Validate Prisma and build Next.js
