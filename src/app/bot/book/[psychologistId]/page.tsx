@@ -38,6 +38,11 @@ export default function ClientBookingPage() {
 
     const router = useRouter();
     const [tgUser, setTgUser] = useState<any>(null);
+    // O-260829 §4.2: канал доставки уведомления — по факту контекста, в
+    // котором открыта ссылка, а не хардкод "Telegram" для всех. Второй
+    // мессенджер бота — Max (см. sendMaxMessage в src/lib/max*.ts); других
+    // каналов у ссылки специалиста сегодня нет, поэтому выбор бинарный.
+    const [notificationChannel, setNotificationChannel] = useState<'Telegram' | 'Max'>('Max');
     const [psy, setPsy] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -100,6 +105,9 @@ export default function ClientBookingPage() {
             if (tg.initDataUnsafe?.user) {
                 setTgUser(tg.initDataUnsafe.user);
             }
+            setNotificationChannel('Telegram');
+        } else {
+            setNotificationChannel('Max');
         }
 
         const init = async () => {
@@ -431,7 +439,7 @@ export default function ClientBookingPage() {
     // Private mode — booking closed
     if (scheduleMode === 'private') {
         return (
-            <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
                     <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center">
                         <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-5">
@@ -441,7 +449,7 @@ export default function ClientBookingPage() {
                         <p className="text-muted-foreground text-sm">Специалист пока не принимает запись онлайн. Попробуйте позже или свяжитесь напрямую.</p>
                         <button
                             onClick={() => { const tg = (window as any).Telegram?.WebApp; if (tg) tg.close(); else window.location.href = '/'; }}
-                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[#1e3a2f] text-white bg-[#1e3a2f] dark:border-[#b89a4e] dark:text-gray-900 dark:bg-[#b89a4e] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
                             Назад
                         </button>
@@ -454,14 +462,14 @@ export default function ClientBookingPage() {
     // Success screen
     if (bookingSuccess) {
         return (
-            <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
                     <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
                         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
                             <CheckCircle2 className="w-8 h-8 text-green-600" />
                         </div>
                         <h2 className="text-2xl font-bold mb-2 text-foreground">Вы записаны!</h2>
-                        <p className="text-muted-foreground text-sm mb-6">Уведомление придёт в Telegram</p>
+                        <p className="text-muted-foreground text-sm mb-6">Уведомление придёт в {notificationChannel}</p>
 
                         <div className="bg-muted/30 rounded-2xl p-5 text-left space-y-3 border border-border/50">
                             <div>
@@ -507,7 +515,7 @@ export default function ClientBookingPage() {
                             onClick={() => {
                                 window.location.href = '/bot/client';
                             }}
-                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[#1e3a2f] text-white bg-[#1e3a2f] dark:border-[#b89a4e] dark:text-gray-900 dark:bg-[#b89a4e] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
                             Готово
                         </button>
@@ -518,7 +526,7 @@ export default function ClientBookingPage() {
     }
 
     return (
-        <div className="min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+        <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <div className="p-4 max-w-md mx-auto">
                 <h1 className="text-3xl font-bold tracking-tight mb-1">Запись на сессию</h1>
                 <p className="text-primary font-semibold text-sm mb-1">Специалист — {psy.name}</p>
@@ -576,7 +584,7 @@ export default function ClientBookingPage() {
                                     type="button"
                                     onClick={() => handlePreferenceSelect(value)}
                                     className={`py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${preference === value
-                                        ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e]'
+                                        ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
                                         : 'border-border text-foreground hover:bg-muted/40'
                                         }`}
                                 >
@@ -598,8 +606,8 @@ export default function ClientBookingPage() {
                                             type="button"
                                             onClick={() => handleSuggestedTimeSelect(candidate)}
                                             className={`w-full py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${isPicked
-                                                ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e]'
-                                                : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10'
+                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
+                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10'
                                                 }`}
                                         >
                                             {format(new Date(candidate.date + 'T00:00:00'), 'd MMMM', { locale: ru })}, {candidate.time}
@@ -624,7 +632,7 @@ export default function ClientBookingPage() {
                                     onChange={e => setWaitlistForm(f => ({ ...f, contact: e.target.value }))}
                                     className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
                                 />
-                                <button type="submit" className="w-full py-2.5 rounded-xl border-2 border-[#1e3a2f] dark:border-[#b89a4e] text-[#1e3a2f] dark:text-[#b89a4e] font-medium text-sm haptic-light">
+                                <button type="submit" className="w-full py-2.5 rounded-xl border-2 border-[var(--booking-accent)] text-[var(--booking-accent)] font-medium text-sm haptic-light">
                                     Записать в лист ожидания
                                 </button>
                             </form>
@@ -661,8 +669,8 @@ export default function ClientBookingPage() {
                             dayClassName={(date) => {
                                 const isAvail = isDateAvailable(date);
                                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
-                                if (isSelected) return "!bg-transparent !border-2 !border-[#1e3a2f] dark:!border-[#b89a4e] !text-[#1e3a2f] dark:!text-[#b89a4e] !rounded-[12px] !font-medium";
-                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[#1e3a2f]/50 dark:hover:!border-[#b89a4e]/50 !font-medium !rounded-[12px] transition-colors";
+                                if (isSelected) return "!bg-transparent !border-2 !border-[var(--booking-accent)] !text-[var(--booking-accent)] !rounded-[12px] !font-medium";
+                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[var(--booking-accent)]/50 !font-medium !rounded-[12px] transition-colors";
                                 return "!text-muted-foreground !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[12px]";
                             }}
                             monthClassName={() => "!text-foreground !font-medium"}
@@ -699,8 +707,8 @@ export default function ClientBookingPage() {
                                             type="button"
                                             onClick={() => handleTimeSlotSelect(slot)}
                                             className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                                ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm'
-                                                : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'
+                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm'
+                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'
                                                 }`}
                                         >
                                             {slot.time}
@@ -718,12 +726,12 @@ export default function ClientBookingPage() {
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('online')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm' : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'}`}
                                     >💻 Онлайн</button>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedFormat('offline')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] shadow-sm' : 'border-[#1e3a2f] text-[#1e3a2f] hover:bg-[#1e3a2f]/10 dark:border-[#b89a4e] dark:text-[#b89a4e] dark:hover:bg-[#b89a4e]/10 bg-transparent'}`}
+                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm' : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'}`}
                                     >🏠 В кабинете</button>
                                 </div>
                             </div>
@@ -765,7 +773,7 @@ export default function ClientBookingPage() {
                             disabled={isKnownClient && !!form.phone}
                         />
                         <p className="text-xs text-muted-foreground mt-2">
-                            Телефон нужен для связи. Уведомление о сессии придет в Telegram.
+                            Телефон нужен для связи. Уведомление о сессии придёт в {notificationChannel}.
                         </p>
                     </div>
 
@@ -773,8 +781,8 @@ export default function ClientBookingPage() {
                         type="submit"
                         disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'}
                         className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'
-                            ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
-                            : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
+                            ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
+                            : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}
                     >
                         {booking ? <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> : null}
@@ -836,8 +844,8 @@ export default function ClientBookingPage() {
                                         onChange={e => setConsentAccepted(e.target.checked)}
                                     />
                                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5 ${consentAccepted
-                                        ? 'bg-[#1e3a2f] border-[#1e3a2f] dark:bg-[#b89a4e] dark:border-[#b89a4e]'
-                                        : 'border-border group-hover:border-[#1e3a2f]/50 dark:group-hover:border-[#b89a4e]/50'
+                                        ? 'bg-[var(--booking-accent)] border-[var(--booking-accent)]'
+                                        : 'border-border group-hover:border-[var(--booking-accent)]/50'
                                         }`}>
                                         {consentAccepted && (
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -854,8 +862,8 @@ export default function ClientBookingPage() {
                                     onClick={handleConsentAccept}
                                     disabled={!consentAccepted || consentSaving}
                                     className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light ${!consentAccepted || consentSaving
-                                        ? 'border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent cursor-not-allowed opacity-40'
-                                        : 'border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 shadow-sm active:scale-[0.98]'
+                                        ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
+                                        : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                                         }`}
                                 >
                                     {consentSaving ? <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> : null}
@@ -872,15 +880,9 @@ export default function ClientBookingPage() {
                     .react-datepicker__header { background: transparent; border-bottom: none; padding-top: 1rem; }
                     .react-datepicker__day--selected { 
                         background-color: transparent !important; 
-                        border: 2px solid #1e3a2f !important; 
+                        border: 2px solid var(--booking-accent) !important; 
                         border-radius: 12px !important; 
-                        color: #1e3a2f !important;
-                    }
-                    @media (prefers-color-scheme: dark) {
-                        .react-datepicker__day--selected { 
-                            border: 2px solid #b89a4e !important; 
-                            color: #b89a4e !important;
-                        }
+                        color: var(--booking-accent) !important;
                     }
                     .react-datepicker__day:hover { border-radius: 12px; }
                     .react-datepicker__day--disabled { opacity: 0.3; }

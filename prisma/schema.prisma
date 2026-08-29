@@ -32,6 +32,7 @@ model User {
   psychologistAddresses PsychologistAddress[]
   diaryBlocks           DiaryBlock[]
   scheduleRules         ScheduleRule[]
+  slugs                 PsychologistSlug[]
 
   // Therapy process (Smart Notes)
   therapyGoals      TherapyGoal[]
@@ -376,6 +377,17 @@ model DiarySession {
   notified1h         Boolean @default(false)
   postSessionNudged  Boolean @default(false)
   clientMoodRating   Int?
+
+  // O-260829 §5.4: пост-сессионный каскад. `outcome` — отдельное поле, а не
+  // переиспользование `status` ('pending'/'confirmed'/'completed'/'cancelled'):
+  // "проведена/не пришёл" — это факт из вечерней отметки специалиста, который
+  // не отменяет и не завершает саму запись. null = ещё не отмечено; до отметки
+  // встреча по умолчанию считается состоявшейся (ТЗ §5.4) — сообщение через 2ч
+  // уходит, если только явно не 'no_show'.
+  outcome              String? // 'completed' | 'no_show'
+  outcomeMarkedAt      DateTime?
+  nextBookingNudgeSent Boolean @default(false)
+  weeklyFollowupSent   Boolean @default(false)
 
   // Ключ идемпотентности, рождённый на устройстве в момент постановки записи в
   // очередь досылки — не в момент отправки. Приложение может потерять ответ
@@ -904,7 +916,30 @@ model WaitlistEntry {
   preference     String? // same preference tag as getSuggestedTimes, if any
   createdAt      DateTime @default(now())
 
+  // O-260829 §5.2: тихое уведомление при освобождении часа. Отмечается, когда
+  // заявке уже отправлена ссылка на освободившееся время — без этого поля
+  // повторный cancel/reschedule того же часа отправил бы то же приглашение
+  // ещё раз той же самой самой старой заявке.
+  notifiedAt DateTime?
+
   @@index([psychologistId, createdAt])
+}
+
+// O-260829 §5.1: человекочитаемый адрес специалиста вместо голого
+// psychologistId в ссылке записи. Смена адреса не удаляет старую запись —
+// isCurrent переключается на новую, старая остаётся резолвящейся навсегда
+// (уже разосланные ссылки не должны ломаться).
+model PsychologistSlug {
+  id             String   @id @default(cuid())
+  psychologistId String
+  slug           String   @unique // латиница, "anna-volkova"
+  slugCyrillic   String?  @unique // "анна-волкова", опционально
+  isCurrent      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@index([psychologistId, isCurrent])
 }
 
 // ── Analytics ingest (charter/12_ANALYTICS.md, charter/13_TRACKING_PLAN.md §6) ──

@@ -18,7 +18,10 @@ function dayOfWeekMondayFirst(dateStr: string): number {
     return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
 }
 
-function matchesPreference(candidate: SuggestedTimeCandidate, preference: TimePreference): boolean {
+// O-260829 §5.2: экспортирована для notifyWaitlistOnFreedSlot (src/lib/waitlist-notify.ts) —
+// та же логика подбора "подходит ли час под предпочтение", один источник для
+// предложения времени клиенту и для проверки заявки листа ожидания.
+export function matchesPreference(candidate: SuggestedTimeCandidate, preference: TimePreference): boolean {
     if (preference === 'any') return true;
     const isWeekend = dayOfWeekMondayFirst(candidate.date) >= 5;
     if (preference === 'weekday_evening') return !isWeekend && candidate.time >= '18:00';

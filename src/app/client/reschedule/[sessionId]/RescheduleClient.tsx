@@ -71,9 +71,9 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
 
     if (result) {
         return (
-            <main className="min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
+            <main className="practice-booking-theme min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
                 <div className="mx-auto max-w-md rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8 text-center">
-                    <h1 className="text-xl font-bold text-[#1a4d3a] mb-2">Встреча перенесена</h1>
+                    <h1 className="text-xl font-bold text-[var(--booking-accent)] mb-2">Встреча перенесена</h1>
                     <p className="text-sm text-[#5d665f]">Новое время: {result.date} в {result.time}. Специалист уже видит изменение.</p>
                 </div>
             </main>
@@ -96,9 +96,9 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
     };
 
     return (
-        <main className="min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
+        <main className="practice-booking-theme min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
             <div className="mx-auto max-w-md rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8">
-                <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-[#1a4d3a]">КОМПАС · перенос встречи</p>
+                <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--booking-accent)]">КОМПАС · перенос встречи</p>
                 <h1 className="text-xl font-bold leading-tight tracking-tight mb-4">Выберите новое время</h1>
 
                 <div className="bg-[#f4f1ea] rounded-2xl p-4 mb-5 border border-[#e6dfd1]">
@@ -132,7 +132,7 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                                     key={day}
                                     disabled={isPast || !isAvail}
                                     onClick={() => handleDateSelect(dateStr)}
-                                    className={`h-9 rounded-xl text-sm font-medium transition-colors ${isSel ? 'bg-[#1a4d3a] text-white shadow-sm' : isAvail ? 'text-[#1f2a24] hover:bg-[#f4f1ea]' : 'text-[#c3beb0] cursor-default'}`}
+                                    className={`h-9 rounded-xl text-sm font-medium transition-colors ${isSel ? 'bg-[var(--booking-accent)] text-white shadow-sm' : isAvail ? 'text-[#1f2a24] hover:bg-[#f4f1ea]' : 'text-[#c3beb0] cursor-default'}`}
                                 >
                                     {day}
                                 </button>
@@ -155,7 +155,7 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                                     <button
                                         key={slot.time}
                                         onClick={() => setSelectedSlot(slot)}
-                                        className={`py-2 rounded-xl border-2 font-medium text-sm transition-colors ${selectedSlot?.time === slot.time ? 'border-[#1a4d3a] bg-[#1a4d3a] text-white' : 'border-[#e6dfd1] text-[#1f2a24] hover:border-[#1a4d3a]/50'}`}
+                                        className={`py-2 rounded-xl border-2 font-medium text-sm transition-colors ${selectedSlot?.time === slot.time ? 'border-[var(--booking-accent)] bg-[var(--booking-accent)] text-white' : 'border-[#e6dfd1] text-[#1f2a24] hover:border-[var(--booking-accent)]/50'}`}
                                     >
                                         {slot.time}
                                     </button>
@@ -172,7 +172,7 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                 <button
                     onClick={handleSave}
                     disabled={saving || !selectedSlot}
-                    className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-[#1a4d3a] hover:bg-[#153d2e] transition-colors disabled:opacity-50"
+                    className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-[var(--booking-accent)] hover:opacity-90 transition-colors disabled:opacity-50"
                 >
                     {saving ? 'Переносим…' : 'Перенести встречу'}
                 </button>
