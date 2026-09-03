@@ -7,7 +7,7 @@
 // 4. слишком старые сессии (включая всю историю status='completed' до этой
 //    фичи) не разлетаются задним числом при первом проходе cron.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const diarySessionFindMany = vi.fn();
 const diarySessionFindFirst = vi.fn();
@@ -150,8 +150,27 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
 });
 
 describe('processWeeklyFollowup (O-260829 §5.4)', () => {
+    const ORIGINAL_FLAG = process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        // PRAKTIKA MVP addendum §8: launch default — выключено; остальные
+        // тесты этого блока проверяют логику при явно включённом флаге.
+        process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = 'true';
+    });
+
+    afterEach(() => {
+        process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = ORIGINAL_FLAG;
+    });
+
+    it('addendum §8: по умолчанию (флаг не задан) cron не читает базу и не шлёт сообщений', async () => {
+        delete process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED;
+
+        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
+        await processWeeklyFollowup();
+
+        expect(diarySessionFindMany).not.toHaveBeenCalled();
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
     });
 
     it('неделя прошла, будущей записи нет — сообщение уходит', async () => {

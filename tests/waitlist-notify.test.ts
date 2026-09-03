@@ -4,7 +4,7 @@
 // старой подходящей заявке, без денег, без "мест осталось", без спама всем
 // подряд.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const waitlistFindMany = vi.fn();
 const waitlistUpdate = vi.fn().mockResolvedValue({});
@@ -58,11 +58,34 @@ function entry(overrides: Record<string, unknown> = {}) {
 }
 
 describe('notifyWaitlistOnFreedSlot (O-260829 §5.2)', () => {
+    const ORIGINAL_FLAG = process.env.PRACTICE_WAITLIST_AUTO_NOTIFY_ENABLED;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        // PRAKTIKA MVP addendum §7: механика не входит в launch scope и по
+        // умолчанию выключена флагом — весь остальной файл проверяет её
+        // поведение "как если бы она была включена" (отдельное решение
+        // владельца), поэтому явно включаем здесь.
+        process.env.PRACTICE_WAITLIST_AUTO_NOTIFY_ENABLED = 'true';
         userFindUnique.mockResolvedValue({ name: 'Анна Волкова', psychologistSettings: null });
         sendTelegramMessage.mockResolvedValue(true);
         sendMaxMessage.mockResolvedValue({ success: true });
+    });
+
+    afterEach(() => {
+        process.env.PRACTICE_WAITLIST_AUTO_NOTIFY_ENABLED = ORIGINAL_FLAG;
+    });
+
+    it('addendum §7: по умолчанию (флаг не задан) не читает базу и не шлёт сообщений', async () => {
+        delete process.env.PRACTICE_WAITLIST_AUTO_NOTIFY_ENABLED;
+
+        const { notifyWaitlistOnFreedSlot } = await import('../src/lib/waitlist-notify');
+        const result = await notifyWaitlistOnFreedSlot('psy_1', new Date('2026-09-10T00:00:00Z'), '15:00');
+
+        expect(result).toEqual({ notified: false });
+        expect(waitlistFindMany).not.toHaveBeenCalled();
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
+        expect(sendMaxMessage).not.toHaveBeenCalled();
     });
 
     it('отправляет ровно одно сообщение самой старой подходящей заявке и помечает её notifiedAt', async () => {

@@ -84,6 +84,14 @@ export async function notifyWaitlistOnFreedSlot(
     freedDate: Date,
     freedTime: string
 ): Promise<{ notified: boolean; entryId?: string }> {
+    // PRAKTIKA MVP addendum §7: утверждённый launch-дизайн не обещает клиенту
+    // автоматическое уведомление — заявка листа ожидания только сохраняется.
+    // Механику не удаляем (может понадобиться после отдельного решения
+    // владельца), но по умолчанию она выключена.
+    if (process.env.PRACTICE_WAITLIST_AUTO_NOTIFY_ENABLED !== 'true') {
+        return { notified: false };
+    }
+
     const entries = await db.waitlistEntry.findMany({
         where: { psychologistId, notifiedAt: null },
         orderBy: { createdAt: 'asc' },

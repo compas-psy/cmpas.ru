@@ -161,6 +161,12 @@ export async function processNextBookingNudge(): Promise<void> {
  * повторной записи нет — одно сообщение со ссылкой на запись.
  */
 export async function processWeeklyFollowup(): Promise<void> {
+    // PRAKTIKA MVP addendum §8: утверждённый launch UX не должен незаметно
+    // начинать автоматическую дополнительную коммуникацию с клиентами.
+    // Механику не удаляем, но по умолчанию cron не отправляет.
+    if (process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED !== 'true') {
+        return;
+    }
     try {
         const now = new Date();
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
