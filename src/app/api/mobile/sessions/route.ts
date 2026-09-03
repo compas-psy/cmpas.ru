@@ -9,6 +9,7 @@ import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliver
 import { createNotification } from '@/lib/notifications';
 import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 import { formatSession, toDatabaseType } from '@/lib/mobile-sessions';
+import { requireOwnedClient } from '@/lib/practice/ownership';
 
 async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     if (!sessions.length) return sessions;
@@ -60,6 +61,12 @@ export async function POST(req: NextRequest) {
     try {
         const { clientId, date, startTime, endTime, format, type, duration: durationReq, clientRequestId, notes } = await req.json();
         if (!clientId || !date || !startTime) return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
+
+        try {
+            await requireOwnedClient(auth.userId, clientId);
+        } catch {
+            return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+        }
 
         // Идемпотентность досылки. Приложение рождает clientRequestId в момент
         // постановки записи в очередь, а не в момент отправки, поэтому повтор

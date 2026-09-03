@@ -170,8 +170,8 @@ export async function createAvailabilitySlot(data: {
 
 export async function deleteAvailabilitySlot(id: string) {
     try {
-        await getPsychologistId();
-        await db.availabilitySlot.delete({ where: { id } });
+        const psychologistId = await getPsychologistId();
+        await db.availabilitySlot.deleteMany({ where: { id, psychologistId } });
         revalidatePath('/diary/availability');
         return { success: true };
     } catch (e: any) {
@@ -315,8 +315,8 @@ export async function createTimeBlock(data: {
 
 export async function deleteTimeBlock(id: string) {
     try {
-        await getPsychologistId();
-        await db.diaryBlock.delete({ where: { id } });
+        const psychologistId = await getPsychologistId();
+        await db.diaryBlock.deleteMany({ where: { id, psychologistId } });
         revalidatePath('/diary/availability');
         return { success: true };
     } catch (e: any) {

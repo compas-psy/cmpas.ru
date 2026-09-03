@@ -8,6 +8,7 @@ import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract-name';
 import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
+import { requireOwnedClient, requireOwnedSession } from '@/lib/practice/ownership';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -94,6 +95,7 @@ export async function createClient(data: {
 
 export async function updateClient(id: string, data: Record<string, unknown>) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
     const client = await db.diaryClient.update({
         where: { id },
         data: { ...data, psychologistId },
@@ -104,7 +106,8 @@ export async function updateClient(id: string, data: Record<string, unknown>) {
 }
 
 export async function archiveClient(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
     await db.diaryClient.update({
         where: { id },
         data: { status: 'archived' },
@@ -113,7 +116,8 @@ export async function archiveClient(id: string) {
 }
 
 export async function restoreClient(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
     await db.diaryClient.update({
         where: { id },
         data: { status: 'active' },
@@ -141,7 +145,8 @@ export async function deleteClient(id: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function saveQuestionnaire(clientId: string, data: any) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, clientId);
     const result = await db.diaryQuestionnaire.upsert({
         where: { clientId },
         create: { clientId, data },
@@ -152,7 +157,8 @@ export async function saveQuestionnaire(clientId: string, data: any) {
 }
 
 export async function updateSessionNotes(sessionId: string, notes: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedSession(psychologistId, sessionId);
     await db.diarySession.update({
         where: { id: sessionId },
         data: { notes },

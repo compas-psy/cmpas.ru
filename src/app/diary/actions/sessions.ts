@@ -9,6 +9,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 import { rescheduleSessionAtomic } from '@/lib/session-reschedule';
 import { track } from '@/lib/analytics/track';
+import { requireOwnedSession, requireOwnedClient } from '@/lib/practice/ownership';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -114,6 +115,7 @@ export async function createSession(data: {
     format?: string;
 }) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, data.clientId);
     const duration = data.duration || 50;
     const [h, m] = data.time.split(':').map(Number);
     const endMinutes = h * 60 + m + duration;
@@ -200,6 +202,7 @@ export async function updateSession(id: string, data: {
     clientSummary?: string;
 }) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedSession(psychologistId, id);
 
     // Build update payload — only include defined fields
     const updatePayload: Record<string, any> = { psychologistId };
@@ -225,9 +228,10 @@ export async function updateSession(id: string, data: {
 
 export async function deleteSession(id: string) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedSession(psychologistId, id);
     // Delete from calendars before deleting session
     autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
-    await db.diarySession.delete({ where: { id } });
+    await db.diarySession.deleteMany({ where: { id, psychologistId } });
     revalidatePath('/diary');
 }
 

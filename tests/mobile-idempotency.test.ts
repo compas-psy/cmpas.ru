@@ -47,6 +47,11 @@ vi.mock('@/lib/db', () => ({
                         (c) => c.clientRequestId === where.clientRequestId && c.psychologistId === where.psychologistId,
                     ) ?? null;
                 }
+                if (where.id) {
+                    return store.clients.find(
+                        (c) => c.id === where.id && c.psychologistId === where.psychologistId,
+                    ) ?? null;
+                }
                 return null;
             },
             create: async ({ data }: any) => {
@@ -90,7 +95,13 @@ function post(url: string, body: unknown) {
 describe('POST /api/mobile/sessions — повтор с тем же ключом не создаёт вторую сессию', () => {
     beforeEach(() => {
         store.sessions = [];
-        store.clients = [];
+        // Клиенты, на которых ссылаются тесты этого блока, — как будто уже
+        // созданы у психолога psy-1 (ownership hardening: сессия создаётся
+        // только для своего клиента, поэтому фикстура должна его знать).
+        store.clients = [
+            { id: 'client-1', psychologistId: 'psy-1' },
+            { id: 'c', psychologistId: 'psy-1' },
+        ];
         vi.resetModules();
     });
 

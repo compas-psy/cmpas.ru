@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getAdsConsentStatus, toggleAdsConsent } from '@/app/legal/actions';
+import { requireOwnedCalendarIntegration } from '@/lib/practice/ownership';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -157,7 +158,8 @@ export async function getIntegrations() {
 }
 
 export async function toggleIntegration(id: string, isActive: boolean) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedCalendarIntegration(psychologistId, id);
     const integration = await db.calendarIntegration.update({
         where: { id },
         data: { isActive },
@@ -167,7 +169,8 @@ export async function toggleIntegration(id: string, isActive: boolean) {
 }
 
 export async function toggleIntegrationSyncFrom(id: string, syncFrom: boolean) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedCalendarIntegration(psychologistId, id);
     // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
     const integration = await db.calendarIntegration.update({
         where: { id },
@@ -178,7 +181,8 @@ export async function toggleIntegrationSyncFrom(id: string, syncFrom: boolean) {
 }
 
 export async function disconnectIntegration(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedCalendarIntegration(psychologistId, id);
     await db.calendarIntegration.delete({
         where: { id },
     });
