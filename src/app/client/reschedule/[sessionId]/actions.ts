@@ -3,7 +3,9 @@
 import { db } from '@/lib/db';
 import { verifySessionActionToken } from '@/lib/client-workflow';
 import { getAvailableDates, getAvailableTimes } from '@/app/bot/actions';
-import { rescheduleSessionAtomic, RescheduleConflictError } from '@/lib/session-reschedule';
+import { reschedulePracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
+import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
+import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
 import { createNotification } from '@/lib/notifications';
 
 async function loadAuthorizedSession(sessionId: string, token: string) {
@@ -41,19 +43,42 @@ export async function getAvailableTimesForClientReschedule(sessionId: string, to
     return getAvailableTimes(session.psychologistId, dateStr, false, sessionId, session.clientId);
 }
 
-export async function submitClientReschedule(sessionId: string, token: string, dateStr: string, time: string) {
+// Task 8: getAvailableTimesForClientReschedule already mints a slotToken per
+// candidate (Task 7's getAvailableTimes does this unconditionally) — this
+// now spends that token instead of a raw date/time string, so a client's
+// reschedule gets the exact same atomic lock + revalidation a fresh booking
+// gets, and a slot rebound to a different rule since the grid was loaded is
+// rejected here rather than silently double-booked.
+export async function submitClientReschedule(sessionId: string, token: string, slotToken: string) {
     const session = await loadAuthorizedSession(sessionId, token);
     if (session.status === 'cancelled') {
         throw new Error('Эта сессия уже отменена, перенести её нельзя');
     }
 
-    let updated;
+    let result;
     try {
-        updated = await rescheduleSessionAtomic(session.psychologistId, sessionId, new Date(dateStr), time);
+        result = await reschedulePracticeBooking({
+            psychologistId: session.psychologistId,
+            sessionId,
+            slotToken,
+            origin: 'self_booking',
+        });
     } catch (e) {
-        if (e instanceof RescheduleConflictError) throw new Error(e.message);
+        if (e instanceof BookingConflictError) throw new Error(e.message);
         throw e;
     }
+
+    const { session: updated, previousDate, previousTime } = result;
+
+    autoDeleteSessionFromCalendars(session.psychologistId, sessionId).catch(console.error);
+    const fullSession = await db.diarySession.findUnique({
+        where: { id: sessionId },
+        include: { client: { select: { name: true } } },
+    });
+    if (fullSession) {
+        autoSyncSessionToCalendars(session.psychologistId, fullSession).catch(console.error);
+    }
+    notifyWaitlistOnFreedSlot(session.psychologistId, previousDate, previousTime).catch(console.error);
 
     const dateLabel = updated.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
     await createNotification({

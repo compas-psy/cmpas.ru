@@ -20,7 +20,7 @@ import type { BlockInput } from './types';
 //      blocked, or capped out is rejected here — not silently double-booked.
 
 export class BookingConflictError extends Error {
-    code: 'INVALID_TOKEN' | 'SLOT_UNAVAILABLE' | 'CLIENT_ALREADY_BOOKED';
+    code: 'INVALID_TOKEN' | 'SLOT_UNAVAILABLE' | 'CLIENT_ALREADY_BOOKED' | 'SESSION_NOT_FOUND';
     constructor(code: BookingConflictError['code'], message: string) {
         super(message);
         this.name = 'BookingConflictError';
@@ -83,6 +83,27 @@ async function acquireDayLock(tx: Parameters<Parameters<typeof db.$transaction>[
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
 }
 
+/**
+ * Task 8: a second advisory-lock namespace (seed 1, vs the day lock's seed 0
+ * — hashtextextended's second argument, so the two keyspaces never collide)
+ * scoped to a single sessionId. Reschedule reads-then-writes one existing
+ * row, and the row's OLD and NEW day can differ — two concurrent reschedules
+ * of the SAME session to two DIFFERENT target days would each only take a
+ * day lock, take DIFFERENT day locks, and never serialize against each
+ * other. Taking this lock FIRST, before any day lock, on every reschedule
+ * closes that gap: any two operations touching the same session always
+ * serialize here regardless of which day(s) they target. Acquired first and
+ * only by reschedule paths, so it can never invert order against a
+ * create-side transaction (which never takes it) — no new deadlock risk.
+ */
+async function acquireSessionLock(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0], sessionId: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${sessionId}, 1))`;
+}
+
+function toDateStr(d: Date): string {
+    return d.toISOString().slice(0, 10);
+}
+
 interface DayWindow {
     dateObj: Date;
     dayStart: Date;
@@ -101,25 +122,28 @@ function dayWindowFor(identity: SlotIdentity): DayWindow {
 }
 
 /**
- * The shared "re-validate under the lock, then write" core. Used by both
- * createPracticeBooking (clientId already known) and createSelfPracticeBooking
- * (clientId resolved/created inside the same transaction, just before this
- * runs) — so a rejected booking rolls back identically for both callers.
+ * The shared "is this exact slot still bookable, right now, under the lock"
+ * check — the validation half of the create-side core, and (Task 8) also the
+ * ENTIRE validation reschedule needs, since a reschedule is "is this exact
+ * slot still available for this client" followed by an UPDATE instead of a
+ * CREATE. `excludeSessionId` is what makes it reusable for reschedule: the
+ * session being moved must not count against its own target day's collision
+ * check, one-booking-per-day rule, or maxSessionsPerDay cap.
  */
-async function resolveAndCommitSession(
+async function assertSlotStillAvailable(
     tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
     params: {
         psychologistId: string;
         clientId: string;
         identity: SlotIdentity;
         origin: BookingOrigin;
-        type?: string;
-        notes?: string | null;
         skipBuffer?: boolean;
         externalBusy: BlockInput[];
         window: DayWindow;
+        /** Reschedule only: the session being moved, excluded from its own target day's checks. */
+        excludeSessionId?: string;
     },
-): Promise<BookedPracticeSession> {
+): Promise<void> {
     const { identity, window } = params;
 
     const [settings, slotRow, daySessions, dayBlocks] = await Promise.all([
@@ -129,7 +153,12 @@ async function resolveAndCommitSession(
             include: { scheduleRule: true },
         }),
         tx.diarySession.findMany({
-            where: { psychologistId: params.psychologistId, date: { gte: window.dayStart, lte: window.dayEnd }, status: { not: 'cancelled' } },
+            where: {
+                psychologistId: params.psychologistId,
+                date: { gte: window.dayStart, lte: window.dayEnd },
+                status: { not: 'cancelled' },
+                ...(params.excludeSessionId ? { id: { not: params.excludeSessionId } } : {}),
+            },
             select: { id: true, date: true, time: true, duration: true, clientId: true },
         }),
         tx.diaryBlock.findMany({
@@ -186,7 +215,32 @@ async function resolveAndCommitSession(
     if (!matches) {
         throw new BookingConflictError('SLOT_UNAVAILABLE', 'Это время больше недоступно — выберите другое.');
     }
+}
 
+/**
+ * The shared "re-validate under the lock, then write" core for a NEW
+ * booking. Used by both createPracticeBooking (clientId already known) and
+ * createSelfPracticeBooking (clientId resolved/created inside the same
+ * transaction, just before this runs) — so a rejected booking rolls back
+ * identically for both callers.
+ */
+async function resolveAndCommitSession(
+    tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+    params: {
+        psychologistId: string;
+        clientId: string;
+        identity: SlotIdentity;
+        origin: BookingOrigin;
+        type?: string;
+        notes?: string | null;
+        skipBuffer?: boolean;
+        externalBusy: BlockInput[];
+        window: DayWindow;
+    },
+): Promise<BookedPracticeSession> {
+    await assertSlotStillAvailable(tx, params);
+
+    const { identity, window } = params;
     const session = await tx.diarySession.create({
         data: {
             psychologistId: params.psychologistId,
@@ -377,6 +431,212 @@ export async function createSelfPracticeBooking(input: CreateSelfPracticeBooking
         });
 
         return { session, client };
+    });
+}
+
+// Task 8 (PRAKTIKA MVP): "reschedule uses same booking core" — before this,
+// src/lib/session-reschedule.ts re-implemented its own read-then-write
+// collision check with no advisory lock and no real maxSessionsPerDay
+// enforcement, and the web/client-facing reschedule pickers minted a
+// slotToken (getAvailableTimes always does) only to throw it away and pass a
+// raw date/time string instead. reschedulePracticeBooking makes reschedule a
+// first-class citizen of the same core as booking: it takes the SAME
+// slotToken the picker already has, re-validates it under the SAME
+// (psychologist, day) advisory lock and the SAME assertSlotStillAvailable
+// used for a fresh booking, and does an UPDATE instead of a CREATE — the
+// session's id/history is preserved, never deleted-then-recreated.
+export interface ReschedulePracticeBookingInput {
+    psychologistId: string;
+    sessionId: string;
+    slotToken: string;
+    origin: BookingOrigin;
+    /** Skip the client-facing booking buffer when re-resolving — psychologist-facing reschedule passes true, same as a fresh manual booking would. */
+    skipBuffer?: boolean;
+}
+
+export interface ReschedulePracticeBookingResult {
+    session: BookedPracticeSession;
+    /** The slot being freed — callers use this for calendar sync and to notify the waitlist of the newly-open old slot. */
+    previousDate: Date;
+    previousTime: string;
+}
+
+export async function reschedulePracticeBooking(input: ReschedulePracticeBookingInput): Promise<ReschedulePracticeBookingResult> {
+    const identity = verifySlotToken(input.psychologistId, input.slotToken);
+    if (!identity) {
+        throw new BookingConflictError('INVALID_TOKEN', 'Ссылка на это время устарела или недействительна — выберите время заново.');
+    }
+
+    const window = dayWindowFor(identity);
+
+    // Network I/O before opening the transaction — never under the advisory lock.
+    const settingsForFetch = await db.psychologistSettings.findUnique({ where: { psychologistId: input.psychologistId } });
+    const externalBusy = await fetchExternalBusyBlocks(input.psychologistId, window.dayStart, window.dayEnd, {
+        timezone: settingsForFetch?.timezone,
+        blockConflicts: settingsForFetch?.blockConflicts ?? true,
+    });
+
+    return db.$transaction(async (tx) => {
+        // Session lock FIRST (see acquireSessionLock) — serializes this
+        // against any other reschedule of the SAME session before either
+        // side has even read it, regardless of which day(s) each targets.
+        await acquireSessionLock(tx, input.sessionId);
+
+        const existing = await tx.diarySession.findFirst({ where: { id: input.sessionId, psychologistId: input.psychologistId } });
+        if (!existing) {
+            throw new BookingConflictError('SESSION_NOT_FOUND', 'Сессия не найдена');
+        }
+        if (existing.status === 'cancelled') {
+            throw new BookingConflictError('SESSION_NOT_FOUND', 'Эта сессия уже отменена');
+        }
+
+        // A reschedule can move a session to a DIFFERENT day than it's
+        // currently on — lock both, in a fixed (sorted) order, so two
+        // unrelated reschedules that happen to touch an overlapping pair of
+        // days can never deadlock against each other.
+        const oldDateStr = toDateStr(existing.date);
+        const dateStrs = Array.from(new Set([oldDateStr, identity.dateStr])).sort();
+        for (const ds of dateStrs) {
+            await acquireDayLock(tx, input.psychologistId, ds);
+        }
+
+        // excludeSessionId: this session's OWN current booking must not
+        // count against the target day's one-booking-per-day rule or
+        // maxSessionsPerDay cap — it's the same booking being moved, not an
+        // additional one.
+        await assertSlotStillAvailable(tx, {
+            psychologistId: input.psychologistId,
+            clientId: existing.clientId,
+            identity,
+            origin: input.origin,
+            skipBuffer: input.skipBuffer,
+            externalBusy,
+            window,
+            excludeSessionId: input.sessionId,
+        });
+
+        // Task 7's principle carried over: the token is the only source of
+        // truth for format/addressId/duration — a reschedule to a slot with
+        // a different format now actually applies that format, instead of
+        // silently keeping the session's old one (session-reschedule.ts
+        // never touched format/addressId at all).
+        const session = await tx.diarySession.update({
+            where: { id: input.sessionId },
+            data: {
+                date: window.dateObj,
+                time: identity.time,
+                endTime: window.endTime,
+                duration: identity.duration,
+                format: identity.format,
+                addressId: identity.addressId,
+                notified24h: false,
+                notified1h: false,
+            },
+        });
+
+        return { session: session as BookedPracticeSession, previousDate: existing.date, previousTime: existing.time };
+    });
+}
+
+// Task 8: the mobile/Android reschedule is, like createManualPracticeSession,
+// NOT tied to any AvailabilitySlot — the psychologist can move a session to
+// any time on purpose, on or off their configured schedule. So there is no
+// slotToken here either: same shape as the old inline logic in
+// src/app/api/mobile/sessions/[id]/route.ts, just moved behind the shared
+// advisory locks (session lock + both days' day locks) and a real
+// maxSessionsPerDay re-check when the move actually changes the day.
+export interface RescheduleManualSessionInput {
+    psychologistId: string;
+    sessionId: string;
+    dateStr: string; // "YYYY-MM-DD"
+    time: string; // "HH:MM"
+    /** Applied verbatim if given — callers decide their own default (e.g. the mobile route resets to 'pending' on reschedule unless the caller says otherwise). */
+    status?: string;
+    /** Extra fields (e.g. notes/structuredNotes) merged into the same UPDATE — kept in one write rather than a second, non-atomic one. */
+    extraUpdateData?: Record<string, unknown>;
+}
+
+export interface RescheduleManualSessionResult {
+    session: BookedPracticeSession;
+    previousDate: Date;
+    previousTime: string;
+}
+
+export async function rescheduleManualPracticeSession(input: RescheduleManualSessionInput): Promise<RescheduleManualSessionResult> {
+    const [y, m, d] = input.dateStr.split('-').map(Number);
+    const dateObj = new Date(Date.UTC(y, m - 1, d));
+    const dayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
+    const [h, min] = input.time.split(':').map(Number);
+    const newStartMins = h * 60 + min;
+
+    return db.$transaction(async (tx) => {
+        await acquireSessionLock(tx, input.sessionId);
+
+        const existing = await tx.diarySession.findFirst({ where: { id: input.sessionId, psychologistId: input.psychologistId } });
+        if (!existing) {
+            throw new BookingConflictError('SESSION_NOT_FOUND', 'Сессия не найдена');
+        }
+        if (existing.status === 'cancelled') {
+            throw new BookingConflictError('SESSION_NOT_FOUND', 'Эта сессия уже отменена');
+        }
+
+        const duration = existing.duration || 50;
+        const newEndMins = newStartMins + duration;
+        const endTime = minutesToTimeStr(newEndMins);
+
+        const oldDateStr = toDateStr(existing.date);
+        const movingDay = oldDateStr !== input.dateStr;
+        const dateStrs = Array.from(new Set([oldDateStr, input.dateStr])).sort();
+        for (const ds of dateStrs) {
+            await acquireDayLock(tx, input.psychologistId, ds);
+        }
+
+        const [settings, daySessions] = await Promise.all([
+            tx.psychologistSettings.findUnique({ where: { psychologistId: input.psychologistId } }),
+            tx.diarySession.findMany({
+                where: {
+                    psychologistId: input.psychologistId,
+                    id: { not: input.sessionId },
+                    date: { gte: dayStart, lte: dayEnd },
+                    status: { not: 'cancelled' },
+                },
+                select: { time: true, duration: true },
+            }),
+        ]);
+
+        // The cap only matters when this move actually adds to the target
+        // day's count — staying on the same day and only changing the time
+        // never changes how many sessions that day has.
+        if (movingDay && settings?.maxSessionsPerDay && daySessions.length >= settings.maxSessionsPerDay) {
+            throw new BookingConflictError('SLOT_UNAVAILABLE', 'На эту дату у специалиста уже максимум записей.');
+        }
+
+        const collision = daySessions.some((s) => {
+            const [eH, eM] = s.time.split(':').map(Number);
+            const eStart = eH * 60 + eM;
+            const eEnd = eStart + (s.duration || 50);
+            return newStartMins < eEnd && newEndMins > eStart;
+        });
+        if (collision) {
+            throw new BookingConflictError('SLOT_UNAVAILABLE', 'Это время уже занято другой сессией.');
+        }
+
+        const session = await tx.diarySession.update({
+            where: { id: input.sessionId },
+            data: {
+                date: dateObj,
+                time: input.time,
+                endTime,
+                ...(input.status !== undefined ? { status: input.status } : {}),
+                notified24h: false,
+                notified1h: false,
+                ...(input.extraUpdateData || {}),
+            },
+            include: { client: true },
+        });
+
+        return { session: session as BookedPracticeSession, previousDate: existing.date, previousTime: existing.time };
     });
 }
 

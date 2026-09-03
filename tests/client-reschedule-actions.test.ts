@@ -13,10 +13,15 @@ vi.mock('@/app/bot/actions', () => ({
     getAvailableDates: vi.fn(),
     getAvailableTimes: vi.fn(),
 }));
-vi.mock('@/lib/session-reschedule', () => ({
-    rescheduleSessionAtomic: vi.fn(),
-    RescheduleConflictError: class RescheduleConflictError extends Error {},
+vi.mock('@/lib/practice/booking/booking', () => ({
+    reschedulePracticeBooking: vi.fn(),
+    BookingConflictError: class BookingConflictError extends Error {},
 }));
+vi.mock('@/lib/calendar/auto-sync', () => ({
+    autoSyncSessionToCalendars: vi.fn(),
+    autoDeleteSessionFromCalendars: vi.fn(),
+}));
+vi.mock('@/lib/waitlist-notify', () => ({ notifyWaitlistOnFreedSlot: vi.fn() }));
 vi.mock('@/lib/notifications', () => ({ createNotification: vi.fn().mockResolvedValue(undefined) }));
 
 function makeSession(overrides: Record<string, unknown> = {}) {

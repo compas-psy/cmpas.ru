@@ -7,10 +7,10 @@ import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/li
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
-import { rescheduleSessionAtomic } from '@/lib/session-reschedule';
+import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
 import { track } from '@/lib/analytics/track';
 import { requireOwnedSession, requireOwnedClient } from '@/lib/practice/ownership';
-import { createManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
+import { createManualPracticeSession, reschedulePracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -211,9 +211,41 @@ export async function deleteSession(id: string) {
     revalidatePath('/diary');
 }
 
-export async function rescheduleSession(id: string, newDate: string, newTime: string) {
+// Task 8: RescheduleModal only ever offers times from the SAME availability
+// grid getAvailableTimesForReschedule already resolves — which, since Task
+// 7, always mints a slotToken per candidate. reschedulePracticeBooking
+// re-verifies that token and re-validates it under the shared advisory lock
+// (same core as a fresh booking), then does an UPDATE in place — no
+// separate, unlocked collision check exists anymore.
+export async function rescheduleSession(id: string, slotToken: string) {
     const psychologistId = await getPsychologistId();
-    const session = await rescheduleSessionAtomic(psychologistId, id, new Date(newDate), newTime);
+
+    let result;
+    try {
+        result = await reschedulePracticeBooking({
+            psychologistId,
+            sessionId: id,
+            slotToken,
+            origin: 'manual',
+            skipBuffer: true, // psychologist-facing — same as getAvailableTimesForReschedule's skipBuffer=true
+        });
+    } catch (e) {
+        if (e instanceof BookingConflictError) throw new Error(e.message);
+        throw e;
+    }
+
+    const { session, previousDate, previousTime } = result;
+
+    autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
+    const fullSession = await db.diarySession.findUnique({
+        where: { id },
+        include: { client: { select: { name: true } } },
+    });
+    if (fullSession) {
+        autoSyncSessionToCalendars(psychologistId, fullSession).catch(console.error);
+    }
+    notifyWaitlistOnFreedSlot(psychologistId, previousDate, previousTime).catch(console.error);
+
     revalidatePath('/diary');
     return session;
 }
@@ -226,11 +258,10 @@ export async function rescheduleSession(id: string, newDate: string, newTime: st
 // Заводить отдельное поле было бы двоевластием: web писал бы в outcome,
 // Android — в status, для одного и того же факта.
 //
-// Тот же приём владения, что и rescheduleSessionAtomic
-// (src/lib/session-reschedule.ts): сессия сначала ищется по id одна, затем
-// сверяется psychologistId, и только потом мутируется — а не совмещается в
-// одном findMany/updateMany filter, чтобы чужая сессия давала внятную
-// ошибку, а не молчаливый no-op.
+// Тот же приём владения, что и rescheduleSession выше: сессия сначала
+// ищется по id одна, затем сверяется psychologistId, и только потом
+// мутируется — а не совмещается в одном findMany/updateMany filter, чтобы
+// чужая сессия давала внятную ошибку, а не молчаливый no-op.
 export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_show') {
     const psychologistId = await getPsychologistId();
 

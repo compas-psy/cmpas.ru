@@ -15,7 +15,7 @@ type Props = {
     clientId?: string;
 };
 
-type AvailableSlot = { time: string; format: string; addressId: string | null };
+type AvailableSlot = { time: string; format: string; addressId: string | null; slotToken: string | null; slotTokenOnline: string | null; slotTokenOffline: string | null };
 
 export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDate, currentTime, clientName, clientId }: Props) {
     const [selectedDate, setSelectedDate] = useState<string>('');
@@ -79,10 +79,19 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
             toast.error('Выберите дату и время');
             return;
         }
+        // Task 8: the token IS the reschedule target — never re-derived from
+        // date/time on the server. A format:'both' rule mints two tokens;
+        // this modal has no online/offline toggle (unchanged from before),
+        // so it defaults to the online one when both are offered.
+        const token = selectedSlot.slotToken || selectedSlot.slotTokenOnline || selectedSlot.slotTokenOffline;
+        if (!token) {
+            toast.error('Это время больше недоступно — выберите другое.');
+            return;
+        }
         setSaving(true);
         try {
             const { rescheduleSession } = await import('../actions/sessions');
-            await rescheduleSession(sessionId, selectedDate, selectedSlot.time);
+            await rescheduleSession(sessionId, token);
             toast.success('Сессия перенесена');
             onSave();
             onClose();

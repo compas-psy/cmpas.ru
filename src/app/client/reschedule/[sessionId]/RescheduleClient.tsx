@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAvailableDatesForClientReschedule, getAvailableTimesForClientReschedule, submitClientReschedule } from './actions';
 
-type TimeSlot = { time: string; format: string; addressId: string | null };
+type TimeSlot = { time: string; format: string; addressId: string | null; slotToken: string | null; slotTokenOnline: string | null; slotTokenOffline: string | null };
 
 type Props = {
     sessionId: string;
@@ -58,10 +58,18 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
             setError('Выберите дату и время');
             return;
         }
+        // Task 8: the token IS the reschedule target — this page has no
+        // online/offline toggle (unchanged from before), so it defaults to
+        // the online one when a format:'both' rule offers both.
+        const slotToken = selectedSlot.slotToken || selectedSlot.slotTokenOnline || selectedSlot.slotTokenOffline;
+        if (!slotToken) {
+            setError('Это время больше недоступно — выберите другое.');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
-            const res = await submitClientReschedule(sessionId, token, selectedDate, selectedSlot.time);
+            const res = await submitClientReschedule(sessionId, token, slotToken);
             setResult(res);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Не удалось перенести встречу');
