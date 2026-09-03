@@ -126,8 +126,14 @@ model AuditLog {
 // ============================================
 
 model LegalDocument {
-  id          String    @id @default(cuid())
-  type        String // "TERMS", "PRIVACY", "ADS"
+  id   String @id @default(cuid())
+  type String // "TERMS", "PRIVACY", "ADS", "PROFESSIONAL", "PRACTICE"
+  // Canonical document code (cmpas_terms, cmpas_privacy, cmpas_professional,
+  // cmpas_practice_terms, cmpas_marketing_consent) — see src/lib/legal-documents.ts
+  // LEGAL_CODES. `type` stays for existing admin filtering; `code` is the
+  // identifier new logic should key off, so it isn't tied to a fixed
+  // TERMS/PRIVACY-only assumption.
+  code        String?
   version     String // "1.0"
   url         String // Path or URL to the PDF document
   isActive    Boolean   @default(false)
@@ -140,6 +146,7 @@ model LegalDocument {
 
   @@index([type])
   @@index([isActive])
+  @@index([code])
 }
 
 model LegalDocumentAcceptance {
@@ -151,15 +158,21 @@ model LegalDocumentAcceptance {
   source          String   @default("web") // "web" | "android"
   documentType    String? // snapshot of LegalDocument.type at acceptance time
   documentVersion String? // snapshot of LegalDocument.version at acceptance time
+  documentCode    String? // snapshot of LegalDocument.code at acceptance time
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Restrict, not Cascade: this row is consent evidence. Deleting the
+  // LegalDocument it points to must never silently take the evidence with
+  // it — src/app/admin/(chrome)/legal/actions.ts#deleteLegalDoc must refuse
+  // instead.
+  document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
 
   @@unique([userId, documentId])
   @@index([userId])
   @@index([documentId])
   @@index([userId, source])
   @@index([documentType])
+  @@index([documentCode])
 }
 
 // Visitor Analytics for LAL Audience Building

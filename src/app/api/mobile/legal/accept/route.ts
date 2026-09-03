@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-import { getActiveLegalDocuments, LEGAL_DOC_TYPES, REQUIRED_LEGAL_DOC_TYPES } from '@/lib/legal-documents';
+import { getActiveLegalDocuments, LEGAL_DOC_TYPES, ACCOUNT_REQUIRED_TYPES } from '@/lib/legal-documents';
 
 type ActiveLegalDocument = Awaited<ReturnType<typeof getActiveLegalDocuments>>[number];
 
@@ -22,15 +22,16 @@ function acceptanceUpsert(params: {
     const { userId, document, ipAddress, source } = params;
     return Prisma.sql`
         INSERT INTO "LegalDocumentAcceptance"
-            (id, "userId", "documentId", "acceptedAt", "ipAddress", "source", "documentType", "documentVersion")
+            (id, "userId", "documentId", "acceptedAt", "ipAddress", "source", "documentType", "documentVersion", "documentCode")
         VALUES
-            (${randomUUID()}, ${userId}, ${document.id}, NOW(), ${ipAddress}, ${source}, ${document.type}, ${document.version})
+            (${randomUUID()}, ${userId}, ${document.id}, NOW(), ${ipAddress}, ${source}, ${document.type}, ${document.version}, ${document.code})
         ON CONFLICT ("userId", "documentId") DO UPDATE
         SET "acceptedAt" = EXCLUDED."acceptedAt",
             "ipAddress" = EXCLUDED."ipAddress",
             "source" = EXCLUDED."source",
             "documentType" = EXCLUDED."documentType",
-            "documentVersion" = EXCLUDED."documentVersion"
+            "documentVersion" = EXCLUDED."documentVersion",
+            "documentCode" = EXCLUDED."documentCode"
     `;
 }
 
@@ -43,13 +44,13 @@ export async function POST(req: NextRequest) {
 
     try {
         const activeDocs = await getActiveLegalDocuments(LEGAL_DOC_TYPES);
-        const requiredDocs = REQUIRED_LEGAL_DOC_TYPES
+        const requiredDocs = ACCOUNT_REQUIRED_TYPES
             .map((type) => activeDocs.find((doc) => doc.type === type))
             .filter((doc): doc is ActiveLegalDocument => Boolean(doc));
         const adsDoc = activeDocs.find((doc) => doc.type === 'ADS') ?? null;
 
         if (body.acceptTerms === true) {
-            if (requiredDocs.length !== REQUIRED_LEGAL_DOC_TYPES.length) {
+            if (requiredDocs.length !== ACCOUNT_REQUIRED_TYPES.length) {
                 return NextResponse.json({ error: 'Required legal documents are unavailable' }, { status: 503 });
             }
 

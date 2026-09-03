@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-import { getActiveLegalDocuments, LEGAL_DOC_TYPES, publicLegalDocUrl, REQUIRED_LEGAL_DOC_TYPES } from '@/lib/legal-documents';
+import { getActiveLegalDocuments, LEGAL_DOC_TYPES, publicLegalDocUrl, ACCOUNT_REQUIRED_TYPES } from '@/lib/legal-documents';
 
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
             accepted: acceptedIds.has(doc.id),
         }) : null;
 
-        const requiredDocuments = REQUIRED_LEGAL_DOC_TYPES
+        const requiredDocuments = ACCOUNT_REQUIRED_TYPES
             .map((type) => latestByType(type))
             .filter((doc): doc is NonNullable<typeof doc> => !!doc && !acceptedIds.has(doc.id));
 

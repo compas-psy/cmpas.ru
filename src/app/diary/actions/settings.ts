@@ -311,13 +311,13 @@ export async function updateProfile(data: {
 }
 
 export async function getAdsConsentForUser() {
-    const userId = await getPsychologistId();
-    return getAdsConsentStatus(userId);
+    await getPsychologistId(); // ensures caller is authenticated before delegating
+    return getAdsConsentStatus();
 }
 
 export async function toggleAdsConsentForUser(accept: boolean) {
-    const userId = await getPsychologistId();
-    return toggleAdsConsent(userId, accept);
+    await getPsychologistId();
+    return toggleAdsConsent(accept);
 }
 
 export async function getTrialStatus() {

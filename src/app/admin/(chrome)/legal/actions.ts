@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
+import { LEGAL_CODES, type LegalDocType } from "@/lib/legal-documents"
 
 async function ensureAdmin() {
     const session = await auth()
@@ -25,7 +26,7 @@ export async function getAdminLegalDocs() {
     }
 }
 
-export async function setActiveLegalDoc(id: string, type: "TERMS" | "PRIVACY" | "ADS") {
+export async function setActiveLegalDoc(id: string, type: LegalDocType) {
     await ensureAdmin()
     try {
         // Run in transaction to securely deactivate others
@@ -47,7 +48,7 @@ export async function setActiveLegalDoc(id: string, type: "TERMS" | "PRIVACY" | 
     }
 }
 
-export async function createLegalDoc(data: { type: "TERMS" | "PRIVACY" | "ADS", version: string, url: string, isActive: boolean }) {
+export async function createLegalDoc(data: { type: LegalDocType, version: string, url: string, isActive: boolean }) {
     await ensureAdmin()
     try {
         if (data.isActive) {
@@ -59,6 +60,7 @@ export async function createLegalDoc(data: { type: "TERMS" | "PRIVACY" | "ADS", 
         await db.legalDocument.create({
             data: {
                 ...data,
+                code: LEGAL_CODES[data.type],
                 publishedAt: new Date()
             }
         })
@@ -70,9 +72,19 @@ export async function createLegalDoc(data: { type: "TERMS" | "PRIVACY" | "ADS", 
     }
 }
 
+/**
+ * Legal acceptances are evidence — deleting the document they were recorded
+ * against must never take that evidence with it. The FK is now onDelete:
+ * Restrict, so the DB itself refuses; this precheck exists to return a clear
+ * message instead of a raw constraint-violation error.
+ */
 export async function deleteLegalDoc(id: string) {
     await ensureAdmin()
     try {
+        const acceptanceCount = await db.legalDocumentAcceptance.count({ where: { documentId: id } })
+        if (acceptanceCount > 0) {
+            return { success: false, error: `Нельзя удалить: у документа ${acceptanceCount} зафиксированных согласий (доказательства). Деактивируйте его вместо удаления.` }
+        }
         await db.legalDocument.delete({ where: { id } })
         revalidatePath("/admin/legal")
         return { success: true }

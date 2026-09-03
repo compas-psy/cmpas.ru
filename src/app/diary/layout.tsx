@@ -8,6 +8,7 @@ import { Toaster } from 'sonner';
 import { SidebarNav } from './sidebar-nav';
 import { MobileSidebar } from './mobile-sidebar';
 import { checkUserAcceptance } from '@/app/legal/actions';
+import { ACCOUNT_REQUIRED_TYPES } from '@/lib/legal-documents';
 import { AdsConsentWrapper } from '@/components/legal/AdsConsentWrapper';
 import { TrialBanner } from '@/components/psidairy/TrialBanner';
 import { BottomTabBar } from './bottom-tab-bar';
@@ -124,9 +125,10 @@ export default async function DiaryLayout({
         redirect('/auth');
     }
 
-    // Legal gate goes before onboarding: a new psychologist must explicitly accept
-    // TERMS + PRIVACY first; onboarding must not become an implicit acceptance path.
-    const acceptanceCheck = await checkUserAcceptance(dbUser.id, ["TERMS", "PRIVACY"]);
+    // Legal gate goes before onboarding: a new psychologist must explicitly
+    // accept TERMS first; onboarding must not become an implicit acceptance
+    // path. PRIVACY is informational only — it is never in this list.
+    const acceptanceCheck = await checkUserAcceptance(ACCOUNT_REQUIRED_TYPES);
     if (acceptanceCheck.success && acceptanceCheck.needsAcceptance && acceptanceCheck.needsAcceptance.length > 0) {
         redirect('/legal-acceptance');
     }
