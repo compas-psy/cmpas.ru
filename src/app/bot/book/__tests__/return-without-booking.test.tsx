@@ -36,7 +36,7 @@ const actions = vi.hoisted(() => ({
     getAddressById: vi.fn(),
     checkConsentRequired: vi.fn(),
     saveConsent: vi.fn(),
-    resolveClientLinkParam: vi.fn(),
+    resolveSignedClientLinkParam: vi.fn(),
     resolveVerifiedTelegramUserId: vi.fn(),
 }));
 
@@ -61,7 +61,7 @@ beforeEach(() => {
     });
     actions.getAvailableDates.mockResolvedValue(['2026-09-15']);
     actions.getAvailableTimes.mockResolvedValue([{ time: '19:00', format: 'online', addressId: null }]);
-    actions.resolveClientLinkParam.mockResolvedValue(null);
+    actions.resolveSignedClientLinkParam.mockResolvedValue(null);
     actions.checkConsentRequired.mockResolvedValue({ required: false, text: '', version: '' });
     actions.getAddressById.mockResolvedValue(null);
     actions.getSuggestedTimes.mockResolvedValue([

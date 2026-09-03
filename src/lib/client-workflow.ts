@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { extractFirstName } from '@/lib/person-name';
 
 // Ephemeral random fallback instead of a known constant: 'cmpas-local-secret'
-// was public in the repo, so anyone could forge clientActionToken /
+// was public in the repo, so anyone could forge sessionActionToken /
 // documentDeliveryToken (cancel any session, open any client document) if
 // AUTH_SECRET were ever unset. Random fallback makes forged tokens impossible
 // (existing links break on restart — the safe failure mode).
@@ -28,15 +28,74 @@ export function publicBaseUrl() {
     return process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'https://cmpas.ru';
 }
 
-export function clientActionToken(psychologistId: string, clientId: string) {
-    return createHash('sha256')
-        .update(`${psychologistId}:${clientId}:${appSecret()}`)
-        .digest('hex');
+export type SessionAction = 'confirm' | 'cancel' | 'reschedule';
+
+const SESSION_ACTION_TOKEN_PREFIX = 'sat1_';
+
+// How long a session-action link (confirm/cancel/reschedule from a reminder
+// or bot message) stays usable after the session itself — not from mint
+// time. A reminder sent 24h before the session should still work if the
+// client taps it right up to (or shortly after) the session, not "N days
+// after we happened to send it".
+const SESSION_ACTION_TOKEN_POST_SESSION_GRACE_MS = 48 * 60 * 60 * 1000; // 48h
+
+export function sessionActionTokenExpiry(sessionDate: Date): number {
+    return sessionDate.getTime() + SESSION_ACTION_TOKEN_POST_SESSION_GRACE_MS;
 }
 
-export function verifyClientActionToken(psychologistId: string, clientId: string, token?: string | null) {
-    if (!token) return false;
-    return safeEqualHex(token, clientActionToken(psychologistId, clientId));
+/**
+ * Session-scoped action token: psychologistId + clientId + sessionId +
+ * action + expiresAt, all bound into the signature. Task 3 (PRAKTIKA MVP,
+ * founder review of 229d99e, item D) — the previous clientActionToken(psy,
+ * client) was static per client: one token, reused across every session and
+ * every action (confirm/cancel/reschedule), with no expiry. A token sent for
+ * session A's reminder could cancel session B, and a confirm-link could be
+ * replayed as a cancel-link. This binds and verifies all five fields, so
+ * none of that cross-session/cross-action/unbounded-lifetime replay works.
+ *
+ * Old (pre-fix) links naturally fail closed: they don't start with the
+ * sat1_ prefix, so verifySessionActionToken rejects them outright — no
+ * legacy-compatibility path is needed or provided.
+ */
+export function sessionActionToken(
+    psychologistId: string,
+    clientId: string,
+    sessionId: string,
+    action: SessionAction,
+    expiresAt: number,
+): string {
+    const payload = `${psychologistId}|${clientId}|${sessionId}|${action}|${expiresAt}`;
+    const sig = createHash('sha256').update(`${payload}:${appSecret()}`).digest('hex').slice(0, 32);
+    return SESSION_ACTION_TOKEN_PREFIX + Buffer.from(`${payload}|${sig}`).toString('base64url');
+}
+
+export function verifySessionActionToken(
+    psychologistId: string,
+    clientId: string,
+    sessionId: string,
+    action: SessionAction,
+    token?: string | null,
+): boolean {
+    if (!token || !token.startsWith(SESSION_ACTION_TOKEN_PREFIX)) return false;
+    try {
+        const decoded = Buffer.from(token.slice(SESSION_ACTION_TOKEN_PREFIX.length), 'base64url').toString('utf8');
+        const parts = decoded.split('|');
+        if (parts.length !== 6) return false;
+        const [tPsy, tClient, tSession, tAction, expiresAtStr, sig] = parts;
+        // Compare the claimed fields against what the caller expects BEFORE
+        // trusting the signature check below — a token is only valid for the
+        // exact (psychologist, client, session, action) it was issued for.
+        if (tPsy !== psychologistId || tClient !== clientId || tSession !== sessionId || tAction !== action) {
+            return false;
+        }
+        const payload = `${tPsy}|${tClient}|${tSession}|${tAction}|${expiresAtStr}`;
+        const expected = createHash('sha256').update(`${payload}:${appSecret()}`).digest('hex').slice(0, 32);
+        if (!safeEqualHex(sig, expected)) return false;
+        if (Date.now() > Number(expiresAtStr)) return false;
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 export function documentDeliveryToken(deliveryId: string) {
@@ -71,27 +130,48 @@ export function personalClientToken(clientId: string, issuedAt: number = Date.no
 }
 
 /**
+ * Strict resolver: verifies the signed-token format only, never falls back
+ * to the legacy unsigned-raw-clientId compatibility path. Use this — never
+ * resolvePersonalClientToken — at any endpoint that discloses client,
+ * session, or document data. A raw DiaryClient id (guessed, leaked back by
+ * another endpoint's own response, or read from localStorage) must never by
+ * itself grant access to that client's data; only a signature this server
+ * issued can.
+ */
+export function resolveSignedPersonalClientToken(token: string | null | undefined): { clientId: string } | null {
+    if (!token || !token.startsWith(SIGNED_LINK_PREFIX)) return null;
+    try {
+        const decoded = Buffer.from(token.slice(SIGNED_LINK_PREFIX.length), 'base64url').toString('utf8');
+        const [clientId, expiresAtStr, sig] = decoded.split('.');
+        if (!clientId || !expiresAtStr || !sig) return null;
+        const expected = createHash('sha256').update(`${clientId}.${expiresAtStr}:${appSecret()}`).digest('hex').slice(0, 32);
+        if (!safeEqualHex(sig, expected)) return null;
+        if (Date.now() > Number(expiresAtStr)) return null;
+        return { clientId };
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Resolves a `?c=` link parameter to a DiaryClient id.
  * - Signed token (current format): verified and checked for expiry.
  * - Anything else: accepted as a legacy raw clientId only inside the 90-day
  *   grace window, and logged as deprecated so we can see when traffic drops.
+ *
+ * General-purpose / UX use only (e.g. "is this link worth trying at all").
+ * Never use this to gate access to client/session/document data — use
+ * resolveSignedPersonalClientToken for that.
  */
 export function resolvePersonalClientToken(token: string | null | undefined): { clientId: string; legacy: boolean } | null {
     if (!token) return null;
 
-    if (token.startsWith(SIGNED_LINK_PREFIX)) {
-        try {
-            const decoded = Buffer.from(token.slice(SIGNED_LINK_PREFIX.length), 'base64url').toString('utf8');
-            const [clientId, expiresAtStr, sig] = decoded.split('.');
-            if (!clientId || !expiresAtStr || !sig) return null;
-            const expected = createHash('sha256').update(`${clientId}.${expiresAtStr}:${appSecret()}`).digest('hex').slice(0, 32);
-            if (!safeEqualHex(sig, expected)) return null;
-            if (Date.now() > Number(expiresAtStr)) return null;
-            return { clientId, legacy: false };
-        } catch {
-            return null;
-        }
-    }
+    const signed = resolveSignedPersonalClientToken(token);
+    if (signed) return { clientId: signed.clientId, legacy: false };
+    // A signed-format token that failed verification (tampered/expired) must
+    // never fall through to legacy raw-id parsing — SIGNED_LINK_PREFIX can't
+    // collide with a real DiaryClient cuid, but treat it as exhausted anyway.
+    if (token.startsWith(SIGNED_LINK_PREFIX)) return null;
 
     if (Date.now() < LEGACY_CLIENT_ID_ACCEPTED_UNTIL) {
         console.warn(`[client-workflow] legacy unsigned personal link used, clientId=${token}`);

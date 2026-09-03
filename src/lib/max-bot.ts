@@ -13,7 +13,7 @@ import { createNotification } from '@/lib/notifications';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
-import { clientActionToken, personalClientToken } from '@/lib/client-workflow';
+import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
 
 const MAX_API = 'https://botapi.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -363,7 +363,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
             await maxApi(`/answers/${callbackId}`, {});
             return sendMaxMessage(userId, 'Сессия не найдена или у вас нет доступа.');
         }
-        const token = clientActionToken(session.psychologistId, session.clientId);
+        const token = sessionActionToken(session.psychologistId, session.clientId, session.id, 'reschedule', sessionActionTokenExpiry(session.date));
         const rescheduleUrl = `${APP_URL}/client/reschedule/${session.id}?t=${token}`;
         await sendMaxMessage(userId, '🔄 Чтобы перенести сессию, выберите новое время:', [[{ text: '📅 Выбрать новое время', url: rescheduleUrl }]]);
     }

@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { verifyClientActionToken } from '@/lib/client-workflow';
+import { verifySessionActionToken } from '@/lib/client-workflow';
 import { getAvailableDates, getAvailableTimes } from '@/app/bot/actions';
 import { rescheduleSessionAtomic, RescheduleConflictError } from '@/lib/session-reschedule';
 import { createNotification } from '@/lib/notifications';
@@ -11,7 +11,10 @@ async function loadAuthorizedSession(sessionId: string, token: string) {
         where: { id: sessionId },
         include: { client: true, psychologist: { select: { name: true } } },
     });
-    if (!session || !verifyClientActionToken(session.psychologistId, session.clientId, token)) {
+    // Task 3 (item D): bound to THIS session and the 'reschedule' action —
+    // a confirm/cancel token, or a reschedule token minted for a different
+    // session, is rejected here.
+    if (!session || !verifySessionActionToken(session.psychologistId, session.clientId, sessionId, 'reschedule', token)) {
         throw new Error('Ссылка недействительна. Попросите специалиста отправить новое уведомление.');
     }
     return session;

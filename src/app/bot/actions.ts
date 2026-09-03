@@ -6,13 +6,22 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
-import { resolvePersonalClientToken } from '@/lib/client-workflow';
+import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalClientToken } from '@/lib/client-workflow';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
- * raw clientId (accepted for a grace window — see resolvePersonalClientToken). */
+ * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
+ * Non-sensitive UX use only (e.g. "is there a link worth trying at all") —
+ * never use this to gate a read that discloses client/session/document data. */
 export async function resolveClientLinkParam(token: string | null | undefined) {
     return resolvePersonalClientToken(token);
+}
+
+/** Strict variant for any client-facing flow that will look up a client's
+ * own PII/sessions by the resolved id (Task 3, addendum §6): never falls
+ * back to the legacy unsigned-raw-clientId path. */
+export async function resolveSignedClientLinkParam(token: string | null | undefined) {
+    return resolveSignedPersonalClientToken(token);
 }
 
 /**
@@ -695,7 +704,11 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         console.error('Auto-sync after booking failed:', e);
     }
 
-    return { success: true, sessionId: session.id, clientId: client.id };
+    // clientToken (not the raw id) is what the browser is allowed to keep for
+    // "manage my bookings" / return-visit purposes — Task 3, addendum §6: a
+    // raw clientId is never proof of identity, only a signature this server
+    // issued is.
+    return { success: true, sessionId: session.id, clientId: client.id, clientToken: personalClientToken(client.id) };
 }
 
 // Direct client lookup by ID (for when MiniApp opens in browser without Telegram context)
@@ -814,59 +827,6 @@ export async function getClientByTelegram(psychologistId: string, telegramUserId
     }
 
     return null;
-}
-
-export async function getClientSessions(telegramChatId: string) {
-    if (!telegramChatId) return [];
-
-    const client = await db.diaryClient.findFirst({
-        where: { telegramChatId }
-    });
-
-    if (!client) return [];
-
-    return getClientSessionsById(client.id);
-}
-
-export async function getClientSessionsById(clientId: string) {
-    if (!clientId) return [];
-
-    const now = new Date();
-    // Reset time to start of day for comparison so we don't miss today's later sessions
-    now.setHours(0, 0, 0, 0);
-
-    const sessions = await db.diarySession.findMany({
-        where: {
-            clientId: clientId,
-            date: { gte: now },
-            status: { not: 'cancelled' }
-        },
-        include: {
-            psychologist: {
-                select: {
-                    name: true,
-                    psychologistSettings: {
-                        select: { fullName: true, onlineSessionLink: true }
-                    }
-                }
-            }
-        },
-        orderBy: [
-            { date: 'asc' },
-            { time: 'asc' }
-        ]
-    });
-
-    return sessions.map(s => ({
-        id: s.id,
-        date: s.date,
-        time: s.time,
-        status: s.status,
-        format: s.format,
-        psychologistId: s.psychologistId,
-        psychologistName: s.psychologist.psychologistSettings?.fullName || s.psychologist.name || 'Специалист',
-        onlineSessionLink: s.psychologist.psychologistSettings?.onlineSessionLink || null
-    }));
 }
 
 export async function getClientUpcomingSessions(psychologistId: string, telegramUserId: string) {

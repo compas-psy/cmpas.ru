@@ -21,10 +21,12 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/db', () => ({ db }));
 
-const resolvePersonalClientToken = vi.hoisted(() => vi.fn());
+const resolveSignedPersonalClientToken = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/client-workflow', () => ({
-    clientActionToken: (psychologistId: string, clientId: string) => `token:${psychologistId}:${clientId}`,
-    resolvePersonalClientToken: (...args: unknown[]) => resolvePersonalClientToken(...args),
+    sessionActionToken: (psychologistId: string, clientId: string, sessionId: string, action: string, expiresAt: number) =>
+        `token:${psychologistId}:${clientId}:${sessionId}:${action}:${expiresAt}`,
+    sessionActionTokenExpiry: (date: Date) => date.getTime() + 48 * 60 * 60 * 1000,
+    resolveSignedPersonalClientToken: (...args: unknown[]) => resolveSignedPersonalClientToken(...args),
 }));
 
 const verifyTelegramWebAppInitData = vi.hoisted(() => vi.fn());
@@ -60,13 +62,13 @@ describe('GET /api/user/diary/bot/client/sessions — подлинность и�
 
     it('сырой ?clientId=<raw> без подписи ИГНОРИРУЕТСЯ — пустые корзины, БД сессий не трогается', async () => {
         // Маршрут не читает ?clientId= вовсе (нет такого параметра в новом
-        // контракте) — resolvePersonalClientToken вызывается с `c` (тут
+        // контракте) — resolveSignedPersonalClientToken вызывается с `c` (тут
         // отсутствующим), возвращает null по умолчанию мока.
         const { GET } = await import('../src/app/api/user/diary/bot/client/sessions/route');
         const res = await GET(await req('?clientId=client-of-b'));
         expect(await res.json()).toEqual({ upcoming: [], past: [] });
         expect(db.diarySession.findMany).not.toHaveBeenCalled();
-        expect(resolvePersonalClientToken).toHaveBeenCalledWith(null);
+        expect(resolveSignedPersonalClientToken).toHaveBeenCalledWith(null);
     });
 
     it('сырой ?telegramChatId=<raw> без заголовка initData ИГНОРИРУЕТСЯ — пустые корзины', async () => {
@@ -78,24 +80,24 @@ describe('GET /api/user/diary/bot/client/sessions — подлинность и�
     });
 
     it('без каких-либо параметров — обе корзины пустые, без обращения к БД сессий', async () => {
-        resolvePersonalClientToken.mockReturnValue(null);
+        resolveSignedPersonalClientToken.mockReturnValue(null);
         const { GET } = await import('../src/app/api/user/diary/bot/client/sessions/route');
         const res = await GET(await req(''));
         expect(await res.json()).toEqual({ upcoming: [], past: [] });
         expect(db.diarySession.findMany).not.toHaveBeenCalled();
     });
 
-    it('невалидный/чужой ?c= токен — resolvePersonalClientToken возвращает null, пустые корзины', async () => {
-        resolvePersonalClientToken.mockReturnValue(null);
+    it('невалидный/чужой ?c= токен — resolveSignedPersonalClientToken возвращает null, пустые корзины', async () => {
+        resolveSignedPersonalClientToken.mockReturnValue(null);
         const { GET } = await import('../src/app/api/user/diary/bot/client/sessions/route');
         const res = await GET(await req('?c=st1_tamperedortoosomeoneelse'));
-        expect(resolvePersonalClientToken).toHaveBeenCalledWith('st1_tamperedortoosomeoneelse');
+        expect(resolveSignedPersonalClientToken).toHaveBeenCalledWith('st1_tamperedortoosomeoneelse');
         expect(await res.json()).toEqual({ upcoming: [], past: [] });
         expect(db.diarySession.findMany).not.toHaveBeenCalled();
     });
 
     it('валидный ?c= токен — сервер сам резолвит clientId из токена, отдаёт upcoming и past отдельно', async () => {
-        resolvePersonalClientToken.mockReturnValue({ clientId: 'client-1', legacy: false });
+        resolveSignedPersonalClientToken.mockReturnValue({ clientId: 'client-1' });
         const upcomingRow = makeSession({ id: 'u1', date: new Date('2026-09-01T00:00:00.000Z') });
         const pastRow = makeSession({ id: 'p1', date: new Date('2026-08-01T00:00:00.000Z'), time: '09:00' });
 
@@ -122,7 +124,9 @@ describe('GET /api/user/diary/bot/client/sessions — подлинность и�
         expect(body.past[0].id).toBe('p1');
         expect(body.past[0]).toMatchObject({
             clientId: 'client-1',
-            clientToken: 'token:psy-1:client-1',
+            // Task 3 (item D): scoped to this session and the 'cancel'
+            // action — no longer a bare per-client token.
+            clientToken: expect.stringMatching(/^token:psy-1:client-1:p1:cancel:\d+$/),
             psychologistName: 'Анна Волкова',
         });
     });

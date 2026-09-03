@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { clientActionToken, resolvePersonalClientToken } from '@/lib/client-workflow';
+import { sessionActionToken, sessionActionTokenExpiry, resolveSignedPersonalClientToken } from '@/lib/client-workflow';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 
 function startOfToday() {
@@ -16,9 +16,12 @@ function startOfToday() {
 //      against TELEGRAM_BOT_TOKEN. initDataUnsafe.user is client-controlled
 //      and must never be trusted directly.
 //   2) Personal link token (`?c=`) — verified server-side by
-//      resolvePersonalClientToken, the same function the booking page's
-//      server action already uses. A clientId resolved client-side and
-//      replayed as a bare id (the previous bug) grants nothing here: this
+//      resolveSignedPersonalClientToken. STRICT: unlike
+//      resolvePersonalClientToken (used elsewhere for non-sensitive UX
+//      gating), this never falls back to the legacy unsigned-raw-clientId
+//      compatibility path — a raw id passed as `c=<id>` must fail exactly
+//      like `?clientId=<id>` does. A clientId resolved client-side and
+//      replayed as a bare id (the original bug) grants nothing here: this
 //      route re-derives identity from the token itself, every time.
 // A forged/wrong/missing credential resolves to `null`, which returns an
 // empty (not another client's) session list below.
@@ -43,7 +46,7 @@ async function resolveClientId(req: NextRequest): Promise<string | null> {
     }
 
     const token = req.nextUrl.searchParams.get('c');
-    const resolved = resolvePersonalClientToken(token);
+    const resolved = resolveSignedPersonalClientToken(token);
     return resolved?.clientId ?? null;
 }
 
@@ -61,7 +64,10 @@ function mapSession(session: any) {
     return {
         id: session.id,
         clientId: session.clientId,
-        clientToken: clientActionToken(session.psychologistId, session.clientId),
+        // Task 3 (item D): scoped to THIS session and the 'cancel' action —
+        // the only action this list's UI (CancelSessionDialog) ever performs
+        // with it — not a bare per-client token reusable on any session.
+        clientToken: sessionActionToken(session.psychologistId, session.clientId, session.id, 'cancel', sessionActionTokenExpiry(session.date)),
         date: session.date,
         time: session.time,
         endTime: session.endTime,

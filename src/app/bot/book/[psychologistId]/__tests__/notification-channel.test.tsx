@@ -48,7 +48,7 @@ const actions = vi.hoisted(() => ({
     getAddressById: vi.fn(),
     checkConsentRequired: vi.fn(),
     saveConsent: vi.fn(),
-    resolveClientLinkParam: vi.fn(),
+    resolveSignedClientLinkParam: vi.fn(),
     resolveVerifiedTelegramUserId: vi.fn(),
 }));
 
@@ -73,7 +73,7 @@ beforeEach(() => {
     actions.getAvailableTimes.mockResolvedValue([
         { time: '19:00', format: 'online', addressId: null },
     ]);
-    actions.resolveClientLinkParam.mockResolvedValue(null);
+    actions.resolveSignedClientLinkParam.mockResolvedValue(null);
     // Неизвестный клиент без Telegram и без client id из URL — page.tsx
     // безусловно требует согласие в этой ветке (см. "Unknown client without
     // TG and without client ID"), независимо от checkConsentRequired.required.

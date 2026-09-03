@@ -91,7 +91,7 @@ describe('notifyWaitlistOnFreedSlot вызывается из переноса �
             autoDeleteSessionFromCalendars: vi.fn().mockResolvedValue(undefined),
         }));
         vi.doMock('@/lib/client-workflow', () => ({
-            verifyClientActionToken: () => true,
+            verifySessionActionToken: () => true,
         }));
         vi.doMock('@/lib/notifications', () => ({
             createNotification: vi.fn().mockResolvedValue(undefined),

@@ -22,7 +22,7 @@ import {
     getAddressById,
     checkConsentRequired,
     saveConsent,
-    resolveClientLinkParam,
+    resolveSignedClientLinkParam,
     resolveVerifiedTelegramUserId
 } from '../actions';
 import type { TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
@@ -76,6 +76,11 @@ function readSavedPreference(psychologistId: string): TimePreference | null {
 export default function BookingPageClient({ psychologistId }: { psychologistId: string }) {
     // Extract clientId manually inside the init function to avoid race conditions.
     const [clientId, setClientId] = useState<string | null>(null);
+    // The raw signed token itself (not the id it decodes to) — the only thing
+    // safe to persist in localStorage or hand back to the browser for
+    // "manage my bookings" links. Task 3 (addendum §6): a raw clientId is
+    // never proof of identity; only a signature this server issued is.
+    const [clientLinkToken, setClientLinkToken] = useState<string | null>(null);
 
     const [tgUser, setTgUser] = useState<any>(null);
     // Task 3 (PRAKTIKA MVP addendum §6): tgUser.id comes from
@@ -219,23 +224,23 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     return;
                 }
 
-                // Extract c param synchronously or read from localStorage
+                // Task 3 (PRAKTIKA MVP addendum §6): the only two sources for
+                // currentClientId are the `?c=` URL param and a previously
+                // saved link TOKEN in localStorage — never a raw clientId.
+                // Both go through the STRICT resolver (no legacy fallback):
+                // a raw id here would let a visitor look up another client's
+                // name/phone/upcoming sessions below (getClientById /
+                // getClientUpcomingSessionsById), exactly the bug this closes.
                 let currentClientId: string | undefined = undefined;
                 if (typeof window !== 'undefined') {
                     const urlParams = new URLSearchParams(window.location.search);
-                    const c = urlParams.get('c');
+                    const c = urlParams.get('c') || localStorage.getItem('compas_clientToken');
                     if (c) {
-                        const resolved = await resolveClientLinkParam(c);
+                        const resolved = await resolveSignedClientLinkParam(c);
                         if (resolved) {
                             currentClientId = resolved.clientId;
                             setClientId(resolved.clientId);
-                        }
-                    }
-                    if (!currentClientId) {
-                        const savedClientId = localStorage.getItem('compas_clientId');
-                        if (savedClientId) {
-                            currentClientId = savedClientId;
-                            setClientId(savedClientId);
+                            setClientLinkToken(c);
                         }
                     }
                 }
@@ -484,9 +489,12 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 return;
             }
 
-            // Save clientId to local storage for persistent identification
-            if (res && res.clientId && typeof window !== 'undefined') {
-                localStorage.setItem('compas_clientId', res.clientId);
+            // Save the signed link TOKEN (never the raw clientId — Task 3,
+            // addendum §6) for persistent identification on this device.
+            if (res && res.clientToken && typeof window !== 'undefined') {
+                localStorage.setItem('compas_clientToken', res.clientToken);
+                setClientLinkToken(res.clientToken);
+                if (res.clientId) setClientId(res.clientId);
             }
 
             // Get address details for success screen
@@ -644,7 +652,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             {upcomingSessions.map((s) => (
                                 <button
                                     key={s.id}
-                                    onClick={() => window.location.href = `/bot/client?c=${clientId || ''}`}
+                                    onClick={() => window.location.href = `/bot/client?c=${encodeURIComponent(clientLinkToken || '')}`}
                                     className="w-full text-left flex items-center gap-3 p-2.5 bg-[var(--booking-paper)] rounded-xl border border-[var(--booking-line)] hover:border-[var(--booking-accent)] transition-colors active:scale-[0.98]"
                                 >
                                     <div className="flex-1 min-w-0">

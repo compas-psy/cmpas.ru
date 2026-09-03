@@ -29,7 +29,8 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('@/lib/client-workflow', () => ({
-    clientActionToken: () => 'token',
+    sessionActionToken: () => 'token',
+    sessionActionTokenExpiry: (date: Date) => date.getTime() + 48 * 60 * 60 * 1000,
     clientBookingLink: () => 'https://cmpas.ru/bot/book/x',
     publicBaseUrl: () => 'https://cmpas.ru',
 }));

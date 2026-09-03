@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { clientActionToken, clientBookingLink, publicBaseUrl } from '@/lib/client-workflow';
+import { sessionActionToken, sessionActionTokenExpiry, clientBookingLink, publicBaseUrl } from '@/lib/client-workflow';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
@@ -154,9 +154,13 @@ function reminderDueAt(session: any, kind: ClientReminderKind): Date {
     return new Date(session.date.getTime() - offsetMs);
 }
 
-function sessionActions(session: { id: string; psychologistId: string; clientId: string }, pending: boolean) {
-    const token = clientActionToken(session.psychologistId, session.clientId);
-    const actionUrl = (action: string) => `${publicBaseUrl()}/api/client/session-action?s=${session.id}&a=${action}&t=${token}`;
+function sessionActions(session: { id: string; psychologistId: string; clientId: string; date: Date }, pending: boolean) {
+    // Task 3 (item D): a per-action token — the 'confirm' button's token
+    // does not work as the 'cancel' button's, and neither works past this
+    // session or on any other session.
+    const expiresAt = sessionActionTokenExpiry(session.date);
+    const actionUrl = (action: 'confirm' | 'cancel') =>
+        `${publicBaseUrl()}/api/client/session-action?s=${session.id}&a=${action}&t=${sessionActionToken(session.psychologistId, session.clientId, session.id, action, expiresAt)}`;
     const rows: Array<Array<{ text: string; url: string }>> = [];
     if (pending) rows.push([{ text: '✅ Подтвердить', url: actionUrl('confirm') }]);
     rows.push([
