@@ -1,9 +1,14 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 33756125247. Файл перезаписывается каждой диагностикой.
+Снято прогоном 33757000306. Файл перезаписывается каждой диагностикой.
+
+Примечание: автопуш этого прогона в main был отклонён (race с прогоном
+33756125247 — main успел уйти вперёд между двумя последовательными
+триггерами). Текст ниже — точная копия отчёта из журнала самого прогона
+CI, вручную перенесённая в репозиторий, чтобы не потерять baseline Task 0
+плана PRAKTIKA MVP (orphan/duplicate-проверки — новые в этом прогоне).
 
 ```
-Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
 ### Журнал миграций существует?
 t
 ### Записей в журнале
@@ -41,6 +46,11 @@ Subscription
 WaitlistEntry
 events
 events_rejected
+### Orphan ScheduleRule.addressId (ссылка на несуществующий кабинет)
+### Orphan AvailabilitySlot.scheduleRuleId (защитная проверка поверх FK)
+### Будущие сессии одного психолога в одно время (не cancelled)
+### Будущие offline-сессии без кабинета (addressId NULL)
+cmtl7k6pw008gxppuhxzz5pj8  psy=cml2q6tfe0001kioc5j6tpyxu  2026-09-09 20:00
 ### Всего таблиц в базе
 53
 ### Строк в главных таблицах
@@ -81,8 +91,8 @@ VisitorAnalytics всего=287
 из них с accountId=4
 из них с utmSource=10
 ### Последнее показание InfraPulse: какие поля заполнены
-collectedAt=2026-09-03 12:33:13.461
-certDaysLeft=89 | backupAgeHours=120.7491372941759 | backupReadable=true | responseP95Ms=NULL | remindersDue=9 | remindersSent=6 | migrationsApplied=39 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=60.17699115044248 | containers=[{"name": "zapiski-api", "running": true
+collectedAt=2026-09-03 12:43:14.402
+certDaysLeft=89 | backupAgeHours=120.9160786830648 | backupReadable=true | responseP95Ms=NULL | remindersDue=9 | remindersSent=6 | migrationsApplied=39 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=52.12765957446808 | containers=[{"name": "zapiski-api", "running": true
 ### События по имени (панель ищет узкие срезы)
 note_saved=813
 sync_completed=681
@@ -94,11 +104,11 @@ rebooking_nudge_sent=2
 app_installed=2
 identity_linked=1
 ### Таблицы, из которых панель читает: пустые или нет
-InfraPulse=3141
+InfraPulse=3143
 DeployLog=14
 ReminderOutbox=9
 events=1604
-events_rejected=9
+events_rejected=10
 Subscription=1
 Payment=9
 ### Место на диске
@@ -107,7 +117,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda2        89G   31G   54G  37% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        2376         354          57        5574        5564
+Mem:            7941        2411         226          57        5668        5529
 Swap:            511          58         453
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
@@ -252,7 +262,7 @@ cmpas-singbox | Exited (1) 13 days ago
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 0.224620s
+код 405, время 0.236270s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -261,7 +271,7 @@ v20.19.6
 subject=CN = *.tinkoff.ru, C = RU, L = Moscow, ST = 77 \D0\B3.\D0\9C\D0\BE\D1\81\D0\BA\D0\B2\D0\B0, O = TBank, OGRN = 1027739642281, 1.2.643.100.4 = 7710140679
 issuer=C = RU, O = The Ministry of Digital Development and Communications, CN = Russian Trusted Sub CA
 -- есть ли в системе российский корневой центр:
-russian_trusted_root_ca.crt
+russian_trusted_***_ca.crt
 russian_trusted_sub_ca.crt
 российского корня в доверенных нет
 ### Платежи: последние записи
@@ -285,6 +295,8 @@ failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3619
 ### Демонстрационный терминал: не подменяет ли он боевой (по журналу приложения)
 упоминаний в журнале контейнера: 0
 ### Журнал колбэков Т-Кассы за 7 суток (RebillId и Token вычищены построчно)
+[Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"<скрыто>"}
+[Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
 ### Куда Т-Касса должна слать колбэк (URL, не секрет)
 AUTH_URL=https://cmpas.ru
 ### Живёт ли контейнер дольше, чем застрявшие платежи (иначе журнал ничего не покажет)
@@ -303,9 +315,9 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.193910s
-https://cmpas.ru/diary -> 307 за 0.162522s
-https://cmpas.ru/admin -> 307 за 0.321531s
+https://cmpas.ru/ -> 200 за 0.082697s
+https://cmpas.ru/diary -> 307 за 0.227844s
+https://cmpas.ru/admin -> 307 за 0.356109s
 ### Сертификат cmpas.ru
 notBefore=Sep  2 23:59:38 2026 GMT
 notAfter=Dec  1 23:59:37 2026 GMT
@@ -319,9 +331,6 @@ LISTEN 0      4096                                          [::]:3000          [
 LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=1155941,fd=13),("nginx",pid=1155940,fd=13),("nginx",pid=1155939,fd=13),("nginx",pid=1155938,fd=13),("nginx",pid=523662,fd=13))                                  
 LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=1155941,fd=14),("nginx",pid=1155940,fd=14),("nginx",pid=1155939,fd=14),("nginx",pid=1155938,fd=14),("nginx",pid=523662,fd=14))                                  
 ### Журнал приложения, последние 60 строк
-    at async m (.next/server/chunks/ssr/_adf2bbda._.js:1:6738)
-    at async o (.next/server/chunks/ssr/_adf2bbda._.js:2:2712)
-    at async Module.I (.next/server/chunks/ssr/_adf2bbda._.js:2:7927)
 ⨯ Error: Failed to find Server Action. This request might be from an older or newer deployment.
 Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
     at async m (.next/server/chunks/ssr/_adf2bbda._.js:1:6738)
@@ -376,6 +385,9 @@ Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
 [CRON] Запуск рассылки уведомлений (каждые 15 минут)
 [CRON] Запуск рассылки уведомлений (каждые 15 минут)
 [CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"0000000000000000000000000000000000000000000000000000000000"}
+[Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
 [CRON] Запуск рассылки уведомлений (каждые 15 минут)
 [Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"0000000000000000000000000000000000000000000000000000000000"}
 [Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
@@ -476,13 +488,13 @@ ANALYTICS_INGEST_ENABLED=true
 ANALYTICS_TRACKING_ENABLED=true
 ANALYTICS_INGEST_SECRET: задан (длина 64)
 ### Файлы с секретом приёмника
-/etc/simpas/ingest-secret: есть, 65 байт, права 600, владелец root
-/var/www/zapiski/.ingest-secret: есть, 65 байт, права 600, владелец root
+/etc/simpas/ingest-secret: есть, 65 байт, права 600, владелец ***
+/var/www/zapiski/.ingest-secret: есть, 65 байт, права 600, владелец ***
 ### Контейнер infra-pulse
 cmpas-infra-pulse | Up 5 days | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=3141
-последняя=2026-09-03 12:33:13.461 возраст_мин=3
+строк всего=3143
+последняя=2026-09-03 12:43:14.402 возраст_мин=2
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
@@ -553,4 +565,5 @@ PUT  /api/mobile/analytics/consent -> 401
 20260823100000_visitor_analytics_account_id
 20260823170000_client_request_id
 20260829120000_booking_v2_slug_waitlist_outcome
+20260829150000_enable_time_suggest
 ```
