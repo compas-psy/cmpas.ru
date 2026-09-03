@@ -21,7 +21,7 @@
 | A4 | **High** | `client-workflow` секрет `'cmpas-local-secret'` (публичен в репо) — форж action/document токенов | ✅ ephemeral random + timing-safe |
 | A5 | **High** | Telegram webhook логировал текст сообщений клиентов (ПДн) | ✅ только update_id + тип |
 | A6 | **High** | Секреты захардкожены в `deploy-docker.yml` (fallback-токены) | 🔧 см. S1 |
-| A7 | **High** | MAX webhook без проверки подлинности | 🔧 см. S2 |
+| A7 | **High** | MAX webhook без проверки подлинности | ✅ secret header |
 | A8 | **High** | Согласие 152-ФЗ фиксируется открытием ссылки (GET), не действием | 🔧 DOC-1 в tz-cjm-audit-beta2.md |
 | A9 | **Medium** | Telegram/MAX MiniApp доверяет `initDataUnsafe` без HMAC-валидации | 🔧 см. S3 |
 | A10 | **Medium** | Нет rate-limiting на magic-link/booking/webhook | 🔧 см. S4 |
@@ -54,6 +54,21 @@
 ### A5 — Логи ПДн
 Убрано логирование текста сообщений/`callback_data` из Telegram webhook.
 
+### A7 — Подлинность MAX webhook (`src/app/api/max/webhook/route.ts`)
+Ранняя версия этого документа (см. старый текст S2 ниже) исходила из того, что
+MAX Bot API не поддерживает secret-заголовок — на момент повторной проверки
+(03.09.2026) это оказалось неверно: `POST /subscriptions` принимает
+необязательное поле `secret` (5–256 символов, `[A-Za-z0-9-]`) и присылает его
+назад в заголовке `X-Max-Bot-Api-Secret` на каждой доставке апдейта — тот же
+контракт, что и у Telegram (A2). Добавлена проверка этого заголовка
+(timing-safe) против `MAX_WEBHOOK_SECRET`, который `scripts/deploy-production-remote.sh`
+самозаводит тем же приёмом, что `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`,
+никогда не в репозитории), и передаёт в теле `POST /subscriptions` при
+(пере)регистрации вебхука на каждой выкладке. Fail-open с предупреждением в
+логах, только если секрет не задан. Ручная переregистрация через
+`/api/max/admin` (POST) тоже теперь передаёт `secret`, если он задан в
+окружении.
+
 ### A11 — Security-заголовки (`next.config.ts`)
 HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
 `Permissions-Policy`; `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'`
@@ -76,16 +91,6 @@ HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
 (BotFather, Yandex OAuth, Google Cloud, Тинькофф).
 **Приёмка:** `grep -E '(secret|password|token).*=.*[A-Za-z0-9]{16}'
 deploy-docker.yml` не находит литералов.
-
-### S2 (High) — Подлинность MAX webhook
-**Файл:** `src/app/api/max/webhook/route.ts`, регистрация в `deploy-docker.yml`.
-**Сейчас:** `POST` обрабатывает любой вход без проверки источника.
-**Надо:** т.к. MAX Bot API не шлёт secret-header, регистрировать webhook с
-URL-параметром-секретом (`.../api/max/webhook?s=<MAX_WEBHOOK_SECRET>`) и
-проверять `request.nextUrl.searchParams.get('s')` timing-safe. Fail-open если
-секрет не задан.
-**Приёмка:** POST без правильного `?s=` → 200/no-op; легитимные апдейты MAX
-проходят.
 
 ### S3 (Medium) — Валидация Telegram `initData` в MiniApp
 **Файлы:** `src/app/bot/client/page.tsx` (:28-33 использует

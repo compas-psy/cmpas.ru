@@ -157,6 +157,17 @@ if [ -z "$webhook_secret" ]; then
   upsert_env TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 32)"
 fi
 
+# MAX_WEBHOOK_SECRET — тот же приём самозаведения. MAX Bot API (POST
+# /subscriptions) принимает необязательное поле "secret" (5-256 символов,
+# [A-Za-z0-9-]) и присылает его назад в заголовке X-Max-Bot-Api-Secret на
+# каждой доставке апдейта — без этого любой, кто знает публичный URL вебхука,
+# мог слать поддельные апдейты (см. src/app/api/max/webhook/route.ts).
+# openssl rand -hex 32 даёт только [0-9a-f] — укладывается в алфавит секрета.
+max_webhook_secret=$(grep '^MAX_WEBHOOK_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
+if [ -z "$max_webhook_secret" ]; then
+  upsert_env MAX_WEBHOOK_SECRET "$(openssl rand -hex 32)"
+fi
+
 # infra-pulse-collector's DB password (O-260817-12) — generated once here,
 # same pattern as AUTH_SECRET/TELEGRAM_WEBHOOK_SECRET above, never
 # committed. The role itself is (re)created further below, after migrations
@@ -483,12 +494,13 @@ if [ -n "$tg_token" ]; then
 fi
 
 max_token=$(grep '^MAX_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)
+max_webhook_secret=$(grep '^MAX_WEBHOOK_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
 if [ -n "$max_token" ]; then
   curl -sS -X DELETE 'https://botapi.max.ru/subscriptions' -H "Authorization: ${max_token}" >/dev/null || true
   curl -fsS -X POST 'https://botapi.max.ru/subscriptions' \
     -H "Authorization: ${max_token}" \
     -H 'Content-Type: application/json' \
-    -d '{"url":"https://cmpas.ru/api/max/webhook","update_types":["bot_started","message_created","message_callback"]}' \
+    -d "{\"url\":\"https://cmpas.ru/api/max/webhook\",\"update_types\":[\"bot_started\",\"message_created\",\"message_callback\"],\"secret\":\"${max_webhook_secret}\"}" \
     >/dev/null || log 'WARNING: MAX webhook registration failed.'
 fi
 

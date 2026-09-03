@@ -64,6 +64,11 @@ export async function POST(request: NextRequest) {
                 url: webhookUrl,
                 // Correct MAX API update_type names (NOT 'callback_button_pressed')
                 update_types: ['bot_started', 'message_created', 'message_callback'],
+                // MAX echoes this back as X-Max-Bot-Api-Secret on every delivery —
+                // src/app/api/max/webhook/route.ts verifies it. Without it, the
+                // deploy-generated MAX_WEBHOOK_SECRET is never registered with MAX
+                // and the webhook silently falls back to fail-open.
+                ...(process.env.MAX_WEBHOOK_SECRET ? { secret: process.env.MAX_WEBHOOK_SECRET } : {}),
             }),
         });
 

@@ -90,7 +90,14 @@ export async function sendMaxMessage(
 
 export async function registerMaxWebhook() {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
-    const result = await maxApi('/subscriptions', { url: webhookUrl, update_types: ['bot_started', 'message_created', 'message_callback'] });
+    const secret = process.env.MAX_WEBHOOK_SECRET;
+    const result = await maxApi('/subscriptions', {
+        url: webhookUrl,
+        update_types: ['bot_started', 'message_created', 'message_callback'],
+        // Echoed back as X-Max-Bot-Api-Secret on every delivery — verified in
+        // src/app/api/max/webhook/route.ts.
+        ...(secret ? { secret } : {}),
+    });
     console.log('[MAX Bot] Webhook registration result:', JSON.stringify(result));
     return result;
 }

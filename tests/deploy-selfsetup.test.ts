@@ -40,6 +40,25 @@ describe('G1: ANALYTICS_INGEST_SECRET рождается сам, если его
     });
 });
 
+describe('Task 2 (PRAKTIKA MVP): MAX_WEBHOOK_SECRET самозаводится и доезжает до MAX', () => {
+    it('если секрета нет ни в окружении, ни в .env — генерируем его тем же приёмом, что TELEGRAM_WEBHOOK_SECRET', () => {
+        expect(source).toMatch(/max_webhook_secret=\$\(grep ['"]?\^MAX_WEBHOOK_SECRET=/);
+        expect(source).toMatch(/if \[ -z "\$max_webhook_secret" \]/);
+    });
+
+    it('генерация идёт ПОСЛЕ блока TELEGRAM_WEBHOOK_SECRET (тот же самозаводящийся паттерн)', () => {
+        const tgIdx = indexOf(/upsert_env TELEGRAM_WEBHOOK_SECRET/);
+        const maxIdx = indexOf(/upsert_env MAX_WEBHOOK_SECRET/);
+        expect(tgIdx).toBeGreaterThan(-1);
+        expect(maxIdx).toBeGreaterThan(-1);
+        expect(maxIdx).toBeGreaterThan(tgIdx);
+    });
+
+    it('секрет передаётся MAX в теле POST /subscriptions как "secret" — иначе MAX никогда не пришлёт его назад в заголовке', () => {
+        expect(source).toMatch(/\\"secret\\":\\"\$\{max_webhook_secret\}\\"/);
+    });
+});
+
 describe('G2: секрет доезжает до ЗАПИСОК через общий файл /etc/simpas/ingest-secret', () => {
     it('каталог создаётся', () => {
         expect(source).toMatch(/mkdir\s+-p[^\n]*\/etc\/simpas(\s|$)/m);
