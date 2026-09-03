@@ -4,7 +4,6 @@ import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 import { build24hReminderText } from './reminder-text';
-import { isImportedSession } from '@/lib/practice/session-origin';
 
 /** MAX-функции возвращают либо null (нет токена / HTTP не ok / исключение — см. maxApi в max-bot.ts),
  *  либо разобранный JSON-ответ, который может нести success:false при формально успешном HTTP-ответе. */
@@ -220,12 +219,15 @@ export async function processReminders() {
                 if (outcome.max !== null) { anyAttempted = true; if (outcome.max) anySucceeded = true; }
             };
 
-            // Task 9: a session imported from an external calendar was never
-            // booked by the client through us — no automated "your session
-            // is tomorrow" message to them. The psychologist-facing block
-            // right below is unaffected: they already know about their own
-            // import.
-            if ((telegramTarget || maxId) && !isImportedSession(session)) {
+            // Task 9 (founder review): clientNotificationsEnabled is the
+            // communication-policy field — never gate on origin directly.
+            // This 24h round is shared with the psychologist-facing block
+            // right below (same query, same notified24h flag), so it's
+            // gated here in-loop rather than in the query's WHERE — a
+            // query-level filter would incorrectly hide the session from
+            // the psychologist-facing reminder too, which must stay
+            // unaffected by this flag.
+            if ((telegramTarget || maxId) && session.clientNotificationsEnabled) {
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
@@ -271,10 +273,16 @@ export async function processReminders() {
         }
 
         const max1 = new Date(in1Hour.getTime() + 15 * 60 * 1000);
+        // Task 9 (founder review): the 1h reminder has no psychologist-
+        // facing counterpart sharing this query, so clientNotificationsEnabled
+        // is filtered right in the WHERE clause — a session with it false
+        // never enters this job at all, and never gets notified1h set, so
+        // re-enabling the flag later picks it straight back up.
         const sessions1 = await db.diarySession.findMany({
             where: {
                 status: { in: ['pending', 'confirmed'] },
                 notified1h: false,
+                clientNotificationsEnabled: true,
                 date: { lte: max1 },
             } as any,
             include: {
@@ -294,8 +302,7 @@ export async function processReminders() {
             let anyAttempted = false;
             let anySucceeded = false;
 
-            // Task 9: same as the 24h loop above — quiet for imported sessions.
-            if ((telegramTarget || maxId) && !isImportedSession(session)) {
+            if (telegramTarget || maxId) {
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,

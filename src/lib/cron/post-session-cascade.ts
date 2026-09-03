@@ -37,7 +37,6 @@ import { getSuggestedTimes } from '@/app/bot/actions';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { track } from '../analytics/track';
-import { isImportedSession } from '@/lib/practice/session-origin';
 
 /** Тот же приём, что clientTargets() в reminders.ts — вынесен сюда отдельно,
  * а не импортирован оттуда, чтобы не тянуть в этот файл всю рассылочную
@@ -96,10 +95,16 @@ export async function processNextBookingNudge(): Promise<void> {
         // простой cron (деплой, инцидент), не трогая многолетнюю историю.
         const staleCutoff = new Date(now.getTime() - 50 * 60 * 60 * 1000);
 
+        // Task 9 (founder review): purely client-facing job, no
+        // psychologist-facing counterpart shares this query — a session
+        // with clientNotificationsEnabled=false never enters it, and never
+        // gets nextBookingNudgeSent set, so re-enabling the flag later
+        // picks it straight back up.
         const sessions = await db.diarySession.findMany({
             where: {
                 status: { notIn: ['cancelled', 'no_show'] },
                 nextBookingNudgeSent: false,
+                clientNotificationsEnabled: true,
                 date: { lte: now },
             } as any,
             include: {
@@ -124,9 +129,7 @@ export async function processNextBookingNudge(): Promise<void> {
             }
 
             const client = session.client;
-            // Task 9: an imported session's client never booked through us —
-            // no "thanks for the visit, here's the next slot" nudge to them.
-            if (client && !isImportedSession(session)) {
+            if (client) {
                 const psychologistName = await psychologistDisplayName(session.psychologistId);
                 const suggestions = await getSuggestedTimes(session.psychologistId, 'any', client.id).catch(() => []);
                 const next = suggestions[0];
@@ -186,10 +189,13 @@ export async function processWeeklyFollowup(): Promise<void> {
         // недельного, а не двухчасового окна).
         const staleCutoff = new Date(now.getTime() - 37 * 24 * 60 * 60 * 1000);
 
+        // Task 9 (founder review): purely client-facing job — same
+        // query-level filter as processNextBookingNudge above.
         const sessions = await db.diarySession.findMany({
             where: {
                 status: 'completed',
                 weeklyFollowupSent: false,
+                clientNotificationsEnabled: true,
                 date: { lte: now },
             } as any,
             include: {
@@ -224,9 +230,7 @@ export async function processWeeklyFollowup(): Promise<void> {
 
             if (!futureBooking) {
                 const client = session.client;
-                // Task 9: same as processNextBookingNudge above — quiet for
-                // imported sessions.
-                if (client && !isImportedSession(session)) {
+                if (client) {
                     const bookingBase = await getPsychologistBookingUrl(session.psychologistId).catch(() => undefined);
                     const link = clientBookingLink(session.psychologistId, client.id, bookingBase);
                     const text = `Если решите продолжить — ваша ссылка на запись всегда здесь.\n${link}`;

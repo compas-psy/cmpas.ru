@@ -61,6 +61,7 @@ function baseSession(overrides: Record<string, unknown> = {}) {
         format: 'online',
         notified24h: false,
         notified1h: false,
+        clientNotificationsEnabled: true,
         client: { id: 'client_1', name: 'Клиент', telegramClient: null, telegramChatId: 'tg_client', maxChatId: null },
         psychologist: { telegramChatId: null, maxChatId: null, psychologistSettings: null },
         address: null,

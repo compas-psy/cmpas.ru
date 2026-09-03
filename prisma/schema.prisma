@@ -429,11 +429,28 @@ model DiarySession {
   format          String   @default("online") // online, offline
   addressId       String? // nullable reference to a PsychologistAddress
   status          String   @default("pending") // pending, confirmed, completed, cancelled, no_show
-  // Task 7: who/what created this session — 'manual' (psychologist, web/
-  // Android) | 'self_booking' (client through the public booking page) |
-  // 'import' (calendar/CSV import). Task 9 uses this to keep cron reminders
-  // quiet on freshly-imported sessions; existing rows default to 'manual'.
+  // Task 7/9 (founder review, 2026-09-03): who/what created this row —
+  // provenance/audit, NOT a communication-policy switch. Canonical values:
+  // 'manual' (psychologist, web/Android) | 'self_booking' (client through
+  // the public booking page) | 'calendar_import' (Google/Yandex, Tasks
+  // 10-12) | 'spreadsheet_import' (CSV/XLSX, Task 13). Existing rows default
+  // to 'manual'. Never branch cron/notification behavior on this field
+  // directly — see clientNotificationsEnabled below, which is the actual
+  // communication-policy field. origin stays useful for analytics/UI
+  // ("where did this session come from") independently of whether client
+  // messaging is currently allowed for it.
   origin          String   @default("manual")
+  // Task 9 (founder review): whether AUTOMATED CLIENT-facing messaging
+  // (reminders, mood-check, rebooking/weekly-followup nudges) may fire for
+  // this session — deliberately a separate field from origin, not derived
+  // from it: a session's provenance shouldn't hard-wire its notification
+  // policy, since re-enabling notifications later (a psychologist choice)
+  // must work without needing to lie about how the session was created.
+  // Existing sessions and every manual/self_booking session default to
+  // true (nothing changes for the current product). Calendar/CSV import
+  // (Tasks 10-13) is required to explicitly pass false when creating rows —
+  // the client never went through our booking flow for those.
+  clientNotificationsEnabled Boolean @default(true)
   notes           String? // Legacy flat notes
   structuredNotes Json? // Array of smart tags/blocks (e.g. Anamnesis, Request)
   privateNotes    Json? // Array of private blocks for the psychologist only

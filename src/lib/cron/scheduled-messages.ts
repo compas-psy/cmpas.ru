@@ -23,6 +23,27 @@ export async function processScheduledMessages() {
     for (const msg of due) {
         try {
             if (msg.status === 'pending') {
+                // Task 9 (founder review): a message tied to a specific
+                // session (sessionId set) must respect that session's
+                // clientNotificationsEnabled — this is client-facing
+                // delivery. manual_pending below is unaffected: it only
+                // notifies the PSYCHOLOGIST to send by hand.
+                if (msg.sessionId) {
+                    const session = await db.diarySession.findUnique({
+                        where: { id: msg.sessionId },
+                        select: { clientNotificationsEnabled: true },
+                    });
+                    if (session && !session.clientNotificationsEnabled) {
+                        // Never leave it pending forever — a terminal state
+                        // so it doesn't get reconsidered on every pass.
+                        await db.scheduledClientMessage.update({
+                            where: { id: msg.id },
+                            data: { status: 'failed', errorMsg: 'CLIENT_NOTIFICATIONS_DISABLED' },
+                        });
+                        continue;
+                    }
+                }
+
                 // Determine channel from stored value
                 const client = await db.diaryClient.findUnique({
                     where: { id: msg.clientId },

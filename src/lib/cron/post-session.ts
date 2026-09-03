@@ -6,7 +6,6 @@
 import { db } from '@/lib/db';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage } from '../max';
-import { isImportedSession } from '@/lib/practice/session-origin';
 
 async function notifyClient(
     tgId: string | null | undefined,
@@ -46,11 +45,17 @@ export async function processPostSessionNudge() {
         const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
         const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-        // Ищем сессии, которые завершились 30 мин - 3 часа назад и ещё не nudged
+        // Ищем сессии, которые завершились 30 мин - 3 часа назад и ещё не nudged.
+        // Task 9 (founder review): purely client-facing job, no
+        // psychologist-facing counterpart shares this query — a session
+        // with clientNotificationsEnabled=false never enters it at all, and
+        // never gets postSessionNudged set, so re-enabling the flag later
+        // picks it straight back up instead of it being closed out forever.
         const sessions = await db.diarySession.findMany({
             where: {
                 status: { in: ['confirmed', 'completed'] },
                 postSessionNudged: false,
+                clientNotificationsEnabled: true,
                 date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
             } as any,
             include: {
@@ -84,16 +89,6 @@ export async function processPostSessionNudge() {
             // Проверяем, включил ли психолог эту настройку
             const moodEnabled = session.psychologist?.notificationSettings?.clientMoodCheckEnabled;
             if (!moodEnabled) {
-                await db.diarySession.update({
-                    where: { id: session.id },
-                    data: { postSessionNudged: true } as any
-                });
-                continue;
-            }
-
-            // Task 9: imported session — client never went through our
-            // booking flow, don't ask them how the session went.
-            if (isImportedSession(session)) {
                 await db.diarySession.update({
                     where: { id: session.id },
                     data: { postSessionNudged: true } as any
