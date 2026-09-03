@@ -1,10 +1,10 @@
-// Task 11 (founder correction): apply/route.ts no longer re-derives a
-// client by name — a name-only match is never an auto-decision (see
-// src/lib/clients/match.ts). The preview UI must send an EXPLICIT
-// resolution: either an existing client id the psychologist picked
-// (resolvedClientId) or confirmation to create a new one (newClientName).
-// A calendar-imported session still must carry origin='calendar_import'
-// and clientNotificationsEnabled=false (Task 9).
+// Task 12: apply/route.ts is now a thin front for commitPracticeImport —
+// it persists exactly what was submitted as a durable PracticeImportBatch
+// (the "evidence"), then delegates all actual validation/creation to the
+// real transactional commit function (tested in isolation in
+// tests/practice-import-commit.test.ts). This tests the route's own
+// responsibilities: coercing the body into batch items, calling commit,
+// and shaping the response — not re-testing commitOneItem's business rules.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -22,155 +22,108 @@ vi.mock('@/lib/notifications', () => ({
     createNotification: (...args: unknown[]) => createNotification(...args),
 }));
 
-const diaryClientFindFirst = vi.fn();
-const diaryClientCreate = vi.fn();
-const diarySessionFindFirst = vi.fn();
-const diarySessionCreate = vi.fn();
-const psychologistAddressFindFirst = vi.fn();
+const practiceImportBatchCreate = vi.fn();
 vi.mock('@/lib/db', () => ({
     db: {
-        diaryClient: {
-            findFirst: (...args: unknown[]) => diaryClientFindFirst(...args),
-            create: (...args: unknown[]) => diaryClientCreate(...args),
-        },
-        diarySession: {
-            findFirst: (...args: unknown[]) => diarySessionFindFirst(...args),
-            create: (...args: unknown[]) => diarySessionCreate(...args),
-        },
-        psychologistAddress: {
-            findFirst: (...args: unknown[]) => psychologistAddressFindFirst(...args),
+        practiceImportBatch: {
+            create: (...args: unknown[]) => practiceImportBatchCreate(...args),
         },
     },
+}));
+
+const commitPracticeImport = vi.fn();
+vi.mock('@/lib/practice/migration/commit', () => ({
+    commitPracticeImport: (...args: unknown[]) => commitPracticeImport(...args),
 }));
 
 function req(body: unknown) {
     return { json: async () => body } as any;
 }
 
-const baseItem = { date: '2026-09-07', startTime: '09:00', endTime: '09:50', duration: 50, summary: 'Сессия — Иван Иванов' };
+const baseItem = { date: '2026-09-07', startTime: '09:00', endTime: '09:50', duration: 50, summary: 'Сессия — Иван Иванов', newClientName: 'Иван Иванов' };
 
-describe('POST /api/diary/calendar/import/apply (Task 11 correction)', () => {
+describe('POST /api/diary/calendar/import/apply (Task 12)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         auth.mockResolvedValue({ user: { id: 'psy-1' } });
-        diaryClientFindFirst.mockResolvedValue(null); // ownership lookup, per resolvedClientId case
-        diaryClientCreate.mockResolvedValue({ id: 'client-new' });
-        diarySessionFindFirst.mockResolvedValue(null);
-        diarySessionCreate.mockResolvedValue({ id: 'session-1' });
-        psychologistAddressFindFirst.mockResolvedValue(null);
+        requirePracticeOperatorAttestation.mockResolvedValue(undefined);
+        practiceImportBatchCreate.mockResolvedValue({ id: 'batch-1' });
+        commitPracticeImport.mockResolvedValue({
+            batchId: 'batch-1', status: 'committed', imported: 1, skipped: 0, failed: 0,
+            outcomes: [{ itemId: 'item-1', status: 'imported', sessionId: 'session-1' }],
+        });
     });
 
-    it('creates the session with origin=calendar_import and clientNotificationsEnabled=false, for an explicit new client', async () => {
+    it('persists a durable batch with the submitted items before committing', async () => {
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов' }] }));
+        await POST(req({ items: [baseItem] }));
 
-        expect(diaryClientCreate).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ name: 'Иван Иванов' }),
-        }));
-        expect(diarySessionCreate).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ origin: 'calendar_import', clientNotificationsEnabled: false, clientId: 'client-new' }),
-        }));
-    });
-
-    it('never re-derives a client by name — a bare clientName with no explicit resolution is rejected, not silently matched', async () => {
-        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, clientName: 'Иван Иванов' }] }));
-        const body = await res.json();
-
-        expect(diaryClientCreate).not.toHaveBeenCalled();
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.imported).toBe(0);
-        expect(body.skipped).toBe(1);
-    });
-
-    it('uses an explicitly resolved existing client id, after verifying ownership — never a name re-match', async () => {
-        diaryClientFindFirst.mockResolvedValue({ id: 'client-1' }); // ownership check passes
-
-        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        await POST(req({ items: [{ ...baseItem, resolvedClientId: 'client-1' }] }));
-
-        expect(diaryClientCreate).not.toHaveBeenCalled();
-        expect(diarySessionCreate).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ clientId: 'client-1' }),
+        expect(practiceImportBatchCreate).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                psychologistId: 'psy-1',
+                items: { create: [expect.objectContaining({ newClientName: 'Иван Иванов', startTime: '09:00', duration: 50 })] },
+            }),
         }));
     });
 
-    it('rejects a resolvedClientId that does not belong to this psychologist (ownership), never creates the session', async () => {
-        diaryClientFindFirst.mockResolvedValue(null); // requireOwnedClient finds nothing -> OwnershipError
-
+    it('calls commitPracticeImport with the created batch id and psychologist id', async () => {
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, resolvedClientId: 'someone-elses-client' }] }));
+        await POST(req({ items: [baseItem] }));
+
+        expect(commitPracticeImport).toHaveBeenCalledWith('batch-1', 'psy-1');
+    });
+
+    it('shapes the response from commitPracticeImport\'s result, including batchId and imported sessionIds', async () => {
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        const res = await POST(req({ items: [baseItem] }));
         const body = await res.json();
 
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.skipped).toBe(1);
+        expect(body).toEqual({ imported: 1, skipped: 0, failed: 0, batchId: 'batch-1', sessionIds: ['session-1'] });
     });
 
-    it('rejects an item that provides BOTH resolvedClientId and newClientName — an ambiguous resolution', async () => {
+    it('never calls commitPracticeImport for an empty item list', async () => {
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, resolvedClientId: 'client-1', newClientName: 'Иван Иванов' }] }));
+        const res = await POST(req({ items: [] }));
         const body = await res.json();
 
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.skipped).toBe(1);
+        expect(commitPracticeImport).not.toHaveBeenCalled();
+        expect(practiceImportBatchCreate).not.toHaveBeenCalled();
+        expect(body).toEqual({ imported: 0, skipped: 0, failed: 0 });
     });
 
-    it('an offline session with an OWNED addressId is created with that cabinet', async () => {
-        psychologistAddressFindFirst.mockResolvedValue({ id: 'addr-1' });
+    it('requires operator attestation before creating a batch', async () => {
+        requirePracticeOperatorAttestation.mockRejectedValue(new Error('ATTESTATION_REQUIRED'));
 
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'offline', addressId: 'addr-1' }] }));
+        const res = await POST(req({ items: [baseItem] }));
 
-        expect(diarySessionCreate).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ format: 'offline', addressId: 'addr-1' }),
-        }));
+        expect(res.status).toBe(403);
+        expect(practiceImportBatchCreate).not.toHaveBeenCalled();
     });
 
-    it('an offline session with a FOREIGN/unowned addressId is rejected — no session created', async () => {
-        psychologistAddressFindFirst.mockResolvedValue(null); // requireOwnedAddress finds nothing -> OwnershipError
-
+    it('notifies the psychologist when at least one session was imported', async () => {
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'offline', addressId: 'someone-elses-address' }] }));
-        const body = await res.json();
+        await POST(req({ items: [baseItem] }));
 
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.skipped).toBe(1);
+        expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({ psychologistId: 'psy-1', type: 'calendar_imported' }));
     });
 
-    it('an offline session with NO addressId at all is rejected — never falls back to "no cabinet"', async () => {
-        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'offline' }] }));
-        const body = await res.json();
+    it('does not notify when nothing was imported', async () => {
+        commitPracticeImport.mockResolvedValue({ batchId: 'batch-1', status: 'committed', imported: 0, skipped: 1, failed: 0, outcomes: [] });
 
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.skipped).toBe(1);
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        await POST(req({ items: [baseItem] }));
+
+        expect(createNotification).not.toHaveBeenCalled();
     });
 
-    it('an online session NEVER trusts a smuggled addressId from the body — always saved as null', async () => {
+    it('caps a batch at 100 items', async () => {
+        const items = Array.from({ length: 150 }, (_, i) => ({ ...baseItem, externalEventId: `evt-${i}` }));
+
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'online', addressId: 'addr-1' }] }));
+        await POST(req({ items }));
 
-        expect(diarySessionCreate).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ format: 'online', addressId: null }),
-        }));
-        expect(psychologistAddressFindFirst).not.toHaveBeenCalled();
-    });
-
-    it('rejects a newClientName shorter than 2 characters', async () => {
-        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'И' }] }));
-        const body = await res.json();
-
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.skipped).toBe(1);
-    });
-
-    it('rejects a non-finite or non-positive duration', async () => {
-        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
-        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', duration: 0 }] }));
-        const body = await res.json();
-
-        expect(diarySessionCreate).not.toHaveBeenCalled();
-        expect(body.skipped).toBe(1);
+        const createCall = practiceImportBatchCreate.mock.calls[0][0];
+        expect(createCall.data.items.create).toHaveLength(100);
     });
 });

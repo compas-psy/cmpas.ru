@@ -33,6 +33,7 @@ model User {
   diaryBlocks           DiaryBlock[]
   scheduleRules         ScheduleRule[]
   slugs                 PsychologistSlug[]
+  practiceImportBatches PracticeImportBatch[]
 
   // Therapy process (Smart Notes)
   therapyGoals      TherapyGoal[]
@@ -130,8 +131,8 @@ model AuditLog {
 // ============================================
 
 model LegalDocument {
-  id   String @id @default(cuid())
-  type String // "TERMS", "PRIVACY", "ADS", "PROFESSIONAL", "PRACTICE"
+  id          String    @id @default(cuid())
+  type        String // "TERMS", "PRIVACY", "ADS", "PROFESSIONAL", "PRACTICE"
   // Canonical document code (cmpas_terms, cmpas_privacy, cmpas_professional,
   // cmpas_practice_terms, cmpas_marketing_consent) — see src/lib/legal-documents.ts
   // LEGAL_CODES. `type` stays for existing admin filtering; `code` is the
@@ -164,7 +165,7 @@ model LegalDocumentAcceptance {
   documentVersion String? // snapshot of LegalDocument.version at acceptance time
   documentCode    String? // snapshot of LegalDocument.code at acceptance time
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Restrict, not Cascade: this row is consent evidence. Deleting the
   // LegalDocument it points to must never silently take the evidence with
   // it — src/app/admin/(chrome)/legal/actions.ts#deleteLegalDoc must refuse
@@ -418,17 +419,17 @@ model DiaryQuestionnaire {
 }
 
 model DiarySession {
-  id              String   @id @default(cuid())
-  psychologistId  String
-  clientId        String
-  date            DateTime
-  time            String // "10:00"
-  endTime         String? // "10:50"
-  duration        Int      @default(50) // minutes
-  type            String   @default("individual") // individual, couple, family
-  format          String   @default("online") // online, offline
-  addressId       String? // nullable reference to a PsychologistAddress
-  status          String   @default("pending") // pending, confirmed, completed, cancelled, no_show
+  id                         String   @id @default(cuid())
+  psychologistId             String
+  clientId                   String
+  date                       DateTime
+  time                       String // "10:00"
+  endTime                    String? // "10:50"
+  duration                   Int      @default(50) // minutes
+  type                       String   @default("individual") // individual, couple, family
+  format                     String   @default("online") // online, offline
+  addressId                  String? // nullable reference to a PsychologistAddress
+  status                     String   @default("pending") // pending, confirmed, completed, cancelled, no_show
   // Task 7/9 (founder review, 2026-09-03): who/what created this row —
   // provenance/audit, NOT a communication-policy switch. Canonical values:
   // 'manual' (psychologist, web/Android) | 'self_booking' (client through
@@ -439,7 +440,7 @@ model DiarySession {
   // communication-policy field. origin stays useful for analytics/UI
   // ("where did this session come from") independently of whether client
   // messaging is currently allowed for it.
-  origin          String   @default("manual")
+  origin                     String   @default("manual")
   // Task 9 (founder review): whether AUTOMATED CLIENT-facing messaging
   // (reminders, mood-check, rebooking/weekly-followup nudges) may fire for
   // this session — deliberately a separate field from origin, not derived
@@ -450,16 +451,16 @@ model DiarySession {
   // true (nothing changes for the current product). Calendar/CSV import
   // (Tasks 10-13) is required to explicitly pass false when creating rows —
   // the client never went through our booking flow for those.
-  clientNotificationsEnabled Boolean @default(true)
-  notes           String? // Legacy flat notes
-  structuredNotes Json? // Array of smart tags/blocks (e.g. Anamnesis, Request)
-  privateNotes    Json? // Array of private blocks for the psychologist only
-  clientSummary   String? // Text summary to be shown in the client's cabinet
+  clientNotificationsEnabled Boolean  @default(true)
+  notes                      String? // Legacy flat notes
+  structuredNotes            Json? // Array of smart tags/blocks (e.g. Anamnesis, Request)
+  privateNotes               Json? // Array of private blocks for the psychologist only
+  clientSummary              String? // Text summary to be shown in the client's cabinet
 
-  notified24h        Boolean @default(false)
-  notified1h         Boolean @default(false)
-  postSessionNudged  Boolean @default(false)
-  clientMoodRating   Int?
+  notified24h       Boolean @default(false)
+  notified1h        Boolean @default(false)
+  postSessionNudged Boolean @default(false)
+  clientMoodRating  Int?
 
   // O-260829 §5.4: пост-сессионный каскад — вечерняя отметка специалиста
   // "была/не пришёл" пишется ПРЯМО в status ('completed' | 'no_show'), а не в
@@ -499,10 +500,11 @@ model DiarySession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  psychologist User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  client       DiaryClient          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  address      PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  homeworks    Homework[]
+  psychologist        User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  client              DiaryClient          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  address             PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  homeworks           Homework[]
+  calendarSessionLink CalendarSessionLink?
 
   @@index([psychologistId])
   @@index([clientId])
@@ -627,10 +629,96 @@ model CalendarIntegration {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  psychologist         User                  @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  calendarSessionLinks CalendarSessionLink[]
 
   @@unique([psychologistId, provider])
   @@index([psychologistId])
+}
+
+// Task 12 (PRAKTIKA MVP): the durable link between one imported/synced
+// DiarySession and the external calendar event it came from. Two jobs:
+//   1. Idempotency for commitPracticeImport — @@unique([integrationId,
+//      externalEventId]) means a second attempt to import the SAME external
+//      event (a re-run of a stale batch, two browser tabs, a retried
+//      request) fails at the database, not at an in-app heuristic. The old
+//      preview (date, time, client name) duplicate check was a best-effort
+//      guess; this is the real identity.
+//   2. The foundation auto-sync.ts's Task-8-era comment already describes:
+//      once every synced/imported session has a link, reschedule can update
+//      the LINKED external event in place instead of delete+recreate, and
+//      external-busy can exclude a session's own linked event from blocking
+//      itself. Neither is implemented yet — Task 12 only introduces the
+//      model and populates it from import; wiring reschedule/external-busy
+//      to use it is separate, deliberately not bundled in here.
+// sessionId is @unique: a DiarySession maps to at most one external event.
+model CalendarSessionLink {
+  id               String   @id @default(cuid())
+  psychologistId   String
+  sessionId        String   @unique
+  integrationId    String
+  provider         String
+  externalEventId  String
+  externalSeriesId String?
+  createdAt        DateTime @default(now())
+
+  session     DiarySession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  integration CalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalEventId])
+  @@index([psychologistId])
+}
+
+// Task 12: a durable record of one calendar-import commit attempt — the
+// "evidence" the founder asked for. Previously /apply ran its per-item loop
+// against whatever the browser happened to POST, with no server-side record
+// of what was decided or what happened to each item; a failed request left
+// no trace to debug. Now every commit first persists its items (as
+// submitted — the resolution the psychologist made in the preview UI),
+// THEN commitPracticeImport(batchId) processes them inside one transaction
+// and writes each item's outcome back, so any commit (successful, partially
+// failed, or fully rolled back) has a queryable record afterward.
+model PracticeImportBatch {
+  id             String    @id @default(cuid())
+  psychologistId String
+  status         String    @default("pending") // pending, committed, failed
+  imported       Int       @default(0)
+  skipped        Int       @default(0)
+  failed         Int       @default(0)
+  createdAt      DateTime  @default(now())
+  committedAt    DateTime?
+
+  psychologist User                      @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  items        PracticeImportBatchItem[]
+
+  @@index([psychologistId])
+}
+
+model PracticeImportBatchItem {
+  id               String   @id @default(cuid())
+  batchId          String
+  provider         String
+  integrationId    String
+  externalEventId  String
+  externalSeriesId String?
+  summary          String
+  date             DateTime
+  startTime        String
+  endTime          String?
+  duration         Int
+  format           String
+  addressId        String?
+  resolvedClientId String?
+  newClientName    String?
+
+  // Written by commitPracticeImport once processed — never set at creation.
+  outcomeStatus String  @default("pending") // pending, imported, skipped, failed
+  outcomeReason String?
+  sessionId     String?
+
+  batch PracticeImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
 }
 
 model PsychologistSettings {
@@ -880,15 +968,15 @@ model Payment {
 
 // MRR tracking, separate from individual Payment rows (charter/13_TRACKING_PLAN.md §5).
 model Subscription {
-  id                String   @id @default(cuid())
-  userId            String
-  plan              String // 'practice' | 'practice_plus'
-  status            String   @default("trial") // trial | active | grace | churned
-  terminal          String   @default("site") // "site" | "app"
-  startedAt         DateTime @default(now())
-  currentPeriodEnd  DateTime
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  plan             String // 'practice' | 'practice_plus'
+  status           String   @default("trial") // trial | active | grace | churned
+  terminal         String   @default("site") // "site" | "app"
+  startedAt        DateTime @default(now())
+  currentPeriodEnd DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -965,7 +1053,7 @@ model ScheduledClientMessage {
   psychologistId String
   clientId       String
   sessionId      String?
-  channel        String    // "telegram" | "max" | "manual"
+  channel        String // "telegram" | "max" | "manual"
   text           String
   sendAt         DateTime
   status         String    @default("pending") // "pending" | "sent" | "failed" | "manual_pending"
@@ -985,7 +1073,7 @@ model ClientInviteToken {
   psychologistId String
   clientId       String
   token          String    @unique
-  channel        String    // "telegram" | "max"
+  channel        String // "telegram" | "max"
   usedAt         DateTime?
   expiresAt      DateTime
   createdAt      DateTime  @default(now())
@@ -1069,10 +1157,10 @@ model AnalyticsEvent {
   // считает несколько NULL коллизией уникального индекса.
   eventId       String?  @unique
 
-  @@map("events")
   @@index([event])
   @@index([accountId])
   @@index([ts])
+  @@map("events")
 }
 
 model AnalyticsEventRejected {
@@ -1081,8 +1169,8 @@ model AnalyticsEventRejected {
   payload   Json
   createdAt DateTime @default(now())
 
-  @@map("events_rejected")
   @@index([createdAt])
+  @@map("events_rejected")
 }
 
 // ── Technical pulse (O-260817-12, TZ_management_dashboard.md §9) ────────────

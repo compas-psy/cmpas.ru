@@ -12,13 +12,13 @@ vi.mock('@/auth', () => ({ auth: (...args: unknown[]) => auth(...args) }));
 const psychologistSettingsFindUnique = vi.fn();
 const calendarIntegrationFindMany = vi.fn();
 const diaryClientFindMany = vi.fn();
-const diarySessionFindMany = vi.fn();
+const calendarSessionLinkFindMany = vi.fn();
 vi.mock('@/lib/db', () => ({
     db: {
         psychologistSettings: { findUnique: (...args: unknown[]) => psychologistSettingsFindUnique(...args) },
         calendarIntegration: { findMany: (...args: unknown[]) => calendarIntegrationFindMany(...args) },
         diaryClient: { findMany: (...args: unknown[]) => diaryClientFindMany(...args) },
-        diarySession: { findMany: (...args: unknown[]) => diarySessionFindMany(...args) },
+        calendarSessionLink: { findMany: (...args: unknown[]) => calendarSessionLinkFindMany(...args) },
     },
 }));
 
@@ -47,7 +47,7 @@ describe('GET /api/diary/calendar/import/preview (Task 11)', () => {
         vi.clearAllMocks();
         auth.mockResolvedValue({ user: { id: 'psy-1' } });
         diaryClientFindMany.mockResolvedValue([]);
-        diarySessionFindMany.mockResolvedValue([]);
+        calendarSessionLinkFindMany.mockResolvedValue([]);
         fetchGoogleCalendarEvents.mockResolvedValue({ success: true, events: [] });
         fetchYandexCalendarEvents.mockResolvedValue({ success: true, events: [] });
     });
@@ -196,13 +196,11 @@ describe('GET /api/diary/calendar/import/preview (Task 11)', () => {
         expect(body.counts.ready).toBe(0);
     });
 
-    it('flags classification=skipped when an existing session already occupies that date+time+name', async () => {
+    it('flags classification=skipped when the event is already linked to a committed session (Task 12 real idempotency)', async () => {
         psychologistSettingsFindUnique.mockResolvedValue({ timezone: 'Europe/Moscow' });
         calendarIntegrationFindMany.mockResolvedValue([{ id: 'integration-1', provider: 'google' }]);
         fetchGoogleCalendarEvents.mockResolvedValue({ success: true, events: [googleEvent()] });
-        diarySessionFindMany.mockResolvedValue([{
-            date: new Date('2026-09-07T00:00:00Z'), time: '09:00', client: { name: 'Иван Иванов' },
-        }]);
+        calendarSessionLinkFindMany.mockResolvedValue([{ integrationId: 'integration-1', externalEventId: 'evt-1' }]);
 
         const { GET } = await import('../src/app/api/diary/calendar/import/preview/route');
         const res = await GET();
@@ -210,5 +208,18 @@ describe('GET /api/diary/calendar/import/preview (Task 11)', () => {
 
         expect(body.items[0].classification).toBe('skipped');
         expect(body.counts.skipped).toBe(1);
+    });
+
+    it('a link for a DIFFERENT externalEventId does not falsely mark this one skipped', async () => {
+        psychologistSettingsFindUnique.mockResolvedValue({ timezone: 'Europe/Moscow' });
+        calendarIntegrationFindMany.mockResolvedValue([{ id: 'integration-1', provider: 'google' }]);
+        fetchGoogleCalendarEvents.mockResolvedValue({ success: true, events: [googleEvent()] });
+        calendarSessionLinkFindMany.mockResolvedValue([{ integrationId: 'integration-1', externalEventId: 'some-other-event' }]);
+
+        const { GET } = await import('../src/app/api/diary/calendar/import/preview/route');
+        const res = await GET();
+        const body = await res.json();
+
+        expect(body.items[0].classification).not.toBe('skipped');
     });
 });

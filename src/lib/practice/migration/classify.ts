@@ -45,27 +45,32 @@ export interface ImportCandidate {
     resolvedClientId: string | null;
 }
 
-function normalizeName(name: string): string {
-    return name.trim().toLowerCase().replace(/\s+/g, ' ');
+/** `integrationId::externalEventId` — the same key shape callers use to build `linkedEventKeys` from CalendarSessionLink rows. */
+export function importLinkKey(integrationId: string, externalEventId: string): string {
+    return `${integrationId}::${externalEventId}`;
 }
 
-/** `date|startTime|normalizedClientName` — same key shape callers use to build `existingSessionKeys`. */
-export function importCandidateDedupeKey(date: string, startTime: string, clientName: string): string {
-    return `${date}|${startTime}|${normalizeName(clientName)}`;
-}
-
+/**
+ * Task 12 (founder correction): the old (date, time, clientName) heuristic
+ * guessed at "already imported" from display fields — two genuinely
+ * different sessions could collide on it, and a renamed client would evade
+ * it. `linkedEventKeys` is now built by the caller from real
+ * CalendarSessionLink rows (src/lib/practice/migration/commit.ts's
+ * idempotency source of truth) — an event is 'skipped' here if and only if
+ * it was actually already committed as a session.
+ */
 export function classifyCalendarEvents(
     events: PracticeSourceEvent[],
     existingClients: ClientIdentity[],
-    existingSessionKeys: Set<string>,
+    linkedEventKeys: Set<string>,
 ): ImportCandidate[] {
-    return events.map((event) => classifyOne(event, existingClients, existingSessionKeys));
+    return events.map((event) => classifyOne(event, existingClients, linkedEventKeys));
 }
 
 function classifyOne(
     event: PracticeSourceEvent,
     existingClients: ClientIdentity[],
-    existingSessionKeys: Set<string>,
+    linkedEventKeys: Set<string>,
 ): ImportCandidate {
     const base = {
         id: `${event.provider}:${event.integrationId}:${event.externalEventId}`,
@@ -86,6 +91,24 @@ function classifyOne(
         addressId: null as string | null,
     };
 
+    // Already committed as a session in an earlier import — checked FIRST,
+    // regardless of classification: the psychologist could have overridden
+    // ANY event (even one that classifies 'uncertain' or 'personal' here)
+    // to 'session' and imported it, so a linked event must never resurface
+    // as a fresh candidate no matter what it looks like this time around.
+    if (linkedEventKeys.has(importLinkKey(event.integrationId, event.externalEventId))) {
+        return {
+            ...base,
+            classification: 'skipped',
+            reviewState: 'skipped',
+            confidence: 'high',
+            matchReason: 'none',
+            proposedClientName: null,
+            suggestedClientId: null,
+            resolvedClientId: null,
+        };
+    }
+
     // All-day entries ("Отпуск", a public holiday, ...) still block
     // availability (Task 10 busy-blocks.ts), but are never a session
     // candidate — always personal, always unchecked by default.
@@ -105,20 +128,6 @@ function classifyOne(
     const extractedName = extractClientNameFromSummary(event.summary);
 
     if (extractedName) {
-        const duplicate = existingSessionKeys.has(importCandidateDedupeKey(event.date, event.startTime, extractedName));
-        if (duplicate) {
-            return {
-                ...base,
-                classification: 'skipped',
-                reviewState: 'skipped',
-                confidence: 'high',
-                matchReason: 'none',
-                proposedClientName: extractedName,
-                suggestedClientId: null,
-                resolvedClientId: null,
-            };
-        }
-
         const match = matchClientIdentity({ name: extractedName }, existingClients);
         return {
             ...base,

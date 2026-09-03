@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { practiceImportRange } from '@/lib/practice/migration/import-range';
-import { classifyCalendarEvents, importCandidateDedupeKey, countByReviewState } from '@/lib/practice/migration/classify';
+import { classifyCalendarEvents, importLinkKey, countByReviewState } from '@/lib/practice/migration/classify';
 import type { PracticeSourceEvent } from '@/lib/practice/migration/types';
 
 export async function GET() {
@@ -40,23 +40,24 @@ export async function GET() {
             if (result.success && result.events) events.push(...result.events);
         }
 
-        const [existingClients, existingSessions] = await Promise.all([
+        const [existingClients, links] = await Promise.all([
             db.diaryClient.findMany({ where: { psychologistId }, select: { id: true, name: true, phone: true, email: true } }),
-            db.diarySession.findMany({
-                where: { psychologistId, date: { gte: start, lte: end }, status: { not: 'cancelled' } },
-                include: { client: { select: { name: true } } },
+            // Task 12 (founder correction): "already imported" is now the
+            // real identity — a CalendarSessionLink row — not a guess from
+            // (date, time, client name). See classify.ts's classifyOne.
+            db.calendarSessionLink.findMany({
+                where: { psychologistId, integrationId: { in: integrations.map((i) => i.id) } },
+                select: { integrationId: true, externalEventId: true },
             }),
         ]);
 
-        const existingSessionKeys = new Set(
-            existingSessions.map((s) => importCandidateDedupeKey(s.date.toISOString().slice(0, 10), s.time, s.client?.name || ''))
-        );
+        const linkedEventKeys = new Set(links.map((l) => importLinkKey(l.integrationId, l.externalEventId)));
 
         // Task 11 (founder correction): classification (extract-name.ts —
         // 'session'/'personal'/'uncertain'/'skipped') and matching
         // (suggestedClientId vs. resolvedClientId — a name is NEVER an
         // auto-match, see src/lib/clients/match.ts) both happen here.
-        const items = classifyCalendarEvents(events, existingClients, existingSessionKeys);
+        const items = classifyCalendarEvents(events, existingClients, linkedEventKeys);
 
         return NextResponse.json({ items, counts: countByReviewState(items) });
     } catch (error) {

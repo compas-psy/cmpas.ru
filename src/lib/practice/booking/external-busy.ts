@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { normalizedEventToBusyBlocks } from '@/lib/practice/migration/busy-blocks';
+import { importLinkKey } from '@/lib/practice/migration/classify';
 import type { BlockInput } from './types';
 
 // Shared external-calendar-busy fetcher — previously duplicated almost
@@ -39,6 +40,18 @@ export async function fetchExternalBusyBlocks(
     });
     if (!integrations.length) return [];
 
+    // Task 12 (founder review of Task 10, item 6): an event already linked
+    // to one of this psychologist's own DiarySessions (imported, or synced
+    // back by autoSyncSessionToCalendars) is not a foreign commitment — it's
+    // the same session PRAKTIKA already accounts for via the sessions table.
+    // Counting it here too would double-block the psychologist against
+    // their own appointment.
+    const links = await db.calendarSessionLink.findMany({
+        where: { psychologistId, integrationId: { in: integrations.map((i) => i.id) } },
+        select: { integrationId: true, externalEventId: true },
+    });
+    const linkedEventKeys = new Set(links.map((l) => importLinkKey(l.integrationId, l.externalEventId)));
+
     const timezone = options.timezone || 'Europe/Moscow';
     const blocks: BlockInput[] = [];
 
@@ -52,6 +65,7 @@ export async function fetchExternalBusyBlocks(
 
         if (res && res.success && res.events) {
             for (const ev of res.events) {
+                if (linkedEventKeys.has(importLinkKey(ev.integrationId, ev.externalEventId))) continue;
                 blocks.push(...normalizedEventToBusyBlocks(ev));
             }
         }

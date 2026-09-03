@@ -11,8 +11,12 @@ import { resolveAvailableTimesForDay } from '../src/lib/practice/booking/availab
 import type { AvailabilitySlotInput, ScheduleRuleInput } from '../src/lib/practice/booking/types';
 
 const calendarIntegrationFindMany = vi.fn();
+const calendarSessionLinkFindMany = vi.fn();
 vi.mock('@/lib/db', () => ({
-    db: { calendarIntegration: { findMany: (...args: unknown[]) => calendarIntegrationFindMany(...args) } },
+    db: {
+        calendarIntegration: { findMany: (...args: unknown[]) => calendarIntegrationFindMany(...args) },
+        calendarSessionLink: { findMany: (...args: unknown[]) => calendarSessionLinkFindMany(...args) },
+    },
 }));
 
 const fetchGoogleCalendarEvents = vi.fn();
@@ -47,6 +51,7 @@ function allDayEvent(provider: 'google' | 'yandex') {
 describe('all-day events block the whole day\'s availability (Task 10)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        calendarSessionLinkFindMany.mockResolvedValue([]);
     });
 
     it('Google all-day "отпуск" makes the whole day unavailable', async () => {
@@ -83,5 +88,16 @@ describe('all-day events block the whole day\'s availability (Task 10)', () => {
             skipBuffer: true,
         });
         expect(resolved).toHaveLength(0);
+    });
+
+    it('Task 12: an event already linked to one of this psychologist\'s own sessions is excluded — never double-counted as external busy', async () => {
+        calendarIntegrationFindMany.mockResolvedValue([{ id: 'integration-1', provider: 'google' }]);
+        calendarSessionLinkFindMany.mockResolvedValue([{ integrationId: 'integration-1', externalEventId: 'evt-vacation' }]);
+        fetchGoogleCalendarEvents.mockResolvedValue({ success: true, events: [allDayEvent('google')] });
+
+        const { fetchExternalBusyBlocks } = await import('../src/lib/practice/booking/external-busy');
+        const blocks = await fetchExternalBusyBlocks('psy-1', new Date('2026-09-10'), new Date('2026-09-10'), { timezone: 'Europe/Moscow' });
+
+        expect(blocks).toHaveLength(0);
     });
 });

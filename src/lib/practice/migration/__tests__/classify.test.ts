@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyCalendarEvents, importCandidateDedupeKey, countByReviewState } from '../classify';
+import { classifyCalendarEvents, importLinkKey, countByReviewState } from '../classify';
 import type { PracticeSourceEvent } from '../types';
 
 function event(overrides: Partial<PracticeSourceEvent> = {}): PracticeSourceEvent {
@@ -90,17 +90,26 @@ describe('classifyCalendarEvents (Task 11 review model)', () => {
         expect(candidates).toHaveLength(4);
     });
 
-    it('flags classification=skipped when an existing session already occupies that date+time+name', () => {
-        const key = importCandidateDedupeKey('2026-09-10', '09:00', 'Иванова Мария');
+    it('flags classification=skipped when the event is already linked to a committed session (Task 12 real idempotency)', () => {
+        const key = importLinkKey('integration-1', 'evt-1');
         const [candidate] = classifyCalendarEvents([event()], [], new Set([key]));
         expect(candidate.classification).toBe('skipped');
         expect(candidate.reviewState).toBe('skipped');
     });
 
-    it('is not fooled into skipped by a different date/time/name', () => {
-        const key = importCandidateDedupeKey('2026-09-11', '09:00', 'Иванова Мария');
+    it('is not fooled into skipped by a different externalEventId', () => {
+        const key = importLinkKey('integration-1', 'some-other-event');
         const [candidate] = classifyCalendarEvents([event()], [], new Set([key]));
         expect(candidate.reviewState).not.toBe('skipped');
+    });
+
+    it('a linked event is skipped regardless of what it would otherwise classify as (all-day, personal, uncertain)', () => {
+        const key = importLinkKey('integration-1', 'evt-allday');
+        const [candidate] = classifyCalendarEvents(
+            [event({ externalEventId: 'evt-allday', allDay: true, summary: 'Отпуск' })],
+            [], new Set([key]),
+        );
+        expect(candidate.classification).toBe('skipped');
     });
 
     it('countByReviewState tallies the four preview counters', () => {
