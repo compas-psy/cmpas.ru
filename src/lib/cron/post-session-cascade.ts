@@ -37,6 +37,7 @@ import { getSuggestedTimes } from '@/app/bot/actions';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { track } from '../analytics/track';
+import { isImportedSession } from '@/lib/practice/session-origin';
 
 /** Тот же приём, что clientTargets() в reminders.ts — вынесен сюда отдельно,
  * а не импортирован оттуда, чтобы не тянуть в этот файл всю рассылочную
@@ -123,7 +124,9 @@ export async function processNextBookingNudge(): Promise<void> {
             }
 
             const client = session.client;
-            if (client) {
+            // Task 9: an imported session's client never booked through us —
+            // no "thanks for the visit, here's the next slot" nudge to them.
+            if (client && !isImportedSession(session)) {
                 const psychologistName = await psychologistDisplayName(session.psychologistId);
                 const suggestions = await getSuggestedTimes(session.psychologistId, 'any', client.id).catch(() => []);
                 const next = suggestions[0];
@@ -221,7 +224,9 @@ export async function processWeeklyFollowup(): Promise<void> {
 
             if (!futureBooking) {
                 const client = session.client;
-                if (client) {
+                // Task 9: same as processNextBookingNudge above — quiet for
+                // imported sessions.
+                if (client && !isImportedSession(session)) {
                     const bookingBase = await getPsychologistBookingUrl(session.psychologistId).catch(() => undefined);
                     const link = clientBookingLink(session.psychologistId, client.id, bookingBase);
                     const text = `Если решите продолжить — ваша ссылка на запись всегда здесь.\n${link}`;

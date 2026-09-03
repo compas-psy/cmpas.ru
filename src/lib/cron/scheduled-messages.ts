@@ -15,9 +15,6 @@ export async function processScheduledMessages() {
             status: { in: ['pending', 'manual_pending'] },
             sendAt: { lte: now },
         },
-        include: {
-            // We need the client for manual status
-        },
         take: 100,
     });
 

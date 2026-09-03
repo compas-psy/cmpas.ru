@@ -4,6 +4,7 @@ import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 import { build24hReminderText } from './reminder-text';
+import { isImportedSession } from '@/lib/practice/session-origin';
 
 /** MAX-функции возвращают либо null (нет токена / HTTP не ok / исключение — см. maxApi в max-bot.ts),
  *  либо разобранный JSON-ответ, который может нести success:false при формально успешном HTTP-ответе. */
@@ -219,7 +220,12 @@ export async function processReminders() {
                 if (outcome.max !== null) { anyAttempted = true; if (outcome.max) anySucceeded = true; }
             };
 
-            if (telegramTarget || maxId) {
+            // Task 9: a session imported from an external calendar was never
+            // booked by the client through us — no automated "your session
+            // is tomorrow" message to them. The psychologist-facing block
+            // right below is unaffected: they already know about their own
+            // import.
+            if ((telegramTarget || maxId) && !isImportedSession(session)) {
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
@@ -288,7 +294,8 @@ export async function processReminders() {
             let anyAttempted = false;
             let anySucceeded = false;
 
-            if (telegramTarget || maxId) {
+            // Task 9: same as the 24h loop above — quiet for imported sessions.
+            if ((telegramTarget || maxId) && !isImportedSession(session)) {
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,

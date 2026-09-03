@@ -6,6 +6,7 @@
 import { db } from '@/lib/db';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage } from '../max';
+import { isImportedSession } from '@/lib/practice/session-origin';
 
 async function notifyClient(
     tgId: string | null | undefined,
@@ -83,6 +84,16 @@ export async function processPostSessionNudge() {
             // Проверяем, включил ли психолог эту настройку
             const moodEnabled = session.psychologist?.notificationSettings?.clientMoodCheckEnabled;
             if (!moodEnabled) {
+                await db.diarySession.update({
+                    where: { id: session.id },
+                    data: { postSessionNudged: true } as any
+                });
+                continue;
+            }
+
+            // Task 9: imported session — client never went through our
+            // booking flow, don't ask them how the session went.
+            if (isImportedSession(session)) {
                 await db.diarySession.update({
                     where: { id: session.id },
                     data: { postSessionNudged: true } as any

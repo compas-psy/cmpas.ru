@@ -8,94 +8,95 @@ export async function register() {
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
         const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
         const { pruneOldAnalyticsEvents } = await import('./lib/cron/analytics-retention');
+        const { runExclusive } = await import('./lib/cron/run-exclusive');
 
         // Напоминания каждые 15 минут
-        cron.schedule('*/15 * * * *', async () => {
+        cron.schedule('*/15 * * * *', runExclusive('reminders', async () => {
             console.log('[CRON] Запуск рассылки уведомлений (каждые 15 минут)');
             try {
                 await processReminders();
             } catch (error) {
                 console.error('[CRON] Ошибка при рассылке уведомлений:', error);
             }
-        });
+        }));
 
         // Утренний дайджест — 08:00 МСК (05:00 UTC)
-        cron.schedule('0 5 * * *', async () => {
+        cron.schedule('0 5 * * *', runExclusive('morning-digest', async () => {
             console.log('[CRON] Утренний дайджест');
             try {
                 await processMorningDigest();
             } catch (error) {
                 console.error('[CRON] Ошибка утреннего дайджеста:', error);
             }
-        });
+        }));
 
         // Еженедельная сводка — понедельник 10:00 МСК (07:00 UTC)
-        cron.schedule('0 7 * * 1', async () => {
+        cron.schedule('0 7 * * 1', runExclusive('weekly-digest', async () => {
             console.log('[CRON] Еженедельная сводка');
             try {
                 await processWeeklyDigest();
             } catch (error) {
                 console.error('[CRON] Ошибка еженедельной сводки:', error);
             }
-        });
+        }));
 
         // Пост-сессионный nudge — каждые 30 минут
-        cron.schedule('*/30 * * * *', async () => {
+        cron.schedule('*/30 * * * *', runExclusive('post-session-nudge', async () => {
             try {
                 await processPostSessionNudge();
             } catch (error) {
                 console.error('[CRON] Ошибка пост-сессионного nudge:', error);
             }
-        });
+        }));
 
         // O-260829 §5.4: пост-сессионный каскад — предложение ближайшего
         // времени через 2 часа после конца сессии. Тем же периодом, что
         // старый processPostSessionNudge (mood-check v1, выключен по
         // умолчанию и не связан с этим новым каскадом).
-        cron.schedule('*/30 * * * *', async () => {
+        cron.schedule('*/30 * * * *', runExclusive('next-booking-nudge', async () => {
             try {
                 await processNextBookingNudge();
             } catch (error) {
                 console.error('[CRON] Ошибка каскада "ближайшее время":', error);
             }
-        });
+        }));
 
         // O-260829 §5.4: сообщение через неделю без новой записи — раз в
         // сутки, в тихое время (03:10 МСК = 00:10 UTC), рядом со сроком
         // хранения аналитики ниже.
-        cron.schedule('10 0 * * *', async () => {
+        cron.schedule('10 0 * * *', runExclusive('weekly-followup', async () => {
             try {
                 await processWeeklyFollowup();
             } catch (error) {
                 console.error('[CRON] Ошибка недельного напоминания:', error);
             }
-        });
+        }));
 
         // Отложенные сообщения клиентам — каждые 5 минут
-        cron.schedule('*/5 * * * *', async () => {
+        cron.schedule('*/5 * * * *', runExclusive('scheduled-messages', async () => {
             try {
                 await processScheduledMessages();
             } catch (error) {
                 console.error('[CRON] Ошибка отложенных сообщений:', error);
             }
-        });
+        }));
 
         // Снимок времени ответа приложения (q_tech_response_p95, ТЗ §5) —
         // каждые 5 минут, тем же периодом, что и отложенные сообщения выше.
-        cron.schedule('*/5 * * * *', async () => {
+        cron.schedule('*/5 * * * *', runExclusive('response-time-window', async () => {
             await flushResponseTimeWindow();
-        });
+        }));
 
         // Срок хранения AnalyticsEvent — 180 дней (решение учредителя 6) —
         // раз в сутки, в 03:00 МСК (00:00 UTC), в тихое время.
-        cron.schedule('0 0 * * *', async () => {
+        cron.schedule('0 0 * * *', runExclusive('analytics-retention', async () => {
             console.log('[CRON] Срок хранения аналитических событий (180 дней)');
             try {
                 await pruneOldAnalyticsEvents();
             } catch (error) {
                 console.error('[CRON] Ошибка удаления устаревших аналитических событий:', error);
             }
-        });
+        }));
 
         console.log('[CRON] Инструментация: cron-задачи зарегистрированы');
 

@@ -147,6 +147,21 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         const where = diarySessionFindMany.mock.calls[0][0].where;
         expect(where.nextBookingNudgeSent).toBe(false);
     });
+
+    it('Task 9: сессия импортирована (origin=import) — сообщение НЕ уходит, флаг всё равно закрывается', async () => {
+        const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+        diarySessionFindMany.mockResolvedValue([
+            baseSession({ date: threeHoursAgo, time: '00:00', endTime: timeStrOf(threeHoursAgo), origin: 'import' }),
+        ]);
+
+        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
+        await processNextBookingNudge();
+
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
+        expect(getSuggestedTimes).not.toHaveBeenCalled();
+        expect(track).not.toHaveBeenCalled();
+        expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { nextBookingNudgeSent: true } });
+    });
 });
 
 describe('processWeeklyFollowup (O-260829 §5.4)', () => {
@@ -240,6 +255,21 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
         expect(diarySessionFindFirst).not.toHaveBeenCalled(); // даже будущую запись не проверяем — сразу закрываем
+        expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { weeklyFollowupSent: true } });
+    });
+
+    it('Task 9: сессия импортирована (origin=import), будущей записи нет — сообщение НЕ уходит, флаг закрывается', async () => {
+        const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+        diarySessionFindMany.mockResolvedValue([
+            baseSession({ date: eightDaysAgo, time: '00:00', endTime: timeStrOf(eightDaysAgo), status: 'completed', origin: 'import' }),
+        ]);
+        diarySessionFindFirst.mockResolvedValue(null);
+
+        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
+        await processWeeklyFollowup();
+
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
+        expect(track).not.toHaveBeenCalled();
         expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { weeklyFollowupSent: true } });
     });
 });
