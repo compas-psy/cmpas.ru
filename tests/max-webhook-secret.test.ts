@@ -52,14 +52,16 @@ describe('POST /api/max/webhook — подлинность источника', 
         process.env.MAX_WEBHOOK_SECRET = ORIGINAL_SECRET;
     });
 
-    it('секрет не задан (мисконфиг деплоя) — fail-open, апдейт обрабатывается', async () => {
+    it('секрет не задан (мисконфиг деплоя) — fail CLOSED, апдейт НЕ обрабатывается', async () => {
+        // Task 2/E (founder review of 229d99e): losing the env var must
+        // never silently reopen this public endpoint as unauthenticated.
         delete process.env.MAX_WEBHOOK_SECRET;
         const { POST } = await import('../src/app/api/max/webhook/route');
 
         const res = await POST(post() as any);
 
         expect(res.status).toBe(200);
-        expect(handleMaxUpdate).toHaveBeenCalledTimes(1);
+        expect(handleMaxUpdate).not.toHaveBeenCalled();
     });
 
     it('верный секрет в X-Max-Bot-Api-Secret — апдейт обрабатывается', async () => {

@@ -57,6 +57,11 @@ describe('Task 2 (PRAKTIKA MVP): MAX_WEBHOOK_SECRET самозаводится �
     it('секрет передаётся MAX в теле POST /subscriptions как "secret" — иначе MAX никогда не пришлёт его назад в заголовке', () => {
         expect(source).toMatch(/\\"secret\\":\\"\$\{max_webhook_secret\}\\"/);
     });
+
+    it('регистрация подписки идёт на platform-api2.max.ru (миграция MAX 19.07.2026), а не на устаревший домен', () => {
+        expect(source).toMatch(/platform-api2\.max\.ru\/subscriptions/);
+        expect(source).not.toMatch(/botapi\.max\.ru\/subscriptions/);
+    });
 });
 
 describe('G2: секрет доезжает до ЗАПИСОК через общий файл /etc/simpas/ingest-secret', () => {

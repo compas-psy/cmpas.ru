@@ -9,15 +9,22 @@ import { extractFirstName } from '@/lib/person-name';
 // /subscriptions and sent back on every update as X-Max-Bot-Api-Secret).
 // Without it, anyone who knows the public webhook URL can POST forged
 // updates — e.g. a fake bot_started with a guessed invite payload, or a
-// forged message_created. Timing-safe compare, same pattern as the Telegram
-// webhook (src/app/api/telegram/webhook/route.ts). Fail OPEN with a warning
-// if MAX_WEBHOOK_SECRET is unset, so a misconfigured deploy doesn't silently
-// drop all bot traffic; the deploy self-generates the secret.
+// forged message_created. Timing-safe compare.
+//
+// FAIL CLOSED, unlike the Telegram webhook's fail-open (A2 in
+// docs/security-audit.md): Task 2 (PRAKTIKA MVP, founder review of 229d99e,
+// item E) — losing MAX_WEBHOOK_SECRET must never silently turn this public
+// endpoint back into an unauthenticated one. scripts/deploy-production-remote.sh
+// self-generates the secret before every deploy (same pattern as
+// TELEGRAM_WEBHOOK_SECRET), so in a normal deploy it is always set; a
+// misconfigured environment logs loudly and drops updates instead of
+// accepting forged ones. /api/max/admin (GET) surfaces whether the secret
+// is configured as a preflight-style diagnostic.
 function verifyWebhookSecret(request: NextRequest): boolean {
     const expected = process.env.MAX_WEBHOOK_SECRET;
     if (!expected) {
-        console.warn('[MAX Webhook] MAX_WEBHOOK_SECRET not set — skipping authenticity check');
-        return true;
+        console.error('[MAX Webhook] MAX_WEBHOOK_SECRET not set — refusing to process updates (fail closed). Configuration error: redeploy or set the env var.');
+        return false;
     }
     const got = request.headers.get('x-max-bot-api-secret') || '';
     const a = Buffer.from(got);

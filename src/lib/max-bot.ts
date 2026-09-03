@@ -40,10 +40,10 @@ export type MaxUpdate = {
 const MAX_PREFIX = 'max_';
 function maxId(uid: number | string) { return `${MAX_PREFIX}${uid}`; }
 
-async function maxApi(path: string, body?: Record<string, unknown>, query: Record<string, string> = {}) {
+async function maxApi(path: string, body?: Record<string, unknown>, query: Record<string, string> = {}, baseUrl: string = MAX_API) {
     if (!MAX_TOKEN) return null;
     const qs = new URLSearchParams(query);
-    const url = `${MAX_API}${path}${qs.toString() ? '?' + qs.toString() : ''}`;
+    const url = `${baseUrl}${path}${qs.toString() ? '?' + qs.toString() : ''}`;
     try {
         const res = await fetch(url, {
             method: body ? 'POST' : 'GET',
@@ -88,6 +88,11 @@ export async function sendMaxMessage(
     return maxApi('/messages', body, { user_id: uid });
 }
 
+// MAX moved its API domain to platform-api2.max.ru (from platform-api.max.ru,
+// 19.07.2026), scoped here to /subscriptions only — per current MAX docs,
+// not a reason to move sendMaxMessage/maxApi's other calls off botapi.max.ru.
+const MAX_SUBSCRIPTIONS_API = 'https://platform-api2.max.ru';
+
 export async function registerMaxWebhook() {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
     const secret = process.env.MAX_WEBHOOK_SECRET;
@@ -97,7 +102,7 @@ export async function registerMaxWebhook() {
         // Echoed back as X-Max-Bot-Api-Secret on every delivery — verified in
         // src/app/api/max/webhook/route.ts.
         ...(secret ? { secret } : {}),
-    });
+    }, {}, MAX_SUBSCRIPTIONS_API);
     console.log('[MAX Bot] Webhook registration result:', JSON.stringify(result));
     return result;
 }

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
 const MAX_API = 'https://botapi.max.ru';
+// MAX moved its API domain to platform-api2.max.ru (from platform-api.max.ru,
+// 19.07.2026). Scoped to /subscriptions only, per current MAX docs — /me and
+// the messaging surface (src/lib/max-bot.ts) stay on botapi.max.ru until
+// there's a concrete reason to move them too.
+const MAX_SUBSCRIPTIONS_API = 'https://platform-api2.max.ru';
 const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.AUTH_SECRET;
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 
@@ -25,14 +30,33 @@ function maxFetch(path: string, options: RequestInit = {}) {
     });
 }
 
+function maxSubscriptionsFetch(path: string, options: RequestInit = {}) {
+    return fetch(`${MAX_SUBSCRIPTIONS_API}${path}`, {
+        ...options,
+        headers: {
+            'Authorization': MAX_TOKEN!,
+            ...(options.headers || {}),
+        },
+    });
+}
+
 export async function GET(request: NextRequest) {
     if (!checkAuth(request)) return unauthorized();
     if (!MAX_TOKEN) return NextResponse.json({ error: 'MAX_BOT_TOKEN not set' });
 
+    // Task 2/E (PRAKTIKA MVP): the webhook now fails CLOSED without this
+    // secret (src/app/api/max/webhook/route.ts) — surface its presence here
+    // as a preflight-style check, since a bot token with no matching secret
+    // means every incoming update is silently dropped.
+    const webhookSecretSet = !!process.env.MAX_WEBHOOK_SECRET;
     const status: Record<string, unknown> = {
         MAX_BOT_TOKEN_set: true,
         MAX_BOT_TOKEN_prefix: MAX_TOKEN.substring(0, 12) + '...',
         webhook_url: `${APP_URL}/api/max/webhook`,
+        MAX_WEBHOOK_SECRET_set: webhookSecretSet,
+        ...(webhookSecretSet ? {} : {
+            configuration_error: 'MAX_WEBHOOK_SECRET is not set — the webhook fails closed and drops every incoming update. Redeploy (it self-generates) or set the env var, then re-run POST to register it with MAX.',
+        }),
     };
 
     try {
@@ -41,7 +65,7 @@ export async function GET(request: NextRequest) {
     } catch (e: any) { status.bot_info_error = e.message; }
 
     try {
-        const r = await maxFetch('/subscriptions');
+        const r = await maxSubscriptionsFetch('/subscriptions');
         status.subscriptions = await r.json();
     } catch (e: any) { status.subscriptions_error = e.message; }
 
@@ -55,9 +79,9 @@ export async function POST(request: NextRequest) {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
 
     try {
-        await maxFetch('/subscriptions', { method: 'DELETE' }).catch(() => {});
+        await maxSubscriptionsFetch('/subscriptions', { method: 'DELETE' }).catch(() => {});
 
-        const res = await maxFetch('/subscriptions', {
+        const res = await maxSubscriptionsFetch('/subscriptions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
