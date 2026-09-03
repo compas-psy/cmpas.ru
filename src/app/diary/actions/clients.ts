@@ -127,10 +127,16 @@ export async function restoreClient(id: string) {
 
 export async function deleteClient(id: string) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
 
     // Standalone tables (ClientInviteToken, ScheduledClientMessage) reference
     // clientId without a Prisma relation/cascade, so they would otherwise be
-    // orphaned or block deletion. Clean them up explicitly first.
+    // orphaned or block deletion. Clean them up explicitly first — but only
+    // after ownership is confirmed above: these are raw deletes keyed by
+    // clientId alone, so running them before the check would let psychologist
+    // A wipe another psychologist's client's invite/message rows just by
+    // knowing their clientId, even though the DiaryClient row itself would
+    // survive (already correctly scoped below).
     try {
         await db.$executeRaw`DELETE FROM "ClientInviteToken" WHERE "clientId" = ${id}`;
         await db.$executeRaw`DELETE FROM "ScheduledClientMessage" WHERE "clientId" = ${id}`;

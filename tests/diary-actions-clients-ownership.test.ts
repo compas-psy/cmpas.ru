@@ -111,8 +111,20 @@ describe('Task 1: клиентские actions скопированы по psych
         });
     });
 
-    it('deleteClient: уже был корректно scoped через deleteMany({id, psychologistId})', async () => {
+    it('deleteClient: свой клиент удаляется как раньше, через deleteMany({id, psychologistId})', async () => {
+        diaryClientFindFirst.mockResolvedValue({ id: 'client-1' });
         await deleteClient('client-1');
         expect(diaryClientDeleteMany).toHaveBeenCalledWith({ where: { id: 'client-1', psychologistId: 'psy-a' } });
+    });
+
+    it('deleteClient: психолог A не может удалить invite/message клиента B (ownership — до побочных эффектов, не только до deleteMany)', async () => {
+        // Раньше ownership проверялся только в финальном deleteMany({id,
+        // psychologistId}) — сам DiaryClient психолога B пережил бы вызов, но
+        // сырые DELETE из ClientInviteToken/ScheduledClientMessage (по одному
+        // clientId, без psychologistId) уже успели бы выполниться.
+        diaryClientFindFirst.mockResolvedValue(null); // клиент существует, но принадлежит psy-b
+        await expect(deleteClient('client-of-b')).rejects.toThrow('Клиент не найден');
+        expect(executeRaw).not.toHaveBeenCalled();
+        expect(diaryClientDeleteMany).not.toHaveBeenCalled();
     });
 });
