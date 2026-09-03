@@ -156,6 +156,64 @@ describe('resolveAvailableTimesForDay — multiple ScheduleRules on the same day
         expect(at1500.map(s => s.addressId).sort()).toEqual(['address-other-office', 'address-yauzskaya']);
     });
 
+    it('overlapping rules with IDENTICAL user-visible semantics collapse into ONE option, not a visual duplicate', () => {
+        // Two different ScheduleRules, same time/format/address/duration —
+        // to the client this is one "15:00 · очно · Яузская" button, not
+        // two. Internally, exactly one canonical availabilitySlotId/
+        // scheduleRuleId must be chosen, deterministically.
+        const ruleD: ScheduleRuleInput = { ...ruleB(), id: 'rule-d' };
+        const result = resolveAvailableTimesForDay({
+            dateStr: MONDAY,
+            slots: [
+                slotFor(ruleB(), 'slot-b', '15:00', '16:00'),
+                slotFor(ruleD, 'slot-d', '15:00', '16:00'),
+            ],
+            blocks: [],
+            sessions: [],
+            settings: { maxSessionsPerDay: null, sessionBreak: 15, bookingBufferHours: 0, bookingHorizonDays: 365 },
+            skipBuffer: true,
+        });
+
+        const at1500 = result.filter(s => s.time === '15:00');
+        expect(at1500).toHaveLength(1);
+        // Deterministic canonical pick — lowest (scheduleRuleId, availabilitySlotId).
+        expect(at1500[0].scheduleRuleId).toBe('rule-b');
+        expect(at1500[0].availabilitySlotId).toBe('slot-b');
+
+        // Order of the input slots must not change the outcome.
+        const reversed = resolveAvailableTimesForDay({
+            dateStr: MONDAY,
+            slots: [
+                slotFor(ruleD, 'slot-d', '15:00', '16:00'),
+                slotFor(ruleB(), 'slot-b', '15:00', '16:00'),
+            ],
+            blocks: [],
+            sessions: [],
+            settings: { maxSessionsPerDay: null, sessionBreak: 15, bookingBufferHours: 0, bookingHorizonDays: 365 },
+            skipBuffer: true,
+        });
+        expect(reversed.filter(s => s.time === '15:00')).toEqual(at1500);
+    });
+
+    it('rules differing only by duration are NOT collapsed — duration changes the booking outcome', () => {
+        const shortRule: ScheduleRuleInput = { ...ruleB(), id: 'rule-short', duration: 30 };
+        const result = resolveAvailableTimesForDay({
+            dateStr: MONDAY,
+            slots: [
+                slotFor(ruleB(), 'slot-b', '15:00', '16:00'),
+                slotFor(shortRule, 'slot-short', '15:00', '16:00'),
+            ],
+            blocks: [],
+            sessions: [],
+            settings: { maxSessionsPerDay: null, sessionBreak: 15, bookingBufferHours: 0, bookingHorizonDays: 365 },
+            skipBuffer: true,
+        });
+
+        const at1500 = result.filter(s => s.time === '15:00');
+        expect(at1500).toHaveLength(2);
+        expect(at1500.map(s => s.duration).sort()).toEqual([30, 50]);
+    });
+
     it('audience filter still applies per rule (new vs regular vs all)', () => {
         const newOnlyRule: ScheduleRuleInput = { ...ruleA(), id: 'rule-new-only', audienceFilter: 'new' };
         const result = resolveAvailableTimesForDay({

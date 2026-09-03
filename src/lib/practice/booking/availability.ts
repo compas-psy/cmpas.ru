@@ -172,21 +172,32 @@ export function resolveAvailableTimesForDay(params: ResolveDayParams): ResolvedS
             }
 
             if (!hasClash && !hasBlock) {
-                // Fix 2: include addressId + the rule/slot identity in the key
-                // so two genuinely different bookable options at the same
-                // clock time (e.g. two offline rules, different offices)
-                // never overwrite one another.
-                const key = `${timeStr}|${format}|${addressId ?? ''}|${slot.scheduleRuleId ?? slot.id}`;
-                if (!timesObj[key]) {
-                    timesObj[key] = {
-                        time: timeStr,
-                        format,
-                        addressId,
-                        duration,
-                        availabilitySlotId: slot.id,
-                        scheduleRuleId: slot.scheduleRuleId ?? null,
-                        isOwnBooking: isOwnSession,
-                    };
+                // Fix 2: the key is the USER-VISIBLE option — time, format,
+                // address, duration. It deliberately does NOT include
+                // scheduleRuleId: two rules that happen to produce the exact
+                // same bookable option (same time/format/address/duration)
+                // are one button to the client, not two identical-looking
+                // ones. Two rules with a different address or format DO
+                // still key apart, since those are genuinely different
+                // options (e.g. two offline rules, different offices).
+                const key = `${timeStr}|${format}|${addressId ?? ''}|${duration}`;
+                const candidate: ResolvedSlotOption = {
+                    time: timeStr,
+                    format,
+                    addressId,
+                    duration,
+                    availabilitySlotId: slot.id,
+                    scheduleRuleId: slot.scheduleRuleId ?? null,
+                    isOwnBooking: isOwnSession,
+                };
+                const existing = timesObj[key];
+                // When multiple rules collapse into one visible option, pick
+                // a canonical availabilitySlotId/scheduleRuleId deterministically
+                // (not "whichever the DB happened to return first" — Prisma
+                // gives no ordering guarantee here) so the same input always
+                // resolves to the same underlying identity.
+                if (!existing || isCanonicalOption(candidate, existing)) {
+                    timesObj[key] = candidate;
                 }
             }
 
@@ -195,6 +206,16 @@ export function resolveAvailableTimesForDay(params: ResolveDayParams): ResolvedS
     });
 
     return Object.values(timesObj).sort((a, b) => a.time.localeCompare(b.time) || a.format.localeCompare(b.format));
+}
+
+// Deterministic tie-break for two options that resolve to the same
+// user-visible key: order by (scheduleRuleId, availabilitySlotId), lowest
+// wins. Arbitrary but stable — the same set of rules always canonicalizes
+// to the same identity, regardless of DB row order.
+function isCanonicalOption(a: ResolvedSlotOption, b: ResolvedSlotOption): boolean {
+    const aKey = `${a.scheduleRuleId ?? ''} ${a.availabilitySlotId}`;
+    const bKey = `${b.scheduleRuleId ?? ''} ${b.availabilitySlotId}`;
+    return aKey < bKey;
 }
 
 // Helper: convert any Date to 'yyyy-MM-dd' string in UTC to avoid timezone issues

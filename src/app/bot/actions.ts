@@ -327,7 +327,19 @@ export async function getSuggestedTimes(
             const times = await getAvailableTimes(psychologistId, dateStr, false, undefined, clientId);
             for (const slot of times) {
                 if (slot.isOwnBooking) continue;
-                candidates.push({ date: dateStr, time: slot.time, format: slot.format, addressId: slot.addressId });
+                // Task 7: carry exact-slot identity through — suggested-times and
+                // the full calendar must share one exact-slot contract, so a
+                // signed slotToken can be issued for a suggested candidate
+                // without re-resolving/guessing which rule it came from later.
+                candidates.push({
+                    date: dateStr,
+                    time: slot.time,
+                    format: slot.format,
+                    addressId: slot.addressId,
+                    availabilitySlotId: slot.availabilitySlotId,
+                    scheduleRuleId: slot.scheduleRuleId,
+                    duration: slot.duration,
+                });
             }
         }
 

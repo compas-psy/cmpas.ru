@@ -8,7 +8,7 @@
 // старой подходящей заявке, без гонки и без давления на клиента.
 
 import { db } from '@/lib/db';
-import { matchesPreference, type SuggestedTimeCandidate, type TimePreference } from '@/lib/booking/suggested-times';
+import { matchesPreference, type TimePreference } from '@/lib/booking/suggested-times';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max';
 import { publicBaseUrl } from '@/lib/client-workflow';
@@ -98,7 +98,7 @@ export async function notifyWaitlistOnFreedSlot(
     });
     if (entries.length === 0) return { notified: false };
 
-    const candidate: SuggestedTimeCandidate = { date: toDateStr(freedDate), time: freedTime, format: 'online', addressId: null };
+    const candidate = { date: toDateStr(freedDate), time: freedTime };
     const matching = entries.filter((e) => matchesPreference(candidate, (e.preference as TimePreference) || 'any'));
     if (matching.length === 0) return { notified: false };
 

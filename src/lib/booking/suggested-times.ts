@@ -10,6 +10,12 @@ export interface SuggestedTimeCandidate {
     time: string; // 'HH:MM'
     format: string;
     addressId: string | null;
+    // Task 7: exact-slot identity carried through from resolveAvailableTimesForDay
+    // so a suggested candidate can be turned into a signed slotToken without
+    // re-resolving/guessing which rule it came from after the fact.
+    availabilitySlotId: string;
+    scheduleRuleId: string | null;
+    duration: number;
 }
 
 function dayOfWeekMondayFirst(dateStr: string): number {
@@ -20,8 +26,11 @@ function dayOfWeekMondayFirst(dateStr: string): number {
 
 // O-260829 §5.2: экспортирована для notifyWaitlistOnFreedSlot (src/lib/waitlist-notify.ts) —
 // та же логика подбора "подходит ли час под предпочтение", один источник для
-// предложения времени клиенту и для проверки заявки листа ожидания.
-export function matchesPreference(candidate: SuggestedTimeCandidate, preference: TimePreference): boolean {
+// предложения времени клиенту и для проверки заявки листа ожидания. Only
+// date/time drive the preference match, so this takes the narrower shape —
+// callers that don't have exact-slot identity (e.g. a freed-slot notice)
+// don't need to fabricate one just to satisfy the type.
+export function matchesPreference(candidate: Pick<SuggestedTimeCandidate, 'date' | 'time'>, preference: TimePreference): boolean {
     if (preference === 'any') return true;
     const isWeekend = dayOfWeekMondayFirst(candidate.date) >= 5;
     if (preference === 'weekday_evening') return !isWeekend && candidate.time >= '18:00';
