@@ -10,28 +10,16 @@ import type { BlockInput } from './types';
 // place that knows how to turn a psychologist's connected Google/Yandex
 // calendars into resolver-shaped busy blocks.
 //
+// Task 10: date/startTime/endTime are now resolved once, inside the
+// fetchers themselves (src/lib/calendar/normalized-event.ts), against the
+// practice's configured timezone — including Yandex's "floating time"
+// events correctly. This file used to redo that resolution itself (and,
+// before this fetcher existed, so did three other call sites) — nothing
+// provider-specific is left to do here.
+//
 // Deliberately NOT called from inside a db transaction / advisory lock —
 // this does real network I/O, which must never happen while holding a lock.
 // Callers fetch this BEFORE opening a transaction and pass the result in.
-
-function getPartsInTz(date: Date, timeZone: string) {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-    });
-    const parts = formatter.formatToParts(date);
-    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
-    let hour = get('hour');
-    if (hour === '24') hour = '00';
-    return {
-        year: Number(get('year')),
-        month: Number(get('month')),
-        day: Number(get('day')),
-        hour,
-        minute: get('minute'),
-    };
-}
 
 export async function fetchExternalBusyBlocks(
     psychologistId: string,
@@ -46,41 +34,21 @@ export async function fetchExternalBusyBlocks(
     });
     if (!integrations.length) return [];
 
-    const tz = options.timezone || 'Europe/Moscow';
+    const timezone = options.timezone || 'Europe/Moscow';
     const blocks: BlockInput[] = [];
 
     for (const integration of integrations) {
         let res;
         if (integration.provider === 'google') {
-            res = await fetchGoogleCalendarEvents(integration.id, rangeStart, rangeEnd);
+            res = await fetchGoogleCalendarEvents(integration.id, rangeStart, rangeEnd, { timezone });
         } else if (integration.provider === 'yandex') {
-            res = await fetchYandexCalendarEvents(integration.id, rangeStart, rangeEnd);
+            res = await fetchYandexCalendarEvents(integration.id, rangeStart, rangeEnd, { timezone });
         }
 
         if (res && res.success && res.events) {
-            for (const ev of res.events as any[]) {
-                // Yandex iCal events without 'Z' suffix are "floating" local time —
-                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
-                const getParts = (dateInput: Date, localStr?: string) => {
-                    if (localStr) {
-                        const [d, t] = localStr.split('T');
-                        const [y, m, day] = d.split('-');
-                        const [h, min] = t.split(':');
-                        return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
-                    }
-                    return getPartsInTz(dateInput, tz);
-                };
-
-                const localStart = new Date(ev.start);
-                const localEnd = new Date(ev.end);
-                const startParts = getParts(localStart, ev.startLocalStr);
-                const endParts = getParts(localEnd, ev.endLocalStr);
-
-                const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
-                const startTime = `${startParts.hour}:${startParts.minute}`;
-                const endTime = `${endParts.hour}:${endParts.minute}`;
-
-                blocks.push({ date, startTime, endTime });
+            for (const ev of res.events) {
+                const [y, m, d] = ev.date.split('-').map(Number);
+                blocks.push({ date: new Date(Date.UTC(y, m - 1, d)), startTime: ev.startTime, endTime: ev.endTime });
             }
         }
     }

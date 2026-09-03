@@ -2,9 +2,30 @@
 
 import { DAVClient } from 'tsdav';
 import { db } from '@/lib/db';
+import { resolveWallClockParts, type NormalizedCalendarEvent } from './normalized-event';
 
 // Yandex CalDAV server URL
 const YANDEX_CALDAV_URL = 'https://caldav.yandex.ru';
+
+// Task 10: the UID PRAKTIKA stamps on every event it pushes to Yandex — the
+// exact analogue of Google's extendedProperties.private.compasSessionId.
+// Reading it back (fetchYandexCalendarEvents below) is what makes loop-back
+// detection possible for Yandex at all: before this, a psychologist's own
+// already-booked session (or a stale event a reschedule left behind — see
+// the note on Yandex delete being a no-op, in src/lib/calendar/auto-sync.ts)
+// counted as "external busy" against their own future availability forever,
+// since nothing recognized it as one of ours.
+const OWN_SESSION_UID_RE = /^compas-session-(.+)@cmpas\.ru$/;
+
+function yandexOwnSessionUid(sessionId: string): string {
+    return `compas-session-${sessionId}@cmpas.ru`;
+}
+
+function parseYandexOwnSessionId(uid: string | undefined): string | null {
+    if (!uid) return null;
+    const match = uid.trim().match(OWN_SESSION_UID_RE);
+    return match ? match[1] : null;
+}
 
 /**
  * Create iCalendar event string from session data
@@ -41,7 +62,7 @@ function createICalEvent(session: {
         'PRODID:-//Compas.ru//Diary//RU',
         'CALSCALE:GREGORIAN',
         'BEGIN:VEVENT',
-        `UID:compas-session-${session.id}@cmpas.ru`,
+        `UID:${yandexOwnSessionUid(session.id)}`,
         `DTSTAMP:${now}`,
         `DTSTART:${dateStr}T${startTime}`,
         `DTEND:${dateStr}T${endTime}`,
@@ -204,8 +225,9 @@ export async function syncAllSessionsToYandex(
 export async function fetchYandexCalendarEvents(
     integrationId: string,
     startDate: Date,
-    endDate: Date
-): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
+    endDate: Date,
+    options?: { includeCompasEvents?: boolean; timezone?: string }
+): Promise<{ success: boolean; events?: NormalizedCalendarEvent[]; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
             where: { id: integrationId },
@@ -234,7 +256,8 @@ export async function fetchYandexCalendarEvents(
             expand: true
         });
 
-        const events: { start: Date; end: Date; summary: string }[] = [];
+        const timezone = options?.timezone || 'Europe/Moscow';
+        const rawEvents: NormalizedCalendarEvent[] = [];
 
         // Parse rudimentary iCal strings returned by tsdav
         // Parse iCal date string: returns UTC date + optional localStr for floating (no Z) times
@@ -295,13 +318,26 @@ export async function fetchYandexCalendarEvents(
                             endDate = ep.date;
                             endLocalStr = ep.localStr;
                         }
-                        events.push({
+                        // A VFREEBUSY period has no per-interval UID of its own
+                        // (it's an aggregate busy/free report, not a discrete
+                        // event) — synthesize a stable-per-fetch identity from
+                        // the interval itself, and never treat it as one of our
+                        // own sessions (that needs a real UID to detect).
+                        const startWc = resolveWallClockParts(startParsed.date, timezone, startParsed.localStr);
+                        const endWc = resolveWallClockParts(endDate, timezone, endLocalStr);
+                        rawEvents.push({
+                            provider: 'yandex',
+                            externalId: `vfb:${startParsed.date.toISOString()}:${endDate.toISOString()}`,
+                            summary,
                             start: startParsed.date,
                             end: endDate,
-                            summary,
-                            ...(startParsed.localStr && { startLocalStr: startParsed.localStr }),
-                            ...(endLocalStr && { endLocalStr }),
-                        } as any);
+                            date: startWc.date,
+                            startTime: startWc.time,
+                            endTime: endWc.time,
+                            isAllDay: false,
+                            isOwnSession: false,
+                            ownSessionId: null,
+                        });
                     }
                 }
                 continue;
@@ -317,6 +353,7 @@ export async function fetchYandexCalendarEvents(
             const dtstartMatch = eventData.match(/DTSTART(?:;.*?)?:(.*)/);
             const dtendMatch = eventData.match(/DTEND(?:;.*?)?:(.*)/);
             const summaryMatch = eventData.match(/SUMMARY:(.*)/);
+            const uidMatch = eventData.match(/UID:(.*)/);
 
             if (dtstartMatch) {
                 const startParsed = parseIcalDateStr(dtstartMatch[1]);
@@ -324,9 +361,10 @@ export async function fetchYandexCalendarEvents(
                     date: new Date(startParsed.date.getTime() + 60 * 60 * 1000),
                     localStr: undefined as string | undefined
                 };
+                const isAllDay = dtstartMatch[1].trim().length === 8;
 
                 // If the event is an all-day event (length 8) and no explicit end was given
-                if (dtstartMatch[1].trim().length === 8 && !dtendMatch) {
+                if (isAllDay && !dtendMatch) {
                     endParsed.date = new Date(startParsed.date.getTime() + 24 * 60 * 60 * 1000);
                     const ny = endParsed.date.getUTCFullYear();
                     const nm = String(endParsed.date.getUTCMonth() + 1).padStart(2, '0');
@@ -334,15 +372,36 @@ export async function fetchYandexCalendarEvents(
                     endParsed.localStr = `${ny}-${nm}-${nd}T00:00:00`;
                 }
 
-                events.push({
+                const uid = uidMatch ? uidMatch[1].trim() : undefined;
+                const ownSessionId = parseYandexOwnSessionId(uid);
+                const startWc = resolveWallClockParts(startParsed.date, timezone, startParsed.localStr);
+                const endWc = resolveWallClockParts(endParsed.date, timezone, endParsed.localStr);
+
+                rawEvents.push({
+                    provider: 'yandex',
+                    // Fall back to a synthesized id only if this particular
+                    // VEVENT genuinely lacks a UID (non-conformant producer) —
+                    // Yandex itself always writes one.
+                    externalId: uid || `vevent:${startParsed.date.toISOString()}:${summaryMatch?.[1]?.trim() || ''}`,
+                    summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
                     start: startParsed.date,
                     end: endParsed.date,
-                    summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
-                    ...(startParsed.localStr && { startLocalStr: startParsed.localStr }),
-                    ...(endParsed.localStr && { endLocalStr: endParsed.localStr }),
-                } as any);
+                    date: startWc.date,
+                    startTime: startWc.time,
+                    endTime: endWc.time,
+                    isAllDay,
+                    isOwnSession: Boolean(ownSessionId),
+                    ownSessionId,
+                });
             }
         }
+
+        // Same rule as Google (see fetchGoogleCalendarEvents): importing/
+        // scanning for clients wants to SEE our own synced events (they carry
+        // client names); checking for conflicts/busy times must exclude
+        // them, since a session's own mirrored external event must never
+        // count as busy against itself.
+        const events = rawEvents.filter((event) => options?.includeCompasEvents || !event.isOwnSession);
 
         return { success: true, events };
     } catch (error) {

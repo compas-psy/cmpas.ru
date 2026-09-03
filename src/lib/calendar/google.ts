@@ -1,6 +1,7 @@
 // Google Calendar OAuth2 + REST API service
 
 import { db } from '@/lib/db';
+import { resolveWallClockParts, type NormalizedCalendarEvent } from './normalized-event';
 
 // Google OAuth2 constants
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -346,8 +347,8 @@ export async function fetchGoogleCalendarEvents(
     integrationId: string,
     startDate: Date,
     endDate: Date,
-    options?: { includeCompasEvents?: boolean }
-): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
+    options?: { includeCompasEvents?: boolean; timezone?: string }
+): Promise<{ success: boolean; events?: NormalizedCalendarEvent[]; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
             where: { id: integrationId },
@@ -381,35 +382,52 @@ export async function fetchGoogleCalendarEvents(
 
         const data = await response.json();
         const items = data.items || [];
+        const timezone = options?.timezone || 'Europe/Moscow';
 
-        const events = items
-            .filter((item: any) => {
-                if (item.status === 'cancelled') return false;
-                // When scanning for clients, include КОМПАС-synced events (they contain client names!)
-                // When checking for conflicts/busy times, exclude them
-                if (!options?.includeCompasEvents && item.extendedProperties?.private?.compasSessionId) return false;
-                return true;
-            })
-            .map((item: any) => {
-                let start, end;
+        const events: NormalizedCalendarEvent[] = items
+            .filter((item: any) => item.status !== 'cancelled')
+            .map((item: any): NormalizedCalendarEvent | null => {
+                let start: Date, end: Date, isAllDay: boolean;
                 if (item.start.dateTime) {
                     start = new Date(item.start.dateTime);
                     end = new Date(item.end.dateTime);
+                    isAllDay = false;
                 } else if (item.start.date) {
-                    // All-day event
+                    // All-day event — Google gives a bare "YYYY-MM-DD", no time-of-day at all.
                     start = new Date(item.start.date);
                     end = new Date(item.end.date);
+                    isAllDay = true;
                 } else {
                     return null;
                 }
 
+                const ownSessionId: string | null = item.extendedProperties?.private?.compasSessionId || null;
+                const startParts = resolveWallClockParts(start, timezone);
+                const endParts = resolveWallClockParts(end, timezone);
+
                 return {
+                    provider: 'google',
+                    externalId: item.id,
+                    summary: item.summary || 'Busy',
                     start,
                     end,
-                    summary: item.summary || 'Busy',
+                    date: startParts.date,
+                    startTime: startParts.time,
+                    endTime: endParts.time,
+                    isAllDay,
+                    isOwnSession: Boolean(ownSessionId),
+                    ownSessionId,
                 };
             })
-            .filter(Boolean);
+            .filter((event: NormalizedCalendarEvent | null): event is NormalizedCalendarEvent => {
+                if (!event) return false;
+                // When scanning for clients (import), include КОМПАС-synced events
+                // (they carry client names in their summary). When checking for
+                // conflicts/busy times, exclude them — a session's own mirrored
+                // external event must never count as busy against itself.
+                if (!options?.includeCompasEvents && event.isOwnSession) return false;
+                return true;
+            });
 
         return { success: true, events };
     } catch (error) {

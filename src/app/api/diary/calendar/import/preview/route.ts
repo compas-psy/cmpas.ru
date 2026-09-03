@@ -11,10 +11,6 @@ function cleanClientName(summary: string) {
         .slice(0, 120) || 'Клиент из календаря';
 }
 
-function minutes(date: Date) {
-    return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
-}
-
 export async function GET(req: NextRequest) {
     const session = await auth();
     const psychologistId = session?.user?.id;
@@ -28,6 +24,18 @@ export async function GET(req: NextRequest) {
     end.setHours(23, 59, 59, 999);
 
     try {
+        // Task 10 (founder review fix): the previous version derived
+        // date/time with `date.getHours()`/`getMinutes()` — the SERVER's OS
+        // timezone, not the practice's. A practice on Europe/Moscow with a
+        // server running in UTC saw every candidate's time off by the UTC
+        // offset. fetchGoogleCalendarEvents now resolves this itself, given
+        // the practice's real timezone.
+        const settings = await db.psychologistSettings.findUnique({
+            where: { psychologistId },
+            select: { timezone: true },
+        });
+        const timezone = settings?.timezone || 'Europe/Moscow';
+
         const integrations = await db.calendarIntegration.findMany({
             where: { psychologistId, isActive: true, provider: 'google', syncFrom: true },
         });
@@ -42,23 +50,31 @@ export async function GET(req: NextRequest) {
 
         const candidates: Array<Record<string, unknown>> = [];
         for (const integration of integrations) {
-            const result = await fetchGoogleCalendarEvents(integration.id, start, end, { includeCompasEvents: false });
+            // includeCompasEvents: false (the default) already drops events
+            // PRAKTIKA itself created and pushed here — those aren't import
+            // candidates, they're our own sessions looping back.
+            const result = await fetchGoogleCalendarEvents(integration.id, start, end, { timezone });
             if (!result.success || !result.events) continue;
             for (const event of result.events) {
-                const date = event.start.toISOString().slice(0, 10);
-                const startTime = minutes(event.start);
-                const endTime = minutes(event.end);
+                // All-day entries ("Отпуск", a public holiday, ...) are not
+                // bookable client sessions — Task 11 will build real
+                // classification, but an all-day span is never a candidate.
+                if (event.isAllDay) continue;
+
                 const clientName = cleanClientName(event.summary);
-                const key = `${date}|${startTime}|${clientName.toLowerCase().trim()}`;
+                const key = `${event.date}|${event.startTime}|${clientName.toLowerCase().trim()}`;
                 candidates.push({
-                    id: Buffer.from(`${integration.id}|${event.summary}|${event.start.toISOString()}`).toString('base64url'),
+                    // Task 10: the provider's own stable id — never a hash of
+                    // display fields, which change and can collide. Tasks
+                    // 11/12 (matching, idempotent commit) key off this.
+                    id: `${integration.provider}:${integration.id}:${event.externalId}`,
                     provider: integration.provider,
                     calendarId: integration.calendarId,
                     summary: event.summary,
                     clientName,
-                    date,
-                    startTime,
-                    endTime,
+                    date: event.date,
+                    startTime: event.startTime,
+                    endTime: event.endTime,
                     duration: Math.max(15, Math.round((event.end.getTime() - event.start.getTime()) / 60000)),
                     duplicate: existingKeys.has(key),
                 });

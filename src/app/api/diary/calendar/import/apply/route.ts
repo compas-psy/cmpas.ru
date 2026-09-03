@@ -4,6 +4,21 @@ import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
 import { requirePracticeOperatorAttestation, ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
 
+// Task 10 (found while normalizing calendar events) — KNOWN GAP, tracked as
+// a Task 12 ("Atomic/idempotent import commit") dependency, not fixed here:
+// this route has no frontend caller yet, so it isn't reachable today, but
+// as written it would need real work before Task 11/12 wire a UI to it:
+//   - db.diarySession.create below never sets origin ('calendar_import') or
+//     clientNotificationsEnabled (false) — every session it creates would
+//     get full automated CLIENT-facing messaging (Task 9), exactly what
+//     origin/clientNotificationsEnabled exist to prevent for imports;
+//   - the client find-or-create + duplicate check + session create isn't
+//     wrapped in a transaction/advisory lock — same class of race Task 7/8
+//     fixed for booking (createSelfPracticeBooking, reschedulePracticeBooking);
+//   - duplicate detection is a (date, time, clientId) heuristic, not the
+//     event's stable externalId (see src/lib/calendar/normalized-event.ts) —
+//     re-running an import after a session was rescheduled would re-import it.
+
 function normalName(value: string) {
     return value.trim().replace(/\s+/g, ' ').slice(0, 120) || 'Клиент из календаря';
 }
