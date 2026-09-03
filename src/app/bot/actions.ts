@@ -10,7 +10,9 @@ import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalC
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 import { resolveAvailableTimesForDay } from '@/lib/practice/booking/availability';
 import { slotToken } from '@/lib/practice/booking/slot-token';
-import { createPracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
+import { createSelfPracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
+import { fetchExternalBusyBlocks } from '@/lib/practice/booking/external-busy';
+import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
@@ -57,9 +59,6 @@ async function notifyUser(
         maxId ? sendMaxMessage(maxId, text).catch(e => console.error('[notify] MAX error:', e)) : null,
     ]);
 }
-import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
-import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
-import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 
 export async function getPsychologist(id: string) {
     const user = await db.user.findUnique({
@@ -96,29 +95,6 @@ function toDateStr(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
-// Helper: robust date parsing to specified timezone without relying on server's local time
-function getPartsInTz(date: Date, timeZone: string) {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false
-    });
-    const parts = formatter.formatToParts(date);
-    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
-    
-    // Some runtimes return "24" instead of "00" for midnight with hour12: false
-    let hour = get('hour');
-    if (hour === '24') hour = '00';
-
-    return {
-        year: Number(get('year')),
-        month: Number(get('month')),
-        day: Number(get('day')),
-        hour,
-        minute: get('minute')
-    };
-}
-
 export async function getAvailableDates(psychologistId: string, year: number, month: number, skipModeCheck = false, clientId: string | null = null, skipBuffer = false) {
     // Check schedule mode — if private, return empty (only for client-facing calls)
     if (!skipModeCheck) {
@@ -141,58 +117,15 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
     const blockConflicts = settings?.blockConflicts ?? true;
 
-    let externalBlocks: any[] = [];
-    if (blockConflicts) {
-        const integrations = await db.calendarIntegration.findMany({
-            where: { psychologistId, isActive: true, syncFrom: true }
-        });
-
-        for (const integration of integrations) {
-            let res;
-            if (integration.provider === 'google') {
-                res = await fetchGoogleCalendarEvents(integration.id, startDate, endDate);
-            } else if (integration.provider === 'yandex') {
-                res = await fetchYandexCalendarEvents(integration.id, startDate, endDate);
+    const [blocks, externalBlocks] = await Promise.all([
+        db.diaryBlock.findMany({
+            where: {
+                psychologistId,
+                date: { lte: endDate, gte: startDate }
             }
-
-            if (res && res.success && res.events) {
-                const tz = settings?.timezone || 'Europe/Moscow';
-                // Map external events into a structure similar to diaryBlocks.
-                // Yandex iCal events without 'Z' suffix are "floating" local time —
-                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
-                const mapped = res.events.map((ev: any) => {
-                    const getParts = (dateInput: Date, localStr?: string) => {
-                        if (localStr) {
-                            const [d, t] = localStr.split('T');
-                            const [y, m, day] = d.split('-');
-                            const [h, min] = t.split(':');
-                            return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
-                        }
-                        return getPartsInTz(dateInput, tz);
-                    };
-
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    const startParts = getParts(localStart, ev.startLocalStr);
-                    const endParts = getParts(localEnd, ev.endLocalStr);
-
-                    const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
-                    const startTime = `${startParts.hour}:${startParts.minute}`;
-                    const endTime = `${endParts.hour}:${endParts.minute}`;
-
-                    return { date, startTime, endTime, _external: true };
-                });
-                externalBlocks.push(...mapped);
-            }
-        }
-    }
-
-    const blocks = await db.diaryBlock.findMany({
-        where: {
-            psychologistId,
-            date: { lte: endDate, gte: startDate }
-        }
-    });
+        }),
+        fetchExternalBusyBlocks(psychologistId, startDate, endDate, { timezone: settings?.timezone, blockConflicts }),
+    ]);
 
     const allBlocks = [...blocks, ...externalBlocks];
 
@@ -241,57 +174,15 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
 
     const blockConflicts = settings?.blockConflicts ?? true;
 
-    let externalBlocks: any[] = [];
-    if (blockConflicts) {
-        const integrations = await db.calendarIntegration.findMany({
-            where: { psychologistId, isActive: true, syncFrom: true }
-        });
-
-        for (const integration of integrations) {
-            let res;
-            if (integration.provider === 'google') {
-                res = await fetchGoogleCalendarEvents(integration.id, dayStart, dayEnd);
-            } else if (integration.provider === 'yandex') {
-                res = await fetchYandexCalendarEvents(integration.id, dayStart, dayEnd);
+    const [blocks, externalBlocks] = await Promise.all([
+        db.diaryBlock.findMany({
+            where: {
+                psychologistId,
+                date: { gte: dayStart, lte: dayEnd }
             }
-
-            if (res && res.success && res.events) {
-                const tz = settings?.timezone || 'Europe/Moscow';
-                // Yandex iCal events without 'Z' suffix are "floating" local time —
-                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
-                const mapped = res.events.map((ev: any) => {
-                    const getParts = (dateInput: Date, localStr?: string) => {
-                        if (localStr) {
-                            const [d, t] = localStr.split('T');
-                            const [y, m, day] = d.split('-');
-                            const [h, min] = t.split(':');
-                            return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
-                        }
-                        return getPartsInTz(dateInput, tz);
-                    };
-
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    const startParts = getParts(localStart, ev.startLocalStr);
-                    const endParts = getParts(localEnd, ev.endLocalStr);
-
-                    const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
-                    const startTime = `${startParts.hour}:${startParts.minute}`;
-                    const endTime = `${endParts.hour}:${endParts.minute}`;
-
-                    return { date, startTime, endTime, _external: true };
-                });
-                externalBlocks.push(...mapped);
-            }
-        }
-    }
-
-    const blocks = await db.diaryBlock.findMany({
-        where: {
-            psychologistId,
-            date: { gte: dayStart, lte: dayEnd }
-        }
-    });
+        }),
+        fetchExternalBusyBlocks(psychologistId, dayStart, dayEnd, { timezone: settings?.timezone, blockConflicts }),
+    ]);
 
     const allBlocks = [...blocks, ...externalBlocks];
     const sessions = await db.diarySession.findMany({
@@ -402,106 +293,23 @@ export async function submitWaitlistInterest(psychologistId: string, name: strin
     return { success: true };
 }
 
-export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, slotToken: string }) {
-    let normalizedPhone = form.phone.replace(/[^\d+]/g, '');
-    const plainDigits = normalizedPhone.replace(/[^\d]/g, '');
-
-    if (plainDigits.length === 11 && (plainDigits.startsWith('8') || plainDigits.startsWith('7'))) {
-        normalizedPhone = '+7' + plainDigits.slice(1);
-    } else if (plainDigits.length === 10) {
-        normalizedPhone = '+7' + plainDigits;
-    } else if (!normalizedPhone.startsWith('+') && normalizedPhone.length > 0) {
-        normalizedPhone = '+' + plainDigits;
-    }
-
-    let client = await db.diaryClient.findFirst({
-        where: {
-            psychologistId,
-            OR: [
-                { phone: normalizedPhone },
-                { phone: plainDigits },
-                { phone: '+' + plainDigits },
-                { phone: form.phone } // legacy formats
-            ]
-        },
-        orderBy: { createdAt: 'desc' }
-    });
-
-    const tgUserId = userDetails?.id ? String(userDetails.id) : null;
-
-    if (!client) {
-        client = await db.diaryClient.create({
-            data: {
-                psychologistId,
-                name: form.name,
-                phone: normalizedPhone,
-                telegramChatId: tgUserId,
-            }
-        });
-    } else {
-        // Клиент найден по телефону — обновляем только telegramChatId, имя НЕ меняем
-        const updateData: any = {};
-        if (tgUserId && !client.telegramChatId) updateData.telegramChatId = tgUserId;
-        if (Object.keys(updateData).length > 0) {
-            client = await db.diaryClient.update({
-                where: { id: client.id },
-                data: updateData
-            });
-        }
-    }
-
-    // Привязать TelegramClient → DiaryClient если есть
-    if (tgUserId) {
-        const tgClient = await db.telegramClient.findUnique({
-            where: { telegramUserId: tgUserId }
-        });
-        
-        if (tgClient) {
-            // Update the link if it doesn't exist yet
-            if (!tgClient.diaryClientId) {
-                await db.telegramClient.update({
-                    where: { id: tgClient.id },
-                    data: { diaryClientId: client.id, psychologistId }
-                });
-            }
-
-            // Sync consent from TelegramClient to DiaryClient if given
-            if (tgClient.consentGiven && tgClient.consentDate && !client.consentVersion) {
-                const activeConsentVer = await db.consentVersion.findFirst({
-                    where: { isActive: true },
-                    orderBy: { createdAt: 'desc' },
-                    select: { version: true }
-                });
-
-                if (activeConsentVer) {
-                    const hashInput = `${tgUserId}:${activeConsentVer.version}:${tgClient.consentDate.toISOString()}`;
-                    const hash = createHash('sha256').update(hashInput).digest('hex');
-                    await db.diaryClient.update({
-                        where: { id: client.id },
-                        data: {
-                            consentVersion: activeConsentVer.version,
-                            consentHash: hash,
-                            consentDate: tgClient.consentDate,
-                        }
-                    });
-                }
-            }
-        }
-    }
-
-    // Task 7: the ONLY source of exact slot identity — never re-derive
-    // duration/format/addressId from a fresh AvailabilitySlot lookup (the old
-    // `findFirst({dayOfWeek})` picked an arbitrary rule when several existed
-    // for the same day, and never checked the collision/day-cap atomically).
-    // createPracticeBooking re-resolves availability and re-checks
-    // maxSessionsPerDay inside a per-(psychologist,day) advisory lock.
-    let session;
+export async function bookSession(psychologistId: string, telegramInitData: string | null, form: { name: string, phone: string, slotToken: string }) {
+    // Task 7 (founder review): client find-or-create, Telegram binding, and
+    // consent sync now live INSIDE createSelfPracticeBooking's own
+    // transaction — together with the slot commit, under the same
+    // (psychologist, day) advisory lock — so a rejected booking (stale slot,
+    // day cap reached) rolls back the just-created DiaryClient too, instead
+    // of leaving an orphan. telegramInitData is the raw, signed
+    // window.Telegram.WebApp.initData string; createSelfPracticeBooking
+    // verifies it server-side and never trusts a client-supplied user id.
+    let result;
     try {
-        session = await createPracticeBooking({
+        result = await createSelfPracticeBooking({
             psychologistId,
-            clientId: client.id,
+            name: form.name,
+            phone: form.phone,
             slotToken: form.slotToken,
-            origin: 'self_booking',
+            telegramInitData,
         });
     } catch (e) {
         if (e instanceof BookingConflictError) {
@@ -510,6 +318,7 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         throw e;
     }
 
+    const { session, client } = result;
     const dateStr = toDateStr(session.date);
     const format = session.format;
 

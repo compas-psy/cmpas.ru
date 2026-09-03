@@ -82,13 +82,13 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // never proof of identity; only a signature this server issued is.
     const [clientLinkToken, setClientLinkToken] = useState<string | null>(null);
 
-    const [tgUser, setTgUser] = useState<any>(null);
-    // Task 3 (PRAKTIKA MVP addendum §6): tgUser.id comes from
-    // initDataUnsafe — client-controlled, fine for a display-only greeting
-    // but never for looking up or writing another client's record.
-    // saveConsent below matches solely by telegramChatId, so an unverified
-    // id here would let a visitor record 152-ФЗ consent onto someone else's
-    // client. This holds the HMAC-verified id (or null), set alongside tgUser.
+    // Task 3 (PRAKTIKA MVP addendum §6): initDataUnsafe.user.id is
+    // client-controlled — fine only for a display-only greeting (read
+    // directly off tg.initDataUnsafe where needed), never for looking up or
+    // writing another client's record. saveConsent below matches solely by
+    // telegramChatId, so an unverified id here would let a visitor record
+    // 152-ФЗ consent onto someone else's client. This holds the
+    // HMAC-verified id (or null) instead.
     const [verifiedTelegramUserId, setVerifiedTelegramUserId] = useState<string | null>(null);
     // O-260829 §4.2: канал доставки уведомления — по факту контекста, в
     // котором открыта ссылка, а не хардкод "Telegram" для всех. Второй
@@ -203,9 +203,6 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
             tg.setHeaderColor?.('#F7F5F1');
             tg.setBackgroundColor?.('#F7F5F1');
 
-            if (tg.initDataUnsafe?.user) {
-                setTgUser(tg.initDataUnsafe.user);
-            }
             setNotificationChannel('Telegram');
         } else {
             setNotificationChannel('Max');
@@ -493,7 +490,13 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         }
 
         try {
-            const res = await bookSession(psychologistId, tgUser, {
+            // Task 7 (founder review): the server must never trust a
+            // client-supplied user object (tgUser comes from
+            // initDataUnsafe.user, which a visitor fully controls) for a
+            // Telegram-chat-id binding. Pass the raw, signed initData string
+            // instead — bookSession verifies it server-side.
+            const tgInitData = (window as any).Telegram?.WebApp?.initData || null;
+            const res = await bookSession(psychologistId, tgInitData, {
                 ...form,
                 slotToken: tokenToUse,
             });

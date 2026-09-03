@@ -1,5 +1,7 @@
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 import { appSecret, safeEqualHex } from '@/lib/app-secret';
+
+const SIGNATURE_DOMAIN = 'practice-slot-v1';
 
 // Task 7 (PRAKTIKA MVP): a slotToken is the ONLY way a booking commit learns
 // what it's booking. It encodes the exact resolved option — psychologist,
@@ -40,7 +42,7 @@ function serializePayload(identity: SlotIdentity, expiresAt: number): string {
 }
 
 function sign(payload: string): string {
-    return createHash('sha256').update(`${payload}:${appSecret()}`).digest('hex').slice(0, 32);
+    return createHmac('sha256', appSecret()).update(`${SIGNATURE_DOMAIN}:${payload}`).digest('hex');
 }
 
 export function slotToken(identity: SlotIdentity, issuedAt: number = Date.now()): string {

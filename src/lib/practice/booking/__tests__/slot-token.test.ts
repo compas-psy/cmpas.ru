@@ -53,6 +53,37 @@ describe('slotToken / verifySlotToken', () => {
         expect(verifySlotToken('psy-1', forged)).toBeNull();
     });
 
+    it('rejects a token whose addressId was edited to a different value', () => {
+        const token = slotToken(IDENTITY);
+        const raw = Buffer.from(token.slice('slt1_'.length), 'base64url').toString('utf8');
+        const parts = raw.split('|');
+        parts[6] = 'address-someone-elses-office'; // addressId field
+        const forged = 'slt1_' + Buffer.from(parts.join('|')).toString('base64url');
+        expect(verifySlotToken('psy-1', forged)).toBeNull();
+    });
+
+    it('rejects a token whose scheduleRuleId was edited to a different value', () => {
+        const token = slotToken(IDENTITY);
+        const raw = Buffer.from(token.slice('slt1_'.length), 'base64url').toString('utf8');
+        const parts = raw.split('|');
+        parts[4] = 'rule-someone-elses'; // scheduleRuleId field
+        const forged = 'slt1_' + Buffer.from(parts.join('|')).toString('base64url');
+        expect(verifySlotToken('psy-1', forged)).toBeNull();
+    });
+
+    it('rejects an old pre-HMAC token (createHash-signed, no domain separation) — fail-closed, no compatibility window', () => {
+        const { createHash } = require('crypto');
+        const expiresAt = Date.now() + 15 * 60 * 1000;
+        const payload = [
+            IDENTITY.psychologistId, IDENTITY.dateStr, IDENTITY.time, IDENTITY.availabilitySlotId,
+            IDENTITY.scheduleRuleId ?? '', IDENTITY.format, IDENTITY.addressId ?? '',
+            String(IDENTITY.duration), String(expiresAt),
+        ].join('|');
+        const oldSig = createHash('sha256').update(`${payload}:${process.env.AUTH_SECRET}`).digest('hex').slice(0, 32);
+        const oldToken = 'slt1_' + Buffer.from(`${payload}|${oldSig}`).toString('base64url');
+        expect(verifySlotToken('psy-1', oldToken)).toBeNull();
+    });
+
     it('rejects an expired token', () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         try {
