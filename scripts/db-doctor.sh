@@ -27,6 +27,42 @@ echo "### Таблицы, которые добавляли откаченные
 q "SELECT table_name FROM information_schema.tables WHERE table_schema='public'
    AND table_name IN ('Subscription','events','events_rejected','WaitlistEntry');"
 
+# ── Task 0 (PRAKTIKA MVP): orphan/duplicate baseline перед новыми миграциями ──
+#
+# ScheduleRule.addressId — сегодня обычная строка, без FK на PsychologistAddress
+# (relation планируется отдельной задачей). Прежде чем её заводить, нужно
+# доказать отсутствие "висячих" ссылок: FK с NOT VALID данными уронит миграцию
+# или, того хуже, накопит orphan молча, если Prisma применит её без валидации.
+echo "### Orphan ScheduleRule.addressId (ссылка на несуществующий кабинет)"
+q "SELECT r.id || ' -> ' || r.\"addressId\" FROM \"ScheduleRule\" r
+   WHERE r.\"addressId\" IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM \"PsychologistAddress\" a WHERE a.id = r.\"addressId\");"
+
+echo "### Orphan AvailabilitySlot.scheduleRuleId (защитная проверка поверх FK)"
+q "SELECT s.id || ' -> ' || s.\"scheduleRuleId\" FROM \"AvailabilitySlot\" s
+   WHERE s.\"scheduleRuleId\" IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM \"ScheduleRule\" r WHERE r.id = s.\"scheduleRuleId\");"
+
+# Дубли/пересечения будущих сессий одного психолога — то, что атомарный booking
+# (Task 7) должен был не допустить. Наличие хотя бы одной строки здесь — сигнал
+# делать честный repair report, а не тихо чинить данные.
+echo "### Будущие сессии одного психолога в одно время (не cancelled)"
+q "SELECT a.id || ' & ' || b.id || '  psy=' || a.\"psychologistId\" || '  ' || a.date::date || ' ' || a.time
+   FROM \"DiarySession\" a
+   JOIN \"DiarySession\" b
+     ON a.\"psychologistId\" = b.\"psychologistId\"
+    AND a.date = b.date
+    AND a.time = b.time
+    AND a.id < b.id
+   WHERE a.date >= now()
+     AND a.status <> 'cancelled' AND b.status <> 'cancelled';"
+
+echo "### Будущие offline-сессии без кабинета (addressId NULL)"
+q "SELECT id || '  psy=' || \"psychologistId\" || '  ' || date::date || ' ' || time
+   FROM \"DiarySession\"
+   WHERE format = 'offline' AND \"addressId\" IS NULL
+     AND date >= now() AND status <> 'cancelled';"
+
 echo "### Всего таблиц в базе"
 q "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
 
