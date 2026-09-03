@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { clientActionToken } from '@/lib/client-workflow';
+import { clientActionToken, resolvePersonalClientToken } from '@/lib/client-workflow';
+import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 
 function startOfToday() {
     const now = new Date();
@@ -8,24 +9,42 @@ function startOfToday() {
     return now;
 }
 
-async function resolveClientId(params: URLSearchParams) {
-    const clientId = params.get('clientId');
-    if (clientId) return clientId;
+// Task 3 (PRAKTIKA MVP addendum §6, REGRESSION GATE): identity for this route
+// must come ONLY from something the server itself verifies — never from a
+// raw clientId/telegramChatId the caller supplies. Two legitimate sources:
+//   1) Telegram Mini App — the X-Telegram-Init-Data header, HMAC-verified
+//      against TELEGRAM_BOT_TOKEN. initDataUnsafe.user is client-controlled
+//      and must never be trusted directly.
+//   2) Personal link token (`?c=`) — verified server-side by
+//      resolvePersonalClientToken, the same function the booking page's
+//      server action already uses. A clientId resolved client-side and
+//      replayed as a bare id (the previous bug) grants nothing here: this
+//      route re-derives identity from the token itself, every time.
+// A forged/wrong/missing credential resolves to `null`, which returns an
+// empty (not another client's) session list below.
+async function resolveClientId(req: NextRequest): Promise<string | null> {
+    const initData = req.headers.get('x-telegram-init-data');
+    if (initData) {
+        const user = verifyTelegramWebAppInitData(initData, process.env.TELEGRAM_BOT_TOKEN);
+        if (!user) return null;
+        const telegramChatId = String(user.id);
 
-    const telegramChatId = params.get('telegramChatId');
-    if (!telegramChatId) return null;
+        const direct = await db.diaryClient.findFirst({
+            where: { telegramChatId },
+            select: { id: true },
+        });
+        if (direct) return direct.id;
 
-    const direct = await db.diaryClient.findFirst({
-        where: { telegramChatId },
-        select: { id: true },
-    });
-    if (direct) return direct.id;
+        const linked = await db.telegramClient.findUnique({
+            where: { telegramUserId: telegramChatId },
+            select: { diaryClientId: true },
+        });
+        return linked?.diaryClientId ?? null;
+    }
 
-    const linked = await db.telegramClient.findUnique({
-        where: { telegramUserId: telegramChatId },
-        select: { diaryClientId: true },
-    });
-    return linked?.diaryClientId ?? null;
+    const token = req.nextUrl.searchParams.get('c');
+    const resolved = resolvePersonalClientToken(token);
+    return resolved?.clientId ?? null;
 }
 
 const sessionInclude = {
@@ -56,7 +75,7 @@ function mapSession(session: any) {
 }
 
 export async function GET(req: NextRequest) {
-    const clientId = await resolveClientId(req.nextUrl.searchParams);
+    const clientId = await resolveClientId(req);
     if (!clientId) return NextResponse.json({ upcoming: [], past: [] });
 
     const todayStart = startOfToday();

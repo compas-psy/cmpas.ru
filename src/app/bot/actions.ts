@@ -7,11 +7,29 @@ import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
 import { resolvePersonalClientToken } from '@/lib/client-workflow';
+import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken). */
 export async function resolveClientLinkParam(token: string | null | undefined) {
     return resolvePersonalClientToken(token);
+}
+
+/**
+ * Task 3 (PRAKTIKA MVP addendum §6): verifies Telegram Mini App initData and
+ * returns the authenticated Telegram user id, or null.
+ *
+ * window.Telegram.WebApp.initDataUnsafe.user is client-controlled — a caller
+ * can set it to any id before this page's own script reads it. Every call
+ * site that resolves a client by Telegram id (getClientByTelegram,
+ * getClientUpcomingSessions, checkConsentRequired) must be given ONLY an id
+ * that passed through this verification, never initDataUnsafe.user.id
+ * directly — otherwise a booking page visitor could read another client's
+ * upcoming sessions/name/phone by supplying that client's Telegram id.
+ */
+export async function resolveVerifiedTelegramUserId(initData: string | null | undefined): Promise<string | null> {
+    const user = verifyTelegramWebAppInitData(initData, process.env.TELEGRAM_BOT_TOKEN);
+    return user ? String(user.id) : null;
 }
 
 /** Send to Telegram and/or MAX depending on which IDs are set. Runs both in

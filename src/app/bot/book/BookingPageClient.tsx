@@ -22,7 +22,8 @@ import {
     getAddressById,
     checkConsentRequired,
     saveConsent,
-    resolveClientLinkParam
+    resolveClientLinkParam,
+    resolveVerifiedTelegramUserId
 } from '../actions';
 import type { TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 import { NotFoundSpecialist } from './NotFoundSpecialist';
@@ -77,6 +78,13 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [clientId, setClientId] = useState<string | null>(null);
 
     const [tgUser, setTgUser] = useState<any>(null);
+    // Task 3 (PRAKTIKA MVP addendum §6): tgUser.id comes from
+    // initDataUnsafe — client-controlled, fine for a display-only greeting
+    // but never for looking up or writing another client's record.
+    // saveConsent below matches solely by telegramChatId, so an unverified
+    // id here would let a visitor record 152-ФЗ consent onto someone else's
+    // client. This holds the HMAC-verified id (or null), set alongside tgUser.
+    const [verifiedTelegramUserId, setVerifiedTelegramUserId] = useState<string | null>(null);
     // O-260829 §4.2: канал доставки уведомления — по факту контекста, в
     // котором открыта ссылка, а не хардкод "Telegram" для всех. Второй
     // мессенджер бота — Max (см. sendMaxMessage в src/lib/max*.ts); других
@@ -249,12 +257,20 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     setStartDate(firstDate);
                 }
 
-                // Pre-fill client data if returning
-                const tgUserId = tg?.initDataUnsafe?.user?.id;
+                // Pre-fill client data if returning. Task 3 (PRAKTIKA MVP
+                // addendum §6): tg.initDataUnsafe.user.id is client-controlled
+                // — a page visitor could set it to any Telegram id and read
+                // that person's name/phone/upcoming sessions via the calls
+                // below. Only an id that passed HMAC verification of
+                // tg.initData may be used to look up a client.
+                const verifiedTgUserId = tg?.initData
+                    ? await resolveVerifiedTelegramUserId(tg.initData)
+                    : null;
+                setVerifiedTelegramUserId(verifiedTgUserId);
 
-                if (tgUserId && user) {
+                if (verifiedTgUserId && user) {
                     try {
-                        const client = await getClientByTelegram(psychologistId, String(tgUserId), currentClientId);
+                        const client = await getClientByTelegram(psychologistId, verifiedTgUserId, currentClientId);
                         if (client) {
                             setIsKnownClient(true);
                             setForm({
@@ -263,14 +279,14 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             });
 
                             // Load upcoming sessions for known client
-                            const sessions = await getClientUpcomingSessions(psychologistId, String(tgUserId));
+                            const sessions = await getClientUpcomingSessions(psychologistId, verifiedTgUserId);
                             setUpcomingSessions(sessions);
                         } else {
                             setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
                         }
 
                         // Check consent requirement
-                        const consent = await checkConsentRequired(String(tgUserId), psychologistId);
+                        const consent = await checkConsentRequired(verifiedTgUserId, psychologistId);
                         setConsentRequired(consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
@@ -436,8 +452,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
         setConsentSaving(true);
         try {
-            const tgUserId = tgUser?.id ? String(tgUser.id) : '';
-            await saveConsent(psychologistId, tgUserId, consentVersion);
+            await saveConsent(psychologistId, verifiedTelegramUserId || '', consentVersion);
             setConsentRequired(false);
             setShowConsentModal(false);
             await performBooking();

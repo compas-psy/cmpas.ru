@@ -49,6 +49,7 @@ const actions = vi.hoisted(() => ({
     checkConsentRequired: vi.fn(),
     saveConsent: vi.fn(),
     resolveClientLinkParam: vi.fn(),
+    resolveVerifiedTelegramUserId: vi.fn(),
 }));
 
 vi.mock('@/app/bot/actions', () => actions);

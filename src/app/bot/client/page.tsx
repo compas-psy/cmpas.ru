@@ -21,7 +21,17 @@ function groupByDate(list: any[]) {
 
 function ClientCalendar() {
     const searchParams = useSearchParams();
-    const [clientContext, setClientContext] = useState<{ id: string, name: string, isTelegram: boolean } | null>(null);
+    // Task 3 (PRAKTIKA MVP addendum §6): this holds only what's needed to
+    // AUTHENTICATE the fetch below — either the raw Telegram initData string
+    // or the raw personal-link token — never a resolved clientId. The API
+    // route re-verifies the credential itself server-side on every request;
+    // this component must never resolve identity and then hand a bare id
+    // to an endpoint that trusts it.
+    const [clientContext, setClientContext] = useState<
+        | { kind: 'telegram'; initData: string; name: string }
+        | { kind: 'token'; token: string; name: string }
+        | null
+    >(null);
     const [contextLoading, setContextLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
     const [pastSessions, setPastSessions] = useState<any[]>([]);
@@ -31,13 +41,18 @@ function ClientCalendar() {
     const [sessionToCancel, setSessionToCancel] = useState<any>(null);
     const [selectedSession, setSelectedSession] = useState<any>(null);
 
-    // Три источника контекста клиента, в порядке приоритета:
-    // 1) Telegram mini-app (window.Telegram.WebApp) — самый богатый контекст;
-    // 2) подписанный токен `?c=` (личная ссылка — Max, любой другой браузер);
-    // 3) localStorage на этом же устройстве (было записано раньше в этом же браузере).
-    // Раньше localStorage тоже проверялся только ВНУТРИ `if (twa)`, то есть
-    // вне Telegram WebApp ни токен, ни localStorage не читались вовсе —
-    // отсюда тупиковое сообщение (или бесконечный спиннер) при открытии из Max.
+    // Два источника контекста клиента, в порядке приоритета:
+    // 1) Telegram mini-app (window.Telegram.WebApp) — initData (подписанная
+    //    строка), не initDataUnsafe: последний полностью подконтролен
+    //    клиенту и не годится для идентификации (Task 3, addendum §6).
+    // 2) подписанный токен `?c=` (личная ссылка — Max, любой другой браузер).
+    // localStorage больше НЕ источник идентичности: раньше сырой
+    // `compas_clientId` из localStorage напрямую отправлялся как параметр
+    // авторизованного запроса — значение, которое пишет в devtools кто
+    // угодно. resolveClientLinkParam ниже вызывается только для быстрой
+    // UX-проверки «токен вообще валиден», а не для получения id: серверный
+    // маршрут заново проверяет сам токен на каждый запрос (см.
+    // src/app/api/user/diary/bot/client/sessions/route.ts).
     useEffect(() => {
         let cancelled = false;
 
@@ -51,12 +66,12 @@ function ClientCalendar() {
                 if (twa.colorScheme === 'dark') {
                     document.documentElement.classList.add('dark');
                 }
-                if (twa.initDataUnsafe?.user) {
+                if (twa.initData && twa.initDataUnsafe?.user) {
                     if (!cancelled) {
                         setClientContext({
-                            id: String(twa.initDataUnsafe.user.id),
+                            kind: 'telegram',
+                            initData: twa.initData,
                             name: twa.initDataUnsafe.user.first_name || 'Клиент',
-                            isTelegram: true
                         });
                     }
                     return;
@@ -69,21 +84,13 @@ function ClientCalendar() {
                     const resolved = await resolveClientLinkParam(token);
                     if (resolved?.clientId) {
                         if (!cancelled) {
-                            setClientContext({ id: resolved.clientId, name: 'Мои записи', isTelegram: false });
+                            setClientContext({ kind: 'token', token, name: 'Мои записи' });
                         }
                         return;
                     }
                 } catch (e) {
                     console.error('Failed to resolve client link token', e);
                 }
-            }
-
-            const savedClientId = localStorage.getItem('compas_clientId');
-            if (savedClientId) {
-                if (!cancelled) {
-                    setClientContext({ id: savedClientId, name: 'Мои записи', isTelegram: false });
-                }
-                return;
             }
         }
 
@@ -98,12 +105,12 @@ function ClientCalendar() {
         if (!clientContext) return;
         setLoading(true);
         try {
-            const params = new URLSearchParams(
-                clientContext.isTelegram
-                    ? { telegramChatId: clientContext.id }
-                    : { clientId: clientContext.id }
-            );
-            const response = await fetch(`/api/user/diary/bot/client/sessions?${params.toString()}`);
+            const url = clientContext.kind === 'token'
+                ? `/api/user/diary/bot/client/sessions?${new URLSearchParams({ c: clientContext.token }).toString()}`
+                : '/api/user/diary/bot/client/sessions';
+            const response = await fetch(url, clientContext.kind === 'telegram'
+                ? { headers: { 'x-telegram-init-data': clientContext.initData } }
+                : undefined);
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const data = await response.json();
             setUpcomingSessions(Array.isArray(data?.upcoming) ? data.upcoming : []);
@@ -152,7 +159,7 @@ function ClientCalendar() {
             <div className="bg-[var(--booking-card)] px-4 py-5 shadow-sm sticky top-0 z-20 border-b border-[var(--booking-line)]">
                 <h1 className="text-xl font-semibold text-[var(--booking-accent)] mb-1">Мои записи</h1>
                 <p className="text-[var(--booking-muted)] text-xs">
-                    {clientContext.isTelegram ? `${clientContext.name}, здесь отображается ваше расписание. ` : 'Здесь отображается расписание всех ваших сессий. '}
+                    {clientContext.kind === 'telegram' ? `${clientContext.name}, здесь отображается ваше расписание. ` : 'Здесь отображается расписание всех ваших сессий. '}
                     <span className="font-semibold text-[var(--booking-ink)]">Нажмите на карточку сессии</span>, чтобы отменить или перенести её.
                 </p>
 

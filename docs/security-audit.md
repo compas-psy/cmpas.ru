@@ -23,7 +23,7 @@
 | A6 | **High** | Секреты захардкожены в `deploy-docker.yml` (fallback-токены) | 🔧 см. S1 |
 | A7 | **High** | MAX webhook без проверки подлинности | ✅ secret header |
 | A8 | **High** | Согласие 152-ФЗ фиксируется открытием ссылки (GET), не действием | 🔧 DOC-1 в tz-cjm-audit-beta2.md |
-| A9 | **Medium** | Telegram/MAX MiniApp доверяет `initDataUnsafe` без HMAC-валидации | 🔧 см. S3 |
+| A9 | **High** (переоценено: не Medium — confirmed live IDOR) | Telegram MiniApp доверяет `initDataUnsafe` без HMAC-валидации | ✅ `/bot/client`, `/bot/book` — см. ниже |
 | A10 | **Medium** | Нет rate-limiting на magic-link/booking/webhook | 🔧 см. S4 |
 | A11 | **Medium** | Нет security-заголовков (HSTS/nosniff/frame) | ✅ next.config |
 | A12 | **Medium** | `clientActionToken` статичен на клиента (не на сессию) — утёкшая ссылка действует на все будущие сессии | 🔧 см. S5 |
@@ -69,6 +69,53 @@ MAX Bot API не поддерживает secret-заголовок — на м�
 `/api/max/admin` (POST) тоже теперь передаёт `secret`, если он задан в
 окружении.
 
+### A9 — Telegram MiniApp identity: confirmed live IDOR (Task 3, addendum §6)
+Founder-reported and confirmed: `GET /api/user/diary/bot/client/sessions`
+accepted a raw `clientId`/`telegramChatId` query param with **zero**
+verification — any caller who knew (or guessed) another client's `clientId`
+(which the route's own response leaks back to every legitimate caller) could
+read that client's full session history (dates, times, address, psychologist
+identity). `src/app/bot/book/BookingPageClient.tsx` had the same trust gap
+one level up: it read `window.Telegram.WebApp.initDataUnsafe.user.id` —
+entirely client-controlled — and passed it straight into
+`getClientByTelegram`/`getClientUpcomingSessions`/`saveConsent`, so a page
+visitor could look up another client's name/phone/upcoming sessions, or
+record 152-ФЗ consent onto someone else's client record, by supplying that
+person's real Telegram id.
+
+Added `src/lib/telegram-webapp.ts` (`verifyTelegramWebAppInitData`) —
+verifies `initData` per Telegram's documented WebApp algorithm (`secret_key
+= HMAC-SHA256("WebAppData", botToken)`, distinct from the Login Widget's
+plain-SHA256 secret already used in `src/lib/telegram-login.ts`), timing-safe,
+with `auth_date` freshness. Both routes now derive identity ONLY from this:
+- `/api/user/diary/bot/client/sessions`: identity comes from the
+  `X-Telegram-Init-Data` header (HMAC-verified) or a server-verified
+  personal-link token (`?c=`, via `resolvePersonalClientToken` — the same
+  function `resolveClientLinkParam` already used, just now invoked
+  server-side on every request instead of trusting a client-resolved id).
+  `src/app/bot/client/page.tsx` no longer reads `initDataUnsafe` or
+  `localStorage.compas_clientId` for authorization — localStorage was
+  explicitly forbidden as an identity source (addendum §6: "treating
+  localStorage as proof of identity").
+- `BookingPageClient.tsx`: added `resolveVerifiedTelegramUserId(initData)`
+  (`src/app/bot/actions.ts`); the prefill/consent lookups and `saveConsent`
+  now use only its result, never `initDataUnsafe.user.id` directly.
+
+Deliberately left alone (documented residual scope, not silently dropped):
+- `resolvePersonalClientToken`'s pre-existing legacy tolerance for
+  **unsigned** `?c=<raw clientId>` links, time-boxed until 2026-11-15 for
+  links sent before the personal-link signing rollout (2026-08-17) — a
+  pre-existing, dated migration window, not something this fix introduces.
+- `bookSession`'s use of the Telegram user id to opportunistically attach
+  `telegramChatId` to a client matched by phone number: identity there is
+  the phone the visitor typed in, the same trust model as web booking
+  without Telegram at all — a different question from the read-disclosure
+  bugs above.
+- `getClientSessions`/`getClientSessionsById` (`src/app/bot/actions.ts`)
+  remain unused by any current UI (grep confirms zero call sites) — same
+  vulnerable shape (raw `telegramChatId`/`clientId`) but not currently wired
+  to anything reachable. Flagged for removal or the same fix if ever wired up.
+
 ### A11 — Security-заголовки (`next.config.ts`)
 HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
 `Permissions-Policy`; `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'`
@@ -91,20 +138,6 @@ HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
 (BotFather, Yandex OAuth, Google Cloud, Тинькофф).
 **Приёмка:** `grep -E '(secret|password|token).*=.*[A-Za-z0-9]{16}'
 deploy-docker.yml` не находит литералов.
-
-### S3 (Medium) — Валидация Telegram `initData` в MiniApp
-**Файлы:** `src/app/bot/client/page.tsx` (:28-33 использует
-`initDataUnsafe.user`), `src/app/bot/book/[psychologistId]/page.tsx`,
-серверные actions `getClientSessions`/`getClientSessionsById`.
-**Сейчас:** личность клиента берётся из `initDataUnsafe` (клиент-контролируемо)
-или `localStorage.compas_clientId` — подделываемо, можно листать чужие записи.
-**Надо:** передавать `initData` (подписанную строку) на сервер, валидировать
-HMAC по `TELEGRAM_BOT_TOKEN` (`src/lib/telegram-login.ts` уже умеет похожее для
-login-widget — переиспользовать), и только по валидированному `user.id`
-резолвить клиента. Для не-Telegram доступа — токен из ссылки, не сырой
-`clientId` из localStorage.
-**Приёмка:** запрос с подделанным `initData`/чужим `clientId` не возвращает
-чужие сессии.
 
 ### S4 (Medium) — Rate limiting
 **Файлы:** `src/app/api/mobile/auth/login` (magic link), `/api/auth/*`,
