@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,7 +50,9 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     var showNotifications by rememberSaveable { mutableStateOf(false) }
+    var showBookingSheet by rememberSaveable { mutableStateOf(false) }
 
     // Возвращение в приложение — момент, когда связь чаще всего появляется.
     // До этого refresh() не вызывался НИОТКУДА: очередь досылки пробовала
@@ -94,6 +97,20 @@ fun DashboardScreen(
                         onClick = { showNotifications = true },
                     )
                 }
+            }
+
+            // Основной призыв к действию «пригласить клиента записаться» —
+            // основатель проверил приложение и не нашёл его на главном экране:
+            // раньше единственный путь лежал через Настройки → «Ссылка для
+            // записи», в двух тапах и не на виду. Карточка стоит сразу под
+            // приветствием, до расписания — это то, что специалист видит
+            // первым, открыв приложение.
+            item {
+                BookingShareCard(
+                    bookingLink = uiState.bookingLink,
+                    onShare = { uiState.bookingLink?.let { shareBookingLink(context, it) } },
+                    onShowQr = { showBookingSheet = true },
+                )
             }
 
             // Недоставленное названо вслух. Без счётчика молчаливая потеря просто
@@ -193,6 +210,53 @@ fun DashboardScreen(
                 onOpenClient = { id -> onClientClick(id) },
             )
         }
+
+        if (showBookingSheet) {
+            BookingLinkSheet(uiState.bookingLink, onClose = { showBookingSheet = false })
+        }
+    }
+}
+
+/**
+ * Заметный блок «поделиться ссылкой для записи» на главном экране. Раньше
+ * единственный путь к этому действию лежал в Настройках — основатель
+ * проверил приложение и не нашёл кнопки на главном экране. Шторка с QR и
+ * копированием (BookingLinkSheet) переиспользуется как есть: здесь только
+ * витрина с прямым системным шерингом в один тап и быстрым переходом к QR.
+ */
+@Composable
+private fun BookingShareCard(bookingLink: String?, onShare: () -> Unit, onShowQr: () -> Unit) {
+    val isReady = bookingLink != null
+    GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(CompasAccent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.Link, null, Modifier.size(21.dp), tint = Forest700)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Ссылка для записи", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text(
+                    bookingLink?.removePrefix("https://")?.removePrefix("http://") ?: "Загружаем…",
+                    style = tBody2,
+                    color = CompasMutedFg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButtonGlass(icon = Icons.Outlined.QrCode2, contentDescription = "Показать QR-код", onClick = onShowQr)
+        }
+        Spacer(Modifier.height(14.dp))
+        PrimaryButton(
+            text = if (isReady) "Поделиться ссылкой с клиентом" else "Загружаем ссылку…",
+            icon = Icons.Outlined.Share,
+            enabled = isReady,
+            onClick = onShare,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

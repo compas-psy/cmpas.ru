@@ -132,28 +132,28 @@ function ClientCalendar() {
 
     if (contextLoading || (loading && !upcomingSessions.length && !pastSessions.length && clientContext)) {
         return (
-            <div className="flex items-center justify-center min-h-screen p-4 bg-background">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="practice-booking-theme flex items-center justify-center min-h-screen p-4 bg-[var(--booking-paper)]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--booking-accent)]"></div>
             </div>
         );
     }
 
     if (!clientContext) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-                <p className="text-muted-foreground text-center">Пожалуйста, откройте приложение через бота или перейдите по персональной ссылке от психолога.</p>
+            <div className="practice-booking-theme flex flex-col items-center justify-center min-h-screen p-4 bg-[var(--booking-paper)]">
+                <p className="text-[var(--booking-muted)] text-center">Пожалуйста, откройте приложение через бота или перейдите по персональной ссылке от психолога.</p>
             </div>
         );
     }
 
     return (
-        <div className="practice-booking-theme min-h-screen bg-background text-foreground pb-20">
+        <div className="practice-booking-theme min-h-screen bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-20">
             {/* Header */}
-            <div className="bg-card px-4 py-5 shadow-sm sticky top-0 z-20 border-b border-border/50">
-                <h1 className="text-xl font-bold text-primary mb-1">Мои записи</h1>
-                <p className="text-muted-foreground text-xs">
+            <div className="bg-[var(--booking-card)] px-4 py-5 shadow-sm sticky top-0 z-20 border-b border-[var(--booking-line)]">
+                <h1 className="text-xl font-semibold text-[var(--booking-accent)] mb-1">Мои записи</h1>
+                <p className="text-[var(--booking-muted)] text-xs">
                     {clientContext.isTelegram ? `${clientContext.name}, здесь отображается ваше расписание. ` : 'Здесь отображается расписание всех ваших сессий. '}
-                    <span className="font-bold text-foreground">Нажмите на карточку сессии</span>, чтобы отменить или перенести её.
+                    <span className="font-semibold text-[var(--booking-ink)]">Нажмите на карточку сессии</span>, чтобы отменить или перенести её.
                 </p>
 
                 {/* Tabs: Предстоящие / Прошедшие */}
@@ -184,7 +184,7 @@ function ClientCalendar() {
             <div className="px-4 pt-6 space-y-6">
                 {sortedDates.map(dateStr => (
                     <div key={dateStr} className="space-y-3">
-                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider pl-1">
+                        <h2 className="text-sm font-semibold text-[var(--booking-muted)] uppercase tracking-wider pl-1">
                             {getDateLabel(dateStr)}
                         </h2>
                         <div className="space-y-2">
@@ -192,15 +192,15 @@ function ClientCalendar() {
                                 <button
                                     key={session.id}
                                     onClick={() => setSelectedSession(session)}
-                                    className="w-full text-left bg-card rounded-2xl p-4 border border-border flex gap-4 transition-all hover:border-primary/30 haptic-light relative overflow-hidden"
+                                    className="w-full text-left bg-[var(--booking-card)] rounded-[var(--booking-radius-card)] p-4 border border-[var(--booking-line)] flex gap-4 transition-all hover:border-[var(--booking-accent)] haptic-light relative overflow-hidden"
                                 >
-                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary/20"></div>
+                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[var(--booking-accent)]/25"></div>
                                     <div className="flex-1">
                                         <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-lg font-bold text-foreground">
-                                                {session.time} {session.endTime && <span className="text-sm text-muted-foreground font-medium">- {session.endTime}</span>}
+                                            <span className="text-lg font-semibold text-[var(--booking-ink)]">
+                                                {session.time} {session.endTime && <span className="text-sm text-[var(--booking-muted)] font-medium">- {session.endTime}</span>}
                                             </span>
-                                            <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border/50">
+                                            <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--booking-paper)] text-[var(--booking-muted)] border border-[var(--booking-line)]">
                                                 {session.format === 'offline' ? (
                                                     <><MapPin className="w-3.5 h-3.5" /> Очно</>
                                                 ) : (
@@ -208,11 +208,11 @@ function ClientCalendar() {
                                                 )}
                                             </span>
                                         </div>
-                                        <div className="text-sm text-foreground/80 font-medium">
+                                        <div className="text-sm text-[var(--booking-ink)]/80 font-medium">
                                             Психолог: {session.psychologistName}
                                         </div>
                                         {session.address && session.format === 'offline' && (
-                                            <div className="text-xs text-muted-foreground mt-1.5 line-clamp-1">
+                                            <div className="text-xs text-[var(--booking-muted)] mt-1.5 line-clamp-1">
                                                 📍 {session.address.name} — {session.address.fullAddress}
                                             </div>
                                         )}
@@ -226,15 +226,15 @@ function ClientCalendar() {
 
             {activeSessions.length === 0 && !loading && (
                 <div className="text-center py-16 px-6">
-                    <div className="text-4xl mb-4 opacity-50 flex justify-center">
-                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                            <CalendarIcon className="w-8 h-8 text-muted-foreground" />
+                    <div className="text-4xl mb-4 flex justify-center">
+                        <div className="w-16 h-16 rounded-full bg-[var(--booking-accent-soft)] flex items-center justify-center">
+                            <CalendarIcon className="w-8 h-8 text-[var(--booking-accent)]" />
                         </div>
                     </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2">
+                    <h3 className="text-lg font-semibold text-[var(--booking-ink)] mb-2">
                         {tab === 'upcoming' ? 'Нет предстоящих сессий' : 'Нет прошедших встреч'}
                     </h3>
-                    <p className="text-sm text-muted-foreground mb-8">
+                    <p className="text-sm text-[var(--booking-muted)] mb-8">
                         {tab === 'upcoming' ? 'У вас пока нет запланированных встреч.' : 'Здесь появятся встречи после того, как они состоятся.'}
                     </p>
                     {tab === 'upcoming' && (
@@ -243,7 +243,7 @@ function ClientCalendar() {
                                 // @ts-ignore
                                 window.Telegram?.WebApp?.close();
                             }}
-                            className="w-full max-w-xs mx-auto py-3.5 rounded-xl border-2 font-bold text-base transition-all haptic-light border-[#1e3a2f] text-white dark:border-[#b89a4e] dark:text-gray-900 bg-[#1e3a2f] dark:bg-[#b89a4e] hover:opacity-90 active:scale-[0.98]"
+                            className="w-full max-w-xs mx-auto py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all haptic-light border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 active:scale-[0.98]"
                         >
                             Вернуться в бот
                         </button>
@@ -254,37 +254,37 @@ function ClientCalendar() {
             {/* Session Detail Modal */}
             {selectedSession && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200 backdrop-blur-sm">
-                    <div className="bg-card rounded-t-3xl sm:rounded-3xl w-full max-w-md border border-border shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
-                        <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-border/50">
-                            <h3 className="text-lg font-bold text-foreground">Детали записи</h3>
-                            <button onClick={() => setSelectedSession(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
-                                <X className="w-5 h-5 text-muted-foreground" />
+                    <div className="bg-[var(--booking-card)] rounded-t-3xl sm:rounded-[var(--booking-radius-card)] w-full max-w-md border border-[var(--booking-line)] shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+                        <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-[var(--booking-line)]">
+                            <h3 className="text-lg font-semibold text-[var(--booking-ink)]">Детали записи</h3>
+                            <button onClick={() => setSelectedSession(null)} className="p-1.5 rounded-lg hover:bg-[var(--booking-accent-soft)] transition-colors">
+                                <X className="w-5 h-5 text-[var(--booking-muted)]" />
                             </button>
                         </div>
 
                         <div className="px-6 py-5 space-y-5">
                             <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">Дата и время</p>
-                                <p className="font-bold text-foreground text-lg">
+                                <p className="text-xs font-semibold text-[var(--booking-muted)] uppercase tracking-widest mb-1">Дата и время</p>
+                                <p className="font-semibold text-[var(--booking-ink)] text-lg">
                                     {format(new Date(selectedSession.date), 'd MMMM yyyy', { locale: ru })}, {selectedSession.time} {selectedSession.endTime && `- ${selectedSession.endTime}`}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">Специалист</p>
-                                <p className="font-semibold text-foreground text-base">{selectedSession.psychologistName}</p>
+                                <p className="text-xs font-semibold text-[var(--booking-muted)] uppercase tracking-widest mb-1">Специалист</p>
+                                <p className="font-semibold text-[var(--booking-ink)] text-base">{selectedSession.psychologistName}</p>
                             </div>
-                            <div className="flex flex-col gap-2 p-4 bg-muted/30 rounded-2xl border border-border/50">
+                            <div className="flex flex-col gap-2 p-4 bg-[var(--booking-paper)] rounded-[var(--booking-radius-card)] border border-[var(--booking-line)]">
                                 <div className="flex items-center gap-2">
                                     {selectedSession.format === 'offline' ? (
-                                        <><MapPin className="w-4 h-4 text-primary" /> <span className="text-sm font-bold text-foreground">Очная встреча</span></>
+                                        <><MapPin className="w-4 h-4 text-[var(--booking-accent)]" /> <span className="text-sm font-semibold text-[var(--booking-ink)]">Очная встреча</span></>
                                     ) : (
-                                        <><Video className="w-4 h-4 text-primary" /> <span className="text-sm font-bold text-foreground">Онлайн-консультация</span></>
+                                        <><Video className="w-4 h-4 text-[var(--booking-accent)]" /> <span className="text-sm font-semibold text-[var(--booking-ink)]">Онлайн-консультация</span></>
                                     )}
                                 </div>
                                 {selectedSession.format === 'offline' && selectedSession.address && (
-                                    <div className="text-sm text-foreground mt-1 ml-6">
+                                    <div className="text-sm text-[var(--booking-ink)] mt-1 ml-6">
                                         <p className="font-semibold">{selectedSession.address.name}</p>
-                                        <p className="text-muted-foreground mt-0.5 leading-snug">{selectedSession.address.fullAddress}</p>
+                                        <p className="text-[var(--booking-muted)] mt-0.5 leading-snug">{selectedSession.address.fullAddress}</p>
                                     </div>
                                 )}
                             </div>
@@ -296,7 +296,7 @@ function ClientCalendar() {
                                     href={selectedSession.onlineSessionLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex w-full items-center justify-center py-3.5 rounded-xl border-2 font-bold transition-colors text-sm bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:border-primary/90 haptic-light"
+                                    className="flex w-full items-center justify-center py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold transition-colors text-sm bg-[var(--booking-accent)] text-white border-[var(--booking-accent)] hover:opacity-90 haptic-light"
                                 >
                                     Присоединиться к встрече
                                 </a>
@@ -310,7 +310,7 @@ function ClientCalendar() {
                                         setSelectedSession(null);
                                         window.location.href = `/bot/book/${selectedSession.psychologistId}`;
                                     }}
-                                    className="py-3 rounded-xl border-2 font-bold transition-colors text-sm hover:bg-muted haptic-light border-border text-foreground bg-transparent"
+                                    className="py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm hover:border-[var(--booking-accent)] hover:text-[var(--booking-accent)] haptic-light border-[var(--booking-line)] text-[var(--booking-ink)] bg-[var(--booking-card)]"
                                 >
                                     Перенести
                                 </button>
@@ -319,7 +319,7 @@ function ClientCalendar() {
                                         setSessionToCancel(selectedSession);
                                         setSelectedSession(null);
                                     }}
-                                    className="py-3 rounded-xl border-2 font-bold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light"
+                                    className="py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light"
                                 >
                                     Отменить
                                 </button>
@@ -331,7 +331,7 @@ function ClientCalendar() {
                                         setSelectedSession(null);
                                         window.location.href = `/bot/book/${selectedSession.psychologistId}`;
                                     }}
-                                    className="w-full py-3 rounded-xl border-2 font-bold transition-colors text-sm haptic-light text-white"
+                                    className="w-full py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm haptic-light text-white"
                                     style={{ borderColor: 'var(--booking-accent)', background: 'var(--booking-accent)' }}
                                 >
                                     Записаться снова
@@ -362,7 +362,7 @@ function ClientCalendar() {
             {/* Instruction Footer */}
             {!loading && (
                 <div className="px-6 py-8 text-center mt-6">
-                    <p className="text-sm text-muted-foreground/80 leading-relaxed font-medium">
+                    <p className="text-sm text-[var(--booking-muted)] leading-relaxed font-medium">
                         Вы всегда можете вернуться на эту страницу по вашей персональной ссылке или через бота, чтобы управлять своими записями.
                     </p>
                 </div>

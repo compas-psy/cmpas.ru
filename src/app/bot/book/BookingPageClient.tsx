@@ -179,8 +179,11 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         if (tg) {
             tg.ready();
             tg.expand();
-            tg.setHeaderColor?.('#f5f5f5');
-            tg.setBackgroundColor?.('#f5f5f5');
+            // Telegram WebApp native chrome color: this API takes a literal
+            // hex string, not a CSS custom property, so it can't reference
+            // --booking-paper directly — kept in sync with it by value.
+            tg.setHeaderColor?.('#F7F5F1');
+            tg.setBackgroundColor?.('#F7F5F1');
 
             if (tg.initDataUnsafe?.user) {
                 setTgUser(tg.initDataUnsafe.user);
@@ -507,8 +510,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen mobile-full-height bg-background safe-top safe-bottom">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <div className="practice-booking-theme flex items-center justify-center min-h-screen mobile-full-height bg-[var(--booking-paper)] safe-top safe-bottom">
+                <Loader2 className="w-8 h-8 text-[var(--booking-accent)] animate-spin" />
             </div>
         );
     }
@@ -520,17 +523,17 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // Private mode — booking closed
     if (scheduleMode === 'private') {
         return (
-            <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
-                    <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center">
-                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-5">
+                    <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] p-8 shadow-sm w-full text-center">
+                        <div className="w-16 h-16 bg-[var(--booking-accent-soft)] rounded-full flex items-center justify-center mx-auto mb-5">
                             <span className="text-3xl">🔒</span>
                         </div>
-                        <h2 className="text-xl font-bold mb-2 text-foreground">Запись закрыта</h2>
-                        <p className="text-muted-foreground text-sm">Специалист пока не принимает запись онлайн. Попробуйте позже или свяжитесь напрямую.</p>
+                        <h2 className="text-xl font-semibold mb-2 text-[var(--booking-ink)]">Запись закрыта</h2>
+                        <p className="text-[var(--booking-muted)] text-sm">Специалист пока не принимает запись онлайн. Попробуйте позже или свяжитесь напрямую.</p>
                         <button
                             onClick={() => { const tg = (window as any).Telegram?.WebApp; if (tg) tg.close(); else window.location.href = '/'; }}
-                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                            className="w-full mt-6 py-3.5 rounded-[var(--booking-radius-card)] border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-semibold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
                             Назад
                         </button>
@@ -543,48 +546,48 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // Success screen
     if (bookingSuccess) {
         return (
-            <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
-                    <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                            <CheckCircle2 className="w-8 h-8 text-green-600" />
+                    <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
+                        <div className="rounded-full flex items-center justify-center mx-auto mb-4 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]" style={{ width: 52, height: 52 }}>
+                            <CheckCircle2 className="w-6 h-6" />
                         </div>
-                        <h2 className="text-2xl font-bold mb-2 text-foreground">Вы записаны!</h2>
-                        <p className="text-muted-foreground text-sm mb-6">Уведомление придёт в {notificationChannel}</p>
+                        <h2 className="text-2xl font-semibold mb-2 text-[var(--booking-ink)]">Вы записаны!</h2>
+                        <p className="text-[var(--booking-muted)] text-sm mb-6">Уведомление придёт в {notificationChannel}</p>
 
-                        <div className="bg-muted/30 rounded-2xl p-5 text-left space-y-3 border border-border/50">
+                        <div className="bg-[var(--booking-paper)] rounded-[var(--booking-radius-card)] p-5 text-left space-y-3 border border-[var(--booking-line)]">
                             <div>
-                                <p className="text-xs font-medium text-muted-foreground">Специалист</p>
-                                <p className="font-bold text-foreground">{bookingSuccess.psyName}</p>
+                                <p className="text-xs font-medium text-[var(--booking-muted)]">Специалист</p>
+                                <p className="font-semibold text-[var(--booking-ink)]">{bookingSuccess.psyName}</p>
                             </div>
                             <div>
-                                <p className="text-xs font-medium text-muted-foreground">Дата и время</p>
-                                <p className="font-bold text-foreground">{bookingSuccess.time}, {bookingSuccess.date}</p>
+                                <p className="text-xs font-medium text-[var(--booking-muted)]">Дата и время</p>
+                                <p className="font-semibold text-[var(--booking-ink)]">{bookingSuccess.time}, {bookingSuccess.date}</p>
                             </div>
                             <div>
-                                <p className="text-xs font-medium text-muted-foreground">Формат</p>
-                                <p className="font-bold text-foreground flex items-center gap-1.5">
+                                <p className="text-xs font-medium text-[var(--booking-muted)]">Формат</p>
+                                <p className="font-semibold text-[var(--booking-ink)] flex items-center gap-1.5">
                                     {bookingSuccess.format === 'online' ? (
-                                        <><Video className="w-4 h-4 text-primary" /> Онлайн</>
+                                        <><Video className="w-4 h-4 text-[var(--booking-accent)]" /> Онлайн</>
                                     ) : (
-                                        <><MapPin className="w-4 h-4 text-primary" /> В кабинете</>
+                                        <><MapPin className="w-4 h-4 text-[var(--booking-accent)]" /> В кабинете</>
                                     )}
                                 </p>
                             </div>
                             {/* Issue #5: Show address if offline */}
                             {bookingSuccess.format === 'offline' && bookingSuccess.addressFull && (
                                 <div>
-                                    <p className="text-xs font-medium text-muted-foreground">Адрес</p>
-                                    <p className="font-bold text-foreground flex items-center gap-1.5">
-                                        <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                                    <p className="text-xs font-medium text-[var(--booking-muted)]">Адрес</p>
+                                    <p className="font-semibold text-[var(--booking-ink)] flex items-center gap-1.5">
+                                        <MapPin className="w-4 h-4 text-[var(--booking-accent)] flex-shrink-0" />
                                         {bookingSuccess.addressName ? `${bookingSuccess.addressName}: ` : ''}{bookingSuccess.addressFull}
                                     </p>
                                 </div>
                             )}
                             {bookingSuccess.format === 'online' && bookingSuccess.onlineLink && (
                                 <div className="mt-2">
-                                    <p className="text-xs font-medium text-muted-foreground">Ссылка на переговорку</p>
-                                    <a href={bookingSuccess.onlineLink} target="_blank" rel="noopener noreferrer" className="font-bold text-primary hover:underline flex items-center gap-1.5 break-all mt-0.5">
+                                    <p className="text-xs font-medium text-[var(--booking-muted)]">Ссылка на переговорку</p>
+                                    <a href={bookingSuccess.onlineLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--booking-accent)] hover:underline flex items-center gap-1.5 break-all mt-0.5">
                                         {bookingSuccess.onlineLink}
                                     </a>
                                 </div>
@@ -596,7 +599,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             onClick={() => {
                                 window.location.href = '/bot/client';
                             }}
-                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                            className="w-full mt-6 py-3.5 rounded-[var(--booking-radius-card)] border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-semibold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
                             Готово
                         </button>
@@ -607,19 +610,19 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     }
 
     return (
-        <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+        <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <div className="p-4 max-w-md mx-auto">
-                <h1 className="text-3xl font-bold tracking-tight mb-1">Запись на сессию</h1>
-                <p className="text-primary font-semibold text-sm mb-1">Специалист — {psy.name}</p>
-                <p className="text-muted-foreground mb-6 text-sm">
+                <h1 className="text-2xl font-semibold tracking-tight mb-1">Запись на сессию</h1>
+                <p className="text-[var(--booking-accent)] font-semibold text-sm mb-1">Специалист — {psy.name}</p>
+                <p className="text-[var(--booking-muted)] mb-6 text-sm">
                     Выберите удобную дату и время.
                 </p>
 
                 {/* Issue #2: Upcoming sessions for known client */}
                 {isKnownClient && upcomingSessions.length > 0 && (
-                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-                        <h3 className="font-medium mb-3 text-foreground flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-primary" />
+                    <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <h3 className="font-medium mb-3 text-[var(--booking-ink)] flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-[var(--booking-accent)]" />
                             Ваши предстоящие записи
                         </h3>
                         <div className="space-y-2">
@@ -627,13 +630,13 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                 <button
                                     key={s.id}
                                     onClick={() => window.location.href = `/bot/client?c=${clientId || ''}`}
-                                    className="w-full text-left flex items-center gap-3 p-2.5 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors active:scale-[0.98]"
+                                    className="w-full text-left flex items-center gap-3 p-2.5 bg-[var(--booking-paper)] rounded-xl border border-[var(--booking-line)] hover:border-[var(--booking-accent)] transition-colors active:scale-[0.98]"
                                 >
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-sm text-foreground">
+                                        <p className="font-medium text-sm text-[var(--booking-ink)]">
                                             {format(new Date(s.date), 'd MMM', { locale: ru })} в {s.time}
                                         </p>
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <p className="text-xs text-[var(--booking-muted)] flex items-center gap-1">
                                             {s.format === 'offline' ? (
                                                 <><MapPin className="w-3 h-3" /> {s.addressName || 'В кабинете'}</>
                                             ) : (
@@ -641,7 +644,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                             )}
                                         </p>
                                     </div>
-                                    <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium flex-shrink-0">
+                                    <span className="text-xs px-2 py-1 rounded-lg bg-[var(--booking-accent-soft)] text-[var(--booking-accent)] font-medium flex-shrink-0">
                                         {s.status === 'confirmed' ? 'Подтв.' : 'Ожид.'}
                                     </span>
                                 </button>
@@ -652,22 +655,22 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
                 {/* Mechanic B "подбор времени" (CJM_booking_v1.md этап 2) */}
                 {psy?.timeSuggestEnabled && !showFullCalendar && (
-                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm">
+                    <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm">
                         {showReturnBanner && returningPreference && (
                             <div className="mb-3 px-3 py-2.5 rounded-xl bg-[var(--booking-accent-soft)] border border-[var(--booking-accent)]/30 space-y-1.5">
-                                <p className="text-sm text-foreground">
+                                <p className="text-sm text-[var(--booking-ink)]">
                                     С возвращением. Вы смотрели: <strong>{PREFERENCE_LABELS[returningPreference]}</strong>
                                 </p>
                                 <button
                                     type="button"
                                     onClick={handleForgetMe}
-                                    className="text-xs text-muted-foreground underline underline-offset-2 haptic-light"
+                                    className="text-xs text-[var(--booking-muted)] underline underline-offset-2 haptic-light"
                                 >
                                     Не запоминать меня на этом устройстве
                                 </button>
                             </div>
                         )}
-                        <h3 className="font-medium mb-3 text-foreground">Когда вам удобнее?</h3>
+                        <h3 className="font-medium mb-3 text-[var(--booking-ink)]">Когда вам удобнее?</h3>
                         <div className="grid grid-cols-1 gap-2 mb-3">
                             {([
                                 ['weekday_evening', 'Будни, после 18:00'],
@@ -680,7 +683,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                     onClick={() => handlePreferenceSelect(value)}
                                     className={`py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${preference === value
                                         ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
-                                        : 'border-border text-foreground hover:bg-muted/40'
+                                        : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'
                                         }`}
                                 >
                                     {label}
@@ -688,7 +691,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             ))}
                         </div>
 
-                        {suggestLoading && <p className="text-muted-foreground text-sm text-center py-2">Подбираем время…</p>}
+                        {suggestLoading && <p className="text-[var(--booking-muted)] text-sm text-center py-2">Подбираем время…</p>}
 
                         {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
                             <div className="space-y-2">
@@ -713,19 +716,19 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                         )}
 
                         {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && !waitlistSubmitted && (
-                            <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-border/50">
-                                <p className="text-muted-foreground text-sm">Сейчас свободного времени нет. Оставьте контакт — предложим первое освободившееся.</p>
+                            <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-[var(--booking-line)]">
+                                <p className="text-[var(--booking-muted)] text-sm">Сейчас свободного времени нет. Оставьте контакт — предложим первое освободившееся.</p>
                                 <input
                                     type="text" placeholder="Как к вам обращаться"
                                     value={waitlistForm.name}
                                     onChange={e => setWaitlistForm(f => ({ ...f, name: e.target.value }))}
-                                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--booking-line)] bg-[var(--booking-card)] text-[var(--booking-ink)] text-sm"
                                 />
                                 <input
                                     type="text" placeholder="Телефон или Telegram"
                                     value={waitlistForm.contact}
                                     onChange={e => setWaitlistForm(f => ({ ...f, contact: e.target.value }))}
-                                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--booking-line)] bg-[var(--booking-card)] text-[var(--booking-ink)] text-sm"
                                 />
                                 <button type="submit" className="w-full py-2.5 rounded-xl border-2 border-[var(--booking-accent)] text-[var(--booking-accent)] font-medium text-sm haptic-light">
                                     Записать в лист ожидания
@@ -734,13 +737,13 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                         )}
 
                         {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && waitlistSubmitted && (
-                            <p className="text-sm text-center py-2 text-foreground">Спасибо! Мы свяжемся, как только время освободится.</p>
+                            <p className="text-sm text-center py-2 text-[var(--booking-ink)]">Спасибо! Мы свяжемся, как только время освободится.</p>
                         )}
 
                         <button
                             type="button"
                             onClick={() => setShowFullCalendar(true)}
-                            className="w-full text-center text-xs text-muted-foreground underline mt-3"
+                            className="w-full text-center text-xs text-[var(--booking-muted)] underline mt-3"
                         >
                             Показать все времена
                         </button>
@@ -750,7 +753,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 {/* Calendar */}
                 {(!psy?.timeSuggestEnabled || showFullCalendar) && (
                 <div className="mb-6">
-                    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm p-2 flex justify-center">
+                    <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] overflow-hidden shadow-sm p-2 flex justify-center">
                         <DatePicker
                             inline
                             locale="ru"
@@ -765,11 +768,11 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                 const isAvail = isDateAvailable(date);
                                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
                                 if (isSelected) return "!bg-transparent !border-2 !border-[var(--booking-accent)] !text-[var(--booking-accent)] !rounded-[12px] !font-medium";
-                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[var(--booking-accent)]/50 !font-medium !rounded-[12px] transition-colors";
-                                return "!text-muted-foreground !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[12px]";
+                                if (isAvail) return "!text-[var(--booking-ink)] !bg-transparent !border-2 !border-transparent hover:!border-[var(--booking-accent)]/50 !font-medium !rounded-[12px] transition-colors";
+                                return "!text-[var(--booking-muted)] !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[12px]";
                             }}
-                            monthClassName={() => "!text-foreground !font-medium"}
-                            weekDayClassName={() => "!text-muted-foreground !font-medium !text-xs"}
+                            monthClassName={() => "!text-[var(--booking-ink)] !font-medium"}
+                            weekDayClassName={() => "!text-[var(--booking-muted)] !font-medium !text-xs"}
                         />
                     </div>
                 </div>
@@ -777,10 +780,10 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
                 {/* Time selection */}
                 {selectedDate && (!psy?.timeSuggestEnabled || showFullCalendar) && (
-                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-                        <h3 className="font-medium mb-3 text-foreground">Свободное время:</h3>
+                    <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <h3 className="font-medium mb-3 text-[var(--booking-ink)]">Свободное время:</h3>
                         {availableTimes.length === 0 ? (
-                            <p className="text-muted-foreground text-sm text-center py-4">Нет свободного времени на эту дату</p>
+                            <p className="text-[var(--booking-muted)] text-sm text-center py-4">Нет свободного времени на эту дату</p>
                         ) : (
                             <div className="grid grid-cols-4 gap-2">
                                 {availableTimes.map(slot => {
@@ -788,7 +791,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                         return (
                                             <div
                                                 key={`${slot.time}-${slot.format}-own`}
-                                                className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-primary/40 bg-primary/10 text-primary"
+                                                className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-[var(--booking-accent)]/40 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]"
                                                 onClick={() => toast.info('Это ваше забронированное время')}
                                             >
                                                 <span>{slot.time}</span>
@@ -815,8 +818,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
                         {/* Format selection — only for hybrid slots */}
                         {selectedTimeSlot?.format === 'both' && (
-                            <div className="mt-4 pt-4 border-t border-border/50 animate-in fade-in duration-200">
-                                <label className="block text-sm font-medium mb-3 text-foreground">Формат проведения <span className="text-destructive">*</span></label>
+                            <div className="mt-4 pt-4 border-t border-[var(--booking-line)] animate-in fade-in duration-200">
+                                <label className="block text-sm font-medium mb-3 text-[var(--booking-ink)]">Формат проведения <span className="text-destructive">*</span></label>
                                 <div className="flex gap-2">
                                     <button
                                         type="button"
@@ -834,26 +837,26 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     </div>
                 )}
 
-                <form onSubmit={handleBookingAttempt} className="space-y-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
+                <form onSubmit={handleBookingAttempt} className="space-y-4 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm">
                     <div>
-                        <label className="block text-sm font-medium mb-1.5 text-foreground">Имя</label>
+                        <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Имя</label>
                         <input
                             type="text"
                             required
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                            className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-foreground transition-all"
+                            className="w-full px-4 py-3 border border-[var(--booking-line)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--booking-accent-soft)] focus:border-[var(--booking-accent)] bg-[var(--booking-card)] text-[var(--booking-ink)] transition-all"
                             placeholder="Ваше имя"
                             readOnly={isKnownClient}
                         />
                         {isKnownClient && (
-                            <p className="text-xs text-primary mt-1.5 flex items-center gap-1">
+                            <p className="text-xs text-[var(--booking-accent)] mt-1.5 flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" /> Данные заполнены автоматически
                             </p>
                         )}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1.5 text-foreground">Телефон</label>
+                        <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Телефон</label>
                         <PhoneInput
                             country={'ru'}
                             value={form.phone}
@@ -862,12 +865,12 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                 required: true,
                             }}
                             containerClass="!w-full"
-                            inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-border !rounded-xl focus:!ring-2 focus:!ring-ring/50 !bg-background !text-foreground !transition-all"
-                            buttonClass="!bg-background !border-border !rounded-l-xl focus:!ring-ring/50 hover:!bg-muted"
-                            dropdownClass="!bg-card !text-foreground !border !border-border !rounded-xl !shadow-lg"
+                            inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-[var(--booking-line)] !rounded-xl focus:!ring-2 focus:!ring-[var(--booking-accent-soft)] !bg-[var(--booking-card)] !text-[var(--booking-ink)] !transition-all"
+                            buttonClass="!bg-[var(--booking-card)] !border-[var(--booking-line)] !rounded-l-xl focus:!ring-[var(--booking-accent-soft)] hover:!bg-[var(--booking-accent-soft)]"
+                            dropdownClass="!bg-[var(--booking-card)] !text-[var(--booking-ink)] !border !border-[var(--booking-line)] !rounded-xl !shadow-lg"
                             disabled={isKnownClient && !!form.phone}
                         />
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p className="text-xs text-[var(--booking-muted)] mt-2">
                             Телефон нужен для связи. Уведомление о сессии придёт в {notificationChannel}.
                         </p>
                     </div>
@@ -875,7 +878,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     <button
                         type="submit"
                         disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'}
-                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'
+                        className={`w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'
                             ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
                             : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}
@@ -884,19 +887,19 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                         {scheduleMode === 'readonly' ? 'Только просмотр' : booking ? 'Оформление...' : 'Записаться'}
                     </button>
                     {scheduleMode === 'readonly' && (
-                        <p className="text-xs text-center text-muted-foreground mt-2">
+                        <p className="text-xs text-center text-[var(--booking-muted)] mt-2">
                             Специалист пока принимает запись только лично. Вы можете посмотреть свободные окна и связаться напрямую.
                         </p>
                     )}
 
                     {/* Issue #4: Consent notice for unknown clients */}
                     {consentRequired && (
-                        <p className="text-xs text-center text-muted-foreground mt-3 leading-relaxed">
+                        <p className="text-xs text-center text-[var(--booking-muted)] mt-3 leading-relaxed">
                             Нажимая кнопку «Записаться», вы принимаете условия{' '}
                             <button
                                 type="button"
                                 onClick={() => setShowConsentModal(true)}
-                                className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                                className="text-[var(--booking-accent)] underline underline-offset-2 hover:opacity-80 transition-colors"
                             >
                                 согласия на обработку персональных данных
                             </button>
@@ -907,30 +910,30 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 {/* Consent Modal */}
                 {showConsentModal && (
                     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
-                        <div className="bg-card rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col border border-border shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+                        <div className="bg-[var(--booking-card)] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col border border-[var(--booking-line)] shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
                             {/* Header */}
-                            <div className="px-6 pt-6 pb-4 border-b border-border/50 flex items-center justify-between flex-shrink-0">
+                            <div className="px-6 pt-6 pb-4 border-b border-[var(--booking-line)] flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-2">
-                                    <Shield className="w-5 h-5 text-primary" />
-                                    <h3 className="text-lg font-bold text-foreground">Согласие на обработку ПДн</h3>
+                                    <Shield className="w-5 h-5 text-[var(--booking-accent)]" />
+                                    <h3 className="text-lg font-semibold text-[var(--booking-ink)]">Согласие на обработку ПДн</h3>
                                 </div>
                                 <button
                                     onClick={() => setShowConsentModal(false)}
-                                    className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                                    className="p-1.5 rounded-lg hover:bg-[var(--booking-accent-soft)] transition-colors"
                                 >
-                                    <X className="w-5 h-5 text-muted-foreground" />
+                                    <X className="w-5 h-5 text-[var(--booking-muted)]" />
                                 </button>
                             </div>
 
                             {/* Consent text */}
                             <div className="px-6 py-4 overflow-y-auto flex-1 custom-scrollbar">
-                                <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                                <div className="text-sm text-[var(--booking-ink)] leading-relaxed whitespace-pre-wrap">
                                     {consentText}
                                 </div>
                             </div>
 
                             {/* Accept section */}
-                            <div className="px-6 py-4 border-t border-border/50 flex-shrink-0 space-y-4">
+                            <div className="px-6 py-4 border-t border-[var(--booking-line)] flex-shrink-0 space-y-4">
                                 <label className="flex items-start gap-3 cursor-pointer group">
                                     <input
                                         type="checkbox"
@@ -940,7 +943,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                     />
                                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5 ${consentAccepted
                                         ? 'bg-[var(--booking-accent)] border-[var(--booking-accent)]'
-                                        : 'border-border group-hover:border-[var(--booking-accent)]/50'
+                                        : 'border-[var(--booking-line)] group-hover:border-[var(--booking-accent)]/50'
                                         }`}>
                                         {consentAccepted && (
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -948,15 +951,15 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                             </svg>
                                         )}
                                     </div>
-                                    <span className="text-sm text-foreground leading-snug">
-                                        Я даю <a href="/legal/privacy" target="_blank" className="text-primary hover:underline" onClick={e => e.stopPropagation()}>согласие</a> на обработку моих персональных данных
+                                    <span className="text-sm text-[var(--booking-ink)] leading-snug">
+                                        Я даю <a href="/legal/privacy" target="_blank" className="text-[var(--booking-accent)] hover:underline" onClick={e => e.stopPropagation()}>согласие</a> на обработку моих персональных данных
                                     </span>
                                 </label>
 
                                 <button
                                     onClick={handleConsentAccept}
                                     disabled={!consentAccepted || consentSaving}
-                                    className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light ${!consentAccepted || consentSaving
+                                    className={`w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all min-h-[44px] haptic-light ${!consentAccepted || consentSaving
                                         ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
                                         : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                                         }`}
@@ -983,7 +986,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     .react-datepicker__day--disabled { opacity: 0.3; }
                     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 4px; }
-                    .custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--booking-line); border-radius: 4px; }
                 `}} />
             </div >
         </div >

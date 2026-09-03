@@ -1,7 +1,5 @@
 package ru.cmpas.app.presentation.settings
 
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,7 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -361,61 +358,9 @@ private fun ProfileInfoSheet(
     }
 }
 
-@Composable
-private fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
-
-    CompasBottomSheet(onClose = onClose) {
-        SheetHead("Ссылка для записи", "Самозапись клиентов")
-        Spacer(Modifier.height(16.dp))
-        if (bookingLink == null) {
-            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Forest700)
-            }
-        } else {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                QrCodeImage(content = bookingLink)
-            }
-            Spacer(Modifier.height(14.dp))
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                padding = 14.dp,
-                onClick = {
-                    clipboard.setText(AnnotatedString(bookingLink))
-                    copied = true
-                },
-            ) {
-                Eyebrow(if (copied) "Скопировано" else "Нажмите, чтобы скопировать")
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Link, null, Modifier.size(18.dp), tint = Forest700)
-                    Spacer(Modifier.width(8.dp))
-                    Text(bookingLink.removePrefix("https://").removePrefix("http://"), style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            PrimaryButton(
-                text = "Поделиться",
-                icon = Icons.Outlined.Share,
-                onClick = { shareBookingLink(context, bookingLink) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-        }
-        GhostButton("Закрыть", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
-    }
-}
-
-private fun shareBookingLink(context: Context, link: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "Ссылка для записи")
-        putExtra(Intent.EXTRA_TEXT, link)
-    }
-    runCatching { context.startActivity(Intent.createChooser(intent, "Отправить через")) }
-}
+// BookingLinkSheet и shareBookingLink вынесены в
+// presentation/components/BookingLinkSheet.kt — общий код для настроек и
+// главного экрана, см. import ru.cmpas.app.presentation.components.* выше.
 
 @Composable
 private fun DocumentsSheet(
