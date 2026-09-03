@@ -3,9 +3,6 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
-import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
-import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
-import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract-name';
 import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { requireOwnedClient, requireOwnedSession } from '@/lib/practice/ownership';
@@ -243,43 +240,6 @@ export async function bulkCreateClients(
     revalidatePath('/diary');
     revalidatePath('/diary/clients');
     return { created, skipped };
-}
-
-// Сканирование подключённого календаря за N последних дней.
-// Возвращает кандидатов-клиентов (повторяющиеся имена из заголовков событий).
-export async function scanCalendarForClients(
-    integrationId: string,
-    days: number = 90
-): Promise<{ success: boolean; candidates?: CandidateClient[]; error?: string }> {
-    const psychologistId = await getPsychologistId();
-
-    const integration = await db.calendarIntegration.findFirst({
-        where: { id: integrationId, psychologistId, isActive: true },
-    });
-    if (!integration) {
-        return { success: false, error: 'Календарь не подключён или отключён' };
-    }
-
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    let result: { success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string };
-
-    if (integration.provider === 'google') {
-        result = await fetchGoogleCalendarEvents(integrationId, startDate, endDate, { includeCompasEvents: true });
-    } else if (integration.provider === 'yandex') {
-        result = await fetchYandexCalendarEvents(integrationId, startDate, endDate);
-    } else {
-        return { success: false, error: 'Неподдерживаемый провайдер' };
-    }
-
-    if (!result.success || !result.events) {
-        return { success: false, error: result.error || 'Не удалось получить события' };
-    }
-
-    const candidates = aggregateCandidates(result.events);
-    return { success: true, candidates };
 }
 
 // Список подключённых календарей — для UI импорта
