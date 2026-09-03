@@ -91,18 +91,30 @@ export async function acceptDocumentsByIds(documentIds: string[]) {
     }
 }
 
+// Task 5: marketing consent is an append-only grant/revoke history, not a
+// row that gets deleted on revoke. Revoking used to `deleteMany` the
+// LegalDocumentAcceptance row outright — that destroyed the very evidence
+// that consent had ever been given. Every toggle now INSERTs a new
+// ConsentEvent; nothing here is ever updated or deleted. "all" is the only
+// channel today because the product only has a single marketing toggle —
+// the schema already supports per-channel (email/push/messenger/sms) rows
+// for whenever that UI exists.
 export async function toggleAdsConsent(accept: boolean) {
     try {
         const userId = await requireSessionUserId()
         const activeAdsDoc = await getActiveLegalDocument("ADS")
         if (!activeAdsDoc) return { success: false, error: "No active ADS document found" }
 
-        if (accept) {
-            const ipAddress = await currentIpAddress()
-            await writeAcceptance(userId, activeAdsDoc, ipAddress)
-        } else {
-            await db.legalDocumentAcceptance.deleteMany({ where: { userId, documentId: activeAdsDoc.id } })
-        }
+        await db.consentEvent.create({
+            data: {
+                userId,
+                consentType: "marketing",
+                channel: "all",
+                status: accept ? "granted" : "revoked",
+                documentVersion: activeAdsDoc.version,
+                sourceEvent: "legal_actions_toggle_ads_consent",
+            },
+        })
 
         return { success: true }
     } catch (error) {
@@ -117,11 +129,12 @@ export async function getAdsConsentStatus() {
         const activeAdsDoc = await getActiveLegalDocument("ADS")
         if (!activeAdsDoc) return { success: true, hasAnswered: true, isAccepted: false }
 
-        const acceptance = await db.legalDocumentAcceptance.findUnique({
-            where: { userId_documentId: { userId, documentId: activeAdsDoc.id } },
+        const latest = await db.consentEvent.findFirst({
+            where: { userId, consentType: "marketing", channel: "all" },
+            orderBy: { occurredAt: "desc" },
         })
 
-        return { success: true, hasAnswered: !!acceptance, isAccepted: !!acceptance }
+        return { success: true, hasAnswered: !!latest, isAccepted: latest?.status === "granted" }
     } catch (error) {
         console.error("Error getting ADS consent status:", error)
         return { success: false, error: "Failed to get ADS consent status" }

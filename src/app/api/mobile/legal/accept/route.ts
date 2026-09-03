@@ -64,23 +64,25 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Task 5: marketing consent is an append-only grant/revoke history —
+        // never delete the evidence that consent was once given. See
+        // src/app/legal/actions.ts#toggleAdsConsent for the web equivalent.
         let adsAccepted: boolean | null = null;
-        if (body.acceptAds === true) {
+        if (typeof body.acceptAds === 'boolean') {
             if (!adsDoc) {
                 return NextResponse.json({ error: 'Advertising consent document is unavailable' }, { status: 503 });
             }
-            await db.$executeRaw(acceptanceUpsert({
-                userId: auth.userId,
-                document: adsDoc,
-                ipAddress,
-                source: 'android',
-            }));
-            adsAccepted = true;
-        } else if (body.acceptAds === false && adsDoc) {
-            await db.legalDocumentAcceptance.deleteMany({
-                where: { userId: auth.userId, documentId: adsDoc.id },
+            await db.consentEvent.create({
+                data: {
+                    userId: auth.userId,
+                    consentType: 'marketing',
+                    channel: 'all',
+                    status: body.acceptAds ? 'granted' : 'revoked',
+                    documentVersion: adsDoc.version,
+                    sourceEvent: 'mobile_legal_accept',
+                },
             });
-            adsAccepted = false;
+            adsAccepted = body.acceptAds;
         }
 
         return NextResponse.json({

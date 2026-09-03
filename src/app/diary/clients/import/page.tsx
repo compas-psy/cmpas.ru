@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ClipboardPaste, Check, AlertCircle, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseClientLines, type ParsedClient } from '@/lib/clients/parse';
+import { useAttestationGate } from '@/components/legal/useAttestationGate';
 
 const EXAMPLE = `Анна Иванова, +79161234567, anna@example.com
 Михаил Петров; +79031112233
@@ -16,6 +17,7 @@ export default function ImportClientsPage() {
     const router = useRouter();
     const [text, setText] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
 
     const parsed = useMemo<ParsedClient[]>(() => parseClientLines(text), [text]);
     const validItems = parsed.filter(p => p.valid);
@@ -29,9 +31,9 @@ export default function ImportClientsPage() {
         setSubmitting(true);
         try {
             const { bulkCreateClients } = await import('../../actions/clients');
-            const result = await bulkCreateClients(
+            const result = await attestationGuard(() => bulkCreateClients(
                 validItems.map(p => ({ name: p.name, phone: p.phone, email: p.email }))
-            );
+            ));
             if (result.created > 0) {
                 toast.success(
                     `Добавлено ${result.created}${result.skipped > 0 ? `, пропущено дубликатов: ${result.skipped}` : ''}`
@@ -42,8 +44,8 @@ export default function ImportClientsPage() {
             } else {
                 toast.error('Не удалось добавить клиентов');
             }
-        } catch {
-            toast.error('Ошибка при добавлении');
+        } catch (err) {
+            if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при добавлении');
         } finally {
             setSubmitting(false);
         }
@@ -185,6 +187,7 @@ export default function ImportClientsPage() {
                             : 'Вставьте список выше'}
                 </button>
             </div>
+            {attestationModal}
         </div>
     );
 }

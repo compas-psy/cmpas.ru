@@ -21,6 +21,7 @@ import {
     createManualSlot,
 } from '../actions/availability';
 import { getAddresses, getSettings, updateSettings } from '../actions/settings';
+import { useAttestationGate } from '@/components/legal/useAttestationGate';
 import {
     getScheduleRules,
     createScheduleRule,
@@ -154,6 +155,7 @@ export default function AvailabilityPage() {
     });
     const [loading, setLoading] = useState(true);
     const [savingMode, setSavingMode] = useState(false);
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
     const [showNewSlot, setShowNewSlot] = useState(false);
     const [showNewBlock, setShowNewBlock] = useState(false);
     const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
@@ -605,7 +607,13 @@ export default function AvailabilityPage() {
                     <button key={m.mode}
                         onClick={async () => {
                             setSavingMode(true);
-                            try { await updateSettings({ scheduleMode: m.mode }); setSettingsState(s => ({ ...s, scheduleMode: m.mode })); toast.success('Режим обновлён'); } catch { toast.error('Ошибка'); }
+                            try {
+                                await attestationGuard(() => updateSettings({ scheduleMode: m.mode }));
+                                setSettingsState(s => ({ ...s, scheduleMode: m.mode }));
+                                toast.success('Режим обновлён');
+                            } catch (err) {
+                                if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка');
+                            }
                             setSavingMode(false);
                         }}
                         disabled={savingMode}
@@ -1371,6 +1379,7 @@ export default function AvailabilityPage() {
                     box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
                 }
             `}</style>
+            {attestationModal}
         </div>
     );
 }

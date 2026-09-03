@@ -9,6 +9,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { ClientTimeline } from '@/components/psidairy/ClientTimeline';
 import { ShareButton } from '@/components/psidairy/ShareSheet';
+import { useAttestationGate } from '@/components/legal/useAttestationGate';
 
 type QuestionnaireData = {
     fullName?: string; dateOfBirth?: string; age?: number; gender?: string;
@@ -63,6 +64,7 @@ export default function ClientsPage() {
     const notesTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
     const suppressAutoSelect = useRef(false);
     const [isMobile, setIsMobile] = useState(false);
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
 
     // Onboarding state: after psychologist adds a new client + first session
     const [pendingOnboardingClientId, setPendingOnboardingClientId] = useState<string | null>(null);
@@ -123,7 +125,7 @@ export default function ClientsPage() {
         if (!newClient.name.trim()) { toast.error('Введите имя клиента'); return; }
         try {
             const { createClient } = await import('../actions/clients');
-            const created = await createClient(newClient);
+            const created = await attestationGuard(() => createClient(newClient));
             toast.success('Клиент добавлен. Добавьте первую сессию.');
             // Track this client for onboarding — triggers after first session is saved
             setPendingOnboardingClientId(created.id);
@@ -135,7 +137,9 @@ export default function ClientsPage() {
             // Auto-select the new client so the user can add a session immediately
             await fetchClientDetail(created.id);
             suppressAutoSelect.current = false;
-        } catch { toast.error('Ошибка при создании клиента'); }
+        } catch (err) {
+            if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при создании клиента');
+        }
     };
 
     const handleSaveQuestionnaire = async () => {
@@ -419,6 +423,7 @@ export default function ClientsPage() {
                 </div>
 
                 {showNewClient && <NewClientModal newClient={newClient} setNewClient={setNewClient} onCreate={handleCreateClient} onClose={() => setShowNewClient(false)} />}
+                {attestationModal}
                 {showOnboarding && onboardingClientId && (
                     <ClientOnboardingModal clientId={onboardingClientId} onClose={() => { setShowOnboarding(false); setOnboardingClientId(null); }} />
                 )}

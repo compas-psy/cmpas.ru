@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, CalendarClock, Loader2, Users, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CandidateClient } from '@/lib/clients/extract-name';
+import { useAttestationGate } from '@/components/legal/useAttestationGate';
 
 type Integration = { id: string; provider: string; accountEmail: string };
 
@@ -31,6 +32,7 @@ export default function ImportFromCalendarPage() {
     const [candidates, setCandidates] = useState<CandidateClient[] | null>(null);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [submitting, setSubmitting] = useState(false);
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
 
     useEffect(() => {
         (async () => {
@@ -98,7 +100,7 @@ export default function ImportFromCalendarPage() {
             const items = candidates
                 .filter(c => selected.has(c.name))
                 .map(c => ({ name: c.name }));
-            const result = await bulkCreateClients(items);
+            const result = await attestationGuard(() => bulkCreateClients(items));
             if (result.created > 0) {
                 toast.success(
                     `Добавлено ${result.created}${result.skipped > 0 ? `, пропущено: ${result.skipped}` : ''}`
@@ -109,8 +111,8 @@ export default function ImportFromCalendarPage() {
             } else {
                 toast.error('Не удалось добавить клиентов');
             }
-        } catch {
-            toast.error('Ошибка при добавлении');
+        } catch (err) {
+            if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при добавлении');
         } finally {
             setSubmitting(false);
         }
@@ -313,6 +315,7 @@ export default function ImportFromCalendarPage() {
                     )}
                 </>
             )}
+            {attestationModal}
         </div>
     );
 }

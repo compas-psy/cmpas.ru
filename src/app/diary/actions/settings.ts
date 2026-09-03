@@ -5,6 +5,7 @@ import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getAdsConsentStatus, toggleAdsConsent } from '@/app/legal/actions';
 import { requireOwnedCalendarIntegration } from '@/lib/practice/ownership';
+import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -118,6 +119,12 @@ export async function updateSettings(data: {
     bookingBufferHours?: number;
 }) {
     const psychologistId = await getPsychologistId();
+    // Task 5: turning on public self-booking exposes a psychologist's slots
+    // to strangers who can create client records of themselves — same
+    // "gate the next client creation" rule as createClient/bulkCreateClients.
+    if (data.scheduleMode === 'booking') {
+        await requirePracticeOperatorAttestation(psychologistId);
+    }
     const safeData = {
         ...(typeof data.timezone === 'string' ? { timezone: data.timezone } : {}),
         ...(typeof data.defaultSessionDuration === 'number' ? { defaultSessionDuration: data.defaultSessionDuration } : {}),

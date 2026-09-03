@@ -30,14 +30,23 @@ export async function GET(req: NextRequest) {
             .map((type) => latestByType(type))
             .filter((doc): doc is NonNullable<typeof doc> => !!doc && !acceptedIds.has(doc.id));
 
+        // Marketing consent lives in ConsentEvent (grant/revoke history), not
+        // LegalDocumentAcceptance — see Task 5 / src/app/legal/actions.ts.
+        const latestMarketingEvent = await db.consentEvent.findFirst({
+            where: { userId: auth.userId, consentType: 'marketing', channel: 'all' },
+            orderBy: { occurredAt: 'desc' },
+        });
+        const adsAccepted = latestMarketingEvent?.status === 'granted';
+        const adsDoc = latestByType('ADS');
+
         return NextResponse.json({
             serverTime: new Date().toISOString(),
             requiredDocumentIds: requiredDocuments.map((doc) => doc.id),
             requiresTermsAcceptance: requiredDocuments.length > 0,
             terms: normalize(latestByType('TERMS')),
             privacy: normalize(latestByType('PRIVACY')),
-            ads: normalize(latestByType('ADS')),
-            adsAccepted: !!latestByType('ADS') && acceptedIds.has(latestByType('ADS')!.id),
+            ads: adsDoc ? { ...normalize(adsDoc), accepted: adsAccepted } : null,
+            adsAccepted,
         });
     } catch (error) {
         console.error('mobile legal status failed', error);

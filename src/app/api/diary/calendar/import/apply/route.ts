@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
+import { requirePracticeOperatorAttestation, ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
 
 function normalName(value: string) {
     return value.trim().replace(/\s+/g, ' ').slice(0, 120) || 'Клиент из календаря';
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const items = Array.isArray(body.items) ? body.items : [];
         if (!items.length) return NextResponse.json({ imported: 0, skipped: 0 });
+
+        await requirePracticeOperatorAttestation(psychologistId);
 
         let imported = 0;
         let skipped = 0;
@@ -84,6 +87,9 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ imported, skipped, sessionIds: importedIds });
     } catch (error) {
+        if (error instanceof Error && error.message === ATTESTATION_REQUIRED_CODE) {
+            return NextResponse.json({ error: ATTESTATION_REQUIRED_CODE }, { status: 403 });
+        }
         console.error('[calendar/import/apply POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }

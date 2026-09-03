@@ -62,6 +62,10 @@ vi.mock('@/lib/db', () => ({
             update: async ({ data }: any) => ({ ...data }),
         },
         user: { findUnique: async () => ({ id: 'psy-1', psychologistSettings: null }) },
+        // Task 5: creating a client is gated by practice operator
+        // attestation — this file is about idempotency, not that gate, so
+        // the psychologist here is always already attested.
+        practiceOperatorAttestation: { findFirst: async () => ({ id: 'attestation-1' }) },
     },
 }));
 

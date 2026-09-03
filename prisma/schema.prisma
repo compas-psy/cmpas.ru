@@ -55,6 +55,10 @@ model User {
   // Legal Documents (152-FZ, Advertising)
   legalAcceptances LegalDocumentAcceptance[]
 
+  // Task 5: operator attestation + immutable marketing consent history
+  practiceOperatorAttestations PracticeOperatorAttestation[]
+  consentEvents                ConsentEvent[]
+
   // Analytics consent (charter/12_ANALYTICS.md §2) — null means not given.
   // Rule: no device_id is written to analytics events before this is set.
   analyticsConsentAt DateTime?
@@ -173,6 +177,50 @@ model LegalDocumentAcceptance {
   @@index([userId, source])
   @@index([documentType])
   @@index([documentCode])
+}
+
+// Task 5 (PRAKTIKA MVP): the psychologist's legal attestation that they are
+// the operator of their clients' personal data and have lawful grounds to
+// process/share it with PRAKTIKA for processing on their behalf. This is
+// NOT the psychologist's own consent to anything — it's a one-time
+// attestation gating the *next* client create/import/booking-activation,
+// never re-asked unless the wording itself changes version.
+model PracticeOperatorAttestation {
+  id              String   @id @default(cuid())
+  psychologistId  String
+  attestationCode String // e.g. "practice_client_data_operator"
+  wordingVersion  String
+  serviceId       String   @default("practice")
+  confirmedAt     DateTime @default(now())
+  sourceEvent     String? // what UI/API path triggered the attestation
+
+  psychologist User @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+
+  @@unique([psychologistId, attestationCode, wordingVersion])
+  @@index([psychologistId])
+}
+
+// Task 5: marketing consent as an append-only history — grant/revoke are
+// each their own immutable row. Never delete or update a row: revoking
+// consent writes a new 'revoked' event, it does not erase the earlier
+// 'granted' one. Effective state is derived from the latest event per
+// (userId, channel).
+model ConsentEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  consentType     String // "marketing"
+  scope           String   @default("cmpas_own_services")
+  channel         String // "email" | "push" | "messenger" | "sms" | "all"
+  status          String // "granted" | "revoked"
+  documentVersion String?
+  occurredAt      DateTime @default(now())
+  sourceEvent     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, channel])
+  @@index([userId, consentType, occurredAt])
 }
 
 // Visitor Analytics for LAL Audience Building

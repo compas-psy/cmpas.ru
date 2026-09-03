@@ -9,6 +9,7 @@ import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract
 import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { requireOwnedClient, requireOwnedSession } from '@/lib/practice/ownership';
+import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -72,6 +73,7 @@ export async function createClient(data: {
     gender?: string;
 }) {
     const psychologistId = await getPsychologistId();
+    await requirePracticeOperatorAttestation(psychologistId);
     const client = await db.diaryClient.create({
         data: {
             psychologistId,
@@ -181,6 +183,7 @@ export async function bulkCreateClients(
     if (!Array.isArray(items) || items.length === 0) {
         return { created: 0, skipped: 0 };
     }
+    await requirePracticeOperatorAttestation(psychologistId);
 
     // Берём существующих, чтобы не плодить дубликаты
     const existing = await db.diaryClient.findMany({
