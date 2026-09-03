@@ -71,10 +71,13 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
 
     if (result) {
         return (
-            <main className="practice-booking-theme min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
-                <div className="mx-auto max-w-md rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8 text-center">
-                    <h1 className="text-xl font-bold text-[var(--booking-accent)] mb-2">Встреча перенесена</h1>
-                    <p className="text-sm text-[#5d665f]">Новое время: {result.date} в {result.time}. Специалист уже видит изменение.</p>
+            <main className="practice-booking-theme min-h-screen bg-[var(--booking-paper)] px-4 py-8 text-[var(--booking-ink)]">
+                <div className="mx-auto max-w-md rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] bg-[var(--booking-card)] p-6 shadow-sm sm:p-8 text-center">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-xl bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]">
+                        ✓
+                    </div>
+                    <h1 className="text-xl font-semibold text-[var(--booking-ink)] mb-2">Встреча перенесена</h1>
+                    <p className="text-sm text-[var(--booking-muted)]">Новое время: {result.date} в {result.time}. Специалист уже видит изменение.</p>
                 </div>
             </main>
         );
@@ -96,13 +99,13 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
     };
 
     return (
-        <main className="practice-booking-theme min-h-screen bg-[#faf8f5] px-4 py-8 text-[#1f2a24]">
-            <div className="mx-auto max-w-md rounded-3xl border border-[#e6dfd1] bg-white p-6 shadow-sm sm:p-8">
+        <main className="practice-booking-theme min-h-screen bg-[var(--booking-paper)] px-4 py-8 text-[var(--booking-ink)]">
+            <div className="mx-auto max-w-md rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] bg-[var(--booking-card)] p-6 shadow-sm sm:p-8">
                 <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-[var(--booking-accent)]">ПРАКТИКА · перенос встречи</p>
-                <h1 className="text-xl font-bold leading-tight tracking-tight mb-4">Выберите новое время</h1>
+                <h1 className="text-xl font-semibold leading-tight tracking-tight mb-4">Выберите новое время</h1>
 
-                <div className="bg-[#f4f1ea] rounded-2xl p-4 mb-5 border border-[#e6dfd1]">
-                    <p className="text-sm text-[#5d665f]">Сейчас записаны к {initial.psychologistName}</p>
+                <div className="bg-[var(--booking-accent-soft)] rounded-[var(--booking-radius-card)] p-4 mb-5">
+                    <p className="text-sm text-[var(--booking-muted)]">Сейчас записаны к {initial.psychologistName}</p>
                     <p className="font-semibold">
                         {new Date(initial.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} в {initial.time}
                     </p>
@@ -110,11 +113,11 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
 
                 <div className="mb-5">
                     <div className="flex items-center justify-between mb-3">
-                        <button onClick={prevMonth} className="p-2 hover:bg-[#f4f1ea] rounded-xl transition-colors text-[#5d665f]">◀</button>
+                        <button onClick={prevMonth} className="p-2 hover:bg-[var(--booking-accent-soft)] rounded-xl transition-colors text-[var(--booking-muted)]">◀</button>
                         <span className="font-semibold capitalize">{monthName}</span>
-                        <button onClick={nextMonth} className="p-2 hover:bg-[#f4f1ea] rounded-xl transition-colors text-[#5d665f]">▶</button>
+                        <button onClick={nextMonth} className="p-2 hover:bg-[var(--booking-accent-soft)] rounded-xl transition-colors text-[var(--booking-muted)]">▶</button>
                     </div>
-                    <div className="grid grid-cols-7 text-center text-xs font-medium text-[#5d665f] mb-2">
+                    <div className="grid grid-cols-7 text-center text-xs font-medium text-[var(--booking-muted)] mb-2">
                         {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(d => <div key={d}>{d}</div>)}
                     </div>
                     <div className="grid grid-cols-7 gap-1">
@@ -132,30 +135,30 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                                     key={day}
                                     disabled={isPast || !isAvail}
                                     onClick={() => handleDateSelect(dateStr)}
-                                    className={`h-9 rounded-xl text-sm font-medium transition-colors ${isSel ? 'bg-[var(--booking-accent)] text-white shadow-sm' : isAvail ? 'text-[#1f2a24] hover:bg-[#f4f1ea]' : 'text-[#c3beb0] cursor-default'}`}
+                                    className={`h-9 rounded-xl text-sm font-medium transition-colors ${isSel ? 'bg-[var(--booking-accent)] text-white shadow-sm' : isAvail ? 'text-[var(--booking-ink)] hover:bg-[var(--booking-accent-soft)]' : 'text-[var(--booking-muted)] opacity-50 cursor-default'}`}
                                 >
                                     {day}
                                 </button>
                             );
                         })}
                     </div>
-                    {loadingDates && <p className="text-center pt-2 text-sm text-[#5d665f]">Загружаем свободные дни…</p>}
+                    {loadingDates && <p className="text-center pt-2 text-sm text-[var(--booking-muted)]">Загружаем свободные дни…</p>}
                 </div>
 
                 {selectedDate && (
                     <div className="mb-5">
                         <h2 className="font-semibold mb-3">Свободное время</h2>
                         {loadingSlots ? (
-                            <p className="text-sm text-[#5d665f] text-center py-4">Загружаем…</p>
+                            <p className="text-sm text-[var(--booking-muted)] text-center py-4">Загружаем…</p>
                         ) : availableSlots.length === 0 ? (
-                            <p className="text-sm text-[#5d665f] text-center py-3">Нет свободных слотов на эту дату</p>
+                            <p className="text-sm text-[var(--booking-muted)] text-center py-3">Нет свободных слотов на эту дату</p>
                         ) : (
                             <div className="grid grid-cols-4 gap-2">
                                 {availableSlots.map(slot => (
                                     <button
                                         key={slot.time}
                                         onClick={() => setSelectedSlot(slot)}
-                                        className={`py-2 rounded-xl border-2 font-medium text-sm transition-colors ${selectedSlot?.time === slot.time ? 'border-[var(--booking-accent)] bg-[var(--booking-accent)] text-white' : 'border-[#e6dfd1] text-[#1f2a24] hover:border-[var(--booking-accent)]/50'}`}
+                                        className={`py-2 rounded-[var(--booking-radius-card)] border font-medium text-sm transition-colors ${selectedSlot?.time === slot.time ? 'border-[var(--booking-accent)] bg-[var(--booking-accent)] text-white' : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'}`}
                                     >
                                         {slot.time}
                                     </button>
@@ -166,13 +169,13 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                 )}
 
                 {error && (
-                    <div className="mb-4 rounded-xl border border-[#D4183D]/20 bg-[#D4183D]/5 px-3 py-2 text-sm text-[#D4183D]">{error}</div>
+                    <div className="mb-4 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div>
                 )}
 
                 <button
                     onClick={handleSave}
                     disabled={saving || !selectedSlot}
-                    className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-[var(--booking-accent)] hover:opacity-90 transition-colors disabled:opacity-50"
+                    className="w-full py-3 rounded-[var(--booking-radius-card)] text-sm font-semibold text-white bg-[var(--booking-accent)] hover:opacity-90 transition-colors disabled:opacity-50"
                 >
                     {saving ? 'Переносим…' : 'Перенести встречу'}
                 </button>

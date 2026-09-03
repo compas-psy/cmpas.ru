@@ -574,8 +574,18 @@ model PsychologistSettings {
   // stop working once the session is over. Off by default — see O-260817-03.
   privateRemindersEnabled Boolean @default(false)
   // CJM_booking_v1.md §1.2 "Подбор времени": a preference question and 2-3
-  // suggested slots instead of an empty-looking grid. Off by default.
-  timeSuggestEnabled      Boolean @default(false)
+  // suggested slots instead of an empty-looking grid.
+  //
+  // O-260829: включено по умолчанию. Механика была написана в v1 и с тех пор
+  // недостижима: флаг стоял в false, и ни одного места, где специалист мог
+  // бы его включить, в продукте не существовало (флаг читается в
+  // src/app/bot/actions.ts и src/app/bot/book/BookingPageClient.tsx и больше
+  // нигде). То есть клиенты видели старую календарную сетку, а не экран
+  // подбора времени из прототипа v2 — при том, что ТЗ v2 §3 числит
+  // time-picker среди «уже сделанного верно». Значение по умолчанию само по
+  // себе не чинит уже заведённые строки — существующим настройкам флаг
+  // проставляется миграцией 20260829150000_enable_time_suggest.
+  timeSuggestEnabled      Boolean @default(true)
 
   methods   String[] @default([])
   basePrice Int?
