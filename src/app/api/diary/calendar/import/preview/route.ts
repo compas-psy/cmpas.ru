@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
                 // All-day entries ("Отпуск", a public holiday, ...) are not
                 // bookable client sessions — Task 11 will build real
                 // classification, but an all-day span is never a candidate.
-                if (event.isAllDay) continue;
+                if (event.allDay) continue;
 
                 const clientName = cleanClientName(event.summary);
                 const key = `${event.date}|${event.startTime}|${clientName.toLowerCase().trim()}`;
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
                     // Task 10: the provider's own stable id — never a hash of
                     // display fields, which change and can collide. Tasks
                     // 11/12 (matching, idempotent commit) key off this.
-                    id: `${integration.provider}:${integration.id}:${event.externalId}`,
+                    id: `${integration.provider}:${integration.id}:${event.externalEventId}`,
                     provider: integration.provider,
                     calendarId: integration.calendarId,
                     summary: event.summary,

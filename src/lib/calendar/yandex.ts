@@ -27,6 +27,27 @@ function parseYandexOwnSessionId(uid: string | undefined): string | null {
     return match ? match[1] : null;
 }
 
+// Task 10 (founder review correction): a bare UID is NOT a safe
+// externalEventId for a recurring occurrence — every occurrence of the same
+// series shares one UID, so using it directly would collide every instance
+// into "the same event" (breaking Task 12's planned
+// UNIQUE(integrationId, externalEventId) dedupe key). With `expand: true`
+// (see fetchYandexCalendarEvents below), the CalDAV server materializes
+// each occurrence as its own VEVENT carrying a RECURRENCE-ID identifying
+// which instance it is; a genuinely non-recurring event has none. Contract:
+//   single event:         externalEventId = UID,  externalSeriesId = null
+//   recurring occurrence: externalEventId = `${UID}::${recurrenceId}`,
+//                          externalSeriesId = UID
+// `recurrenceId` is used verbatim (the raw, trimmed iCal value straight
+// after the colon) rather than re-parsed into a Date — it's already a
+// unique, stable-per-occurrence string as Yandex writes it, and re-parsing
+// floating-vs-UTC values would risk losing exactly the precision that makes
+// it stable across repeated fetches of the same occurrence.
+function yandexEventIdentity(uid: string, recurrenceId: string | undefined): { externalEventId: string; externalSeriesId: string | null } {
+    if (!recurrenceId) return { externalEventId: uid, externalSeriesId: null };
+    return { externalEventId: `${uid}::${recurrenceId}`, externalSeriesId: uid };
+}
+
 /**
  * Create iCalendar event string from session data
  */
@@ -327,14 +348,16 @@ export async function fetchYandexCalendarEvents(
                         const endWc = resolveWallClockParts(endDate, timezone, endLocalStr);
                         rawEvents.push({
                             provider: 'yandex',
-                            externalId: `vfb:${startParsed.date.toISOString()}:${endDate.toISOString()}`,
+                            integrationId,
+                            externalEventId: `vfb:${startParsed.date.toISOString()}:${endDate.toISOString()}`,
+                            externalSeriesId: null,
                             summary,
                             start: startParsed.date,
                             end: endDate,
                             date: startWc.date,
                             startTime: startWc.time,
                             endTime: endWc.time,
-                            isAllDay: false,
+                            allDay: false,
                             isOwnSession: false,
                             ownSessionId: null,
                         });
@@ -354,6 +377,10 @@ export async function fetchYandexCalendarEvents(
             const dtendMatch = eventData.match(/DTEND(?:;.*?)?:(.*)/);
             const summaryMatch = eventData.match(/SUMMARY:(.*)/);
             const uidMatch = eventData.match(/UID:(.*)/);
+            // Present only on an expanded occurrence of a recurring series
+            // (see yandexEventIdentity above) — absent on a genuinely
+            // single, non-recurring event.
+            const recurrenceIdMatch = eventData.match(/RECURRENCE-ID(?:;.*?)?:(.*)/);
 
             if (dtstartMatch) {
                 const startParsed = parseIcalDateStr(dtstartMatch[1]);
@@ -373,23 +400,30 @@ export async function fetchYandexCalendarEvents(
                 }
 
                 const uid = uidMatch ? uidMatch[1].trim() : undefined;
+                const recurrenceId = recurrenceIdMatch ? recurrenceIdMatch[1].trim() : undefined;
                 const ownSessionId = parseYandexOwnSessionId(uid);
                 const startWc = resolveWallClockParts(startParsed.date, timezone, startParsed.localStr);
                 const endWc = resolveWallClockParts(endParsed.date, timezone, endParsed.localStr);
 
+                // Fall back to a synthesized id only if this particular
+                // VEVENT genuinely lacks a UID (non-conformant producer) —
+                // Yandex itself always writes one.
+                const identity = uid
+                    ? yandexEventIdentity(uid, recurrenceId)
+                    : { externalEventId: `vevent:${startParsed.date.toISOString()}:${summaryMatch?.[1]?.trim() || ''}`, externalSeriesId: null };
+
                 rawEvents.push({
                     provider: 'yandex',
-                    // Fall back to a synthesized id only if this particular
-                    // VEVENT genuinely lacks a UID (non-conformant producer) —
-                    // Yandex itself always writes one.
-                    externalId: uid || `vevent:${startParsed.date.toISOString()}:${summaryMatch?.[1]?.trim() || ''}`,
+                    integrationId,
+                    externalEventId: identity.externalEventId,
+                    externalSeriesId: identity.externalSeriesId,
                     summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
                     start: startParsed.date,
                     end: endParsed.date,
                     date: startWc.date,
                     startTime: startWc.time,
                     endTime: endWc.time,
-                    isAllDay,
+                    allDay: isAllDay,
                     isOwnSession: Boolean(ownSessionId),
                     ownSessionId,
                 });

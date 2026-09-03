@@ -5,7 +5,7 @@
 // psychologist's own already-booked session — or a stale event a
 // reschedule left behind, since Yandex delete is still a no-op — counted as
 // "external busy" against their own future availability, forever. This
-// proves the fix: own-session UID detection, isAllDay, floating-time
+// proves the fix: own-session UID detection, allDay, floating-time
 // handling, and timezone-correct date/time resolution.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -78,7 +78,7 @@ describe('fetchYandexCalendarEvents (Task 10 normalization)', () => {
         expect(included.events).toHaveLength(1);
         expect(included.events![0].isOwnSession).toBe(true);
         expect(included.events![0].ownSessionId).toBe('session-42');
-        expect(included.events![0].externalId).toBe('compas-session-session-42@cmpas.ru');
+        expect(included.events![0].externalEventId).toBe('compas-session-session-42@cmpas.ru');
     });
 
     it('a real external event (not ours) resolves date/time against the given timezone and exposes its UID as externalId', async () => {
@@ -93,7 +93,7 @@ describe('fetchYandexCalendarEvents (Task 10 normalization)', () => {
         expect(result.events).toHaveLength(1);
         const event = result.events![0];
         expect(event.provider).toBe('yandex');
-        expect(event.externalId).toBe('some-external-uid@yandex.ru');
+        expect(event.externalEventId).toBe('some-external-uid@yandex.ru');
         expect(event.isOwnSession).toBe(false);
         expect(event.ownSessionId).toBeNull();
         expect(event.date).toBe('2026-09-08');
@@ -114,6 +114,41 @@ describe('fetchYandexCalendarEvents (Task 10 normalization)', () => {
         expect(result.events![0].endTime).toBe('10:20');
     });
 
+    it('a single, non-recurring event (no RECURRENCE-ID) has externalEventId = UID and externalSeriesId = null', async () => {
+        fetchCalendarObjects.mockResolvedValue([
+            { data: vevent('UID:single-event-uid@yandex.ru\r\nDTSTART:20260907T090000Z\r\nDTEND:20260907T095000Z\r\nSUMMARY:Клиент') },
+        ]);
+
+        const { fetchYandexCalendarEvents } = await import('../yandex');
+        const result = await fetchYandexCalendarEvents('integration-1', new Date(), new Date());
+
+        expect(result.events).toHaveLength(1);
+        expect(result.events![0].externalEventId).toBe('single-event-uid@yandex.ru');
+        expect(result.events![0].externalSeriesId).toBeNull();
+    });
+
+    it('two occurrences of the same recurring series (same UID, different RECURRENCE-ID) share externalSeriesId but have DIFFERENT externalEventId, and re-fetching the same occurrence is stable', async () => {
+        const occurrence1 = 'UID:series-uid@yandex.ru\r\nRECURRENCE-ID:20260907T090000Z\r\nDTSTART:20260907T090000Z\r\nDTEND:20260907T095000Z\r\nSUMMARY:Клиент Х';
+        const occurrence2 = 'UID:series-uid@yandex.ru\r\nRECURRENCE-ID:20260914T090000Z\r\nDTSTART:20260914T090000Z\r\nDTEND:20260914T095000Z\r\nSUMMARY:Клиент Х';
+
+        fetchCalendarObjects.mockResolvedValueOnce([{ data: vevent(occurrence1) }, { data: vevent(occurrence2) }]);
+
+        const { fetchYandexCalendarEvents } = await import('../yandex');
+        const result = await fetchYandexCalendarEvents('integration-1', new Date(), new Date());
+        const [e1, e2] = result.events!;
+
+        expect(e1.externalSeriesId).toBe('series-uid@yandex.ru');
+        expect(e2.externalSeriesId).toBe('series-uid@yandex.ru');
+        expect(e1.externalEventId).not.toBe(e2.externalEventId);
+        expect(e1.integrationId).toBe('integration-1');
+
+        // Same occurrence, fetched again — same identity, deterministically.
+        fetchCalendarObjects.mockResolvedValueOnce([{ data: vevent(occurrence1) }]);
+        const refetch = await fetchYandexCalendarEvents('integration-1', new Date(), new Date());
+        expect(refetch.events![0].externalEventId).toBe(e1.externalEventId);
+        expect(refetch.events![0].externalSeriesId).toBe(e1.externalSeriesId);
+    });
+
     it('flags an all-day event (8-digit DTSTART, no explicit DTEND)', async () => {
         fetchCalendarObjects.mockResolvedValue([
             { data: vevent('UID:allday-uid@yandex.ru\r\nDTSTART:20260910\r\nSUMMARY:Отпуск') },
@@ -123,6 +158,6 @@ describe('fetchYandexCalendarEvents (Task 10 normalization)', () => {
         const result = await fetchYandexCalendarEvents('integration-1', new Date(), new Date());
 
         expect(result.events).toHaveLength(1);
-        expect(result.events![0].isAllDay).toBe(true);
+        expect(result.events![0].allDay).toBe(true);
     });
 });

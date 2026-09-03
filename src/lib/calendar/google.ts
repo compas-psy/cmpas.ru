@@ -387,34 +387,47 @@ export async function fetchGoogleCalendarEvents(
         const events: NormalizedCalendarEvent[] = items
             .filter((item: any) => item.status !== 'cancelled')
             .map((item: any): NormalizedCalendarEvent | null => {
-                let start: Date, end: Date, isAllDay: boolean;
+                let start: Date, end: Date, allDay: boolean, startParts: { date: string; time: string }, endParts: { date: string; time: string };
                 if (item.start.dateTime) {
                     start = new Date(item.start.dateTime);
                     end = new Date(item.end.dateTime);
-                    isAllDay = false;
+                    allDay = false;
+                    startParts = resolveWallClockParts(start, timezone);
+                    endParts = resolveWallClockParts(end, timezone);
                 } else if (item.start.date) {
-                    // All-day event — Google gives a bare "YYYY-MM-DD", no time-of-day at all.
-                    start = new Date(item.start.date);
-                    end = new Date(item.end.date);
-                    isAllDay = true;
+                    // All-day event — Google gives a bare "YYYY-MM-DD", no
+                    // time-of-day or timezone meaning at all. Use the literal
+                    // digits directly: converting them via Intl/timezone (as
+                    // if they were a UTC instant) can shift the calendar date
+                    // itself for any timezone west of UTC.
+                    allDay = true;
+                    const [sy, sm, sd] = item.start.date.split('-').map(Number);
+                    const [ey, em, ed] = item.end.date.split('-').map(Number);
+                    start = new Date(Date.UTC(sy, sm - 1, sd));
+                    end = new Date(Date.UTC(ey, em - 1, ed));
+                    startParts = { date: item.start.date, time: '00:00' };
+                    endParts = { date: item.end.date, time: '00:00' };
                 } else {
                     return null;
                 }
 
                 const ownSessionId: string | null = item.extendedProperties?.private?.compasSessionId || null;
-                const startParts = resolveWallClockParts(start, timezone);
-                const endParts = resolveWallClockParts(end, timezone);
 
                 return {
                     provider: 'google',
-                    externalId: item.id,
+                    integrationId,
+                    externalEventId: item.id,
+                    // Google: an expanded recurring instance carries
+                    // recurringEventId pointing at the series' master event
+                    // id; a non-recurring event has none.
+                    externalSeriesId: item.recurringEventId || null,
                     summary: item.summary || 'Busy',
                     start,
                     end,
                     date: startParts.date,
                     startTime: startParts.time,
                     endTime: endParts.time,
-                    isAllDay,
+                    allDay,
                     isOwnSession: Boolean(ownSessionId),
                     ownSessionId,
                 };

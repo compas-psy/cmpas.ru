@@ -1,15 +1,21 @@
-// Task 10 (PRAKTIKA MVP): one shared shape for a calendar event, regardless
-// of provider. Before this, fetchGoogleCalendarEvents and
-// fetchYandexCalendarEvents shared an identical TYPE ANNOTATION
+// Task 10 (PRAKTIKA MVP, founder review correction): one shared shape for a
+// calendar event, regardless of provider. Before this, fetchGoogleCalendarEvents
+// and fetchYandexCalendarEvents shared an identical TYPE ANNOTATION
 // (`{ start, end, summary }`) but not an identical VALUE shape — Yandex
 // smuggled extra untyped fields (`startLocalStr`/`endLocalStr`) through an
-// `as any` cast, and neither exposed a stable external identity, an
-// all-day flag, or "is this actually one of our own synced sessions
-// looping back." Every consumer (the availability resolver's external-busy
-// blocks, the calendar-import preview) had to know both providers'
-// undocumented quirks itself.
+// `as any` cast, and neither exposed a stable external identity, recurring-
+// series identity, an all-day flag, or "is this actually one of our own
+// synced sessions looping back." Every consumer (the availability
+// resolver's external-busy blocks, the calendar-import preview) had to know
+// both providers' undocumented quirks itself.
 //
-// Two concrete bugs this fixes, not just a type-tidying exercise:
+// The canonical shape is PracticeSourceEvent (src/lib/practice/migration/
+// types.ts) — Tasks 11/12/13's contract. NormalizedCalendarEvent is a plain
+// alias kept for this module's own naming; nothing here adds fields PracticeSourceEvent
+// doesn't already have.
+//
+// Concrete bugs this file's helper (and the fetchers that use it) fix, not
+// just a type-tidying exercise:
 //   1. src/app/api/diary/calendar/import/preview/route.ts computed
 //      date/time with `date.getHours()`/`getMinutes()` — the SERVER's OS
 //      timezone, not the practice's configured one. A practice on
@@ -24,31 +30,10 @@
 //      still a no-op, see src/lib/calendar/auto-sync.ts) counted as
 //      "external busy" against their own future availability, forever.
 
-export type CalendarProvider = 'google' | 'yandex';
+import type { PracticeSourceEvent } from '@/lib/practice/migration/types';
 
-export interface NormalizedCalendarEvent {
-    provider: CalendarProvider;
-    /**
-     * Stable per-provider identity — Google's event id, or Yandex's iCal
-     * UID. Never derived from summary/time (those can collide or change).
-     * Tasks 11/12 (import matching, CalendarSessionLink) key off this, not
-     * off a hash of the display fields.
-     */
-    externalId: string;
-    summary: string;
-    /** Absolute UTC instants. */
-    start: Date;
-    end: Date;
-    /** Wall-clock date/time resolved against the PRACTICE's configured timezone — never the server's OS timezone. */
-    date: string; // "YYYY-MM-DD"
-    startTime: string; // "HH:MM"
-    endTime: string; // "HH:MM"
-    isAllDay: boolean;
-    /** True when this event is one PRAKTIKA itself created and pushed out (loop-back) — see ownSessionId. */
-    isOwnSession: boolean;
-    /** The DiarySession id this event mirrors, when isOwnSession is true. */
-    ownSessionId: string | null;
-}
+export type { CalendarProvider } from '@/lib/practice/migration/types';
+export type NormalizedCalendarEvent = PracticeSourceEvent;
 
 /** Helper: robust date parsing to a specific timezone without relying on the server's local time. */
 function getPartsInTz(date: Date, timeZone: string) {
@@ -79,6 +64,12 @@ function getPartsInTz(date: Date, timeZone: string) {
  * instant to convert FROM, only the literal digits already written. When
  * `localStr` is given, its digits are used verbatim; `timezone` is only
  * used for an unambiguous (already-UTC-anchored) instant.
+ *
+ * NEVER call this for an all-day event — an all-day date has no time-of-day
+ * or timezone meaning at all (Google's `start.date`/`end.date`, Yandex's
+ * 8-digit DTSTART), and running it through Intl timezone conversion can
+ * shift the calendar date itself for a timezone west of UTC. Both fetchers
+ * use the literal date string directly for all-day events instead.
  */
 export function resolveWallClockParts(instant: Date, timezone: string, localStr?: string): { date: string; time: string } {
     if (localStr) {

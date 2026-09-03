@@ -72,9 +72,9 @@ describe('GET /api/diary/calendar/import/preview (Task 10)', () => {
         fetchGoogleCalendarEvents.mockResolvedValue({
             success: true,
             events: [{
-                provider: 'google', externalId: 'evt-1', summary: 'Сессия — Иван Иванов',
+                provider: 'google', integrationId: 'integration-1', externalEventId: 'evt-1', externalSeriesId: null, summary: 'Сессия — Иван Иванов',
                 start, end, date: '2026-09-07', startTime: '09:00', endTime: '09:50',
-                isAllDay: false, isOwnSession: false, ownSessionId: null,
+                allDay: false, isOwnSession: false, ownSessionId: null,
             }],
         });
 
@@ -93,10 +93,10 @@ describe('GET /api/diary/calendar/import/preview (Task 10)', () => {
         fetchGoogleCalendarEvents.mockResolvedValue({
             success: true,
             events: [{
-                provider: 'google', externalId: 'evt-allday', summary: 'Отпуск',
+                provider: 'google', integrationId: 'integration-1', externalEventId: 'evt-allday', externalSeriesId: null, summary: 'Отпуск',
                 start: new Date('2026-09-10T00:00:00Z'), end: new Date('2026-09-11T00:00:00Z'),
                 date: '2026-09-10', startTime: '00:00', endTime: '00:00',
-                isAllDay: true, isOwnSession: false, ownSessionId: null,
+                allDay: true, isOwnSession: false, ownSessionId: null,
             }],
         });
 
