@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
-import { requireOwnedClient, OwnershipError } from '@/lib/practice/ownership';
+import { requireOwnedClient, requireOwnedAddress, OwnershipError } from '@/lib/practice/ownership';
 import { requirePracticeOperatorAttestation, ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
 
 // Task 11 (founder review of Task 10) wired this to a real UI
@@ -51,13 +51,16 @@ export async function POST(req: NextRequest) {
             const date = String(raw.date || '');
             const startTime = String(raw.startTime || '');
             const endTime = String(raw.endTime || '');
-            const duration = Number(raw.duration || 50);
+            const duration = Number(raw.duration);
             const format = VALID_FORMATS.has(raw.format) ? raw.format : 'online';
-            const addressId = format === 'offline' && typeof raw.addressId === 'string' ? raw.addressId : null;
             const resolvedClientId = typeof raw.resolvedClientId === 'string' && raw.resolvedClientId ? raw.resolvedClientId : null;
             const newClientName = typeof raw.newClientName === 'string' ? raw.newClientName.trim().slice(0, 120) : '';
 
             if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(startTime)) {
+                skipped += 1;
+                continue;
+            }
+            if (!Number.isFinite(duration) || duration <= 0) {
                 skipped += 1;
                 continue;
             }
@@ -68,6 +71,33 @@ export async function POST(req: NextRequest) {
             if ((!resolvedClientId && !newClientName) || (resolvedClientId && newClientName)) {
                 skipped += 1;
                 continue;
+            }
+            if (newClientName && newClientName.length < 2) {
+                skipped += 1;
+                continue;
+            }
+
+            // Founder correction: addressId is never trusted from the body.
+            // Online never carries a cabinet; offline requires one the
+            // psychologist actually owns — a foreign or made-up id must
+            // reject the whole item, never fall back to "no cabinet".
+            let addressId: string | null = null;
+            if (format === 'offline') {
+                const requestedAddressId = typeof raw.addressId === 'string' ? raw.addressId : '';
+                if (!requestedAddressId) {
+                    skipped += 1;
+                    continue;
+                }
+                try {
+                    await requireOwnedAddress(psychologistId, requestedAddressId);
+                } catch (e) {
+                    if (e instanceof OwnershipError) {
+                        skipped += 1;
+                        continue;
+                    }
+                    throw e;
+                }
+                addressId = requestedAddressId;
             }
 
             let clientId: string;
@@ -116,7 +146,7 @@ export async function POST(req: NextRequest) {
                     date: dayStart,
                     time: startTime,
                     endTime: /^\d{2}:\d{2}$/.test(endTime) ? endTime : null,
-                    duration: Number.isFinite(duration) ? duration : 50,
+                    duration,
                     type: 'individual',
                     format,
                     addressId,

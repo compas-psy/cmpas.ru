@@ -26,6 +26,7 @@ const diaryClientFindFirst = vi.fn();
 const diaryClientCreate = vi.fn();
 const diarySessionFindFirst = vi.fn();
 const diarySessionCreate = vi.fn();
+const psychologistAddressFindFirst = vi.fn();
 vi.mock('@/lib/db', () => ({
     db: {
         diaryClient: {
@@ -35,6 +36,9 @@ vi.mock('@/lib/db', () => ({
         diarySession: {
             findFirst: (...args: unknown[]) => diarySessionFindFirst(...args),
             create: (...args: unknown[]) => diarySessionCreate(...args),
+        },
+        psychologistAddress: {
+            findFirst: (...args: unknown[]) => psychologistAddressFindFirst(...args),
         },
     },
 }));
@@ -53,6 +57,7 @@ describe('POST /api/diary/calendar/import/apply (Task 11 correction)', () => {
         diaryClientCreate.mockResolvedValue({ id: 'client-new' });
         diarySessionFindFirst.mockResolvedValue(null);
         diarySessionCreate.mockResolvedValue({ id: 'session-1' });
+        psychologistAddressFindFirst.mockResolvedValue(null);
     });
 
     it('creates the session with origin=calendar_import and clientNotificationsEnabled=false, for an explicit new client', async () => {
@@ -110,12 +115,62 @@ describe('POST /api/diary/calendar/import/apply (Task 11 correction)', () => {
         expect(body.skipped).toBe(1);
     });
 
-    it('carries format and addressId from the item instead of always defaulting to online', async () => {
+    it('an offline session with an OWNED addressId is created with that cabinet', async () => {
+        psychologistAddressFindFirst.mockResolvedValue({ id: 'addr-1' });
+
         const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
         await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'offline', addressId: 'addr-1' }] }));
 
         expect(diarySessionCreate).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({ format: 'offline', addressId: 'addr-1' }),
         }));
+    });
+
+    it('an offline session with a FOREIGN/unowned addressId is rejected — no session created', async () => {
+        psychologistAddressFindFirst.mockResolvedValue(null); // requireOwnedAddress finds nothing -> OwnershipError
+
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'offline', addressId: 'someone-elses-address' }] }));
+        const body = await res.json();
+
+        expect(diarySessionCreate).not.toHaveBeenCalled();
+        expect(body.skipped).toBe(1);
+    });
+
+    it('an offline session with NO addressId at all is rejected — never falls back to "no cabinet"', async () => {
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'offline' }] }));
+        const body = await res.json();
+
+        expect(diarySessionCreate).not.toHaveBeenCalled();
+        expect(body.skipped).toBe(1);
+    });
+
+    it('an online session NEVER trusts a smuggled addressId from the body — always saved as null', async () => {
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', format: 'online', addressId: 'addr-1' }] }));
+
+        expect(diarySessionCreate).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ format: 'online', addressId: null }),
+        }));
+        expect(psychologistAddressFindFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects a newClientName shorter than 2 characters', async () => {
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'И' }] }));
+        const body = await res.json();
+
+        expect(diarySessionCreate).not.toHaveBeenCalled();
+        expect(body.skipped).toBe(1);
+    });
+
+    it('rejects a non-finite or non-positive duration', async () => {
+        const { POST } = await import('../src/app/api/diary/calendar/import/apply/route');
+        const res = await POST(req({ items: [{ ...baseItem, newClientName: 'Иван Иванов', duration: 0 }] }));
+        const body = await res.json();
+
+        expect(diarySessionCreate).not.toHaveBeenCalled();
+        expect(body.skipped).toBe(1);
     });
 });

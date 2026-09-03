@@ -89,8 +89,12 @@ function initialRowState(item: ImportCandidate): RowState {
 function bucketOf(item: ImportCandidate, state: RowState): Bucket {
     if (state.decision === 'personal') return 'personal';
     if (state.decision === 'skip') return 'skipped';
-    const resolved = state.clientMode === 'existing' ? !!state.existingClientId : state.newClientName.trim().length >= 2;
-    return resolved ? 'ready' : 'review';
+    const clientResolved = state.clientMode === 'existing' ? !!state.existingClientId : state.newClientName.trim().length >= 2;
+    // Founder correction: an offline session with no cabinet picked yet is
+    // not actually ready to import — the apply route would have to guess
+    // or reject it. Online never needs a cabinet.
+    const locationResolved = state.format === 'online' || !!state.addressId;
+    return clientResolved && locationResolved ? 'ready' : 'review';
 }
 
 function formatDate(dateStr: string) {

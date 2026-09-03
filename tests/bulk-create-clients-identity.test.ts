@@ -66,6 +66,38 @@ describe('bulkCreateClients — name is not identity (Task 11 correction)', () =
         expect(result.review).toEqual([]);
     });
 
+    it('batch: "Иван Иванов" +79001111111 then "Иван Иванов" +79002222222 → the second is NOT silently skipped (different phone = different person)', async () => {
+        diaryClientFindMany.mockResolvedValue([]);
+        diaryClientCreate.mockResolvedValueOnce({ id: 'client-a' });
+
+        const result = await bulkCreateClients([
+            { name: 'Иван Иванов', phone: '+79001111111' },
+            { name: 'Иван Иванов', phone: '+79002222222' },
+        ]);
+
+        expect(diaryClientCreate).toHaveBeenCalledTimes(1);
+        expect(result.created).toBe(1);
+        expect(result.skipped).toBe(0);
+        expect(result.review).toEqual([
+            { name: 'Иван Иванов', status: 'review', reason: 'NAME_ONLY_COLLISION', suggestedClientIds: ['client-a'] },
+        ]);
+    });
+
+    it('batch: "Иван Иванов" +79001111111 then "Иван Иванов" 89001111111 (same phone, different formatting) → strong duplicate, skip is fine', async () => {
+        diaryClientFindMany.mockResolvedValue([]);
+        diaryClientCreate.mockResolvedValueOnce({ id: 'client-a' });
+
+        const result = await bulkCreateClients([
+            { name: 'Иван Иванов', phone: '+79001111111' },
+            { name: 'Иван Иванов', phone: '89001111111' },
+        ]);
+
+        expect(diaryClientCreate).toHaveBeenCalledTimes(1);
+        expect(result.created).toBe(1);
+        expect(result.skipped).toBe(1);
+        expect(result.review).toEqual([]);
+    });
+
     it('a genuinely new name with no existing match is created normally', async () => {
         diaryClientFindMany.mockResolvedValue([IVAN_IN_DB]);
         diaryClientCreate.mockResolvedValue({ id: 'client-2' });

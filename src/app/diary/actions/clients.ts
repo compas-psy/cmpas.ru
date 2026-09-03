@@ -207,7 +207,6 @@ export async function bulkCreateClients(
     let created = 0;
     let skipped = 0;
     const review: BulkCreateReviewItem[] = [];
-    const seenInBatch = new Set<string>();
 
     for (const raw of items) {
         const name = (raw.name || '').trim();
@@ -215,13 +214,16 @@ export async function bulkCreateClients(
             skipped++;
             continue;
         }
-        const key = name.toLowerCase();
-        if (seenInBatch.has(key)) {
-            skipped++;
-            continue;
-        }
-        seenInBatch.add(key);
 
+        // Task 11 (founder correction, round 2): no batch-internal name
+        // dedupe either — "Иван Иванов" twice in one paste with two
+        // different phone numbers is two different people, not a repeat.
+        // knownClients grows as we create, so a genuine within-batch repeat
+        // (same name, same or no identifier) still resolves correctly
+        // through matchClientIdentity below: a real strong-identifier
+        // repeat skips as a duplicate, a bare name repeat goes to review
+        // against the row just created, exactly like any other name-only
+        // collision — never silently merged.
         const match = matchClientIdentity({ name, phone: raw.phone, email: raw.email }, knownClients);
         if (match.resolvedClientId) {
             // Strong (phone/email) identity match — a real duplicate.
