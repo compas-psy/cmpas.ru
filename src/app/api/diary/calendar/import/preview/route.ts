@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
 import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { practiceImportRange } from '@/lib/practice/migration/import-range';
-import { classifyCalendarEvents, importCandidateDedupeKey } from '@/lib/practice/migration/classify';
+import { classifyCalendarEvents, importCandidateDedupeKey, countByReviewState } from '@/lib/practice/migration/classify';
 import type { PracticeSourceEvent } from '@/lib/practice/migration/types';
 
 export async function GET() {
@@ -41,7 +41,7 @@ export async function GET() {
         }
 
         const [existingClients, existingSessions] = await Promise.all([
-            db.diaryClient.findMany({ where: { psychologistId }, select: { id: true, name: true } }),
+            db.diaryClient.findMany({ where: { psychologistId }, select: { id: true, name: true, phone: true, email: true } }),
             db.diarySession.findMany({
                 where: { psychologistId, date: { gte: start, lte: end }, status: { not: 'cancelled' } },
                 include: { client: { select: { name: true } } },
@@ -52,16 +52,13 @@ export async function GET() {
             existingSessions.map((s) => importCandidateDedupeKey(s.date.toISOString().slice(0, 10), s.time, s.client?.name || ''))
         );
 
-        // Classification (extract-name.ts rejects non-client summaries like
-        // "Обед"/"Планёрка") + matching (matchedClientId against existing
-        // DiaryClient rows) both happen here — see classify.ts.
+        // Task 11 (founder correction): classification (extract-name.ts —
+        // 'session'/'personal'/'uncertain'/'skipped') and matching
+        // (suggestedClientId vs. resolvedClientId — a name is NEVER an
+        // auto-match, see src/lib/clients/match.ts) both happen here.
         const items = classifyCalendarEvents(events, existingClients, existingSessionKeys);
 
-        return NextResponse.json({
-            items,
-            count: items.length,
-            importableCount: items.filter((i) => !i.duplicate).length,
-        });
+        return NextResponse.json({ items, counts: countByReviewState(items) });
     } catch (error) {
         console.error('[calendar/import/preview GET]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

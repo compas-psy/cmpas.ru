@@ -1,18 +1,25 @@
 // Task 11 — Import preview/classification/matching.
 //
-// Classification: reuses extract-name.ts's existing name-extraction/
-// STOP_WORDS logic (already proven on real calendars via the Task-11-era
-// disconnected `scanCalendarForClients` flow) instead of the old preview
-// route's crude `cleanClientName` prefix-strip, which had no way to reject
-// "Обед"/"Планёрка"/etc. — anything extract-name.ts can't turn into a name
-// is not an import candidate at all, not just an unlabeled one.
+// Founder correction: this used to `continue` past anything
+// extract-name.ts couldn't turn into a name, and treated a case-insensitive
+// name match as an auto-resolved client. Neither is acceptable: a
+// non-matching event still needs to be visible to the psychologist (as
+// 'personal' or 'uncertain', never silently dropped), and a name match is
+// only ever a *suggestion* — see src/lib/clients/match.ts for why.
 //
-// Matching: a case-insensitive exact match against the psychologist's
-// existing DiaryClient names — the same equality apply/route.ts's
-// find-or-create already used pre-Task-11, just surfaced to the caller as
-// `matchedClientId` instead of being decided silently at commit time.
-import { extractClientNameFromSummary } from '@/lib/clients/extract-name';
+// Every source event lands in exactly one (classification, reviewState)
+// pair. 'ready' — auto-selected on import — is reserved for a strong
+// (phone/email) identity match; calendar events essentially never carry
+// one (Task 10's PracticeSourceEvent has no phone/email field), so nearly
+// everything here ends up 'review' or 'personal' by design. Task 13's
+// CSV/XLSX import (which CAN carry phone/email columns) reuses
+// matchClientIdentity and can produce real 'ready' rows.
+import { extractClientNameFromSummary, isObviousNonClientSummary } from '@/lib/clients/extract-name';
+import { matchClientIdentity, type ClientIdentity, type MatchReason, type MatchConfidence } from '@/lib/clients/match';
 import type { PracticeSourceEvent } from './types';
+
+export type ImportClassification = 'session' | 'client_only' | 'personal' | 'uncertain' | 'skipped';
+export type ImportReviewState = 'ready' | 'review' | 'personal' | 'skipped';
 
 export interface ImportCandidate {
     id: string;
@@ -21,18 +28,21 @@ export interface ImportCandidate {
     externalEventId: string;
     externalSeriesId: string | null;
     summary: string;
-    clientName: string;
-    matchedClientId: string | null;
     date: string;
     startTime: string;
     endTime: string;
     duration: number;
-    duplicate: boolean;
-}
+    format: 'online' | 'offline';
+    addressId: string | null;
 
-export interface ExistingClientRef {
-    id: string;
-    name: string;
+    classification: ImportClassification;
+    reviewState: ImportReviewState;
+    confidence: MatchConfidence;
+    matchReason: MatchReason;
+
+    proposedClientName: string | null;
+    suggestedClientId: string | null;
+    resolvedClientId: string | null;
 }
 
 function normalizeName(name: string): string {
@@ -46,39 +56,119 @@ export function importCandidateDedupeKey(date: string, startTime: string, client
 
 export function classifyCalendarEvents(
     events: PracticeSourceEvent[],
-    existingClients: ExistingClientRef[],
+    existingClients: ClientIdentity[],
     existingSessionKeys: Set<string>,
 ): ImportCandidate[] {
-    const clientIdByName = new Map(existingClients.map((c) => [normalizeName(c.name), c.id]));
-    const candidates: ImportCandidate[] = [];
+    return events.map((event) => classifyOne(event, existingClients, existingSessionKeys));
+}
 
-    for (const event of events) {
-        // All-day entries ("Отпуск", a public holiday, ...) are never
-        // bookable client sessions — they still block availability (Task 10
-        // busy-blocks.ts), just not as import candidates here. Own-session
-        // (PRAKTIKA-created) events are already excluded by the fetchers'
-        // default includeCompasEvents=false, before this function ever sees them.
-        if (event.allDay) continue;
+function classifyOne(
+    event: PracticeSourceEvent,
+    existingClients: ClientIdentity[],
+    existingSessionKeys: Set<string>,
+): ImportCandidate {
+    const base = {
+        id: `${event.provider}:${event.integrationId}:${event.externalEventId}`,
+        provider: event.provider,
+        integrationId: event.integrationId,
+        externalEventId: event.externalEventId,
+        externalSeriesId: event.externalSeriesId,
+        summary: event.summary,
+        date: event.date,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        duration: Math.max(15, Math.round((event.end.getTime() - event.start.getTime()) / 60000)),
+        // Task 10's PracticeSourceEvent carries no location/description, so
+        // there is no online-link heuristic to run yet — every candidate
+        // defaults to online/no cabinet; the psychologist corrects it in
+        // the preview UI when it's wrong (see import-calendar/page.tsx).
+        format: 'online' as const,
+        addressId: null as string | null,
+    };
 
-        const clientName = extractClientNameFromSummary(event.summary);
-        if (!clientName) continue;
-
-        candidates.push({
-            id: `${event.provider}:${event.integrationId}:${event.externalEventId}`,
-            provider: event.provider,
-            integrationId: event.integrationId,
-            externalEventId: event.externalEventId,
-            externalSeriesId: event.externalSeriesId,
-            summary: event.summary,
-            clientName,
-            matchedClientId: clientIdByName.get(normalizeName(clientName)) ?? null,
-            date: event.date,
-            startTime: event.startTime,
-            endTime: event.endTime,
-            duration: Math.max(15, Math.round((event.end.getTime() - event.start.getTime()) / 60000)),
-            duplicate: existingSessionKeys.has(importCandidateDedupeKey(event.date, event.startTime, clientName)),
-        });
+    // All-day entries ("Отпуск", a public holiday, ...) still block
+    // availability (Task 10 busy-blocks.ts), but are never a session
+    // candidate — always personal, always unchecked by default.
+    if (event.allDay) {
+        return {
+            ...base,
+            classification: 'personal',
+            reviewState: 'personal',
+            confidence: 'high',
+            matchReason: 'none',
+            proposedClientName: null,
+            suggestedClientId: null,
+            resolvedClientId: null,
+        };
     }
 
-    return candidates;
+    const extractedName = extractClientNameFromSummary(event.summary);
+
+    if (extractedName) {
+        const duplicate = existingSessionKeys.has(importCandidateDedupeKey(event.date, event.startTime, extractedName));
+        if (duplicate) {
+            return {
+                ...base,
+                classification: 'skipped',
+                reviewState: 'skipped',
+                confidence: 'high',
+                matchReason: 'none',
+                proposedClientName: extractedName,
+                suggestedClientId: null,
+                resolvedClientId: null,
+            };
+        }
+
+        const match = matchClientIdentity({ name: extractedName }, existingClients);
+        return {
+            ...base,
+            classification: 'session',
+            reviewState: match.resolvedClientId ? 'ready' : 'review',
+            confidence: match.confidence,
+            matchReason: match.matchReason,
+            proposedClientName: extractedName,
+            suggestedClientId: match.suggestedClientId,
+            resolvedClientId: match.resolvedClientId,
+        };
+    }
+
+    if (isObviousNonClientSummary(event.summary)) {
+        return {
+            ...base,
+            classification: 'personal',
+            reviewState: 'personal',
+            confidence: 'high',
+            matchReason: 'none',
+            proposedClientName: null,
+            suggestedClientId: null,
+            resolvedClientId: null,
+        };
+    }
+
+    // Timed, not a recognized personal keyword, but extract-name.ts found
+    // no name either (e.g. no capitalized words) — genuinely unknown, not
+    // dismissed. Surfaced for review, never dropped.
+    return {
+        ...base,
+        classification: 'uncertain',
+        reviewState: 'review',
+        confidence: 'low',
+        matchReason: 'none',
+        proposedClientName: null,
+        suggestedClientId: null,
+        resolvedClientId: null,
+    };
+}
+
+export interface ImportCounts {
+    ready: number;
+    review: number;
+    personal: number;
+    skipped: number;
+}
+
+export function countByReviewState(items: ImportCandidate[]): ImportCounts {
+    const counts: ImportCounts = { ready: 0, review: 0, personal: 0, skipped: 0 };
+    for (const item of items) counts[item.reviewState]++;
+    return counts;
 }

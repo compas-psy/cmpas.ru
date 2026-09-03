@@ -34,6 +34,14 @@ export default function ImportClientsPage() {
             const result = await attestationGuard(() => bulkCreateClients(
                 validItems.map(p => ({ name: p.name, phone: p.phone, email: p.email }))
             ));
+            // Task 11 (founder correction): a name matching an existing
+            // client is never auto-merged or silently skipped — it comes
+            // back as `review` and must not just vanish here.
+            if (result.review.length > 0) {
+                toast.info(
+                    `Похожи на уже существующих клиентов (не добавлены — проверьте вручную): ${result.review.map(r => r.name).join(', ')}`
+                );
+            }
             if (result.created > 0) {
                 toast.success(
                     `Добавлено ${result.created}${result.skipped > 0 ? `, пропущено дубликатов: ${result.skipped}` : ''}`
@@ -41,7 +49,7 @@ export default function ImportClientsPage() {
                 router.push('/diary/clients');
             } else if (result.skipped > 0) {
                 toast.info('Все клиенты уже существуют — пропущено');
-            } else {
+            } else if (result.review.length === 0) {
                 toast.error('Не удалось добавить клиентов');
             }
         } catch (err) {

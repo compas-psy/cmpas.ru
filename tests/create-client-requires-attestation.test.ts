@@ -72,7 +72,7 @@ describe('createClient / bulkCreateClients — gated by practice operator attest
 
         const result = await bulkCreateClients([]);
 
-        expect(result).toEqual({ created: 0, skipped: 0 });
+        expect(result).toEqual({ created: 0, skipped: 0, review: [] });
         expect(attestationFindFirst).not.toHaveBeenCalled();
     });
 

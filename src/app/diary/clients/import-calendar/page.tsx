@@ -3,74 +3,131 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, CalendarClock, Loader2, Users, Link2, Check } from 'lucide-react';
+import { ChevronLeft, CalendarClock, Loader2, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAttestationGate } from '@/components/legal/useAttestationGate';
 
 type Integration = { id: string; provider: string; accountEmail: string | null };
+type ClientOption = { id: string; name: string };
+type AddressOption = { id: string; name: string };
+
+type Classification = 'session' | 'client_only' | 'personal' | 'uncertain' | 'skipped';
+type ReviewState = 'ready' | 'review' | 'personal' | 'skipped';
 
 type ImportCandidate = {
     id: string;
     provider: string;
-    clientName: string;
-    matchedClientId: string | null;
+    integrationId: string;
+    externalEventId: string;
+    externalSeriesId: string | null;
+    summary: string;
     date: string;
     startTime: string;
     endTime: string;
     duration: number;
-    summary: string;
-    duplicate: boolean;
+    format: 'online' | 'offline';
+    addressId: string | null;
+    classification: Classification;
+    reviewState: ReviewState;
+    confidence: 'high' | 'medium' | 'low';
+    matchReason: 'phone' | 'email' | 'name_only' | 'conflict' | 'none';
+    proposedClientName: string | null;
+    suggestedClientId: string | null;
+    resolvedClientId: string | null;
 };
 
-type CandidateGroup = {
-    name: string;
-    matchedClientId: string | null;
-    sessions: ImportCandidate[];
+type Decision = 'session' | 'personal' | 'skip';
+type Bucket = 'ready' | 'review' | 'personal' | 'skipped';
+
+type RowState = {
+    decision: Decision;
+    clientMode: 'existing' | 'new';
+    existingClientId: string | null;
+    newClientName: string;
+    format: 'online' | 'offline';
+    addressId: string | null;
+    duration: number;
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
-    google: 'Google Calendar',
-    yandex: 'Яндекс Календарь',
+    google: 'Google',
+    yandex: 'Яндекс',
 };
 
-function groupByClient(items: ImportCandidate[]): CandidateGroup[] {
-    const map = new Map<string, CandidateGroup>();
-    for (const item of items) {
-        const key = item.clientName.toLowerCase().trim();
-        let group = map.get(key);
-        if (!group) {
-            group = { name: item.clientName, matchedClientId: item.matchedClientId, sessions: [] };
-            map.set(key, group);
-        }
-        group.sessions.push(item);
+const CLASSIFICATION_LABEL: Record<Classification, string> = {
+    session: 'Сессия',
+    client_only: 'Клиент',
+    personal: 'Личное',
+    uncertain: 'Неясно',
+    skipped: 'Уже импортировано',
+};
+
+const BUCKET_LABEL: Record<Bucket, string> = {
+    ready: 'Готово',
+    review: 'Проверить',
+    personal: 'Личное',
+    skipped: 'Пропущено',
+};
+
+function initialRowState(item: ImportCandidate): RowState {
+    if (item.reviewState === 'personal') {
+        return { decision: 'personal', clientMode: 'new', existingClientId: null, newClientName: '', format: item.format, addressId: item.addressId, duration: item.duration };
     }
-    return Array.from(map.values())
-        .map((g) => ({ ...g, sessions: g.sessions.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)) }))
-        .sort((a, b) => b.sessions.length - a.sessions.length);
+    if (item.reviewState === 'skipped') {
+        return { decision: 'skip', clientMode: 'new', existingClientId: null, newClientName: '', format: item.format, addressId: item.addressId, duration: item.duration };
+    }
+    if (item.reviewState === 'ready') {
+        // The only case with a real auto-decision: a strong (phone/email)
+        // identity match. Everything else starts with NO client chosen —
+        // suggestedClientId is a hint the psychologist clicks to accept,
+        // never a pre-made decision (founder correction).
+        return { decision: 'session', clientMode: 'existing', existingClientId: item.resolvedClientId, newClientName: '', format: item.format, addressId: item.addressId, duration: item.duration };
+    }
+    return { decision: 'session', clientMode: 'existing', existingClientId: null, newClientName: '', format: item.format, addressId: item.addressId, duration: item.duration };
+}
+
+function bucketOf(item: ImportCandidate, state: RowState): Bucket {
+    if (state.decision === 'personal') return 'personal';
+    if (state.decision === 'skip') return 'skipped';
+    const resolved = state.clientMode === 'existing' ? !!state.existingClientId : state.newClientName.trim().length >= 2;
+    return resolved ? 'ready' : 'review';
 }
 
 function formatDate(dateStr: string) {
     return new Date(`${dateStr}T00:00:00`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' });
 }
 
+const BUCKET_ORDER: Bucket[] = ['review', 'ready', 'personal', 'skipped'];
+
 export default function ImportFromCalendarPage() {
     const router = useRouter();
     const [integrations, setIntegrations] = useState<Integration[]>([]);
+    const [clients, setClients] = useState<ClientOption[]>([]);
+    const [addresses, setAddresses] = useState<AddressOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [scanning, setScanning] = useState(false);
     const [items, setItems] = useState<ImportCandidate[] | null>(null);
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
     const [submitting, setSubmitting] = useState(false);
     const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
-
-    const groups = useMemo(() => (items ? groupByClient(items) : null), [items]);
 
     useEffect(() => {
         (async () => {
             try {
-                const { getConnectedCalendars } = await import('../../actions/clients');
-                const list = await getConnectedCalendars();
-                setIntegrations(list);
+                const [{ getConnectedCalendars, getClients }, { getAddresses }] = await Promise.all([
+                    import('../../actions/clients'),
+                    import('../../actions/settings'),
+                ]);
+                const [integrationList, clientList, addressResult] = await Promise.all([
+                    getConnectedCalendars(),
+                    getClients(),
+                    getAddresses(),
+                ]);
+                setIntegrations(integrationList);
+                setClients(clientList.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
+                if (addressResult.success && addressResult.data) {
+                    setAddresses(addressResult.data.map((a: { id: string; name: string }) => ({ id: a.id, name: a.name })));
+                }
             } catch {
                 /* silent */
             } finally {
@@ -78,6 +135,23 @@ export default function ImportFromCalendarPage() {
             }
         })();
     }, []);
+
+    const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+
+    const buckets = useMemo(() => {
+        if (!items) return null;
+        const result: Record<Bucket, { item: ImportCandidate; state: RowState }[]> = { ready: [], review: [], personal: [], skipped: [] };
+        for (const item of items) {
+            const state = rowStates[item.id];
+            if (!state) continue;
+            result[bucketOf(item, state)].push({ item, state });
+        }
+        return result;
+    }, [items, rowStates]);
+
+    const counts = buckets
+        ? { ready: buckets.ready.length, review: buckets.review.length, personal: buckets.personal.length, skipped: buckets.skipped.length }
+        : null;
 
     const handleScan = async () => {
         setScanning(true);
@@ -91,11 +165,10 @@ export default function ImportFromCalendarPage() {
             }
             const list: ImportCandidate[] = result.items || [];
             setItems(list);
-            // По умолчанию отмечаем всё, кроме уже существующих сессий.
-            setSelected(new Set(list.filter((i) => !i.duplicate).map((i) => i.id)));
-            if (list.length === 0) {
-                toast.info('Будущих сессий в календаре не найдено');
-            }
+            const nextStates: Record<string, RowState> = {};
+            for (const item of list) nextStates[item.id] = initialRowState(item);
+            setRowStates(nextStates);
+            if (list.length === 0) toast.info('Будущих событий в календаре не найдено');
         } catch {
             toast.error('Ошибка при сканировании');
         } finally {
@@ -103,44 +176,35 @@ export default function ImportFromCalendarPage() {
         }
     };
 
-    const toggle = (id: string) => {
-        const next = new Set(selected);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        setSelected(next);
-    };
-
-    const toggleGroup = (group: CandidateGroup) => {
-        const importable = group.sessions.filter((s) => !s.duplicate);
-        const allSelected = importable.every((s) => selected.has(s.id));
-        const next = new Set(selected);
-        for (const s of importable) {
-            if (allSelected) next.delete(s.id);
-            else next.add(s.id);
-        }
-        setSelected(next);
+    const updateRow = (id: string, patch: Partial<RowState>) => {
+        setRowStates((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
     };
 
     const handleSubmit = async () => {
-        if (!items || selected.size === 0) {
-            toast.error('Выберите хотя бы одну сессию');
+        if (!buckets || buckets.ready.length === 0) {
+            toast.error('Нет ни одной сессии, готовой к импорту');
             return;
         }
         setSubmitting(true);
         try {
-            const selectedItems = items.filter((i) => selected.has(i.id));
             const result = await attestationGuard(async () => {
                 const res = await fetch('/api/diary/calendar/import/apply', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        items: selectedItems.map((i) => ({
-                            clientName: i.clientName,
-                            date: i.date,
-                            startTime: i.startTime,
-                            endTime: i.endTime,
-                            duration: i.duration,
-                            summary: i.summary,
+                        items: buckets.ready.map(({ item, state }) => ({
+                            integrationId: item.integrationId,
+                            externalEventId: item.externalEventId,
+                            externalSeriesId: item.externalSeriesId,
+                            date: item.date,
+                            startTime: item.startTime,
+                            endTime: item.endTime,
+                            duration: state.duration,
+                            summary: item.summary,
+                            format: state.format,
+                            addressId: state.format === 'offline' ? state.addressId : null,
+                            resolvedClientId: state.clientMode === 'existing' ? state.existingClientId : null,
+                            newClientName: state.clientMode === 'new' ? state.newClientName.trim() : null,
                         })),
                     }),
                 });
@@ -149,12 +213,8 @@ export default function ImportFromCalendarPage() {
                 return body as { imported: number; skipped: number };
             });
             if (result.imported > 0) {
-                toast.success(
-                    `Импортировано сессий: ${result.imported}${result.skipped > 0 ? `, пропущено дублей: ${result.skipped}` : ''}`
-                );
+                toast.success(`Импортировано сессий: ${result.imported}${result.skipped > 0 ? `, пропущено: ${result.skipped}` : ''}`);
                 router.push('/diary/clients');
-            } else if (result.skipped > 0) {
-                toast.info('Все выбранные сессии уже есть в календаре');
             } else {
                 toast.error('Не удалось импортировать сессии');
             }
@@ -175,12 +235,8 @@ export default function ImportFromCalendarPage() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            {/* Header */}
             <div>
-                <Link
-                    href="/diary/clients"
-                    className="inline-flex items-center gap-1 text-primary text-sm font-medium mb-3 hover:opacity-80 transition-opacity"
-                >
+                <Link href="/diary/clients" className="inline-flex items-center gap-1 text-primary text-sm font-medium mb-3 hover:opacity-80 transition-opacity">
                     <ChevronLeft className="w-4 h-4" /> Клиенты
                 </Link>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground flex items-center gap-3">
@@ -188,8 +244,8 @@ export default function ImportFromCalendarPage() {
                     Из календаря
                 </h1>
                 <p className="text-muted-foreground text-sm mt-2">
-                    ПРАКТИКА прочитает подключённые календари и предложит будущие встречи для импорта как сессии — с чекбоксом
-                    по каждой.
+                    ПРАКТИКА прочитает подключённые календари и предложит будущие события на проверку. Ни одна сессия не
+                    импортируется без вашего явного решения.
                 </p>
             </div>
 
@@ -200,132 +256,173 @@ export default function ImportFromCalendarPage() {
                     <p className="text-sm text-muted-foreground mb-5 max-w-md mx-auto">
                         Подключите Google или Яндекс Календарь в разделе «Интеграции» — и вернитесь сюда.
                     </p>
-                    <Link
-                        href="/diary/integrations"
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl font-semibold text-sm hover:bg-accent/90 transition-all shadow-card"
-                    >
+                    <Link href="/diary/integrations" className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent text-accent-foreground rounded-xl font-semibold text-sm hover:bg-accent/90 transition-all shadow-card">
                         Перейти к интеграциям
                     </Link>
                 </div>
             ) : (
                 <>
                     <div className="bg-card rounded-2xl border border-border p-5 shadow-card space-y-4">
-                        <div>
-                            <div className="text-sm font-semibold text-foreground mb-2">Подключённые календари</div>
-                            <div className="flex flex-wrap gap-2">
-                                {integrations.map((i) => (
-                                    <span key={i.id} className="px-3 py-1.5 rounded-lg bg-muted text-xs font-medium text-foreground">
-                                        {PROVIDER_LABEL[i.provider] || i.provider}
-                                        {i.accountEmail ? ` · ${i.accountEmail}` : ''}
-                                    </span>
-                                ))}
-                            </div>
+                        <div className="flex flex-wrap gap-2">
+                            {integrations.map((i) => (
+                                <span key={i.id} className="px-3 py-1.5 rounded-lg bg-muted text-xs font-medium text-foreground">
+                                    {PROVIDER_LABEL[i.provider] || i.provider}
+                                    {i.accountEmail ? ` · ${i.accountEmail}` : ''}
+                                </span>
+                            ))}
                         </div>
                         <button
                             onClick={handleScan}
                             disabled={scanning}
                             className="w-full px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-card hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                            {scanning ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Сканируем…
-                                </>
-                            ) : (
-                                <>
-                                    <CalendarClock className="w-4 h-4" />
-                                    Просканировать будущие события
-                                </>
-                            )}
+                            {scanning ? (<><Loader2 className="w-4 h-4 animate-spin" /> Сканируем…</>) : (<><CalendarClock className="w-4 h-4" /> Просканировать будущие события</>)}
                         </button>
                     </div>
 
-                    {/* Кандидаты */}
-                    {groups && groups.length > 0 && (
-                        <div className="space-y-3">
-                            <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
-                                <Users className="w-4 h-4 text-accent" />
-                                Найдено клиентов: {groups.length}, сессий: {items!.length}
-                            </h2>
-                            <div className="space-y-3">
-                                {groups.map((group) => {
-                                    const importable = group.sessions.filter((s) => !s.duplicate);
-                                    const allSelected = importable.length > 0 && importable.every((s) => selected.has(s.id));
-                                    return (
-                                        <div key={group.name} className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-                                            <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
-                                                <div className="font-semibold text-foreground text-sm">
-                                                    {group.name}
-                                                    {group.matchedClientId && (
-                                                        <span className="ml-2 text-xs font-normal text-muted-foreground">уже есть в базе</span>
-                                                    )}
-                                                </div>
-                                                {importable.length > 0 && (
-                                                    <button onClick={() => toggleGroup(group)} className="text-xs text-primary hover:underline font-medium">
-                                                        {allSelected ? 'Снять все' : 'Выбрать все'}
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="divide-y divide-border">
-                                                {group.sessions.map((s) => {
-                                                    const isSelected = selected.has(s.id);
-                                                    return (
-                                                        <button
-                                                            key={s.id}
-                                                            onClick={() => !s.duplicate && toggle(s.id)}
-                                                            disabled={s.duplicate}
-                                                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left disabled:cursor-not-allowed disabled:opacity-60"
-                                                        >
-                                                            <div
-                                                                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                                                                    isSelected ? 'bg-accent border-accent' : 'border-border'
-                                                                }`}
-                                                            >
-                                                                {isSelected && <Check className="w-3 h-3 text-accent-foreground" strokeWidth={3} />}
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="text-sm text-foreground">
-                                                                    {formatDate(s.date)}, {s.startTime}–{s.endTime}
-                                                                </div>
-                                                                {s.duplicate && (
-                                                                    <div className="text-xs text-muted-foreground mt-0.5">уже есть в календаре</div>
-                                                                )}
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                    {counts && items && items.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2">
+                            {BUCKET_ORDER.map((b) => (
+                                <div key={b} className="bg-card rounded-xl border border-border p-3 text-center">
+                                    <div className="text-2xl font-bold text-foreground">{counts[b]}</div>
+                                    <div className="text-xs text-muted-foreground">{BUCKET_LABEL[b]}</div>
+                                </div>
+                            ))}
                         </div>
                     )}
 
                     {items && items.length === 0 && !scanning && (
                         <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-card">
-                            <p className="text-sm text-muted-foreground">
-                                Будущих сессий в подключённых календарях не нашлось. Добавьте клиентов вручную или проверьте
-                                интеграции.
-                            </p>
+                            <p className="text-sm text-muted-foreground">Будущих событий в подключённых календарях не нашлось.</p>
                         </div>
                     )}
 
-                    {/* Submit */}
-                    {groups && groups.length > 0 && (
+                    {items && buckets && items.length > 0 && (
+                        <div className="space-y-3">
+                            {BUCKET_ORDER.flatMap((bucket) => buckets[bucket]).map(({ item, state }) => {
+                                const bucket = bucketOf(item, state);
+                                const suggestedName = item.suggestedClientId ? clientById.get(item.suggestedClientId) : null;
+                                return (
+                                    <div key={item.id} className="bg-card rounded-2xl border border-border shadow-card p-4 space-y-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-foreground text-sm truncate">{item.summary}</div>
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                    {PROVIDER_LABEL[item.provider] || item.provider} · {formatDate(item.date)}, {item.startTime}–{item.endTime}
+                                                </div>
+                                            </div>
+                                            <span className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${
+                                                bucket === 'ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                                    : bucket === 'review' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                    : bucket === 'personal' ? 'bg-muted text-muted-foreground'
+                                                    : 'bg-muted text-muted-foreground/70'
+                                            }`}>
+                                                {BUCKET_LABEL[bucket]}
+                                            </span>
+                                        </div>
+
+                                        <div className="text-xs text-muted-foreground">
+                                            Предложенный тип: {CLASSIFICATION_LABEL[item.classification]}
+                                            {item.classification === 'skipped' && ' — сессия на эту дату/время уже есть'}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                onClick={() => updateRow(item.id, { decision: 'session' })}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${state.decision === 'session' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                            >Сессия</button>
+                                            <button
+                                                onClick={() => updateRow(item.id, { decision: 'personal' })}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${state.decision === 'personal' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                            >Личное</button>
+                                            <button
+                                                onClick={() => updateRow(item.id, { decision: 'skip' })}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${state.decision === 'skip' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                            >Пропустить</button>
+                                        </div>
+
+                                        {state.decision === 'session' && (
+                                            <div className="space-y-2 border-t border-border pt-3">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <select
+                                                        value={state.clientMode === 'existing' ? (state.existingClientId || '') : '__new__'}
+                                                        onChange={(e) => {
+                                                            if (e.target.value === '__new__') updateRow(item.id, { clientMode: 'new', existingClientId: null, newClientName: item.proposedClientName || '' });
+                                                            else updateRow(item.id, { clientMode: 'existing', existingClientId: e.target.value || null });
+                                                        }}
+                                                        className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                                                    >
+                                                        <option value="">— выбрать клиента —</option>
+                                                        {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                        <option value="__new__">+ Новый клиент</option>
+                                                    </select>
+
+                                                    {state.clientMode === 'new' && (
+                                                        <input
+                                                            type="text"
+                                                            value={state.newClientName}
+                                                            onChange={(e) => updateRow(item.id, { newClientName: e.target.value })}
+                                                            placeholder="Имя нового клиента"
+                                                            className="px-3 py-2 rounded-lg border border-border bg-background text-sm flex-1 min-w-[160px]"
+                                                        />
+                                                    )}
+
+                                                    {suggestedName && state.clientMode === 'existing' && state.existingClientId !== item.suggestedClientId && (
+                                                        <button
+                                                            onClick={() => updateRow(item.id, { clientMode: 'existing', existingClientId: item.suggestedClientId })}
+                                                            className="text-xs text-primary hover:underline"
+                                                        >
+                                                            Похоже, это {suggestedName} — выбрать
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <select
+                                                        value={state.format}
+                                                        onChange={(e) => updateRow(item.id, { format: e.target.value as 'online' | 'offline' })}
+                                                        className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                                                    >
+                                                        <option value="online">Онлайн</option>
+                                                        <option value="offline">Очно</option>
+                                                    </select>
+                                                    {state.format === 'offline' && (
+                                                        <select
+                                                            value={state.addressId || ''}
+                                                            onChange={(e) => updateRow(item.id, { addressId: e.target.value || null })}
+                                                            className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                                                        >
+                                                            <option value="">— кабинет —</option>
+                                                            {addresses.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                                        </select>
+                                                    )}
+                                                    <input
+                                                        type="number"
+                                                        min={5}
+                                                        step={5}
+                                                        value={state.duration}
+                                                        onChange={(e) => updateRow(item.id, { duration: Number(e.target.value) || item.duration })}
+                                                        className="w-20 px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                                                    />
+                                                    <span className="text-xs text-muted-foreground">мин</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {counts && counts.ready > 0 && (
                         <div className="flex gap-3 sticky bottom-4 bg-background/80 backdrop-blur-md py-3 -mx-4 px-4 rounded-xl">
-                            <Link
-                                href="/diary/clients"
-                                className="px-5 py-3 border border-border rounded-xl font-medium text-sm hover:bg-muted transition-colors"
-                            >
-                                Отмена
-                            </Link>
+                            <Link href="/diary/clients" className="px-5 py-3 border border-border rounded-xl font-medium text-sm hover:bg-muted transition-colors">Отмена</Link>
                             <button
                                 onClick={handleSubmit}
-                                disabled={submitting || selected.size === 0}
+                                disabled={submitting}
                                 className="flex-1 px-5 py-3 bg-accent text-accent-foreground rounded-xl font-semibold text-sm shadow-card hover:bg-accent/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {submitting ? 'Импортируем…' : `Импортировать ${selected.size} ${pluralSessions(selected.size)}`}
+                                {submitting ? 'Импортируем…' : `Импортировать ${counts.ready} готовых`}
                             </button>
                         </div>
                     )}
@@ -334,12 +431,4 @@ export default function ImportFromCalendarPage() {
             {attestationModal}
         </div>
     );
-}
-
-function pluralSessions(n: number): string {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'сессию';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'сессии';
-    return 'сессий';
 }

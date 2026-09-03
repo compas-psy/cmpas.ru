@@ -7,6 +7,7 @@ import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { requireOwnedClient, requireOwnedSession } from '@/lib/practice/ownership';
 import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
+import { matchClientIdentity, type ClientIdentity } from '@/lib/clients/match';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -171,34 +172,41 @@ export async function updateSessionNotes(sessionId: string, notes: string) {
     revalidatePath('/diary/clients');
 }
 
+export interface BulkCreateReviewItem {
+    name: string;
+    status: 'review';
+    reason: 'NAME_ONLY_COLLISION';
+    suggestedClientIds: string[];
+}
+
 // Массовое создание клиентов — из вставки списком или из сканирования календаря.
-// Пропускает дубликаты по имени (case-insensitive) в пределах существующих клиентов психолога.
+//
+// Task 11 (founder correction): this used to treat a case-insensitive name
+// match against an existing client as a duplicate and silently skip it —
+// exactly the name-only auto-match the correction banned (two different
+// people can share a name; a psychologist correcting a card would silently
+// re-merge future imports into the wrong one). Only a strong identifier
+// (exact phone or email match, via the same matchClientIdentity used by
+// calendar import) is a safe automatic duplicate. A name-only collision is
+// neither created as a duplicate person nor silently merged — it comes back
+// as a structured `review` entry for the caller UI to resolve explicitly.
 export async function bulkCreateClients(
     items: { name: string; phone?: string; email?: string }[]
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; review: BulkCreateReviewItem[] }> {
     const psychologistId = await getPsychologistId();
     if (!Array.isArray(items) || items.length === 0) {
-        return { created: 0, skipped: 0 };
+        return { created: 0, skipped: 0, review: [] };
     }
     await requirePracticeOperatorAttestation(psychologistId);
 
-    // Берём существующих, чтобы не плодить дубликаты
-    const existing = await db.diaryClient.findMany({
+    const knownClients: ClientIdentity[] = await db.diaryClient.findMany({
         where: { psychologistId },
-        select: { name: true, phone: true, email: true },
+        select: { id: true, name: true, phone: true, email: true },
     });
-    const existingKeys = new Set(
-        existing.map(c => (c.name || '').trim().toLowerCase())
-    );
-    const existingPhones = new Set(
-        existing.map(c => (c.phone || '').replace(/\D/g, '')).filter(Boolean)
-    );
-    const existingEmails = new Set(
-        existing.map(c => (c.email || '').toLowerCase()).filter(Boolean)
-    );
 
     let created = 0;
     let skipped = 0;
+    const review: BulkCreateReviewItem[] = [];
     const seenInBatch = new Set<string>();
 
     for (const raw of items) {
@@ -208,22 +216,29 @@ export async function bulkCreateClients(
             continue;
         }
         const key = name.toLowerCase();
-        if (seenInBatch.has(key) || existingKeys.has(key)) {
+        if (seenInBatch.has(key)) {
             skipped++;
             continue;
         }
-        const phoneDigits = (raw.phone || '').replace(/\D/g, '');
-        if (phoneDigits && existingPhones.has(phoneDigits)) {
+        seenInBatch.add(key);
+
+        const match = matchClientIdentity({ name, phone: raw.phone, email: raw.email }, knownClients);
+        if (match.resolvedClientId) {
+            // Strong (phone/email) identity match — a real duplicate.
             skipped++;
             continue;
         }
-        const emailLower = (raw.email || '').toLowerCase();
-        if (emailLower && existingEmails.has(emailLower)) {
-            skipped++;
+        if (match.matchReason === 'name_only' || match.matchReason === 'conflict') {
+            review.push({
+                name,
+                status: 'review',
+                reason: 'NAME_ONLY_COLLISION',
+                suggestedClientIds: match.suggestedClientId ? [match.suggestedClientId] : [],
+            });
             continue;
         }
 
-        await db.diaryClient.create({
+        const client = await db.diaryClient.create({
             data: {
                 psychologistId,
                 name,
@@ -231,15 +246,13 @@ export async function bulkCreateClients(
                 email: raw.email || null,
             },
         });
-        seenInBatch.add(key);
-        if (phoneDigits) existingPhones.add(phoneDigits);
-        if (emailLower) existingEmails.add(emailLower);
+        knownClients.push({ id: client.id, name, phone: raw.phone || null, email: raw.email || null });
         created++;
     }
 
     revalidatePath('/diary');
     revalidatePath('/diary/clients');
-    return { created, skipped };
+    return { created, skipped, review };
 }
 
 // Список подключённых календарей — для UI импорта
