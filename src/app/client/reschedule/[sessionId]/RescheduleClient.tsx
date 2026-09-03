@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAvailableDatesForClientReschedule, getAvailableTimesForClientReschedule, submitClientReschedule } from './actions';
-
-type TimeSlot = { time: string; format: string; addressId: string | null; slotToken: string | null; slotTokenOnline: string | null; slotTokenOffline: string | null };
+import { getAddressById } from '@/app/bot/actions';
+import { expandToConcreteSlotOptions, type ConcreteSlotOption, type RawTimeSlot } from '@/lib/booking/concrete-slot-options';
 
 type Props = {
     sessionId: string;
@@ -19,12 +19,19 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
     const [availableDates, setAvailableDates] = useState<string[]>([]);
     const [loadingDates, setLoadingDates] = useState(true);
     const [selectedDate, setSelectedDate] = useState<string>('');
-    const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+    const [rawSlots, setRawSlots] = useState<RawTimeSlot[]>([]);
+    const [addressNames, setAddressNames] = useState<Record<string, string>>({});
     const [loadingSlots, setLoadingSlots] = useState(false);
-    const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+    const [selectedOption, setSelectedOption] = useState<ConcreteSlotOption | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<{ date: string; time: string } | null>(null);
+
+    // Task 8 (founder review): one clock time can carry several genuinely
+    // different bookable options (same time, different format or office) —
+    // each becomes its own selectable option here, never collapsed by time
+    // alone. See src/lib/booking/concrete-slot-options.ts.
+    const options = useMemo(() => expandToConcreteSlotOptions(rawSlots), [rawSlots]);
 
     useEffect(() => {
         let cancelled = false;
@@ -42,34 +49,45 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
     const fetchSlots = useCallback((dateStr: string) => {
         setLoadingSlots(true);
         getAvailableTimesForClientReschedule(sessionId, token, dateStr)
-            .then(setAvailableSlots)
-            .catch(() => setAvailableSlots([]))
+            .then(async (slots: RawTimeSlot[]) => {
+                setRawSlots(slots);
+
+                // Resolve office names for any offline addresses among
+                // today's options. Re-fetched per date rather than cached
+                // against component state, to avoid a stale-closure cache
+                // (this callback is memoized by [sessionId, token] alone)
+                // serving a name from a previous render.
+                const addressIds = Array.from(new Set(
+                    slots.map((s) => s.addressId).filter((id): id is string => !!id)
+                ));
+                if (addressIds.length > 0) {
+                    const resolved = await Promise.all(addressIds.map((id) => getAddressById(id)));
+                    setAddressNames((prev) => {
+                        const next = { ...prev };
+                        addressIds.forEach((id, i) => { next[id] = resolved[i]?.name || 'Кабинет'; });
+                        return next;
+                    });
+                }
+            })
+            .catch(() => setRawSlots([]))
             .finally(() => setLoadingSlots(false));
     }, [sessionId, token]);
 
     const handleDateSelect = (dateStr: string) => {
         setSelectedDate(dateStr);
-        setSelectedSlot(null);
+        setSelectedOption(null);
         fetchSlots(dateStr);
     };
 
     const handleSave = async () => {
-        if (!selectedDate || !selectedSlot) {
+        if (!selectedDate || !selectedOption) {
             setError('Выберите дату и время');
-            return;
-        }
-        // Task 8: the token IS the reschedule target — this page has no
-        // online/offline toggle (unchanged from before), so it defaults to
-        // the online one when a format:'both' rule offers both.
-        const slotToken = selectedSlot.slotToken || selectedSlot.slotTokenOnline || selectedSlot.slotTokenOffline;
-        if (!slotToken) {
-            setError('Это время больше недоступно — выберите другое.');
             return;
         }
         setSaving(true);
         setError(null);
         try {
-            const res = await submitClientReschedule(sessionId, token, slotToken);
+            const res = await submitClientReschedule(sessionId, token, selectedOption.slotToken);
             setResult(res);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Не удалось перенести встречу');
@@ -158,17 +176,20 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                         <h2 className="font-semibold mb-3">Свободное время</h2>
                         {loadingSlots ? (
                             <p className="text-sm text-[var(--booking-muted)] text-center py-4">Загружаем…</p>
-                        ) : availableSlots.length === 0 ? (
+                        ) : options.length === 0 ? (
                             <p className="text-sm text-[var(--booking-muted)] text-center py-3">Нет свободных слотов на эту дату</p>
                         ) : (
-                            <div className="grid grid-cols-4 gap-2">
-                                {availableSlots.map(slot => (
+                            <div className="grid grid-cols-2 gap-2">
+                                {options.map(option => (
                                     <button
-                                        key={slot.time}
-                                        onClick={() => setSelectedSlot(slot)}
-                                        className={`py-2 rounded-[var(--booking-radius-card)] border font-medium text-sm transition-colors ${selectedSlot?.time === slot.time ? 'border-[var(--booking-accent)] bg-[var(--booking-accent)] text-white' : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'}`}
+                                        key={option.key}
+                                        onClick={() => setSelectedOption(option)}
+                                        className={`px-3 py-2 rounded-[var(--booking-radius-card)] border text-left transition-colors ${selectedOption?.key === option.key ? 'border-[var(--booking-accent)] bg-[var(--booking-accent)] text-white' : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'}`}
                                     >
-                                        {slot.time}
+                                        <div className="text-sm font-semibold">{option.time}</div>
+                                        <div className={`text-xs ${selectedOption?.key === option.key ? 'text-white/80' : 'text-[var(--booking-muted)]'}`}>
+                                            {option.format === 'online' ? 'Онлайн' : `Очно · ${option.addressId ? (addressNames[option.addressId] || '…') : 'Кабинет'}`}
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -182,7 +203,7 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
 
                 <button
                     onClick={handleSave}
-                    disabled={saving || !selectedSlot}
+                    disabled={saving || !selectedOption}
                     className="w-full py-3 rounded-[var(--booking-radius-card)] text-sm font-semibold text-white bg-[var(--booking-accent)] hover:opacity-90 transition-colors disabled:opacity-50"
                 >
                     {saving ? 'Переносим…' : 'Перенести встречу'}

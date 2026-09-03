@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Calendar, Clock, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { expandToConcreteSlotOptions, type ConcreteSlotOption, type RawTimeSlot } from '@/lib/booking/concrete-slot-options';
 
 type Props = {
     isOpen: boolean;
@@ -15,13 +16,12 @@ type Props = {
     clientId?: string;
 };
 
-type AvailableSlot = { time: string; format: string; addressId: string | null; slotToken: string | null; slotTokenOnline: string | null; slotTokenOffline: string | null };
-
 export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDate, currentTime, clientName, clientId }: Props) {
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [availableDates, setAvailableDates] = useState<string[]>([]);
-    const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
-    const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+    const [rawSlots, setRawSlots] = useState<RawTimeSlot[]>([]);
+    const [addressNames, setAddressNames] = useState<Record<string, string>>({});
+    const [selectedOption, setSelectedOption] = useState<ConcreteSlotOption | null>(null);
     const [saving, setSaving] = useState(false);
     const [loadingDates, setLoadingDates] = useState(true);
     const [loadingSlots, setLoadingSlots] = useState(false);
@@ -31,6 +31,12 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
         const d = new Date();
         return { year: d.getFullYear(), month: d.getMonth() };
     });
+
+    // Task 8 (founder review): one clock time can carry several genuinely
+    // different bookable options (same time, different format or office) —
+    // each becomes its own selectable option here, never collapsed by time
+    // alone. See src/lib/booking/concrete-slot-options.ts.
+    const options = useMemo(() => expandToConcreteSlotOptions(rawSlots), [rawSlots]);
 
     const fetchAvailableDates = useCallback(async (year: number, month: number) => {
         try {
@@ -61,37 +67,46 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
         try {
             const { getAvailableTimesForReschedule } = await import('../actions/sessions');
             const slots = await getAvailableTimesForReschedule(dateStr, sessionId, clientId);
-            setAvailableSlots(slots);
+            setRawSlots(slots);
+
+            // Resolve office names for any offline addresses among today's
+            // options. Re-fetched per date rather than cached against
+            // component state, to avoid a stale-closure cache (this callback
+            // is memoized by [clientId] alone) serving a name from a
+            // previous render.
+            const addressIds = Array.from(new Set(
+                slots.map((s: RawTimeSlot) => s.addressId).filter((id: string | null): id is string => !!id)
+            ));
+            if (addressIds.length > 0) {
+                const { getAddressById } = await import('@/app/bot/actions');
+                const resolved = await Promise.all(addressIds.map((id) => getAddressById(id)));
+                setAddressNames((prev) => {
+                    const next = { ...prev };
+                    addressIds.forEach((id, i) => { next[id] = resolved[i]?.name || 'Кабинет'; });
+                    return next;
+                });
+            }
         } catch {
-            setAvailableSlots([]);
+            setRawSlots([]);
         }
         setLoadingSlots(false);
-    }, [clientId]);
+    }, [clientId, sessionId]);
 
     const handleDateSelect = (dateStr: string) => {
         setSelectedDate(dateStr);
-        setSelectedSlot(null);
+        setSelectedOption(null);
         fetchSlots(dateStr);
     };
 
     const handleSave = async () => {
-        if (!selectedDate || !selectedSlot) {
+        if (!selectedDate || !selectedOption) {
             toast.error('Выберите дату и время');
-            return;
-        }
-        // Task 8: the token IS the reschedule target — never re-derived from
-        // date/time on the server. A format:'both' rule mints two tokens;
-        // this modal has no online/offline toggle (unchanged from before),
-        // so it defaults to the online one when both are offered.
-        const token = selectedSlot.slotToken || selectedSlot.slotTokenOnline || selectedSlot.slotTokenOffline;
-        if (!token) {
-            toast.error('Это время больше недоступно — выберите другое.');
             return;
         }
         setSaving(true);
         try {
             const { rescheduleSession } = await import('../actions/sessions');
-            await rescheduleSession(sessionId, token);
+            await rescheduleSession(sessionId, selectedOption.slotToken);
             toast.success('Сессия перенесена');
             onSave();
             onClose();
@@ -181,26 +196,29 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
                     {loadingDates && <div className="text-center pt-2"><Loader2 className="w-4 h-4 animate-spin inline text-muted-foreground" /></div>}
                 </div>
 
-                {/* Time slots */}
+                {/* Time slots — one button per CONCRETE option (time + format + office), never per time alone */}
                 {selectedDate && (
                     <div className="mb-5 animate-in fade-in slide-in-from-top-2 duration-200">
                         <h4 className="font-semibold text-foreground mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4 text-primary" /> Свободное время:</h4>
                         {loadingSlots ? (
                             <div className="text-center py-4"><Loader2 className="w-5 h-5 animate-spin inline text-muted-foreground" /></div>
-                        ) : availableSlots.length === 0 ? (
+                        ) : options.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-3">Нет свободных слотов</p>
                         ) : (
-                            <div className="grid grid-cols-4 gap-2">
-                                {availableSlots.map(slot => (
+                            <div className="grid grid-cols-2 gap-2">
+                                {options.map(option => (
                                     <button
-                                        key={slot.time}
-                                        onClick={() => setSelectedSlot(slot)}
-                                        className={`py-2 rounded-xl border-2 font-medium text-sm transition-colors ${selectedSlot?.time === slot.time
+                                        key={option.key}
+                                        onClick={() => setSelectedOption(option)}
+                                        className={`px-3 py-2 rounded-xl border-2 text-left transition-colors ${selectedOption?.key === option.key
                                             ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                                             : 'border-border text-foreground hover:border-primary/50'
                                             }`}
                                     >
-                                        {slot.time}
+                                        <div className="text-sm font-semibold">{option.time}</div>
+                                        <div className={`text-xs ${selectedOption?.key === option.key ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                            {option.format === 'online' ? 'Онлайн' : `Очно · ${option.addressId ? (addressNames[option.addressId] || '…') : 'Кабинет'}`}
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -212,7 +230,7 @@ export function RescheduleModal({ isOpen, onClose, onSave, sessionId, currentDat
                     <button onClick={onClose} className="flex-1 px-4 py-3 min-h-[44px] bg-secondary text-secondary-foreground rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-colors">Отмена</button>
                     <button
                         onClick={handleSave}
-                        disabled={saving || !selectedSlot}
+                        disabled={saving || !selectedOption}
                         className="flex-1 px-4 py-3 min-h-[44px] bg-primary text-primary-foreground rounded-xl text-sm font-semibold shadow-sm hover:bg-forest-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
