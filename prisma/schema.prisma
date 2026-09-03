@@ -429,6 +429,11 @@ model DiarySession {
   format          String   @default("online") // online, offline
   addressId       String? // nullable reference to a PsychologistAddress
   status          String   @default("pending") // pending, confirmed, completed, cancelled, no_show
+  // Task 7: who/what created this session — 'manual' (psychologist, web/
+  // Android) | 'self_booking' (client through the public booking page) |
+  // 'import' (calendar/CSV import). Task 9 uses this to keep cron reminders
+  // quiet on freshly-imported sessions; existing rows default to 'manual'.
+  origin          String   @default("manual")
   notes           String? // Legacy flat notes
   structuredNotes Json? // Array of smart tags/blocks (e.g. Anamnesis, Request)
   privateNotes    Json? // Array of private blocks for the psychologist only

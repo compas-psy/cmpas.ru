@@ -1,28 +1,7 @@
-import { createHash, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import { extractFirstName } from '@/lib/person-name';
-
-// Ephemeral random fallback instead of a known constant: 'cmpas-local-secret'
-// was public in the repo, so anyone could forge sessionActionToken /
-// documentDeliveryToken (cancel any session, open any client document) if
-// AUTH_SECRET were ever unset. Random fallback makes forged tokens impossible
-// (existing links break on restart — the safe failure mode).
-let _ephemeralSecret: string | undefined;
-function appSecret() {
-    const s = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-    if (s) return s;
-    if (!_ephemeralSecret) {
-        console.error('[client-workflow] AUTH_SECRET is not set — using an ephemeral key; client action/document links will not survive restarts.');
-        _ephemeralSecret = createHash('sha256').update(randomUUID() + randomUUID()).digest('hex');
-    }
-    return _ephemeralSecret;
-}
-
-function safeEqualHex(a: string, b: string) {
-    const ba = Buffer.from(a);
-    const bb = Buffer.from(b);
-    return ba.length === bb.length && timingSafeEqual(ba, bb);
-}
+import { appSecret, safeEqualHex } from '@/lib/app-secret';
 
 export function publicBaseUrl() {
     return process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'https://cmpas.ru';

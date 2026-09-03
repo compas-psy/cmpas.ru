@@ -10,6 +10,7 @@ import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliver
 import { rescheduleSessionAtomic } from '@/lib/session-reschedule';
 import { track } from '@/lib/analytics/track';
 import { requireOwnedSession, requireOwnedClient } from '@/lib/practice/ownership';
+import { createManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -116,51 +117,26 @@ export async function createSession(data: {
 }) {
     const psychologistId = await getPsychologistId();
     await requireOwnedClient(psychologistId, data.clientId);
-    const duration = data.duration || 50;
-    const [h, m] = data.time.split(':').map(Number);
-    const endMinutes = h * 60 + m + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
-    const sessionDate = new Date(data.date);
-    const dayStart = new Date(sessionDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(sessionDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    // Check for time conflicts
-    const existingSessions = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            date: { gte: dayStart, lte: dayEnd },
-            status: { not: 'cancelled' },
-        },
-    });
-
-    const newStartMins = h * 60 + m;
-    const newEndMins = newStartMins + duration;
-
-    for (const sess of existingSessions) {
-        const [sH, sM] = sess.time.split(':').map(Number);
-        const sStartMins = sH * 60 + sM;
-        const sEndMins = sStartMins + (sess.duration || 50);
-        if (newStartMins < sEndMins && newEndMins > sStartMins) {
-            throw new Error('Это время уже занято другой сессией');
-        }
-    }
-
-    const session = await db.diarySession.create({
-        data: {
+    // Task 7: shared atomic core with mobile — a per-(psychologist,day)
+    // advisory lock, so two concurrent manual creates for the same day can't
+    // both pass a stale collision check, plus a real maxSessionsPerDay cap
+    // (previously unchecked here entirely).
+    let session;
+    try {
+        ({ session } = await createManualPracticeSession({
             psychologistId,
             clientId: data.clientId,
-            date: sessionDate,
+            dateStr: data.date,
             time: data.time,
-            endTime,
-            duration,
-            type: data.type || 'individual',
-            format: data.format || 'online',
-            status: 'confirmed',
-        },
-    });
+            duration: data.duration,
+            type: data.type,
+            format: data.format,
+        }));
+    } catch (e) {
+        if (e instanceof BookingConflictError) throw new Error(e.message);
+        throw e;
+    }
 
     // Update client stats
     const sessionsCount = await db.diarySession.count({ where: { clientId: data.clientId } });

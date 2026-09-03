@@ -10,6 +10,7 @@ import { createNotification } from '@/lib/notifications';
 import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 import { formatSession, toDatabaseType } from '@/lib/mobile-sessions';
 import { requireOwnedClient } from '@/lib/practice/ownership';
+import { createManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
 
 async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
     if (!sessions.length) return sessions;
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { clientId, date, startTime, endTime, format, type, duration: durationReq, clientRequestId, notes } = await req.json();
+        const { clientId, date, startTime, format, type, duration: durationReq, clientRequestId, notes } = await req.json();
         if (!clientId || !date || !startTime) return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
 
         try {
@@ -68,63 +69,42 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Client not found' }, { status: 404 });
         }
 
-        // Идемпотентность досылки. Приложение рождает clientRequestId в момент
-        // постановки записи в очередь, а не в момент отправки, поэтому повтор
-        // после потерянного ответа приходит с тем же ключом. Возвращаем то, что
-        // уже создано, вместо второй сессии в расписании.
-        //
-        // Проверка идёт ДО проверки занятости времени: иначе повтор собственной
-        // же записи натыкался бы на неё саму и получал «Это время уже занято».
-        if (typeof clientRequestId === 'string' && clientRequestId) {
-            const already = await db.diarySession.findFirst({
-                where: { clientRequestId, psychologistId: auth.userId } as any,
-                include: { client: true },
-            });
-            if (already) return NextResponse.json(formatSession(already as any));
-        }
-
         const duration = durationReq || 50;
-        const [hours, minutes] = startTime.split(':').map(Number);
-        const endMinutes = hours * 60 + minutes + duration;
-        const computedEnd = endTime || `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
-        const sessionDate = new Date(date);
-        const dayStart = new Date(sessionDate); dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(sessionDate); dayEnd.setHours(23, 59, 59, 999);
-
-        const existing = await db.diarySession.findMany({ where: { psychologistId: auth.userId, date: { gte: dayStart, lte: dayEnd }, status: { not: 'cancelled' } } });
-        const newStart = hours * 60 + minutes;
-        const newEnd = newStart + duration;
-        for (const item of existing) {
-            const [itemHours, itemMinutes] = item.time.split(':').map(Number);
-            const itemStart = itemHours * 60 + itemMinutes;
-            const itemEnd = itemStart + (item.duration || 50);
-            if (newStart < itemEnd && newEnd > itemStart) return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
+        // Task 7: shared atomic core with web manual creation — a per-
+        // (psychologist,day) advisory lock re-checks the clientRequestId
+        // idempotency replay, the time collision, and a real
+        // maxSessionsPerDay cap (previously unchecked here) all inside one
+        // lock, so a lost-response retry can never race its own original
+        // request into a duplicate the way a bare UNIQUE-constraint catch
+        // could.
+        let session;
+        let alreadyExisted: boolean;
+        try {
+            ({ session, alreadyExisted } = await createManualPracticeSession({
+                psychologistId: auth.userId,
+                clientId,
+                dateStr: date,
+                time: startTime,
+                duration,
+                type: toDatabaseType(type),
+                format: format === 'IN_PERSON' ? 'in_person' : 'online',
+                status: 'pending',
+                notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null,
+                clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null,
+            }));
+        } catch (error) {
+            if (error instanceof BookingConflictError) {
+                return NextResponse.json({ error: error.message }, { status: 409 });
+            }
+            throw error;
         }
 
-        // Гонка двух одновременных повторов: оба проходят проверку выше, и
-        // второй упирается в UNIQUE-индекс на clientRequestId. Проверено на
-        // настоящем Postgres — БД отвергает дубль с P2002. Для клиента это тот
-        // же самый случай «уже создано», а не ошибка сервера.
-        const createSessionRow = async () => {
-            try {
-                return await db.diarySession.create({
-                    data: { psychologistId: auth.userId, clientId, date: sessionDate, time: startTime, endTime: computedEnd, duration, type: toDatabaseType(type), format: format === 'IN_PERSON' ? 'in_person' : 'online', status: 'pending', clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null, notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null } as any,
-                    include: { client: true },
-                });
-            } catch (error) {
-                const isDuplicateKey = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
-                if (!isDuplicateKey || !clientRequestId) throw error;
-                const raced = await db.diarySession.findFirst({
-                    where: { clientRequestId, psychologistId: auth.userId } as any,
-                    include: { client: true },
-                });
-                if (!raced) throw error;
-                return raced;
-            }
-        };
-
-        const session = await createSessionRow();
+        // Idempotent replay of a lost response — the original request already
+        // ran notifications/calendar-sync/client-notice; don't repeat them.
+        if (alreadyExisted) {
+            return NextResponse.json(formatSession(session as any));
+        }
 
         await createNotification({
             psychologistId: auth.userId,

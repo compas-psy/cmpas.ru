@@ -10,12 +10,15 @@ export interface SuggestedTimeCandidate {
     time: string; // 'HH:MM'
     format: string;
     addressId: string | null;
-    // Task 7: exact-slot identity carried through from resolveAvailableTimesForDay
-    // so a suggested candidate can be turned into a signed slotToken without
-    // re-resolving/guessing which rule it came from after the fact.
+    // Task 7: exact-slot identity carried through from resolveAvailableTimesForDay,
+    // plus the signed slotToken itself — suggested-times and the full
+    // calendar share one exact-slot contract, so a suggested candidate can
+    // be booked directly instead of re-resolving/guessing which rule it
+    // came from after the fact.
     availabilitySlotId: string;
     scheduleRuleId: string | null;
     duration: number;
+    slotToken: string;
 }
 
 function dayOfWeekMondayFirst(dateStr: string): number {

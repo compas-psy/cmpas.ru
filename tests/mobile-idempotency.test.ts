@@ -21,8 +21,8 @@ vi.mock('@/lib/mobile-auth', () => ({
     unauthorizedResponse: () => new Response('unauthorized', { status: 401 }),
 }));
 
-vi.mock('@/lib/db', () => ({
-    db: {
+vi.mock('@/lib/db', () => {
+    const db: any = {
         diarySession: {
             findFirst: async ({ where }: any) => {
                 if (where.clientRequestId) {
@@ -66,8 +66,18 @@ vi.mock('@/lib/db', () => ({
         // attestation — this file is about idempotency, not that gate, so
         // the psychologist here is always already attested.
         practiceOperatorAttestation: { findFirst: async () => ({ id: 'attestation-1' }) },
-    },
-}));
+        // Task 7: session creation now goes through createManualPracticeSession,
+        // which wraps the idempotency/collision/cap check in db.$transaction
+        // with a per-(psychologist,day) advisory lock. The mock passes the
+        // same db object through as `tx` — every method below already reads/
+        // writes the shared `store`, so this preserves this file's existing
+        // single-flow-at-a-time test semantics without a real Postgres lock.
+        $transaction: async (fn: any) => fn(db),
+        $executeRaw: async () => undefined,
+        psychologistSettings: { findUnique: async () => null },
+    };
+    return { db };
+});
 
 vi.mock('@/lib/calendar/auto-sync', () => ({
     autoSyncSessionToCalendars: async () => undefined,
@@ -137,32 +147,23 @@ describe('POST /api/mobile/sessions — повтор с тем же ключом
         expect(store.sessions[0].clientRequestId).toBeNull();
     });
 
-    it('гонка двух повторов: отказ БД по UNIQUE возвращает уже созданное, а не 500', async () => {
-        // Два одновременных повтора оба проходят проверку по ключу и второй
-        // упирается в UNIQUE-индекс. Проверено на настоящем Postgres, что БД
-        // такой дубль отвергает; здесь проверяется, что маршрут это переживает.
+    it('Task 7: повтор с тем же ключом после потерянного ответа переживает без 500 — тот же случай, другой механизм', async () => {
+        // Раньше это защищала гонка "create падает по UNIQUE, ловим P2002,
+        // перечитываем" — единственный сценарий, где ДВА create вообще могли
+        // столкнуться. С advisory-lock-транзакцией (createManualPracticeSession)
+        // проверка по clientRequestId происходит ВНУТРИ лока, до create —
+        // гонки, которую ловил P2002-catch, больше физически не может быть:
+        // второй запрос видит уже созданную строку и просто возвращает её.
         const { POST } = await import('../src/app/api/mobile/sessions/route');
-        const { db } = (await import('@/lib/db')) as any;
+        const body = { clientId: 'c', date: '2026-09-01', startTime: '10:00', clientRequestId: 'op-race' };
 
-        // Строка уже создана «другим процессом» ПОСЛЕ того, как наша проверка
-        // по ключу вернула пусто: create падает, findFirst её находит.
-        const realCreate = db.diarySession.create;
-        db.diarySession.create = async () => {
-            store.sessions.push({ id: 'session-raced', clientRequestId: 'op-race', psychologistId: 'psy-1', client: { id: 'c', name: 'Клиент' }, date: new Date(), time: '10:00' });
-            const err: any = new Error('Unique constraint failed');
-            err.code = 'P2002';
-            Object.setPrototypeOf(err, (await import('@prisma/client')).Prisma.PrismaClientKnownRequestError.prototype);
-            throw err;
-        };
+        const first = await POST(post('https://cmpas.ru/api/mobile/sessions', body) as any);
+        const second = await POST(post('https://cmpas.ru/api/mobile/sessions', body) as any);
 
-        const res = await POST(post('https://cmpas.ru/api/mobile/sessions', {
-            clientId: 'c', date: '2026-09-01', startTime: '10:00', clientRequestId: 'op-race',
-        }) as any);
-
-        db.diarySession.create = realCreate;
-        expect(res.status).not.toBe(500);
+        expect(first.status).not.toBe(500);
+        expect(second.status).not.toBe(500);
         expect(store.sessions).toHaveLength(1);
-        expect((await res.json()).id).toBe('session-raced');
+        expect((await first.json()).id).toBe((await second.json()).id);
     });
 
     it('комментарий доезжает до сервера, а не теряется на успешном пути', async () => {

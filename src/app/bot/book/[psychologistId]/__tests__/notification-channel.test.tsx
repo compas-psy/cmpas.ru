@@ -71,7 +71,7 @@ beforeEach(() => {
     });
     actions.getAvailableDates.mockResolvedValue(['2026-09-15']);
     actions.getAvailableTimes.mockResolvedValue([
-        { time: '19:00', format: 'online', addressId: null },
+        { time: '19:00', format: 'online', addressId: null, slotToken: 'slt1_test-token' },
     ]);
     actions.resolveSignedClientLinkParam.mockResolvedValue(null);
     // Неизвестный клиент без Telegram и без client id из URL — page.tsx

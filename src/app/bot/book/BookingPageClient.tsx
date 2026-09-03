@@ -105,7 +105,12 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // Booking state
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
-    type TimeSlot = { time: string, format: string, addressId: string | null, isOwnBooking?: boolean };
+    // Task 7: slotToken is the exact-slot identity the booking commit trusts —
+    // format/addressId/duration are never re-derived from raw date/time at
+    // booking time, only decoded from this signed token server-side. A
+    // format:'both' slot has no single token (the concrete choice isn't made
+    // yet), so it carries one token per concrete format instead.
+    type TimeSlot = { time: string, format: string, addressId: string | null, isOwnBooking?: boolean, slotToken?: string | null, slotTokenOnline?: string | null, slotTokenOffline?: string | null };
     const [availableTimes, setAvailableTimes] = useState<TimeSlot[]>([]);
     const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
     const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline' | null>(null);
@@ -408,7 +413,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const handleSuggestedTimeSelect = (candidate: SuggestedTimeCandidate) => {
         const [y, m, d] = candidate.date.split('-').map(Number);
         setSelectedDate(new Date(y, m - 1, d));
-        handleTimeSlotSelect({ time: candidate.time, format: candidate.format, addressId: candidate.addressId });
+        handleTimeSlotSelect({ time: candidate.time, format: candidate.format, addressId: candidate.addressId, slotToken: candidate.slotToken });
     };
 
     const handleWaitlistSubmit = async (e: React.FormEvent) => {
@@ -471,16 +476,26 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const performBooking = async () => {
         if (!selectedDate || !selectedTimeSlot || !selectedFormat) return;
 
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
         setBooking(true);
+
+        // Task 7: the slotToken IS the booking — format/addressId/duration
+        // are never sent as separate fields the server would have to trust.
+        // A format:'both' slot carries two tokens, one per concrete choice;
+        // anything else carries exactly one.
+        const tokenToUse = selectedTimeSlot.format === 'both'
+            ? (selectedFormat === 'offline' ? selectedTimeSlot.slotTokenOffline : selectedTimeSlot.slotTokenOnline)
+            : selectedTimeSlot.slotToken;
+
+        if (!tokenToUse) {
+            toast.error('Это время больше недоступно — выберите другое.');
+            setBooking(false);
+            return;
+        }
 
         try {
             const res = await bookSession(psychologistId, tgUser, {
                 ...form,
-                date: dateStr,
-                time: selectedTimeSlot.time,
-                format: selectedFormat,
-                addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
+                slotToken: tokenToUse,
             });
 
             if (res && !res.success) {

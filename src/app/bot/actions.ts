@@ -9,6 +9,8 @@ import { createNotification } from '@/lib/notifications';
 import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalClientToken } from '@/lib/client-workflow';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 import { resolveAvailableTimesForDay } from '@/lib/practice/booking/availability';
+import { slotToken } from '@/lib/practice/booking/slot-token';
+import { createPracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
@@ -302,7 +304,35 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         select: { date: true, time: true, duration: true, clientId: true }
     });
 
-    return resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
+    const resolved = resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
+
+    // Task 7: every option carries a signed slotToken — the ONLY thing a
+    // booking commit trusts for exact slot identity. Minted here, at read
+    // time, from the exact same resolved option the client sees; never
+    // reconstructed from date/time later.
+    //
+    // format:'both' is special: it means the RULE allows either format, and
+    // the client picks one in a follow-up step (see BookingPageClient's
+    // online/offline toggle) — there is no single concrete option to sign.
+    // Two tokens are minted instead, one per concrete choice, so the token
+    // always encodes exactly what will be booked, never an ambiguous format.
+    return resolved.map(opt => {
+        const mint = (format: string, addressId: string | null) => slotToken({
+            psychologistId,
+            dateStr,
+            time: opt.time,
+            availabilitySlotId: opt.availabilitySlotId,
+            scheduleRuleId: opt.scheduleRuleId,
+            format,
+            addressId,
+            duration: opt.duration,
+        });
+
+        if (opt.format === 'both') {
+            return { ...opt, slotToken: null, slotTokenOnline: mint('online', null), slotTokenOffline: mint('offline', opt.addressId) };
+        }
+        return { ...opt, slotToken: mint(opt.format, opt.addressId), slotTokenOnline: null, slotTokenOffline: null };
+    });
 }
 
 /**
@@ -331,14 +361,19 @@ export async function getSuggestedTimes(
                 // the full calendar must share one exact-slot contract, so a
                 // signed slotToken can be issued for a suggested candidate
                 // without re-resolving/guessing which rule it came from later.
+                // A format:'both' rule normally waits for a follow-up online/
+                // offline choice in the full grid — the one-tap suggestion
+                // quick-pick has no such step, so it defaults to online.
+                const isBoth = slot.format === 'both';
                 candidates.push({
                     date: dateStr,
                     time: slot.time,
-                    format: slot.format,
-                    addressId: slot.addressId,
+                    format: isBoth ? 'online' : slot.format,
+                    addressId: isBoth ? null : slot.addressId,
                     availabilitySlotId: slot.availabilitySlotId,
                     scheduleRuleId: slot.scheduleRuleId,
                     duration: slot.duration,
+                    slotToken: (isBoth ? slot.slotTokenOnline : slot.slotToken) as string,
                 });
             }
         }
@@ -367,7 +402,7 @@ export async function submitWaitlistInterest(psychologistId: string, name: strin
     return { success: true };
 }
 
-export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
+export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, slotToken: string }) {
     let normalizedPhone = form.phone.replace(/[^\d+]/g, '');
     const plainDigits = normalizedPhone.replace(/[^\d]/g, '');
 
@@ -454,66 +489,29 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         }
     }
 
-    const [y, m, d] = form.date.split('-').map(Number);
-    const dateObj = new Date(Date.UTC(y, m - 1, d));
-
-    const dayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-    const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
-
-    // Get duration from the matching availability slot for this booking
-    const [h, min] = form.time.split(':').map(Number);
-    const bookingDayOfWeek = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
-    const matchingSlot = await db.availabilitySlot.findFirst({
-        where: {
-            psychologistId,
-            isActive: true,
-            dayOfWeek: bookingDayOfWeek,
-        },
-        orderBy: { createdAt: 'desc' },
-    });
-    const duration = matchingSlot?.duration || 50;
-    const newStartMins = h * 60 + min;
-    const newEndMins = newStartMins + duration;
-
-    const existingSessions = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            date: { gte: dayStart, lte: dayEnd },
-            status: { not: 'cancelled' },
-        },
-    });
-
-    for (const existing of existingSessions) {
-        const [eH, eM] = existing.time.split(':').map(Number);
-        const eStartMins = eH * 60 + eM;
-        const eEndMins = eStartMins + (existing.duration || 50);
-        if (newStartMins < eEndMins && newEndMins > eStartMins) {
-            return { success: false, error: 'Это время уже занято' };
-        }
-    }
-
-    // Валидация: один клиент не может записаться 2+ раз в один день
-    const clientSessionsToday = existingSessions.filter(s => s.clientId === client!.id);
-    if (clientSessionsToday.length > 0) {
-        return { success: false, error: 'Вы уже записаны на этот день' };
-    }
-
-    const endMinutes = h * 60 + min + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-
-    const session = await db.diarySession.create({
-        data: {
+    // Task 7: the ONLY source of exact slot identity — never re-derive
+    // duration/format/addressId from a fresh AvailabilitySlot lookup (the old
+    // `findFirst({dayOfWeek})` picked an arbitrary rule when several existed
+    // for the same day, and never checked the collision/day-cap atomically).
+    // createPracticeBooking re-resolves availability and re-checks
+    // maxSessionsPerDay inside a per-(psychologist,day) advisory lock.
+    let session;
+    try {
+        session = await createPracticeBooking({
             psychologistId,
             clientId: client.id,
-            date: dateObj,
-            time: form.time,
-            endTime,
-            duration,
-            type: 'individual',
-            format: form.format || 'online',
-            status: 'confirmed'
+            slotToken: form.slotToken,
+            origin: 'self_booking',
+        });
+    } catch (e) {
+        if (e instanceof BookingConflictError) {
+            return { success: false, error: e.message };
         }
-    });
+        throw e;
+    }
+
+    const dateStr = toDateStr(session.date);
+    const format = session.format;
 
     const sessionsCount = await db.diarySession.count({ where: { clientId: client.id } });
     await db.diaryClient.update({
@@ -521,31 +519,31 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         data: { totalSessions: sessionsCount }
     });
 
-    const psy = await db.user.findUnique({ 
+    const psy = await db.user.findUnique({
         where: { id: psychologistId },
         include: { psychologistSettings: true }
     }) as any;
 
-    const onlineLink = form.format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
+    const onlineLink = format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
     const linkText = onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
 
     // Notify psychologist (Telegram + MAX)
     await notifyUser(
         psy?.telegramChatId,
         (psy as any)?.maxChatId,
-        `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
+        `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n📍 Формат: ${format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
     );
     await createNotification({
         psychologistId,
         type: 'new_booking',
         title: 'Новая самозапись',
-        subtitle: `${form.name} · ${form.date} в ${form.time}`,
+        subtitle: `${form.name} · ${dateStr} в ${session.time}`,
         sessionId: session.id,
         clientId: client.id,
     });
 
     // Notify client (Telegram + MAX)
-    const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
+    const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n📍 Формат: ${format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
     await notifyUser(
         client.telegramChatId,
         (client as any).maxChatId,
