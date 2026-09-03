@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
-const MAX_API = 'https://botapi.max.ru';
-// MAX moved its API domain to platform-api2.max.ru (from platform-api.max.ru,
-// 19.07.2026). Scoped to /subscriptions only, per current MAX docs — /me and
-// the messaging surface (src/lib/max-bot.ts) stay on botapi.max.ru until
-// there's a concrete reason to move them too.
-const MAX_SUBSCRIPTIONS_API = 'https://platform-api2.max.ru';
+// MAX migrated from platform-api.max.ru to platform-api2.max.ru (19.07.2026);
+// current docs use it for every method (/me, /messages, /subscriptions, ...),
+// not just subscription registration — one base URL, not two parallel ones.
+const MAX_API = 'https://platform-api2.max.ru';
 const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.AUTH_SECRET;
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 
@@ -22,16 +20,6 @@ function checkAuth(request: NextRequest) {
 // MAX API uses bare token in Authorization header (no Bearer/Token prefix)
 function maxFetch(path: string, options: RequestInit = {}) {
     return fetch(`${MAX_API}${path}`, {
-        ...options,
-        headers: {
-            'Authorization': MAX_TOKEN!,
-            ...(options.headers || {}),
-        },
-    });
-}
-
-function maxSubscriptionsFetch(path: string, options: RequestInit = {}) {
-    return fetch(`${MAX_SUBSCRIPTIONS_API}${path}`, {
         ...options,
         headers: {
             'Authorization': MAX_TOKEN!,
@@ -65,7 +53,7 @@ export async function GET(request: NextRequest) {
     } catch (e: any) { status.bot_info_error = e.message; }
 
     try {
-        const r = await maxSubscriptionsFetch('/subscriptions');
+        const r = await maxFetch('/subscriptions');
         status.subscriptions = await r.json();
     } catch (e: any) { status.subscriptions_error = e.message; }
 
@@ -79,9 +67,13 @@ export async function POST(request: NextRequest) {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
 
     try {
-        await maxSubscriptionsFetch('/subscriptions', { method: 'DELETE' }).catch(() => {});
+        // DELETE /subscriptions requires the ?url= of the subscription being
+        // removed — a bare DELETE with no query param doesn't identify which
+        // subscription to unregister per the current MAX contract.
+        const deleteQs = new URLSearchParams({ url: webhookUrl }).toString();
+        await maxFetch(`/subscriptions?${deleteQs}`, { method: 'DELETE' }).catch(() => {});
 
-        const res = await maxSubscriptionsFetch('/subscriptions', {
+        const res = await maxFetch('/subscriptions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

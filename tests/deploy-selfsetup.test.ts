@@ -60,7 +60,14 @@ describe('Task 2 (PRAKTIKA MVP): MAX_WEBHOOK_SECRET самозаводится �
 
     it('регистрация подписки идёт на platform-api2.max.ru (миграция MAX 19.07.2026), а не на устаревший домен', () => {
         expect(source).toMatch(/platform-api2\.max\.ru\/subscriptions/);
-        expect(source).not.toMatch(/botapi\.max\.ru\/subscriptions/);
+        expect(source).not.toMatch(/botapi\.max\.ru/);
+    });
+
+    it('DELETE /subscriptions передаёт ?url= удаляемой подписки — обязательный параметр по текущему контракту MAX', () => {
+        const deleteIdx = indexOf(/-X DELETE 'https:\/\/platform-api2\.max\.ru\/subscriptions/);
+        expect(deleteIdx).toBeGreaterThan(-1);
+        const deleteLine = source.slice(deleteIdx, source.indexOf('\n', deleteIdx));
+        expect(deleteLine).toMatch(/\?url=/);
     });
 });
 

@@ -496,10 +496,12 @@ fi
 max_token=$(grep '^MAX_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)
 max_webhook_secret=$(grep '^MAX_WEBHOOK_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
 # MAX moved its API domain to platform-api2.max.ru (from platform-api.max.ru,
-# 19.07.2026), scoped here to the /subscriptions registration only — per
-# current MAX docs, not a reason to move the rest of the bot's API calls.
+# 19.07.2026) — current docs use it for every method, not just
+# /subscriptions, but this script only ever calls /subscriptions.
+# DELETE requires ?url=<subscription's webhook URL> to identify which
+# subscription to remove — a bare DELETE with no query param is a no-op.
 if [ -n "$max_token" ]; then
-  curl -sS -X DELETE 'https://platform-api2.max.ru/subscriptions' -H "Authorization: ${max_token}" >/dev/null || true
+  curl -sS -X DELETE 'https://platform-api2.max.ru/subscriptions?url=https%3A%2F%2Fcmpas.ru%2Fapi%2Fmax%2Fwebhook' -H "Authorization: ${max_token}" >/dev/null || true
   curl -fsS -X POST 'https://platform-api2.max.ru/subscriptions' \
     -H "Authorization: ${max_token}" \
     -H 'Content-Type: application/json' \

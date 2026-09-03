@@ -113,7 +113,7 @@ export async function getMessagingStatus(): Promise<MessagingStatus> {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch('https://botapi.max.ru/me', { headers: { Authorization: maxToken }, signal: controller.signal });
+      const res = await fetch('https://platform-api2.max.ru/me', { headers: { Authorization: maxToken }, signal: controller.signal });
       clearTimeout(timer);
       const json: any = await res.json().catch(() => null);
       maxBot = { configured: true, ok: res.ok, error: res.ok ? null : (json?.message || `HTTP ${res.status}`) };

@@ -77,13 +77,13 @@ export async function GET() {
         }
     }
 
-    // Test 5: MAX API connectivity (botapi.max.ru)
+    // Test 5: MAX API connectivity (platform-api2.max.ru)
     const maxToken = process.env.MAX_BOT_TOKEN;
     if (maxToken) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
         try {
-            const res = await fetch('https://botapi.max.ru/me', {
+            const res = await fetch('https://platform-api2.max.ru/me', {
                 signal: controller.signal,
                 headers: { 'Authorization': maxToken },
             });

@@ -79,16 +79,30 @@ MAX Bot API не поддерживает secret-заголовок — на м�
 `/api/max/admin` (GET) теперь отдельно показывает `MAX_WEBHOOK_SECRET_set` —
 preflight-диагностика на случай, если секрет всё же потерян вручную.
 
-**Домен регистрации подписки** перенесён на `platform-api2.max.ru`
-(миграция MAX с `platform-api.max.ru`, 19.07.2026) — только для
-`POST/DELETE/GET /subscriptions` в `scripts/deploy-production-remote.sh`,
-`src/app/api/max/admin/route.ts` и неиспользуемом `registerMaxWebhook()`
-(`src/lib/max-bot.ts`). Остальные вызовы MAX API (`/messages`, `/me`) по
-прямому указанию оставлены на `botapi.max.ru` — без явной необходимости их
-не трогали. *Не удалось независимо проверить по официальной документации
-(`dev.max.ru` заблокирован сетевым прокси этой сессии) — перенос сделан по
-прямому указанию учредителя; рекомендуется подтвердить реальной
-регистрацией при следующей выкладке.*
+**Домен MAX API** перенесён на `platform-api2.max.ru` (миграция MAX с
+`platform-api.max.ru`, 19.07.2026) — **везде**, не только для
+`/subscriptions`: `sendMaxMessage`/`getMaxBotInfo`/`registerMaxWebhook`
+(`src/lib/max-bot.ts`), `/api/max/admin` (GET/POST), диагностика
+(`src/app/api/telegram/diagnostic/route.ts`,
+`src/app/admin/actions/features.ts`) и, важнее всего, автоматическая
+(пере)регистрация вебхука при каждом старте приложения
+(`src/instrumentation.ts`, через 10с после старта) — единый base URL, без
+двух параллельных доменов. Первая версия этой правки (03.09.2026) ошибочно
+ограничила перенос только `/subscriptions` в трёх местах; учредитель открыл
+актуальную документацию MAX и подтвердил, что она использует
+`platform-api2.max.ru` для всех методов.
+
+**Найдено при этой доправке:** `src/instrumentation.ts` — САМ РЕАЛЬНЫЙ путь
+регистрации в проде (срабатывает при каждом рестарте) — вообще не передавал
+`secret` в `POST /subscriptions`. Это означало, что каждый рестарт
+контейнера тихо перерегистрировал подписку БЕЗ секрета, отменяя защиту из
+`/api/max/admin` или деплой-скрипта, даже после их корректной регистрации.
+Исправлено вместе с доменом.
+
+**DELETE `/subscriptions`** по актуальному контракту MAX требует параметр
+`?url=<адрес подписки>`, идентифицирующий, какую подписку снимать — голый
+`DELETE` без параметра ничего не делает. Исправлено во всех трёх местах
+регистрации (деплой-скрипт, `/api/max/admin`, `instrumentation.ts`).
 
 ### A9 — Telegram MiniApp identity: confirmed live IDOR (Task 3, addendum §6)
 Founder-reported and confirmed: `GET /api/user/diary/bot/client/sessions`
