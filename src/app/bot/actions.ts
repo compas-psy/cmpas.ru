@@ -8,6 +8,7 @@ import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
 import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalClientToken } from '@/lib/client-workflow';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
+import { resolveAvailableTimesForDay } from '@/lib/practice/booking/availability';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
@@ -116,157 +117,6 @@ function getPartsInTz(date: Date, timeZone: string) {
     };
 }
 
-function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], settings: any, clientId: string | null = null, skipBuffer = false) {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(Date.UTC(year, month - 1, day));
-    // Use the practice timezone (default Europe/Moscow) for "now" — the server
-    // runs in UTC, but slot times like "17:00" are local wall-clock. Comparing
-    // against UTC hours wrongly offers past slots (e.g. 17:00 at 19:07 MSK).
-    const tz = settings?.timezone || 'Europe/Moscow';
-    const now = new Date();
-    const nowParts = getPartsInTz(now, tz);
-    const todayStr = `${nowParts.year}-${String(nowParts.month).padStart(2, '0')}-${String(nowParts.day).padStart(2, '0')}`;
-    const isToday = dateStr === todayStr;
-    const nowH = Number(nowParts.hour);
-    const nowM = Number(nowParts.minute);
-
-    // Global settings checks
-    const bufferHours = settings?.bookingBufferHours ?? 24;
-    const bufferDate = new Date(now.getTime() + bufferHours * 60 * 60 * 1000);
-    const bufferParts = getPartsInTz(bufferDate, tz);
-    const bufferDateStr = `${bufferParts.year}-${String(bufferParts.month).padStart(2, '0')}-${String(bufferParts.day).padStart(2, '0')}`;
-    // If the check date is historically earlier or earlier than buffer date
-    if (dateStr < todayStr) return [];
-    
-    // Horizon check — only for client-facing booking, not psychologist
-    if (!skipBuffer) {
-        const horizonDays = settings?.bookingHorizonDays ?? 14;
-        const horizonDate = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
-        const horizonDateStr = toDateStr(horizonDate);
-        if (dateStr > horizonDateStr) return [];
-    }
-
-    const maxSessionsPerDay = settings?.maxSessionsPerDay ?? null;
-    const defaultSessionBreak = settings?.sessionBreak ?? 15;
-
-    const dayOfWeek = (date.getUTCDay() + 6) % 7;
-
-    const daySlots = slots.filter(s => {
-        if (s.dayOfWeek !== dayOfWeek) return false;
-
-        const ruleStart = s.scheduleRule?.startDate || s.startDate;
-        if (ruleStart) {
-            const slotStartStr = toDateStr(new Date(ruleStart));
-            if (dateStr < slotStartStr) return false;
-        }
-        
-        const ruleEnd = s.scheduleRule?.endDate || s.endDate;
-        if (ruleEnd) {
-            const slotEndStr = toDateStr(new Date(ruleEnd));
-            if (dateStr > slotEndStr) return false;
-        }
-        return true;
-    });
-
-    const clientAudience = clientId ? 'regular' : 'new';
-    const daySessions = sessions.filter(s => toDateStr(new Date(s.date)) === dateStr);
-    const bookedCount = daySessions.length;
-
-    let timesObj: Record<string, { time: string, format: string, addressId: string | null, isOwnBooking?: boolean }> = {};
-
-    daySlots.forEach(slot => {
-        const audienceFilter = slot.scheduleRule?.audienceFilter || 'all';
-        if (audienceFilter !== 'all' && audienceFilter !== clientAudience) return;
-
-        const [startH, startM] = slot.startTime.split(':').map(Number);
-        const [endH, endM] = slot.endTime.split(':').map(Number);
-        const duration = slot.scheduleRule?.duration ?? slot.duration ?? 50;
-        const format = slot.scheduleRule?.format ?? slot.format ?? 'online';
-        const addressId = slot.scheduleRule?.addressId ?? slot.addressId ?? null;
-        const breakDuration = slot.scheduleRule?.breakDuration ?? defaultSessionBreak;
-
-        let currentTotalMins = startH * 60 + startM;
-        const endTotalMins = endH * 60 + endM;
-
-        while (currentTotalMins + duration <= endTotalMins) {
-            const h = Math.floor(currentTotalMins / 60);
-            const m = currentTotalMins % 60;
-            const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-            if (maxSessionsPerDay && (bookedCount + Object.keys(timesObj).filter(k => !timesObj[k].isOwnBooking).length) >= maxSessionsPerDay) {
-                break;
-            }
-
-            const slotEndTimeMins = currentTotalMins + duration;
-            
-            // Evaluated exact time buffer.
-            if (skipBuffer) {
-                // Psychologist manually creating — no buffer restriction, only skip past times for today
-                if (isToday) {
-                    if (h < nowH || (h === nowH && m <= nowM)) {
-                        currentTotalMins += duration + breakDuration;
-                        continue;
-                    }
-                }
-            } else if (isToday || dateStr === bufferDateStr) {
-                 // bufferDate comparison. If this exact slot starts before the buffer Date/Time, skip it.
-                 const [bH, bM] = [Number(bufferParts.hour), Number(bufferParts.minute)];
-                 if (dateStr === bufferDateStr && (h < bH || (h === bH && m < bM))) {
-                     currentTotalMins += duration + breakDuration;
-                     continue;
-                 } else if (dateStr < bufferDateStr) {
-                     currentTotalMins += duration + breakDuration;
-                     continue;
-                 }
-            }
-
-            const hasBlock = blocks.some(b => {
-                const blockStr = toDateStr(new Date(b.date));
-                if (blockStr !== dateStr && blockStr !== toDateStr(new Date(b.date.getTime() + 86400000))) return false; // Basic safeguard. Usually b.date is in UTC on same day.
-                if (toDateStr(new Date(b.date)) !== dateStr) return false;
-                const [bSH, bSM] = b.startTime.split(':').map(Number);
-                const [bEH, bEM] = b.endTime.split(':').map(Number);
-                const blockStartMins = bSH * 60 + bSM;
-                const blockEndMins = bEH * 60 + bEM;
-                return currentTotalMins < blockEndMins && slotEndTimeMins > blockStartMins;
-            });
-
-            let isOwnSession = false;
-            let hasClash = false;
-            const collidingSession = daySessions.find(sess => {
-                const [sessH, sessM] = sess.time.split(':').map(Number);
-                const sessStartMins = sessH * 60 + sessM;
-                const sessEndMins = sessStartMins + (sess.duration || 50);
-                return currentTotalMins < sessEndMins && slotEndTimeMins > sessStartMins;
-            });
-
-            if (collidingSession) {
-                if (clientId && collidingSession.clientId === clientId) {
-                    isOwnSession = true;
-                } else {
-                    hasClash = true;
-                }
-            }
-
-            if (!hasClash && !hasBlock) {
-                const key = `${timeStr}-${format}`;
-                if (!timesObj[key]) {
-                    timesObj[key] = {
-                        time: timeStr,
-                        format: format,
-                        addressId: addressId,
-                        isOwnBooking: isOwnSession
-                    };
-                }
-            }
-
-            currentTotalMins += duration + breakDuration;
-        }
-    });
-
-    return Object.values(timesObj).sort((a, b) => a.time.localeCompare(b.time));
-}
-
 export async function getAvailableDates(psychologistId: string, year: number, month: number, skipModeCheck = false, clientId: string | null = null, skipBuffer = false) {
     // Check schedule mode — if private, return empty (only for client-facing calls)
     if (!skipModeCheck) {
@@ -359,7 +209,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
         const dateStr = toDateStr(d);
         if (dateStr < todayStr) continue;
 
-        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
+        const availableTimes = resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
         }
@@ -452,7 +302,7 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         select: { date: true, time: true, duration: true, clientId: true }
     });
 
-    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
+    return resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
 }
 
 /**
