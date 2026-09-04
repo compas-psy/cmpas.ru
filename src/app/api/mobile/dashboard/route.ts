@@ -5,7 +5,8 @@ import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-au
 import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { listNotifications } from '@/lib/notifications';
-import { compareSessionStart, hasSessionNotes, isSessionFuture, settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
+import { compareSessionStart, isSessionFuture, settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
+import { getPracticeAttention } from '@/lib/practice/attention';
 
 function normalizePaymentStatus(value: unknown) {
     const raw = String(value || 'not_required').toLowerCase();
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
         const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7);
         const horizon = new Date(today); horizon.setDate(horizon.getDate() + 30);
 
-        const [todaySessions, weekSessions, user, futureCandidates, completedCandidates, unpaidPastSessions, notificationPage] = await Promise.all([
+        const [todaySessions, weekSessions, user, futureCandidates, attentionItems, notificationPage] = await Promise.all([
             db.diarySession.findMany({
                 where: { psychologistId: auth.userId, date: { gte: today, lt: tomorrow }, status: { not: 'cancelled' } },
                 include: { client: { select: { id: true, name: true } } },
@@ -73,18 +74,10 @@ export async function GET(req: NextRequest) {
                 orderBy: [{ date: 'asc' }, { time: 'asc' }],
                 take: 60,
             }),
-            db.diarySession.findMany({
-                where: { psychologistId: auth.userId, status: 'completed', date: { lte: tomorrow } },
-                select: { id: true, notes: true, clientSummary: true, structuredNotes: true },
-                take: 500,
-            }),
-            db.$queryRaw<Array<{ count: bigint }>>`
-                SELECT COUNT(*)::bigint as count
-                FROM "DiarySession"
-                WHERE "psychologistId" = ${auth.userId}
-                  AND status = 'completed'
-                  AND "paymentStatus" = 'unpaid'
-            `.catch(() => []),
+            // Задача 17: «требует внимания» больше не считается здесь тремя
+            // отдельными счётчиками — и веб, и мобайл берут одни и те же
+            // конкретные пункты с идентификаторами из общего Action Center.
+            getPracticeAttention(auth.userId, now).catch(() => []),
             listNotifications(auth.userId, { limit: 30 }).catch(() => ({ items: [] })),
         ]);
 
@@ -98,15 +91,6 @@ export async function GET(req: NextRequest) {
         const onlineLink = user?.psychologistSettings?.onlineSessionLink || null;
         const formattedSessions = todaySessions.map((session) => formatSession(session, paymentById, onlineLink));
         const formattedNextSession = nextSessionRaw ? formatSession(nextSessionRaw, paymentById, onlineLink) : null;
-
-        const attentionItems: Array<{ type: string; count: number; label: string }> = [];
-        const sessionsWithoutNotes = completedCandidates.filter((session) => !hasSessionNotes(session)).length;
-        const clientsWithoutConsent = await db.diaryClient.count({ where: { psychologistId: auth.userId, consentDate: null, status: 'active' } }).catch(() => 0);
-        const unpaidCount = Number(unpaidPastSessions[0]?.count || 0);
-
-        if (sessionsWithoutNotes > 0) attentionItems.push({ type: 'sessions_without_notes', count: sessionsWithoutNotes, label: 'Сессии без заметок' });
-        if (clientsWithoutConsent > 0) attentionItems.push({ type: 'clients_without_consent', count: clientsWithoutConsent, label: 'Клиенты без согласия' });
-        if (unpaidCount > 0) attentionItems.push({ type: 'sessions_unpaid', count: unpaidCount, label: 'Сессии без оплаты' });
 
         const notifications = notificationPage.items.map((item: any) => ({
             id: item.id,

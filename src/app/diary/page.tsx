@@ -5,13 +5,14 @@ import {
     Calendar as CalendarIcon, Plus, User, Video, MapPin,
     AlertTriangle, FileText, Sparkles, CheckCircle2,
     ChevronRight, Coffee, Users, TrendingUp, LayoutList,
-    Filter, X, BookOpen, Shield, Clock, Share2
+    Filter, X, BookOpen, Shield, Clock, Share2, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
 import { ShareButton } from '@/components/psidairy/ShareSheet';
+import type { PracticeAttentionItem, PracticeAttentionType } from '@/lib/practice/attention';
 
 type Session = {
     id: string;
@@ -73,6 +74,28 @@ const formatLabels: Record<string, { label: string; icon: typeof Video }> = {
     hybrid: { label: 'Гибрид', icon: Users },
 };
 
+/**
+ * Задача 17 §4: куда ведёт пункт «требует внимания». Идентификаторы пришли
+ * с сервера под текущим специалистом, здесь только маршрут — каждый ведёт к
+ * конкретному объекту, а не к общему списку.
+ */
+export function attentionHref(item: PracticeAttentionItem): string {
+    switch (item.type) {
+        case 'session_without_notes':
+            return `/diary/session/${item.sessionId}/notes`;
+        case 'session_unpaid':
+            return `/diary/session/${item.sessionId}`;
+        case 'client_without_consent':
+            return `/diary/clients?clientId=${item.clientId}`;
+        case 'import_review':
+            // Своего экрана у конкретного batch пока нет: разбор идёт на
+            // экране импорта того же источника (Задача 17 не строит новый).
+            return item.importSource === 'spreadsheet'
+                ? '/diary/clients/import-spreadsheet'
+                : '/diary/clients/import-calendar';
+    }
+}
+
 function getGreeting(): string {
     const hour = new Date().getHours();
     if (hour < 6) return 'Доброй ночи';
@@ -98,6 +121,7 @@ export default function DiaryCalendarPage() {
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [prevWeek, setPrevWeek] = useState({ sessions: 0, clients: 0 });
+    const [attention, setAttention] = useState<PracticeAttentionItem[]>([]);
     const filterRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = useCallback(async () => {
@@ -122,6 +146,16 @@ export default function DiaryCalendarPage() {
                 name: c.name,
                 consentDate: (c as any).consentDate ?? null,
             })));
+        } catch { /* empty */ }
+    }, []);
+
+    // Задача 17: единственный источник «требует внимания» — общий бэкенд.
+    // Состояние вычисляемое, поэтому список просто перечитывается после
+    // каждого действия, которое могло закрыть проблему.
+    const fetchAttention = useCallback(async () => {
+        try {
+            const { getDashboardAttention } = await import('./actions/attention');
+            setAttention(await getDashboardAttention());
         } catch { /* empty */ }
     }, []);
 
@@ -159,6 +193,7 @@ export default function DiaryCalendarPage() {
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => { fetchClients(); }, [fetchClients]);
     useEffect(() => { fetchSettings(); }, [fetchSettings]);
+    useEffect(() => { fetchAttention(); }, [fetchAttention]);
 
     // Close filter dropdown on outside click
     useEffect(() => {
@@ -175,6 +210,9 @@ export default function DiaryCalendarPage() {
 
     const handleSessionSave = () => {
         fetchSessions();
+        // Состояние вычисляемое: сохранили заметку или отметили оплату —
+        // пункт «требует внимания» уходит на этом же перечитывании.
+        fetchAttention();
         setShowNewSession(false);
     };
 
@@ -210,6 +248,7 @@ export default function DiaryCalendarPage() {
             const { markSessionOutcome } = await import('./actions/sessions');
             await markSessionOutcome(id, outcome);
             fetchSessions();
+            fetchAttention();
         } catch {
             toast.error('Не удалось отметить сессию');
         }
@@ -244,66 +283,18 @@ export default function DiaryCalendarPage() {
     const completedToday = todaySessions.filter(s => s.status === 'completed' || s.status === 'no_show').length;
     const totalToday = todaySessions.length;
 
-    const pendingSessions = sessions.filter(s => s.status === 'pending');
-    const missingSessions = sessions.filter(s => {
-        if (s.status !== 'completed') return false;
-        const d = new Date(s.date); if (d > now) return false;
-        return Math.floor((now.getTime() - d.getTime()) / 86400000) <= 14 && !s.notes && !s.structuredNotes;
-    });
-    const noConsentClients = clients.filter(c => !c.consentDate);
-
-    // Задача 16 §5: «Требует внимания» перечисляет конкретные объекты, а не
-    // группы со счётчиком. Каждый пункт открывает именно то, что требует
-    // решения: карточку этого клиента или эту запись. Сигналы остаются теми
-    // же, что и раньше, — общий Action Center собирает Задача 17.
-    const byDateDesc = (a: Session, b: Session) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time);
-    const sessionWhen = (s: Session) =>
-        `${new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, ${s.time}`;
-    const clientNameOf = (s: Session) =>
-        s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
-
-    type AttentionItem = {
-        key: string;
-        title: string;
-        hint: string;
-        icon: typeof AlertTriangle;
-        rowClass: string;
-        iconClass: string;
-        href?: string;
-        onSelect?: () => void;
+    // Задача 17 §4: сигналы «требует внимания» больше НЕ вычисляются здесь —
+    // и веб, и мобайл берут их из общего getPracticeAttention. Осталось
+    // только представление: тип пункта решает вид и то, что открывается.
+    const attentionStyles: Record<PracticeAttentionType, { icon: typeof AlertTriangle; rowClass: string; iconClass: string }> = {
+        client_without_consent: { icon: Shield, rowClass: 'bg-red-50 hover:bg-red-100/50', iconClass: 'bg-red-100 text-red-500' },
+        session_without_notes: { icon: FileText, rowClass: 'bg-amber-50 hover:bg-amber-100/50', iconClass: 'bg-amber-100 text-amber-600' },
+        session_unpaid: { icon: AlertTriangle, rowClass: 'bg-orange-50 hover:bg-orange-100/50', iconClass: 'bg-orange-100 text-orange-500' },
+        import_review: { icon: Upload, rowClass: 'bg-sage-50 hover:bg-sage-100/50', iconClass: 'bg-sage-100 text-forest-700' },
     };
 
-    const attentionItems: AttentionItem[] = [
-        ...noConsentClients.map(c => ({
-            key: `consent-${c.id}`,
-            title: c.name,
-            hint: 'Нет согласия на обработку данных',
-            icon: Shield,
-            rowClass: 'bg-red-50 hover:bg-red-100/50',
-            iconClass: 'bg-red-100 text-red-500',
-            href: `/diary/clients?clientId=${c.id}`,
-        })),
-        ...[...missingSessions].sort(byDateDesc).map(s => ({
-            key: `note-${s.id}`,
-            title: clientNameOf(s),
-            hint: `Нет заметки по сессии · ${sessionWhen(s)}`,
-            icon: FileText,
-            rowClass: 'bg-amber-50 hover:bg-amber-100/50',
-            iconClass: 'bg-amber-100 text-amber-600',
-            onSelect: () => openSession(s),
-        })),
-        ...[...pendingSessions].sort(byDateDesc).map(s => ({
-            key: `pending-${s.id}`,
-            title: clientNameOf(s),
-            hint: `Оплата не отмечена · ${sessionWhen(s)}`,
-            icon: AlertTriangle,
-            rowClass: 'bg-orange-50 hover:bg-orange-100/50',
-            iconClass: 'bg-orange-100 text-orange-500',
-            onSelect: () => openSession(s),
-        })),
-    ];
-    const attentionCount = attentionItems.length;
-    const visibleAttention = attentionItems.slice(0, 6);
+    const attentionCount = attention.length;
+    const visibleAttention = attention.slice(0, 6);
     const hiddenAttentionCount = attentionCount - visibleAttention.length;
 
     const weekSessions = sessions.filter(s => {
@@ -794,24 +785,24 @@ export default function DiaryCalendarPage() {
                                 <div className="text-center py-6 text-[13px] text-muted-foreground/50 font-medium">Всё в порядке ✓</div>
                             ) : (<>
                                 {visibleAttention.map(item => {
-                                    const ItemIcon = item.icon;
-                                    const rowClass = `w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-colors ${item.rowClass}`;
-                                    const body = (
-                                        <>
-                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.iconClass}`}>
+                                    const style = attentionStyles[item.type];
+                                    const ItemIcon = style.icon;
+                                    return (
+                                        <a
+                                            key={item.id}
+                                            data-testid="attention-item"
+                                            href={attentionHref(item)}
+                                            className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-colors ${style.rowClass}`}
+                                        >
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${style.iconClass}`}>
                                                 <ItemIcon className="w-3.5 h-3.5" />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[12px] font-bold text-foreground truncate">{item.title}</div>
-                                                <div className="text-[11px] text-muted-foreground truncate">{item.hint}</div>
+                                                <div className="text-[11px] text-muted-foreground truncate">{item.detail}</div>
                                             </div>
                                             <ChevronRight className="w-3.5 h-3.5 text-primary shrink-0" />
-                                        </>
-                                    );
-                                    return item.href ? (
-                                        <a key={item.key} data-testid="attention-item" href={item.href} className={rowClass}>{body}</a>
-                                    ) : (
-                                        <button key={item.key} data-testid="attention-item" type="button" onClick={item.onSelect} className={rowClass}>{body}</button>
+                                        </a>
                                     );
                                 })}
                                 {hiddenAttentionCount > 0 && (

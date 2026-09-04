@@ -39,6 +39,13 @@ vi.mock('@/app/diary/actions/settings', () => settingsActions);
 const bookingLinkActions = vi.hoisted(() => ({ getMyBookingUrl: vi.fn() }));
 vi.mock('@/app/diary/actions/booking-link', () => bookingLinkActions);
 
+// Задача 17: «требует внимания» приходит из общего Action Center, а не
+// считается на дашборде. Здесь проверяется представление — что пункт
+// показан и ведёт к своему объекту; сам бэкенд проверяется в
+// tests/practice-attention.test.ts.
+const attentionActions = vi.hoisted(() => ({ getDashboardAttention: vi.fn() }));
+vi.mock('@/app/diary/actions/attention', () => attentionActions);
+
 // Модалки заменяем маркерами: нас интересует, ЧТО дашборд в них передаёт
 // (какую конкретно запись открыл клик), а не их внутренняя вёрстка.
 vi.mock('@/app/diary/components/SessionModal', () => ({
@@ -55,7 +62,6 @@ import DiaryCalendarPage from '../page';
 
 const TODAY = new Date();
 const iso = (d: Date) => d.toISOString();
-const daysAgo = (n: number) => { const d = new Date(TODAY); d.setDate(d.getDate() - n); return d; };
 const daysAhead = (n: number) => { const d = new Date(TODAY); d.setDate(d.getDate() + n); return d; };
 
 function session(over: SessionRow = {}): SessionRow {
@@ -78,6 +84,7 @@ beforeEach(() => {
     onboardingProgress = { clientsCount: 0, sessionsCount: 0, availabilityCount: 0, botConnected: false };
 
     store.sessions = [session()];
+    attentionActions.getDashboardAttention.mockResolvedValue([]);
     clientActions.getClients.mockResolvedValue([{ id: 'c1', name: 'Анна Волкова', consentDate: '2026-01-01' }]);
     settingsActions.getSettings.mockResolvedValue({ success: true, data: { onlineSessionLink: null } });
     bookingLinkActions.getMyBookingUrl.mockResolvedValue('https://cmpas.ru/u/anna-volkova');
@@ -243,61 +250,62 @@ describe('§4 Онбординг по реальным данным', () => {
 });
 
 describe('§5 Требует внимания — адресные пункты', () => {
-    it('клиент без согласия — отдельный пункт со ссылкой на КОНКРЕТНОГО клиента', async () => {
-        clientActions.getClients.mockResolvedValue([
-            { id: 'c1', name: 'Анна Волкова', consentDate: '2026-01-01' },
-            { id: 'c7', name: 'Пётр Ильин', consentDate: null },
+    it('клиент без согласия — пункт со ссылкой на КОНКРЕТНОГО клиента', async () => {
+        attentionActions.getDashboardAttention.mockResolvedValue([
+            { id: 'client_without_consent:c-7', type: 'client_without_consent', label: 'Пётр Ильин · нет согласия на обработку данных', title: 'Пётр Ильин', detail: 'нет согласия на обработку данных', clientId: 'c-7' },
         ]);
         await renderDashboard();
 
         const item = await screen.findByRole('link', { name: /Пётр Ильин/ });
-        expect(item).toHaveAttribute('href', '/diary/clients?clientId=c7');
-        expect(within(item).getByText('Нет согласия на обработку данных')).toBeInTheDocument();
+        expect(item).toHaveAttribute('href', '/diary/clients?clientId=c-7');
+        expect(within(item).getByText('нет согласия на обработку данных')).toBeInTheDocument();
     });
 
-    it('сессия без заметки — пункт, который открывает ИМЕННО эту запись', async () => {
-        store.sessions = [
-            session(),
-            session({ id: 's-no-note', date: iso(daysAgo(2)), status: 'completed', notes: null, structuredNotes: null }),
-        ];
+    it('сессия без заметки ведёт к заметке ИМЕННО этой сессии', async () => {
+        attentionActions.getDashboardAttention.mockResolvedValue([
+            { id: 'session_without_notes:s-no-note', type: 'session_without_notes', label: 'Анна · нет заметки по сессии 2 сентября', title: 'Анна', detail: 'нет заметки по сессии 2 сентября', sessionId: 's-no-note', clientId: 'c1' },
+        ]);
         await renderDashboard();
 
-        const item = await screen.findByRole('button', { name: /Нет заметки по сессии/ });
-        fireEvent.click(item);
-
-        expect(await screen.findByTestId('session-modal')).toHaveTextContent('s-no-note');
+        const item = await screen.findByRole('link', { name: /нет заметки по сессии/ });
+        expect(item).toHaveAttribute('href', '/diary/session/s-no-note/notes');
     });
 
-    it('неотмеченная оплата — пункт, который открывает ИМЕННО эту запись', async () => {
-        store.sessions = [
-            session(),
-            session({ id: 's-pending', date: iso(daysAgo(1)), status: 'pending' }),
-        ];
+    it('неотмеченная оплата ведёт к ИМЕННО этой записи', async () => {
+        attentionActions.getDashboardAttention.mockResolvedValue([
+            { id: 'session_unpaid:s-pending', type: 'session_unpaid', label: 'Борис · не отмечена оплата 3 сентября', title: 'Борис', detail: 'не отмечена оплата 3 сентября', sessionId: 's-pending', clientId: 'c2' },
+        ]);
         await renderDashboard();
 
-        fireEvent.click(await screen.findByRole('button', { name: /Оплата не отмечена/ }));
+        const item = await screen.findByRole('link', { name: /не отмечена оплата/ });
+        expect(item).toHaveAttribute('href', '/diary/session/s-pending');
+    });
 
-        expect(await screen.findByTestId('session-modal')).toHaveTextContent('s-pending');
+    it('незакрытый импорт ведёт на экран разбора того же источника', async () => {
+        attentionActions.getDashboardAttention.mockResolvedValue([
+            { id: 'import_review:b-1', type: 'import_review', label: 'Импорт календаря · требуется проверка: 3', title: 'Импорт календаря', detail: 'требуется проверка: 3', batchId: 'b-1', importSource: 'calendar' },
+        ]);
+        await renderDashboard();
+
+        const item = await screen.findByRole('link', { name: /Импорт календаря/ });
+        expect(item).toHaveAttribute('href', '/diary/clients/import-calendar');
     });
 
     it('каждый показанный пункт ведёт к конкретному объекту — счётчика без перехода нет', async () => {
-        clientActions.getClients.mockResolvedValue([
-            { id: 'c7', name: 'Пётр Ильин', consentDate: null },
-            { id: 'c8', name: 'Мария Седова', consentDate: null },
+        attentionActions.getDashboardAttention.mockResolvedValue([
+            { id: 'client_without_consent:c-7', type: 'client_without_consent', label: 'Пётр · нет согласия', title: 'Пётр', detail: 'нет согласия', clientId: 'c-7' },
+            { id: 'session_unpaid:s-2', type: 'session_unpaid', label: 'Борис · не отмечена оплата', title: 'Борис', detail: 'не отмечена оплата', sessionId: 's-2', clientId: 'c-2' },
+            { id: 'session_without_notes:s-3', type: 'session_without_notes', label: 'Анна · нет заметки', title: 'Анна', detail: 'нет заметки', sessionId: 's-3', clientId: 'c-3' },
         ]);
-        store.sessions = [
-            session(),
-            session({ id: 's-pending', date: iso(daysAgo(1)), status: 'pending' }),
-        ];
         await renderDashboard();
 
         const items = await screen.findAllByTestId('attention-item');
         expect(items.length).toBe(3);
         for (const item of items) {
-            const actionable = item.tagName === 'A'
-                ? item.getAttribute('href')!.length > '/diary/clients?clientId='.length
-                : item.tagName === 'BUTTON';
-            expect(actionable).toBe(true);
+            expect(item.tagName).toBe('A');
+            const href = item.getAttribute('href') || '';
+            // Ссылка адресует объект, а не общий список.
+            expect(href).toMatch(/\/diary\/(session\/[^/]+|clients\?clientId=)/);
         }
     });
 

@@ -80,12 +80,22 @@ data class WeekStats(
     val cancelledCount: Int,
 )
 
+/**
+ * Задача 17: пункт «требует внимания» приходит с сервера уже конкретным —
+ * с идентификатором объекта, который нужно открыть, а не счётчиком «4 сессии
+ * без заметок». Идентификаторы рождаются на сервере под текущим
+ * специалистом (см. src/lib/practice/attention.ts).
+ */
 @Serializable
 data class AttentionItem(
+    val id: String = "",
     val type: String,
-    val count: Int,
     val label: String,
-    val icon: String? = null,
+    val title: String = "",
+    val detail: String = "",
+    val sessionId: String? = null,
+    val clientId: String? = null,
+    val batchId: String? = null,
 )
 
 @Serializable

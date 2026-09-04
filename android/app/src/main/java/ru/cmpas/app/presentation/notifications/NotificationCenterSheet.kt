@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.notifications
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -52,15 +53,32 @@ fun NotificationCenterSheet(
         }
         Spacer(Modifier.height(14.dp))
 
+        // Задача 17 §6: «Требует внимания» и «Уведомления» — две РАЗНЫЕ
+        // секции. Здесь вычисляемое состояние практики с конкретными
+        // объектами; ниже — история уведомлений со своим прочитано/непрочитано.
+        // Смешивать их нельзя.
         if (attentionItems.isNotEmpty()) {
             Eyebrow("Требует внимания")
             Spacer(Modifier.height(8.dp))
             GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                 attentionItems.forEachIndexed { index, attention ->
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.WarningAmber, null, Modifier.size(18.dp), tint = CompasAccent)
+                    val target = attentionTarget(attention)
+                    val rowModifier = if (target == null) Modifier.fillMaxWidth()
+                    else Modifier.fillMaxWidth().clickable {
+                        onClose()
+                        when (target) {
+                            is AttentionTarget.OpenSession -> onOpenSession(target.sessionId)
+                            is AttentionTarget.OpenClient -> onOpenClient(target.clientId)
+                        }
+                    }
+                    Row(rowModifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(attentionIcon(attention.type), null, Modifier.size(18.dp), tint = CompasAccent)
                         Spacer(Modifier.width(10.dp))
                         Text(attention.label, style = tBody2, color = CompasFg, modifier = Modifier.weight(1f))
+                        if (target != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
+                        }
                     }
                     if (index != attentionItems.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
                 }
@@ -117,6 +135,41 @@ fun NotificationCenterSheet(
         Spacer(Modifier.height(16.dp))
         GhostButton("Закрыть", ::closeAndMarkRead, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
     }
+}
+
+/**
+ * Куда ведёт строка «требует внимания». Отдельная от Composable функция —
+ * так решение проверяется обычным JVM-тестом, без Compose UI-инфраструктуры
+ * (её в модуле нет, тот же приём уже применён в DashboardViewModelTest).
+ */
+internal sealed interface AttentionTarget {
+    data class OpenSession(val sessionId: String) : AttentionTarget
+    data class OpenClient(val clientId: String) : AttentionTarget
+}
+
+/**
+ * Сессия важнее клиента: у пунктов про сессию есть оба идентификатора, и
+ * открыть нужно именно ту запись, из-за которой пункт появился. У
+ * import_review нет ни того, ни другого — в приложении пока нет экрана
+ * разбора импорта, и придумывать переход «куда-нибудь» хуже, чем не
+ * предлагать его вовсе: строка остаётся некликабельной (Задача 17 §6).
+ */
+internal fun attentionTarget(item: AttentionItem): AttentionTarget? {
+    val sessionId = item.sessionId
+    val clientId = item.clientId
+    return when {
+        !sessionId.isNullOrBlank() -> AttentionTarget.OpenSession(sessionId)
+        !clientId.isNullOrBlank() -> AttentionTarget.OpenClient(clientId)
+        else -> null
+    }
+}
+
+internal fun attentionIcon(type: String): ImageVector = when (type) {
+    "session_without_notes" -> Icons.Outlined.EditNote
+    "session_unpaid" -> Icons.Outlined.Payments
+    "client_without_consent" -> Icons.Outlined.Shield
+    "import_review" -> Icons.Outlined.UploadFile
+    else -> Icons.Outlined.WarningAmber
 }
 
 private fun openNotification(item: PracticeNotification, closeAndMarkRead: () -> Unit, onOpenSession: (String) -> Unit, onOpenClient: (String) -> Unit) {
