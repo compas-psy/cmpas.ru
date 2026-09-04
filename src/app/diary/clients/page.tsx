@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send } from 'lucide-react';
+import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -369,7 +369,7 @@ export default function ClientsPage() {
                         Начните с быстрого наполнения — три способа на выбор.
                     </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <button
                         onClick={() => setShowNewClient(true)}
                         className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all text-left flex flex-col items-start gap-3 active:scale-[0.98]"
@@ -412,6 +412,20 @@ export default function ClientsPage() {
                             </p>
                         </div>
                     </Link>
+                    <Link
+                        href="/diary/clients/import-spreadsheet"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent-foreground group-hover:bg-accent group-hover:text-accent-foreground transition-all">
+                            <FileSpreadsheet className="w-6 h-6" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base mb-1">Из файла CSV/XLSX</h3>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                Нет календаря? Загрузите таблицу с клиентами и сессиями.
+                            </p>
+                        </div>
+                    </Link>
                 </div>
                 <div className="text-center">
                     <Link
@@ -444,6 +458,9 @@ export default function ClientsPage() {
                     </Link>
                     <Link href="/diary/clients/import" className="hidden sm:flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
                         <ClipboardPaste className="w-4 h-4" /> Импорт
+                    </Link>
+                    <Link href="/diary/clients/import-spreadsheet" className="hidden sm:flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
+                        <FileSpreadsheet className="w-4 h-4" /> Из файла
                     </Link>
                     <button onClick={() => setShowNewClient(true)}
                         className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-all font-bold shadow-card active:scale-[0.98] text-sm">

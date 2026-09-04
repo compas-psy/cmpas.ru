@@ -30,26 +30,60 @@ export default function ImportClientsPage() {
         }
         setSubmitting(true);
         try {
-            const { bulkCreateClients } = await import('../../actions/clients');
-            const result = await attestationGuard(() => bulkCreateClients(
-                validItems.map(p => ({ name: p.name, phone: p.phone, email: p.email }))
-            ));
-            // Task 11 (founder correction): a name matching an existing
-            // client is never auto-merged or silently skipped — it comes
-            // back as `review` and must not just vanish here.
-            if (result.review.length > 0) {
+            // Task 13: this flow no longer mutates DiaryClient directly via
+            // bulkCreateClients — it goes through the SAME preview (real
+            // matchClientIdentity against the db) -> PracticeImportBatch ->
+            // commitPracticeImport core the CSV/XLSX import uses. A name is
+            // never an identity: only a genuinely new name (bucket 'ready')
+            // is submitted; a strong-identity match is already a no-op
+            // (bucket 'skipped'), and a name-only/conflicting match goes to
+            // 'review' and is never auto-created or auto-merged here either.
+            const previewRes = await fetch('/api/diary/clients/import-spreadsheet/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'client_only', source: 'paste', text }),
+            });
+            const previewBody = await previewRes.json();
+            if (!previewRes.ok) throw new Error(previewBody.error || 'Ошибка при разборе списка');
+
+            type PreviewRow = { name: string | null; phone: string | null; email: string | null; bucket: 'ready' | 'review' | 'skipped' | 'error' };
+            const rows: PreviewRow[] = previewBody.rows || [];
+            const ready = rows.filter(r => r.bucket === 'ready');
+            const review = rows.filter(r => r.bucket === 'review');
+            const alreadyExists = rows.filter(r => r.bucket === 'skipped');
+
+            if (review.length > 0) {
                 toast.info(
-                    `Похожи на уже существующих клиентов (не добавлены — проверьте вручную): ${result.review.map(r => r.name).join(', ')}`
+                    `Похожи на уже существующих клиентов (не добавлены — проверьте вручную): ${review.map(r => r.name).join(', ')}`
                 );
             }
-            if (result.created > 0) {
+
+            if (ready.length === 0) {
+                if (alreadyExists.length > 0) toast.info('Все клиенты уже существуют — пропущено');
+                else if (review.length === 0) toast.error('Не удалось добавить клиентов');
+                return;
+            }
+
+            const result = await attestationGuard(async () => {
+                const res = await fetch('/api/diary/clients/import-spreadsheet/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: 'client_only',
+                        items: ready.map(r => ({ clientMode: 'new', name: r.name, phone: r.phone, email: r.email })),
+                    }),
+                });
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || 'Ошибка при добавлении');
+                return body as { imported: number; skipped: number };
+            });
+
+            if (result.imported > 0) {
                 toast.success(
-                    `Добавлено ${result.created}${result.skipped > 0 ? `, пропущено дубликатов: ${result.skipped}` : ''}`
+                    `Добавлено ${result.imported}${(result.skipped + alreadyExists.length) > 0 ? `, пропущено дубликатов: ${result.skipped + alreadyExists.length}` : ''}`
                 );
                 router.push('/diary/clients');
-            } else if (result.skipped > 0) {
-                toast.info('Все клиенты уже существуют — пропущено');
-            } else if (result.review.length === 0) {
+            } else {
                 toast.error('Не удалось добавить клиентов');
             }
         } catch (err) {

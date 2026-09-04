@@ -720,26 +720,35 @@ model PracticeImportBatch {
 }
 
 model PracticeImportItem {
-  id               String    @id @default(cuid())
-  batchId          String
-  integrationId    String? // null for a client_only/spreadsheet row with no calendar source
-  provider         String?
-  externalEventId  String?
-  externalSeriesId String?
+  id                String    @id @default(cuid())
+  batchId           String
+  integrationId     String? // null for a client_only/spreadsheet row with no calendar source
+  provider          String?
+  externalEventId   String?
+  externalSeriesId  String?
   // The calendar title / row text, kept ONLY for showing an unresolved item
   // in a review UI. Never copied into DiarySession.notes (Task 12 correction,
   // item 7) — cleared to null once the item reaches a terminal status.
-  sourceSummary    String?
-  classification   String // session | client_only | personal | uncertain | skipped
+  sourceSummary     String?
+  classification    String // session | client_only | personal | uncertain | skipped
   // The psychologist's actual decision, as a JSON blob: { decision:
   // 'session'|'personal'|'skip', clientMode: 'existing'|'new'|null,
   // resolvedClientId, newClientName, format, addressId, duration }.
-  resolution       Json?
+  resolution        Json?
   // Calendar-date-convention DateTime (UTC-midnight-anchored date + minutes,
   // never a real timezone instant — see src/lib/practice/migration/
   // date-utils.ts). Null for client_only items: no session, no date to fabricate.
-  startAt          DateTime?
-  endAt            DateTime?
+  startAt           DateTime?
+  endAt             DateTime?
+  // Task 13: a spreadsheet/paste row has no CalendarSessionLink to anchor
+  // idempotency to, so this is its durable source identity instead — a
+  // deterministic SHA-256 over (sourceType, clientKey, date, startTime,
+  // duration, format, normalized address), computed by
+  // src/lib/practice/migration/spreadsheet/fingerprint.ts. Null for
+  // calendar-sourced items (they use CalendarSessionLink) and for
+  // client_only rows (matchClientIdentity's strong-match check is their
+  // idempotency signal — see commit.ts).
+  sourceFingerprint String?
 
   // Written by commitPracticeImport once processed — never set at creation.
   status                String  @default("pending") // pending, imported, skipped, error, rolled_back
@@ -754,6 +763,7 @@ model PracticeImportItem {
   batch PracticeImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@index([batchId])
+  @@index([sourceFingerprint])
 }
 
 model PsychologistSettings {

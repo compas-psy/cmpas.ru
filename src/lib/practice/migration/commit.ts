@@ -12,6 +12,7 @@
 // same identity checks). 'committed' and 'rolled_back' are terminal.
 import { db } from '@/lib/db';
 import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
+import { computeClientKey } from '@/lib/clients/identity-key';
 import { calendarDateToUtcMidnight, utcDatePart, utcDayBounds, utcTimePart } from './date-utils';
 
 export type ImportItemStatus = 'pending' | 'imported' | 'skipped' | 'error' | 'rolled_back';
@@ -22,6 +23,13 @@ export interface ImportItemResolution {
     clientMode: 'existing' | 'new' | null;
     resolvedClientId: string | null;
     newClientName: string | null;
+    // Task 13: a spreadsheet/paste row can carry a phone/email for a new
+    // client (calendar rows never set these — a calendar event has no
+    // contact fields). Persisted on create; also the strong-identity key
+    // resolveOrCreateClient uses to collapse two "new" rows in the SAME
+    // batch that share a phone/email into one created client (§12).
+    newClientPhone?: string | null;
+    newClientEmail?: string | null;
     format: 'online' | 'offline';
     addressId: string | null;
     duration: number;
@@ -79,6 +87,7 @@ async function resolveOrCreateClient(
     tx: Tx,
     psychologistId: string,
     resolution: ImportItemResolution,
+    runningNewClients: Map<string, string>,
 ): Promise<{ ok: true; clientId: string; createdClientId: string | null } | { ok: false; errorCode: string }> {
     const hasResolvedClient = !!resolution.resolvedClientId;
     const hasNewClientName = !!resolution.newClientName && resolution.newClientName.trim().length >= 2;
@@ -90,11 +99,31 @@ async function resolveOrCreateClient(
         if (!client) return { ok: false, errorCode: 'CLIENT_NOT_OWNED' };
         return { ok: true, clientId: client.id, createdClientId: null };
     }
+
+    // Task 13 §12: two rows in the SAME batch that both want a "new" client
+    // but share a strong identifier (phone/email) are the SAME person, not
+    // two — reuse the client the first such row created instead of making a
+    // second one. Only the row that actually created it gets createdClientId
+    // (so rollback deletes it exactly once); a row that merely reused it
+    // never claims to have created anything.
+    const key = computeClientKey({ phone: resolution.newClientPhone, email: resolution.newClientEmail, name: resolution.newClientName! });
+    const existingInBatch = runningNewClients.get(key);
+    if (existingInBatch) return { ok: true, clientId: existingInBatch, createdClientId: null };
+
     // Point 9: this is the LAST step of validation for client_only items —
     // for session items, every other check (integration, address, conflict)
     // has already passed by the time this runs (see commitOneItem), so this
     // create is never followed by a "soft" failure that would orphan it.
-    const created = await tx.diaryClient.create({ data: { psychologistId, name: resolution.newClientName!.trim(), status: 'active' } });
+    const created = await tx.diaryClient.create({
+        data: {
+            psychologistId,
+            name: resolution.newClientName!.trim(),
+            phone: resolution.newClientPhone?.trim() || null,
+            email: resolution.newClientEmail?.trim().toLowerCase() || null,
+            status: 'active',
+        },
+    });
+    runningNewClients.set(key, created.id);
     return { ok: true, clientId: created.id, createdClientId: created.id };
 }
 
@@ -109,6 +138,7 @@ interface ItemRow {
     resolution: unknown;
     startAt: Date | null;
     endAt: Date | null;
+    sourceFingerprint: string | null;
 }
 
 interface RunningSlot {
@@ -123,6 +153,7 @@ async function commitOneItem(
     sourceType: string,
     item: ItemRow,
     runningSlots: RunningSlot[],
+    runningNewClients: Map<string, string>,
 ): Promise<CommitOutcomeRow> {
     const resolution = item.resolution as ImportItemResolution | null;
 
@@ -131,9 +162,29 @@ async function commitOneItem(
     // correction, item 6).
     if (item.classification === 'client_only') {
         if (!resolution) return { itemId: item.id, status: 'error', errorCode: 'MISSING_RESOLUTION' };
-        const clientResult = await resolveOrCreateClient(tx, psychologistId, resolution);
+        const clientResult = await resolveOrCreateClient(tx, psychologistId, resolution, runningNewClients);
         if (!clientResult.ok) return { itemId: item.id, status: 'error', errorCode: clientResult.errorCode };
         return { itemId: item.id, status: 'imported', createdClientId: clientResult.createdClientId };
+    }
+
+    // Task 13 §13: a spreadsheet/paste row has no CalendarSessionLink, so
+    // its durable source fingerprint is its cross-upload idempotency check
+    // — a genuine DB read against every PREVIOUSLY committed spreadsheet
+    // import for this psychologist, not just this batch. Takes priority
+    // over every other check (§14), exactly like ALREADY_IMPORTED below.
+    if (item.sourceFingerprint) {
+        const priorImported = await tx.practiceImportItem.findFirst({
+            where: {
+                sourceFingerprint: item.sourceFingerprint,
+                status: 'imported',
+                id: { not: item.id },
+                batch: { psychologistId, sourceType: 'spreadsheet' },
+            },
+            select: { createdSessionId: true },
+        });
+        if (priorImported) {
+            return { itemId: item.id, status: 'skipped', errorCode: 'ALREADY_IMPORTED_SOURCE_ROW', createdSessionId: priorImported.createdSessionId ?? undefined };
+        }
     }
 
     if (!item.startAt || Number.isNaN(item.startAt.getTime())) {
@@ -211,7 +262,7 @@ async function commitOneItem(
     }
 
     // 6. Every check that could fail has passed — mutate.
-    const clientResult = await resolveOrCreateClient(tx, psychologistId, resolution);
+    const clientResult = await resolveOrCreateClient(tx, psychologistId, resolution, runningNewClients);
     if (!clientResult.ok) return { itemId: item.id, status: 'error', errorCode: clientResult.errorCode };
 
     const origin = ORIGIN_BY_SOURCE_TYPE[sourceType] ?? 'calendar_import';
@@ -325,7 +376,13 @@ async function runCommitTransaction(psychologistId: string, batchId: string): Pr
         if (!batch) throw new Error('BATCH_NOT_FOUND');
 
         const runningSlots: RunningSlot[] = [];
+        const runningNewClients = new Map<string, string>();
         const seenEventKeys = new Set<string>();
+        // Task 13 §13: catches the same spreadsheet/paste row appearing
+        // twice WITHIN this one submitted batch, before it ever reaches a
+        // DB call — the cross-batch case (a previously committed import)
+        // is checked separately, inside commitOneItem, against persisted data.
+        const seenFingerprints = new Set<string>();
         const outcomes: CommitOutcomeRow[] = [];
 
         for (const item of batch.items) {
@@ -337,9 +394,12 @@ async function runCommitTransaction(psychologistId: string, batchId: string): Pr
                 // batch — never let it reach the DB as a genuine unique
                 // conflict (point 13: no catching P2002 mid-transaction).
                 outcome = { itemId: item.id, status: 'skipped', errorCode: 'ALREADY_IMPORTED' };
+            } else if (item.sourceFingerprint && seenFingerprints.has(item.sourceFingerprint)) {
+                outcome = { itemId: item.id, status: 'skipped', errorCode: 'DUPLICATE_SOURCE_ROW' };
             } else {
-                outcome = await commitOneItem(tx, psychologistId, batch.sourceType, item, runningSlots);
+                outcome = await commitOneItem(tx, psychologistId, batch.sourceType, item, runningSlots, runningNewClients);
                 if (eventKey) seenEventKeys.add(eventKey);
+                if (item.sourceFingerprint) seenFingerprints.add(item.sourceFingerprint);
             }
             outcomes.push(outcome);
 
