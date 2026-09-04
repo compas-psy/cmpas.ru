@@ -107,8 +107,12 @@ export default function ClientsPage() {
     useEffect(() => { fetchClients(); }, [fetchClients]);
 
     useEffect(() => {
-        const clientId = new URLSearchParams(window.location.search).get('clientId');
+        const params = new URLSearchParams(window.location.search);
+        const clientId = params.get('clientId');
         if (clientId) fetchClientDetail(clientId);
+        // Задача 16 §2: «+ Клиент» с дашборда открывает ту же самую форму
+        // создания, что и кнопка на этой странице, — без второго потока.
+        if (params.get('new') === '1') setShowNewClient(true);
     }, [fetchClientDetail]);
 
     useEffect(() => {

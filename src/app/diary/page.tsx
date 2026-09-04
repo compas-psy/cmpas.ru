@@ -5,7 +5,7 @@ import {
     Calendar as CalendarIcon, Plus, User, Video, MapPin,
     AlertTriangle, FileText, Sparkles, CheckCircle2,
     ChevronRight, Coffee, Users, TrendingUp, LayoutList,
-    Filter, MoreVertical, X, BookOpen, Shield, Clock, Share2
+    Filter, X, BookOpen, Shield, Clock, Share2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
@@ -98,7 +98,6 @@ export default function DiaryCalendarPage() {
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [prevWeek, setPrevWeek] = useState({ sessions: 0, clients: 0 });
-    const [userId, setUserId] = useState('');
     const filterRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = useCallback(async () => {
@@ -147,7 +146,6 @@ export default function DiaryCalendarPage() {
                     const parts = d.user.name.trim().split(/\s+/);
                     setUserName(parts.length > 1 ? parts[parts.length - 1] : parts[0]);
                 }
-                if (d?.user?.id) setUserId(d.user.id);
             })
             .catch(() => { });
 
@@ -178,6 +176,15 @@ export default function DiaryCalendarPage() {
     const handleSessionSave = () => {
         fetchSessions();
         setShowNewSession(false);
+    };
+
+    // SessionModal рендерится только при isOpen — одного setEditingSession
+    // мало, клик оставался немым. Задача 16 §5 требует, чтобы пункт «требует
+    // внимания» действительно открывал конкретную запись, поэтому открытие
+    // записи идёт через одну точку.
+    const openSession = (s: Session) => {
+        setEditingSession(s);
+        setShowNewSession(true);
     };
 
     const handleStatusChange = async (id: string, status: string) => {
@@ -243,8 +250,61 @@ export default function DiaryCalendarPage() {
         const d = new Date(s.date); if (d > now) return false;
         return Math.floor((now.getTime() - d.getTime()) / 86400000) <= 14 && !s.notes && !s.structuredNotes;
     });
-    const noConsentClients = clients.filter(c => !c.consentDate).slice(0, 5);
-    const attentionCount = pendingSessions.length + missingSessions.length + noConsentClients.length;
+    const noConsentClients = clients.filter(c => !c.consentDate);
+
+    // Задача 16 §5: «Требует внимания» перечисляет конкретные объекты, а не
+    // группы со счётчиком. Каждый пункт открывает именно то, что требует
+    // решения: карточку этого клиента или эту запись. Сигналы остаются теми
+    // же, что и раньше, — общий Action Center собирает Задача 17.
+    const byDateDesc = (a: Session, b: Session) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time);
+    const sessionWhen = (s: Session) =>
+        `${new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, ${s.time}`;
+    const clientNameOf = (s: Session) =>
+        s.client?.name || clients.find(c => c.id === s.clientId)?.name || 'Клиент';
+
+    type AttentionItem = {
+        key: string;
+        title: string;
+        hint: string;
+        icon: typeof AlertTriangle;
+        rowClass: string;
+        iconClass: string;
+        href?: string;
+        onSelect?: () => void;
+    };
+
+    const attentionItems: AttentionItem[] = [
+        ...noConsentClients.map(c => ({
+            key: `consent-${c.id}`,
+            title: c.name,
+            hint: 'Нет согласия на обработку данных',
+            icon: Shield,
+            rowClass: 'bg-red-50 hover:bg-red-100/50',
+            iconClass: 'bg-red-100 text-red-500',
+            href: `/diary/clients?clientId=${c.id}`,
+        })),
+        ...[...missingSessions].sort(byDateDesc).map(s => ({
+            key: `note-${s.id}`,
+            title: clientNameOf(s),
+            hint: `Нет заметки по сессии · ${sessionWhen(s)}`,
+            icon: FileText,
+            rowClass: 'bg-amber-50 hover:bg-amber-100/50',
+            iconClass: 'bg-amber-100 text-amber-600',
+            onSelect: () => openSession(s),
+        })),
+        ...[...pendingSessions].sort(byDateDesc).map(s => ({
+            key: `pending-${s.id}`,
+            title: clientNameOf(s),
+            hint: `Оплата не отмечена · ${sessionWhen(s)}`,
+            icon: AlertTriangle,
+            rowClass: 'bg-orange-50 hover:bg-orange-100/50',
+            iconClass: 'bg-orange-100 text-orange-500',
+            onSelect: () => openSession(s),
+        })),
+    ];
+    const attentionCount = attentionItems.length;
+    const visibleAttention = attentionItems.slice(0, 6);
+    const hiddenAttentionCount = attentionCount - visibleAttention.length;
 
     const weekSessions = sessions.filter(s => {
         const d = new Date(s.date);
@@ -334,10 +394,6 @@ export default function DiaryCalendarPage() {
     return (
         <>
         <div className="space-y-6 pb-12 w-full min-w-0">
-            {/* Welcome strip for new psychologists */}
-            <WelcomeStrip />
-
-
             {/* ── HEADER with WEEK STRIP ── */}
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 min-w-0">
                 <div className="min-w-0">
@@ -347,18 +403,6 @@ export default function DiaryCalendarPage() {
                     <p className="text-muted-foreground text-[13px] mt-0.5 font-medium capitalize">
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
-                    {userId && (
-                        <ShareButton
-                            url={async () => {
-                                const { getMyBookingUrl } = await import('./actions/booking-link');
-                                return getMyBookingUrl();
-                            }}
-                            text="Запишитесь на сессию:"
-                            label="Отправить ссылку клиенту"
-                            icon={<Share2 className="w-3.5 h-3.5" />}
-                            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-sage-100 hover:bg-sage-200 text-forest-700 text-[12px] font-semibold transition-colors active:scale-95"
-                        />
-                    )}
                 </div>
 
                 {/* Week strip */}
@@ -379,6 +423,42 @@ export default function DiaryCalendarPage() {
                         ))}
                     </div>
                 </div>
+            </div>
+
+            {/* ── QUICK ACTIONS ──
+                Задача 16 §2: четыре действия, которыми практика живёт каждый
+                день, — сразу под приветствием и над героем. Каждое ведёт в уже
+                существующий рабочий поток, ни одной декоративной кнопки. */}
+            <div className="flex flex-wrap items-center gap-2">
+                <button
+                    onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]"
+                >
+                    <Plus className="w-4 h-4" /> Запись
+                </button>
+                <button
+                    onClick={() => { window.location.href = '/diary/clients?new=1'; }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97]"
+                >
+                    <Plus className="w-4 h-4" /> Клиент
+                </button>
+                <ShareButton
+                    url={async () => {
+                        const { getMyBookingUrl } = await import('./actions/booking-link');
+                        return getMyBookingUrl();
+                    }}
+                    text="Запишитесь на сессию:"
+                    label="Поделиться"
+                    title="Ссылка для записи"
+                    icon={<Share2 className="w-4 h-4" />}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97] disabled:opacity-60"
+                />
+                <a
+                    href="/diary/availability"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97]"
+                >
+                    <CalendarIcon className="w-4 h-4" /> Расписание
+                </a>
             </div>
 
             {/* ── MAIN CONTENT GRID ── */}
@@ -544,6 +624,12 @@ export default function DiaryCalendarPage() {
                         );
                     })()}
 
+                    {/* Задача 16 §1/§4: онбординг — контекстный блок ПОД героем,
+                        а не первый экран. Дашборд остаётся дашбордом; у нового
+                        специалиста, у которого ещё нет ближайшей сессии, этот
+                        блок естественно оказывается первым содержательным. */}
+                    <WelcomeStrip />
+
                     {/* РАСПИСАНИЕ НА СЕГОДНЯ */}
                     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-card">
                         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
@@ -616,7 +702,7 @@ export default function DiaryCalendarPage() {
                                     const awaitingOutcome = sessionEndStr <= currentTimeStr && s.status !== 'cancelled' && s.status !== 'no_show';
 
                                     return (
-                                        <div key={s.id} onClick={() => setEditingSession(s)}
+                                        <div key={s.id} onClick={() => openSession(s)}
                                             className={`flex gap-3 px-5 py-3 hover:bg-sage-50/50 transition-colors cursor-pointer ${isN ? 'bg-sage-50/80' : ''} ${done ? 'opacity-50' : ''}`}>
                                             {/* Time column */}
                                             <div className="shrink-0 w-[44px] pt-0.5 text-right">
@@ -699,40 +785,38 @@ export default function DiaryCalendarPage() {
                                 <AlertTriangle className={`w-4 h-4 ${attentionCount > 0 ? 'text-orange-500' : 'text-muted-foreground/30'}`} />
                                 <span className="text-[14px] font-bold text-foreground">Требует внимания</span>
                             </div>
-                            <button className="p-1 rounded-lg hover:bg-sage-50 transition-colors text-muted-foreground/40"><MoreVertical className="w-4 h-4" /></button>
+                            {attentionCount > 0 && (
+                                <span className="text-[11px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full tabular-nums">{attentionCount}</span>
+                            )}
                         </div>
                         <div className="p-3 space-y-1.5">
                             {attentionCount === 0 ? (
                                 <div className="text-center py-6 text-[13px] text-muted-foreground/50 font-medium">Всё в порядке ✓</div>
                             ) : (<>
-                                {noConsentClients.length > 0 && (
-                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-red-50 hover:bg-red-100/50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-red-100 text-red-500 flex items-center justify-center shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Нет согласия на обработку данных</div>
-                                            <div className="text-[11px] text-muted-foreground">{noConsentClients.length} клиентов</div>
-                                        </div>
-                                        <button onClick={() => window.location.href = '/diary/clients'} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Открыть <ChevronRight className="w-3 h-3" /></button>
-                                    </div>
-                                )}
-                                {missingSessions.length > 0 && (
-                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100/50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><FileText className="w-3.5 h-3.5" /></div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Домашние задания не заполнены</div>
-                                            <div className="text-[11px] text-muted-foreground">{missingSessions.length} записи</div>
-                                        </div>
-                                        <button onClick={() => missingSessions[0] && setEditingSession(missingSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>
-                                    </div>
-                                )}
-                                {pendingSessions.length > 0 && (
-                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-orange-50 hover:bg-orange-100/50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-500 flex items-center justify-center shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Оплата сессий не отмечена</div>
-                                            <div className="text-[11px] text-muted-foreground">{pendingSessions.length} сессий</div>
-                                        </div>
-                                        <button onClick={() => pendingSessions[0] && setEditingSession(pendingSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>
+                                {visibleAttention.map(item => {
+                                    const ItemIcon = item.icon;
+                                    const rowClass = `w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-colors ${item.rowClass}`;
+                                    const body = (
+                                        <>
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.iconClass}`}>
+                                                <ItemIcon className="w-3.5 h-3.5" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-[12px] font-bold text-foreground truncate">{item.title}</div>
+                                                <div className="text-[11px] text-muted-foreground truncate">{item.hint}</div>
+                                            </div>
+                                            <ChevronRight className="w-3.5 h-3.5 text-primary shrink-0" />
+                                        </>
+                                    );
+                                    return item.href ? (
+                                        <a key={item.key} data-testid="attention-item" href={item.href} className={rowClass}>{body}</a>
+                                    ) : (
+                                        <button key={item.key} data-testid="attention-item" type="button" onClick={item.onSelect} className={rowClass}>{body}</button>
+                                    );
+                                })}
+                                {hiddenAttentionCount > 0 && (
+                                    <div className="px-2.5 pt-1 text-[11px] text-muted-foreground">
+                                        и ещё {hiddenAttentionCount}
                                     </div>
                                 )}
                             </>)}

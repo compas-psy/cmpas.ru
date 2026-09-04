@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { X, Check, Users, Clock, Bot, Sparkles } from 'lucide-react';
+import { X, Check, Users, Clock, Bot, Sparkles, CalendarPlus } from 'lucide-react';
 
 type State = {
     loaded: boolean;
     clientsCount: number;
+    sessionsCount: number;
     availabilityCount: number;
     botConnected: boolean;
 };
@@ -17,6 +18,7 @@ export function WelcomeStrip() {
     const [state, setState] = useState<State>({
         loaded: false,
         clientsCount: 0,
+        sessionsCount: 0,
         availabilityCount: 0,
         botConnected: false,
     });
@@ -39,6 +41,7 @@ export function WelcomeStrip() {
                     setState({
                         loaded: true,
                         clientsCount: data.clientsCount ?? 0,
+                        sessionsCount: data.sessionsCount ?? 0,
                         availabilityCount: data.availabilityCount ?? 0,
                         botConnected: !!data.botConnected,
                     });
@@ -62,6 +65,11 @@ export function WelcomeStrip() {
 
     if (!state.loaded || dismissed) return null;
 
+    // Задача 16 §4: каждый шаг закрывается реальными данными из БД
+    // (/api/onboarding/progress). localStorage — только для «скрыть», он
+    // никогда не считается доказательством выполненного шага. Поэтому
+    // специалист, перенёсший практику импортом, приходит с уже закрытыми
+    // шагами «клиенты» и «записи», а не с предложением завести их заново.
     const steps = [
         {
             key: 'clients',
@@ -69,6 +77,13 @@ export function WelcomeStrip() {
             href: '/diary/clients',
             icon: Users,
             done: state.clientsCount > 0,
+        },
+        {
+            key: 'sessions',
+            label: 'Первая запись',
+            href: '/diary/calendar',
+            icon: CalendarPlus,
+            done: state.sessionsCount > 0,
         },
         {
             key: 'schedule',
@@ -115,11 +130,11 @@ export function WelcomeStrip() {
                 <div>
                     <h2 className="font-bold text-foreground text-base md:text-lg">Добро пожаловать в ПРАКТИКУ</h2>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Три шага — и кабинет готов к работе.
+                        {`Осталось шагов до готового кабинета: ${steps.filter(s => !s.done).length}.`}
                     </p>
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 {steps.map((step, i) => {
                     const Icon = step.icon;
                     return (
