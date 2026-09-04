@@ -2,44 +2,62 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
-import { requirePracticeOperatorAttestation, ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
-import { commitPracticeImport } from '@/lib/practice/migration/commit';
+import { ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
+import { commitPracticeImport, CommitConflictError } from '@/lib/practice/migration/commit';
+import { calendarDateTimeToUtc } from '@/lib/practice/migration/date-utils';
 
-// Task 12 (PRAKTIKA MVP): this route is now a thin front for the real
-// commit path. It does two things: (1) persist exactly what the
-// psychologist submitted as a durable PracticeImportBatch/
-// PracticeImportBatchItem — the "evidence" a commit can be inspected
-// against later, even if it partially fails — and (2) call
-// commitPracticeImport(batchId), the transactional, advisory-locked,
-// CalendarSessionLink-idempotent commit (src/lib/practice/migration/
-// commit.ts). All per-item validation (date/time shape, duration, exactly
-// one client resolution, address ownership) now lives in commitOneItem —
-// that function is the actual transactional boundary and must be correct
-// standing alone, so this route does not duplicate it, only coerces raw
-// JSON into the batch item shape.
+// Task 12 (PRAKTIKA MVP, founder correction round 3): this route is a thin
+// front for the real commit path. It does two things: (1) persist exactly
+// what the psychologist submitted as a durable PracticeImportBatch/
+// PracticeImportItem — the "evidence" a commit can be inspected against
+// later, even if it partially fails — and (2) call
+// commitPracticeImport(psychologistId, batchId), the transactional,
+// advisory-locked, ownership-checked, CalendarSessionLink-idempotent commit
+// (src/lib/practice/migration/commit.ts). ALL validation (date/time shape,
+// duration, exactly one client resolution, integration/address ownership,
+// schedule conflicts) lives in commitOneItem — including operator
+// attestation, enforced by commitPracticeImport itself, not duplicated
+// here — so this route never needs to re-check the legal gate; it only
+// coerces raw JSON into the batch item shape.
 //
-// The response shape stays backward compatible ({ imported, skipped,
-// sessionIds }) for the existing preview UI, with `batchId` added for a
-// future retry/audit view.
+// startAt/endAt are computed here via calendarDateTimeToUtc — never a bare
+// `new Date(dateStr)` — from the date/startTime/endTime strings the preview
+// route already resolved against the practice's configured timezone
+// (Task 10). That is the ONE piece of real interpretation this route does;
+// everything else is a straight, typed copy of the submitted body.
 
 const VALID_FORMATS = new Set(['online', 'offline']);
+const VALID_DECISIONS = new Set(['session', 'personal', 'skip']);
+const VALID_CLIENT_MODES = new Set(['existing', 'new']);
 
 function coerceItem(raw: Record<string, unknown>) {
     const format = typeof raw.format === 'string' && VALID_FORMATS.has(raw.format) ? raw.format : 'online';
+    const decision = typeof raw.decision === 'string' && VALID_DECISIONS.has(raw.decision) ? raw.decision : 'session';
+    const clientMode = typeof raw.clientMode === 'string' && VALID_CLIENT_MODES.has(raw.clientMode) ? raw.clientMode : null;
+    const date = typeof raw.date === 'string' ? raw.date : '';
+    const startTime = typeof raw.startTime === 'string' ? raw.startTime : '';
+    const endTime = typeof raw.endTime === 'string' ? raw.endTime : null;
+    const classification = typeof raw.classification === 'string' ? raw.classification : 'uncertain';
+    const isDated = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(startTime);
+
     return {
-        provider: typeof raw.provider === 'string' ? raw.provider : 'google',
-        integrationId: typeof raw.integrationId === 'string' ? raw.integrationId : '',
-        externalEventId: typeof raw.externalEventId === 'string' ? raw.externalEventId : '',
+        integrationId: typeof raw.integrationId === 'string' && raw.integrationId ? raw.integrationId : null,
+        provider: typeof raw.provider === 'string' && raw.provider ? raw.provider : null,
+        externalEventId: typeof raw.externalEventId === 'string' && raw.externalEventId ? raw.externalEventId : null,
         externalSeriesId: typeof raw.externalSeriesId === 'string' ? raw.externalSeriesId : null,
-        summary: typeof raw.summary === 'string' ? raw.summary.trim().slice(0, 500) : '',
-        date: new Date(String(raw.date || '')),
-        startTime: String(raw.startTime || ''),
-        endTime: typeof raw.endTime === 'string' ? raw.endTime : null,
-        duration: Number(raw.duration),
-        format,
-        addressId: format === 'offline' && typeof raw.addressId === 'string' ? raw.addressId : null,
-        resolvedClientId: typeof raw.resolvedClientId === 'string' && raw.resolvedClientId ? raw.resolvedClientId : null,
-        newClientName: typeof raw.newClientName === 'string' ? raw.newClientName.trim().slice(0, 120) : null,
+        sourceSummary: typeof raw.summary === 'string' ? raw.summary.trim().slice(0, 500) : null,
+        classification,
+        startAt: isDated && classification !== 'client_only' ? calendarDateTimeToUtc(date, startTime) : null,
+        endAt: isDated && endTime && /^\d{2}:\d{2}$/.test(endTime) && classification !== 'client_only' ? calendarDateTimeToUtc(date, endTime) : null,
+        resolution: {
+            decision,
+            clientMode,
+            resolvedClientId: clientMode === 'existing' && typeof raw.resolvedClientId === 'string' && raw.resolvedClientId ? raw.resolvedClientId : null,
+            newClientName: clientMode === 'new' && typeof raw.newClientName === 'string' ? raw.newClientName.trim().slice(0, 120) : null,
+            format,
+            addressId: format === 'offline' && typeof raw.addressId === 'string' ? raw.addressId : null,
+            duration: Number(raw.duration),
+        },
     };
 }
 
@@ -53,18 +71,32 @@ export async function POST(req: NextRequest) {
         const rawItems: Record<string, unknown>[] = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
         if (!rawItems.length) return NextResponse.json({ imported: 0, skipped: 0, failed: 0 });
 
-        await requirePracticeOperatorAttestation(psychologistId);
-
         const items = rawItems.map(coerceItem);
+
+        // rangeStart/rangeEnd/summary are audit context, derived straight
+        // from what was actually submitted — not re-fetched from
+        // practiceImportRange, which would need another timezone lookup for
+        // a value this batch's own items already carry.
+        const datedStarts = items.map((i) => i.startAt).filter((d): d is Date => d !== null);
+        const rangeStart = datedStarts.length ? new Date(Math.min(...datedStarts.map((d) => d.getTime()))) : null;
+        const rangeEnd = datedStarts.length ? new Date(Math.max(...datedStarts.map((d) => d.getTime()))) : null;
+        const summary = items.reduce((acc: Record<string, number>, i) => {
+            acc[i.classification] = (acc[i.classification] || 0) + 1;
+            return acc;
+        }, {});
 
         const batch = await db.practiceImportBatch.create({
             data: {
                 psychologistId,
+                sourceType: 'calendar',
+                rangeStart,
+                rangeEnd,
+                summary,
                 items: { create: items },
             },
         });
 
-        const result = await commitPracticeImport(batch.id, psychologistId);
+        const result = await commitPracticeImport(psychologistId, batch.id);
 
         if (result.imported > 0) {
             await createNotification({
@@ -80,11 +112,14 @@ export async function POST(req: NextRequest) {
             skipped: result.skipped,
             failed: result.failed,
             batchId: result.batchId,
-            sessionIds: result.outcomes.filter((o) => o.status === 'imported').map((o) => o.sessionId),
+            sessionIds: result.outcomes.filter((o) => o.status === 'imported' && o.createdSessionId).map((o) => o.createdSessionId),
         });
     } catch (error) {
         if (error instanceof Error && error.message === ATTESTATION_REQUIRED_CODE) {
             return NextResponse.json({ error: ATTESTATION_REQUIRED_CODE }, { status: 403 });
+        }
+        if (error instanceof CommitConflictError) {
+            return NextResponse.json({ error: error.code }, { status: 409 });
         }
         console.error('[calendar/import/apply POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

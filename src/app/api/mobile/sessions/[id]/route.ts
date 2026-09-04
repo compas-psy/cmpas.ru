@@ -122,7 +122,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             }
             const updated = result.session;
 
-            autoDeleteSessionFromCalendars(auth.userId, id).catch(console.error);
+            // Task 12: autoSyncSessionToCalendars is link-aware — updates
+            // the already-linked event in place, so no delete-then-recreate.
             if (paymentStatus) await writePaymentStatus(id, paymentStatus);
 
             const fullUpdated = await db.diarySession.findUnique({ where: { id }, include: { client: { select: { name: true } } } });

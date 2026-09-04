@@ -49,7 +49,14 @@ function yandexEventIdentity(uid: string, recurrenceId: string | undefined): { e
 }
 
 /**
- * Create iCalendar event string from session data
+ * Create iCalendar event string from session data.
+ *
+ * `identity`: Task 12 (calendar sync adapter) — when UPDATING an existing
+ * linked event in place, the UID (and, for a recurring occurrence, its
+ * RECURRENCE-ID) must be preserved EXACTLY as the existing event already
+ * has it; changing UID on a PUT to the same object effectively creates a
+ * different event identity. Omitted only for a fresh sync-created event,
+ * where PRAKTIKA's own deterministic UID convention applies.
  */
 function createICalEvent(session: {
     id: string;
@@ -61,7 +68,7 @@ function createICalEvent(session: {
     format: string;
     notes: string | null;
     client?: { name: string } | null;
-}): string {
+}, identity?: { uid: string; recurrenceId?: string }): string {
     const dateStr = session.date.toISOString().split('T')[0].replace(/-/g, '');
     const startTime = session.time.replace(':', '') + '00';
     const endTime = session.endTime
@@ -76,6 +83,7 @@ function createICalEvent(session: {
     const clientName = session.client?.name || 'Клиент';
     const typeLabel = session.type === 'individual' ? 'Индивидуальная' : session.type === 'couple' ? 'Парная' : session.type;
     const formatLabel = session.format === 'online' ? 'онлайн' : 'очно';
+    const uid = identity?.uid ?? yandexOwnSessionUid(session.id);
 
     return [
         'BEGIN:VCALENDAR',
@@ -83,7 +91,8 @@ function createICalEvent(session: {
         'PRODID:-//Compas.ru//Diary//RU',
         'CALSCALE:GREGORIAN',
         'BEGIN:VEVENT',
-        `UID:${yandexOwnSessionUid(session.id)}`,
+        `UID:${uid}`,
+        ...(identity?.recurrenceId ? [`RECURRENCE-ID:${identity.recurrenceId}`] : []),
         `DTSTAMP:${now}`,
         `DTSTART:${dateStr}T${startTime}`,
         `DTEND:${dateStr}T${endTime}`,
@@ -98,6 +107,47 @@ function createICalEvent(session: {
         'END:VEVENT',
         'END:VCALENDAR',
     ].join('\r\n');
+}
+
+/**
+ * Task 12 (calendar sync adapter): locate the real CalDAV object (url/etag)
+ * for a known externalEventId (a bare UID, or `${uid}::${recurrenceId}` for
+ * a recurring occurrence — see yandexEventIdentity above), by fetching and
+ * matching identity rather than assuming any URL convention — correct for
+ * BOTH a foreign event the psychologist created directly (imported) and one
+ * PRAKTIKA created itself (synced).
+ */
+async function findYandexObjectByExternalEventId(
+    client: DAVClient,
+    calendar: Awaited<ReturnType<DAVClient['fetchCalendars']>>[number],
+    externalEventId: string
+): Promise<{ url: string; etag?: string; data: string } | null> {
+    const now = new Date();
+    const objects = await client.fetchCalendarObjects({
+        calendar,
+        timeRange: {
+            start: new Date(now.getTime() - 400 * 86400000).toISOString(),
+            end: new Date(now.getTime() + 400 * 86400000).toISOString(),
+        },
+        expand: true,
+    });
+
+    for (const obj of objects) {
+        if (!obj.data) continue;
+        const veventMatch = obj.data.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/);
+        if (!veventMatch) continue;
+        const eventData = veventMatch[0];
+        const uidMatch = eventData.match(/UID:(.*)/);
+        if (!uidMatch) continue;
+        const uid = uidMatch[1].trim();
+        const recurrenceIdMatch = eventData.match(/RECURRENCE-ID(?:;.*?)?:(.*)/);
+        const recurrenceId = recurrenceIdMatch ? recurrenceIdMatch[1].trim() : undefined;
+        const identity = yandexEventIdentity(uid, recurrenceId);
+        if (identity.externalEventId === externalEventId) {
+            return { url: obj.url, etag: obj.etag, data: obj.data };
+        }
+    }
+    return null;
 }
 
 /**
@@ -144,7 +194,7 @@ export async function testYandexConnection(login: string, password: string): Pro
 export async function pushSessionToYandex(
     integrationId: string,
     session: Parameters<typeof createICalEvent>[0]
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; eventId?: string; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
             where: { id: integrationId },
@@ -174,9 +224,83 @@ export async function pushSessionToYandex(
             data: { lastSynced: new Date() },
         });
 
-        return { success: true };
+        // Task 12: the deterministic UID this event was just created with —
+        // the identity a CalendarSessionLink needs to update/delete it later.
+        return { success: true, eventId: yandexOwnSessionUid(session.id) };
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Ошибка синхронизации';
+        return { success: false, error: message };
+    }
+}
+
+/**
+ * Task 12 (calendar sync adapter): update an existing Yandex event IN PLACE
+ * by its known externalEventId — preserves the event's own UID (and
+ * RECURRENCE-ID, if it's a recurring occurrence) so identity never changes
+ * on a reschedule, only its content.
+ */
+export async function updateYandexCalendarEvent(
+    integrationId: string,
+    externalEventId: string,
+    session: Parameters<typeof createICalEvent>[0]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.caldavLogin || !integration?.caldavPassword || !integration?.calendarId) {
+            return { success: false, error: 'Интеграция не настроена' };
+        }
+
+        const client = await createYandexClient(integration.caldavLogin, integration.caldavPassword);
+        const calendars = await client.fetchCalendars();
+        const calendar = calendars.find(c => c.url === integration.calendarId) || calendars[0];
+        if (!calendar) return { success: false, error: 'Календарь не найден' };
+
+        const existing = await findYandexObjectByExternalEventId(client, calendar, externalEventId);
+        if (!existing) return { success: false, error: 'Событие не найдено для обновления' };
+
+        const uidMatch = existing.data.match(/UID:(.*)/);
+        const recurrenceIdMatch = existing.data.match(/RECURRENCE-ID(?:;.*?)?:(.*)/);
+        const uid = uidMatch ? uidMatch[1].trim() : yandexOwnSessionUid(session.id);
+        const recurrenceId = recurrenceIdMatch ? recurrenceIdMatch[1].trim() : undefined;
+
+        const iCalString = createICalEvent(session, { uid, recurrenceId });
+        await client.updateCalendarObject({ calendarObject: { url: existing.url, etag: existing.etag, data: iCalString } });
+
+        await db.calendarIntegration.update({ where: { id: integrationId }, data: { lastSynced: new Date() } });
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка обновления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
+ * Task 12 (calendar sync adapter): delete a Yandex event by its known
+ * externalEventId. Closes the long-standing gap noted in
+ * src/lib/calendar/auto-sync.ts — Yandex delete used to be a no-op.
+ */
+export async function deleteYandexCalendarEventById(
+    integrationId: string,
+    externalEventId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.caldavLogin || !integration?.caldavPassword || !integration?.calendarId) {
+            return { success: false, error: 'Интеграция не настроена' };
+        }
+
+        const client = await createYandexClient(integration.caldavLogin, integration.caldavPassword);
+        const calendars = await client.fetchCalendars();
+        const calendar = calendars.find(c => c.url === integration.calendarId) || calendars[0];
+        if (!calendar) return { success: false, error: 'Календарь не найден' };
+
+        const existing = await findYandexObjectByExternalEventId(client, calendar, externalEventId);
+        if (!existing) return { success: true }; // already gone — a successful delete, not a failure
+
+        await client.deleteCalendarObject({ calendarObject: { url: existing.url, etag: existing.etag } });
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка удаления события';
         return { success: false, error: message };
     }
 }

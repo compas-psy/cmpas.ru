@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { verifySessionActionToken } from '@/lib/client-workflow';
 import { getAvailableDates, getAvailableTimes } from '@/app/bot/actions';
 import { reschedulePracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
-import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
+import { autoSyncSessionToCalendars } from '@/lib/calendar/auto-sync';
 import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
 import { createNotification } from '@/lib/notifications';
 
@@ -70,7 +70,9 @@ export async function submitClientReschedule(sessionId: string, token: string, s
 
     const { session: updated, previousDate, previousTime } = result;
 
-    autoDeleteSessionFromCalendars(session.psychologistId, sessionId).catch(console.error);
+    // Task 12: autoSyncSessionToCalendars is link-aware — it updates an
+    // already-linked event in place instead of delete+recreate, so a
+    // reschedule no longer calls autoDeleteSessionFromCalendars first.
     const fullSession = await db.diarySession.findUnique({
         where: { id: sessionId },
         include: { client: { select: { name: true } } },

@@ -198,13 +198,17 @@ export default function ImportFromCalendarPage() {
                     body: JSON.stringify({
                         items: buckets.ready.map(({ item, state }) => ({
                             integrationId: item.integrationId,
+                            provider: item.provider,
                             externalEventId: item.externalEventId,
                             externalSeriesId: item.externalSeriesId,
+                            classification: item.classification,
                             date: item.date,
                             startTime: item.startTime,
                             endTime: item.endTime,
                             duration: state.duration,
                             summary: item.summary,
+                            decision: state.decision,
+                            clientMode: state.clientMode,
                             format: state.format,
                             addressId: state.format === 'offline' ? state.addressId : null,
                             resolvedClientId: state.clientMode === 'existing' ? state.existingClientId : null,

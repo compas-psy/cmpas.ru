@@ -236,7 +236,8 @@ export async function rescheduleSession(id: string, slotToken: string) {
 
     const { session, previousDate, previousTime } = result;
 
-    autoDeleteSessionFromCalendars(psychologistId, id).catch(console.error);
+    // Task 12: autoSyncSessionToCalendars is link-aware — updates the
+    // already-linked event in place, so no delete-then-recreate here.
     const fullSession = await db.diarySession.findUnique({
         where: { id },
         include: { client: { select: { name: true } } },

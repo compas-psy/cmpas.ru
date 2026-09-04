@@ -251,6 +251,101 @@ export async function createGoogleCalendarEvent(
 }
 
 /**
+ * Task 12 (calendar sync adapter): update a Google Calendar event IN PLACE
+ * by its known externalEventId — used for a session that already has a
+ * CalendarSessionLink for this integration (imported or previously
+ * synced), so a reschedule moves the SAME event instead of deleting and
+ * recreating a duplicate.
+ */
+export async function updateGoogleCalendarEvent(
+    integrationId: string,
+    externalEventId: string,
+    session: Parameters<typeof createGoogleCalendarEvent>[1]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.calendarId) {
+            return { success: false, error: 'Календарь не выбран' };
+        }
+
+        const accessToken = await getValidToken(integrationId);
+
+        const dateStr = session.date.toISOString().split('T')[0];
+        const endTime = session.endTime || (() => {
+            const [h, m] = session.time.split(':').map(Number);
+            const endMin = h * 60 + m + session.duration;
+            return `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+        })();
+
+        const clientName = session.client?.name || 'Клиент';
+        const typeLabel = session.type === 'individual' ? 'Индивидуальная' : session.type === 'couple' ? 'Парная' : session.type;
+        const formatLabel = session.format === 'online' ? 'онлайн' : 'очно';
+
+        const event = {
+            summary: `${typeLabel} сессия — ${clientName}`,
+            description: `Формат: ${formatLabel}${session.notes ? '\n' + session.notes : ''}`,
+            start: { dateTime: `${dateStr}T${session.time}:00`, timeZone: 'Europe/Moscow' },
+            end: { dateTime: `${dateStr}T${endTime}:00`, timeZone: 'Europe/Moscow' },
+            extendedProperties: { private: { compasSessionId: session.id } },
+        };
+
+        const response = await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events/${encodeURIComponent(externalEventId)}`,
+            {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(event),
+            }
+        );
+
+        if (!response.ok) {
+            const err = await response.text();
+            return { success: false, error: `Google API error: ${err}` };
+        }
+
+        await db.calendarIntegration.update({ where: { id: integrationId }, data: { lastSynced: new Date() } });
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка обновления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
+ * Task 12 (calendar sync adapter): delete a Google Calendar event by its
+ * known externalEventId — the identity-based counterpart to
+ * deleteGoogleCalendarEvent below (which searches by session id and stays
+ * for callers with no CalendarSessionLink to read from).
+ */
+export async function deleteGoogleCalendarEventById(
+    integrationId: string,
+    externalEventId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.calendarId) {
+            return { success: false, error: 'Календарь не выбран' };
+        }
+        const accessToken = await getValidToken(integrationId);
+
+        const response = await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events/${encodeURIComponent(externalEventId)}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        // 404/410 means it's already gone — that's a successful delete, not a failure.
+        if (!response.ok && response.status !== 404 && response.status !== 410) {
+            const err = await response.text();
+            return { success: false, error: `Google API error: ${err}` };
+        }
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка удаления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
  * Delete a calendar event from Google Calendar by session ID
  */
 export async function deleteGoogleCalendarEvent(

@@ -34,6 +34,7 @@ model User {
   scheduleRules         ScheduleRule[]
   slugs                 PsychologistSlug[]
   practiceImportBatches PracticeImportBatch[]
+  calendarSessionLinks  CalendarSessionLink[]
 
   // Therapy process (Smart Notes)
   therapyGoals      TherapyGoal[]
@@ -500,11 +501,14 @@ model DiarySession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  psychologist        User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  client              DiaryClient          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  address             PsychologistAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  homeworks           Homework[]
-  calendarSessionLink CalendarSessionLink?
+  psychologist  User                  @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  client        DiaryClient           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  address       PsychologistAddress?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  homeworks     Homework[]
+  // Task 12 correction: one session can have a link per CONNECTED
+  // INTEGRATION (imported from one calendar, synced out to others) — never
+  // globally unique per session. See CalendarSessionLink below.
+  calendarLinks CalendarSessionLink[]
 
   @@index([psychologistId])
   @@index([clientId])
@@ -629,92 +633,123 @@ model CalendarIntegration {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  psychologist         User                  @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  calendarSessionLinks CalendarSessionLink[]
+  psychologist User                  @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  sessionLinks CalendarSessionLink[]
 
   @@unique([psychologistId, provider])
   @@index([psychologistId])
 }
 
-// Task 12 (PRAKTIKA MVP): the durable link between one imported/synced
-// DiarySession and the external calendar event it came from. Two jobs:
+// Task 12 (founder correction, round 3): the durable link between one
+// DiarySession and one external calendar event on one connected
+// integration. Corrected from a first pass that made sessionId globally
+// @unique — wrong: the SAME session can be imported from integration A
+// (sourceRole='imported') and ALSO synced out to integration B
+// (sourceRole='synced'), needing two separate rows. What must stay unique
+// per session is the pairing with a given integration
+// (@@unique([integrationId, sessionId])) — one link per (session,
+// integration), never two.
+//
+// Two jobs:
 //   1. Idempotency for commitPracticeImport — @@unique([integrationId,
 //      externalEventId]) means a second attempt to import the SAME external
 //      event (a re-run of a stale batch, two browser tabs, a retried
-//      request) fails at the database, not at an in-app heuristic. The old
-//      preview (date, time, client name) duplicate check was a best-effort
-//      guess; this is the real identity.
-//   2. The foundation auto-sync.ts's Task-8-era comment already describes:
-//      once every synced/imported session has a link, reschedule can update
-//      the LINKED external event in place instead of delete+recreate, and
-//      external-busy can exclude a session's own linked event from blocking
-//      itself. Neither is implemented yet — Task 12 only introduces the
-//      model and populates it from import; wiring reschedule/external-busy
-//      to use it is separate, deliberately not bundled in here.
-// sessionId is @unique: a DiarySession maps to at most one external event.
+//      request) fails at the database, not at an in-app heuristic.
+//   2. The sync adapter (src/lib/calendar/auto-sync.ts): reschedule/cancel
+//      look up a session's link(s) to update/delete the linked external
+//      event in place instead of delete+recreate, and external-busy
+//      excludes a session's own linked event from blocking itself.
+//
+// integration is onDelete: Restrict, not Cascade: disconnecting a calendar
+// integration must not silently vanish the audit trail of what was
+// imported/synced through it — the psychologist should see a clear error
+// (or the caller should remove the links explicitly first), never a quiet
+// cascade delete of import history.
 model CalendarSessionLink {
   id               String   @id @default(cuid())
   psychologistId   String
-  sessionId        String   @unique
   integrationId    String
-  provider         String
+  sessionId        String
   externalEventId  String
   externalSeriesId String?
+  sourceRole       String   @default("imported") // imported | synced
   createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  session     DiarySession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  integration CalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  psychologist User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  integration  CalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  session      DiarySession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([integrationId, externalEventId])
+  @@unique([integrationId, sessionId])
   @@index([psychologistId])
+  @@index([sessionId])
 }
 
-// Task 12: a durable record of one calendar-import commit attempt — the
-// "evidence" the founder asked for. Previously /apply ran its per-item loop
-// against whatever the browser happened to POST, with no server-side record
-// of what was decided or what happened to each item; a failed request left
-// no trace to debug. Now every commit first persists its items (as
-// submitted — the resolution the psychologist made in the preview UI),
-// THEN commitPracticeImport(batchId) processes them inside one transaction
-// and writes each item's outcome back, so any commit (successful, partially
-// failed, or fully rolled back) has a queryable record afterward.
+// Task 12 (founder correction, round 3): a durable record of one
+// calendar/spreadsheet import commit attempt — the "evidence" a
+// partially-failed or rolled-back commit can be inspected against, and the
+// substrate rollbackPracticeImport needs to know exactly what it created.
+//
+// status is the batch state machine (see commit.ts): preview (persisted,
+// not yet processed) -> committing (claimed by a commit attempt, guards
+// against a concurrent second commit of the same batch) -> committed |
+// failed (a genuine, non-item-level error aborted the whole attempt) ->
+// rolled_back (rollbackPracticeImport undid everything it proved it created).
 model PracticeImportBatch {
   id             String    @id @default(cuid())
   psychologistId String
-  status         String    @default("pending") // pending, committed, failed
+  sourceType     String // 'calendar' | 'spreadsheet' — decides DiarySession.origin at commit time, never hardcoded
+  integrationId  String? // set only when the batch is scoped to a single integration; calendar preview usually spans several
+  status         String    @default("preview") // preview, committing, committed, failed, rolled_back
+  rangeStart     DateTime?
+  rangeEnd       DateTime?
+  summary        Json? // {ready, review, personal, skipped} counts at submission time — a snapshot, not live data
   imported       Int       @default(0)
   skipped        Int       @default(0)
   failed         Int       @default(0)
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   committedAt    DateTime?
+  rolledBackAt   DateTime?
 
-  psychologist User                      @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  items        PracticeImportBatchItem[]
+  psychologist User                 @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  items        PracticeImportItem[]
 
   @@index([psychologistId])
 }
 
-model PracticeImportBatchItem {
-  id               String   @id @default(cuid())
+model PracticeImportItem {
+  id               String    @id @default(cuid())
   batchId          String
-  provider         String
-  integrationId    String
-  externalEventId  String
+  integrationId    String? // null for a client_only/spreadsheet row with no calendar source
+  provider         String?
+  externalEventId  String?
   externalSeriesId String?
-  summary          String
-  date             DateTime
-  startTime        String
-  endTime          String?
-  duration         Int
-  format           String
-  addressId        String?
-  resolvedClientId String?
-  newClientName    String?
+  // The calendar title / row text, kept ONLY for showing an unresolved item
+  // in a review UI. Never copied into DiarySession.notes (Task 12 correction,
+  // item 7) — cleared to null once the item reaches a terminal status.
+  sourceSummary    String?
+  classification   String // session | client_only | personal | uncertain | skipped
+  // The psychologist's actual decision, as a JSON blob: { decision:
+  // 'session'|'personal'|'skip', clientMode: 'existing'|'new'|null,
+  // resolvedClientId, newClientName, format, addressId, duration }.
+  resolution       Json?
+  // Calendar-date-convention DateTime (UTC-midnight-anchored date + minutes,
+  // never a real timezone instant — see src/lib/practice/migration/
+  // date-utils.ts). Null for client_only items: no session, no date to fabricate.
+  startAt          DateTime?
+  endAt            DateTime?
 
   // Written by commitPracticeImport once processed — never set at creation.
-  outcomeStatus String  @default("pending") // pending, imported, skipped, failed
-  outcomeReason String?
-  sessionId     String?
+  status                String  @default("pending") // pending, imported, skipped, error, rolled_back
+  errorCode             String?
+  createdClientId       String?
+  createdSessionId      String?
+  calendarSessionLinkId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   batch PracticeImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
