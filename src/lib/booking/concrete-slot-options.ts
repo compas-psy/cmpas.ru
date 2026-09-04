@@ -17,6 +17,16 @@ export interface RawTimeSlot {
     slotToken: string | null;
     slotTokenOnline: string | null;
     slotTokenOffline: string | null;
+    // Task 14: optional pass-through fields some callers (BookingPageClient's
+    // full calendar, getSuggestedTimes) carry on the raw slot and want
+    // preserved onto each expanded concrete option — never required, never
+    // interpreted by the expansion itself.
+    isOwnBooking?: boolean;
+    availabilitySlotId?: string;
+    scheduleRuleId?: string | null;
+    duration?: number;
+    /** Display label for addressId (e.g. "Яузская") — null for online. */
+    addressName?: string | null;
 }
 
 export interface ConcreteSlotOption {
@@ -26,30 +36,43 @@ export interface ConcreteSlotOption {
     format: 'online' | 'offline';
     addressId: string | null;
     slotToken: string;
+    isOwnBooking?: boolean;
+    availabilitySlotId?: string;
+    scheduleRuleId?: string | null;
+    duration?: number;
+    addressName?: string | null;
 }
 
 export function expandToConcreteSlotOptions(slots: RawTimeSlot[]): ConcreteSlotOption[] {
     const options: ConcreteSlotOption[] = [];
 
     for (const slot of slots) {
+        const passthrough = {
+            time: slot.time,
+            isOwnBooking: slot.isOwnBooking,
+            availabilitySlotId: slot.availabilitySlotId,
+            scheduleRuleId: slot.scheduleRuleId,
+            duration: slot.duration,
+        };
         if (slot.format === 'both') {
             // A format:'both' rule never resolves to one option — Task 7
             // mints a separate token per concrete choice, and both must
             // become their own visible option; never silently default to
             // online.
             if (slot.slotTokenOnline) {
-                options.push({ key: slot.slotTokenOnline, time: slot.time, format: 'online', addressId: null, slotToken: slot.slotTokenOnline });
+                options.push({ ...passthrough, key: slot.slotTokenOnline, format: 'online', addressId: null, slotToken: slot.slotTokenOnline, addressName: null });
             }
             if (slot.slotTokenOffline) {
-                options.push({ key: slot.slotTokenOffline, time: slot.time, format: 'offline', addressId: slot.addressId, slotToken: slot.slotTokenOffline });
+                options.push({ ...passthrough, key: slot.slotTokenOffline, format: 'offline', addressId: slot.addressId, slotToken: slot.slotTokenOffline, addressName: slot.addressName ?? null });
             }
         } else if (slot.slotToken) {
             options.push({
+                ...passthrough,
                 key: slot.slotToken,
-                time: slot.time,
                 format: slot.format === 'offline' ? 'offline' : 'online',
                 addressId: slot.addressId,
                 slotToken: slot.slotToken,
+                addressName: slot.format === 'offline' ? (slot.addressName ?? null) : null,
             });
         }
     }

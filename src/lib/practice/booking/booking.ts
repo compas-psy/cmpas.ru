@@ -4,6 +4,7 @@ import { verifySlotToken, type SlotIdentity } from './slot-token';
 import { resolveAvailableTimesForDay } from './availability';
 import { fetchExternalBusyBlocks } from './external-busy';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
+import { resolveSignedPersonalClientToken } from '@/lib/client-workflow';
 import type { BlockInput } from './types';
 
 // Task 7 (PRAKTIKA MVP): the single atomic entry point for turning a signed
@@ -309,6 +310,16 @@ export interface CreateSelfPracticeBookingInput {
     slotToken: string;
     /** Raw window.Telegram.WebApp.initData — verified server-side here, never trusted as-is. */
     telegramInitData?: string | null;
+    /**
+     * Task 14 point 6: the raw signed personal-link token (the same one
+     * BookingPageClient already resolved once at page load, via the `?c=`
+     * param or a saved compas_clientToken) — re-verified HERE, never trusted
+     * as a pre-decoded id. Lets a known client whose phone field the UI
+     * hides still resolve to their EXISTING DiaryClient by verified identity
+     * instead of the phone-string match below, which silently created a
+     * duplicate for a known client with no phone on file.
+     */
+    clientLinkToken?: string | null;
 }
 
 export interface SelfPracticeBookingResult {
@@ -350,21 +361,45 @@ export async function createSelfPracticeBooking(input: CreateSelfPracticeBooking
 
     const { normalizedPhone, plainDigits } = normalizePhone(input.phone);
 
+    // Task 14 point 6: re-verify the personal-link token locally (pure,
+    // synchronous, no DB) — exactly like telegramInitData above, never trust
+    // a pre-decoded clientId from the caller.
+    const linkResolution = input.clientLinkToken ? resolveSignedPersonalClientToken(input.clientLinkToken) : null;
+    const verifiedLinkClientId = linkResolution?.clientId ?? null;
+
     return db.$transaction(async (tx) => {
         await acquireDayLock(tx, input.psychologistId, identity.dateStr);
 
-        let client = await tx.diaryClient.findFirst({
-            where: {
-                psychologistId: input.psychologistId,
-                OR: [
-                    { phone: normalizedPhone },
-                    { phone: plainDigits },
-                    { phone: '+' + plainDigits },
-                    { phone: input.phone }, // legacy formats
-                ],
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+        // Task 14 point 6: a client already identified through a VERIFIED
+        // channel (HMAC-checked Telegram id, or a signature this server
+        // issued) is matched by that identity FIRST — never by the phone
+        // heuristic below, which fails closed to "no match" for a known
+        // client whose phone field the UI hid (nothing empty to match) and
+        // would otherwise create a duplicate DiaryClient instead of reusing
+        // the real one. Only a genuinely unidentified visitor falls through
+        // to the phone match.
+        let client = tgUserId
+            ? await tx.diaryClient.findFirst({ where: { psychologistId: input.psychologistId, telegramChatId: tgUserId } })
+            : null;
+
+        if (!client && verifiedLinkClientId) {
+            client = await tx.diaryClient.findFirst({ where: { id: verifiedLinkClientId, psychologistId: input.psychologistId } });
+        }
+
+        if (!client) {
+            client = await tx.diaryClient.findFirst({
+                where: {
+                    psychologistId: input.psychologistId,
+                    OR: [
+                        { phone: normalizedPhone },
+                        { phone: plainDigits },
+                        { phone: '+' + plainDigits },
+                        { phone: input.phone }, // legacy formats
+                    ],
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+        }
 
         if (!client) {
             client = await tx.diaryClient.create({

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle2, MapPin, Video, Calendar, Clock, X, Shield } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Loader2, CheckCircle2, MapPin, Video, Calendar, X, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ru } from 'date-fns/locale/ru';
@@ -17,7 +17,6 @@ import {
     submitWaitlistInterest,
     bookSession,
     getClientByTelegram,
-    getScheduleMode,
     getClientUpcomingSessions,
     getAddressById,
     checkConsentRequired,
@@ -26,6 +25,7 @@ import {
     resolveVerifiedTelegramUserId
 } from '../actions';
 import type { TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
+import { expandToConcreteSlotOptions, type ConcreteSlotOption, type RawTimeSlot } from '@/lib/booking/concrete-slot-options';
 import { NotFoundSpecialist } from './NotFoundSpecialist';
 
 registerLocale('ru', ru);
@@ -67,6 +67,49 @@ function readSavedPreference(psychologistId: string): TimePreference | null {
     }
 }
 
+function capitalize(s: string): string {
+    return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+// Task 14 point 4: a suggested/concrete slot must say WHAT the client is
+// choosing — never three identical-looking "18:00" buttons.
+function formatSlotHeading(dateStr: string, time: string): string {
+    const d = new Date(`${dateStr}T00:00:00`);
+    return `${capitalize(format(d, 'EEEE, d MMMM', { locale: ru }))} · ${time}`;
+}
+
+function formatSlotMeta(duration: number | undefined, slotFormat: string, addressName: string | null | undefined): string {
+    const parts: string[] = [];
+    if (duration) parts.push(`${duration} минут`);
+    parts.push(slotFormat === 'offline' ? `Очно${addressName ? ` · ${addressName}` : ''}` : 'Онлайн');
+    return parts.join(' · ');
+}
+
+// Task 14 point 5: group concrete options by where they actually happen —
+// one section for online, one PER cabinet — instead of one flat grid that
+// hides which button means what. Order follows first appearance, which
+// already matches the server's time-then-format sort.
+interface OptionSection { key: string; label: string; options: ConcreteSlotOption[] }
+function buildSections(options: ConcreteSlotOption[]): OptionSection[] {
+    const sections: OptionSection[] = [];
+    const indexByKey = new Map<string, number>();
+    for (const opt of options) {
+        const sectionKey = opt.format === 'online' ? 'online' : `office:${opt.addressId ?? 'unknown'}`;
+        let idx = indexByKey.get(sectionKey);
+        if (idx === undefined) {
+            idx = sections.length;
+            indexByKey.set(sectionKey, idx);
+            sections.push({
+                key: sectionKey,
+                label: opt.format === 'online' ? 'ОНЛАЙН' : (opt.addressName?.toUpperCase() || 'ОЧНО'),
+                options: [],
+            });
+        }
+        sections[idx].options.push(opt);
+    }
+    return sections;
+}
+
 // Extracted from src/app/bot/book/[psychologistId]/page.tsx (§5.1, O-260829)
 // so that the human-readable slug routes (/u/<slug>, /у/<slug>) and the
 // legacy /bot/book/<id> route render the exact same booking flow without
@@ -79,7 +122,10 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // The raw signed token itself (not the id it decodes to) — the only thing
     // safe to persist in localStorage or hand back to the browser for
     // "manage my bookings" links. Task 3 (addendum §6): a raw clientId is
-    // never proof of identity; only a signature this server issued is.
+    // never proof of identity; only a signature this server issued is. Task
+    // 14 point 6: this SAME raw token is also sent (and re-verified
+    // server-side) with a booking, so a known client whose phone field is
+    // hidden still resolves to their real DiaryClient.
     const [clientLinkToken, setClientLinkToken] = useState<string | null>(null);
 
     // Task 3 (PRAKTIKA MVP addendum §6): initDataUnsafe.user.id is
@@ -107,15 +153,17 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [availableDates, setAvailableDates] = useState<string[]>([]);
     // Task 7: slotToken is the exact-slot identity the booking commit trusts —
     // format/addressId/duration are never re-derived from raw date/time at
-    // booking time, only decoded from this signed token server-side. A
-    // format:'both' slot has no single token (the concrete choice isn't made
-    // yet), so it carries one token per concrete format instead.
-    type TimeSlot = { time: string, format: string, addressId: string | null, isOwnBooking?: boolean, slotToken?: string | null, slotTokenOnline?: string | null, slotTokenOffline?: string | null };
-    const [availableTimes, setAvailableTimes] = useState<TimeSlot[]>([]);
-    const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
-    const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline' | null>(null);
+    // booking time, only decoded from this signed token server-side. Task 14
+    // point 2/3: a format:'both' rule is expanded into TWO concrete options
+    // (via expandToConcreteSlotOptions) before this component ever sees it —
+    // it never has to special-case an ambiguous format itself.
+    const [availableTimes, setAvailableTimes] = useState<RawTimeSlot[]>([]);
+    const [selectedTimeSlot, setSelectedTimeSlot] = useState<ConcreteSlotOption | null>(null);
     const [form, setForm] = useState({ name: '', phone: '' });
     const [booking, setBooking] = useState(false);
+
+    const concreteOptions = useMemo(() => expandToConcreteSlotOptions(availableTimes), [availableTimes]);
+    const sections = useMemo(() => buildSections(concreteOptions), [concreteOptions]);
 
     // Consent state
     const [consentRequired, setConsentRequired] = useState(false);
@@ -129,6 +177,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [bookingSuccess, setBookingSuccess] = useState<{
         date: string;
         time: string;
+        duration?: number;
         format: string;
         psyName: string;
         addressName?: string | null;
@@ -153,7 +202,10 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // O-260829 §5.3 "Возврат по ссылке без брони" (S1-R)
     const [returningPreference, setReturningPreference] = useState<TimePreference | null>(null);
     const [showReturnBanner, setShowReturnBanner] = useState(false);
-    const [returnFlowTriggered, setReturnFlowTriggered] = useState(false);
+    // Task 14 point 1: guards the ONE automatic suggestion load per visit —
+    // either the S1-R return flow (explicit remembered preference) or a
+    // plain 'any' load, whichever applies. Never both, never twice.
+    const [initialSuggestionsTriggered, setInitialSuggestionsTriggered] = useState(false);
 
     // Читаем сохранённое предпочтение сразу, независимо от загрузки психолога —
     // это чтение localStorage этого устройства, серверу ничего не нужно.
@@ -162,24 +214,30 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         setReturningPreference(readSavedPreference(psychologistId));
     }, [psychologistId]);
 
-    // Показываем баннер и сразу подбираем свежие (не кэшированные) варианты —
-    // только когда доступна фича подбора времени и клиент ещё не известен
-    // (уже есть подтверждённые встречи — значит, это не "смотрел и ушёл").
-    // Once-guard (returnFlowTriggered): без него баннер переигрывался бы
-    // заново при каждом решении isKnownClient/psy.
+    // Task 14 point 1 (founder correction): the first screen shows 2-3
+    // concrete nearest slots immediately — the psychologist chip question is
+    // for REFINING, not a gate the client must click through first. So the
+    // very first load calls loadSuggestions('any') unconditionally (never
+    // persisting a preference nobody chose); a fresh S1-R return visit
+    // (remembered preference, not already a known client with upcoming
+    // sessions) instead replays that explicit preference and shows the
+    // "с возвращением" banner, exactly as before.
     useEffect(() => {
-        if (returnFlowTriggered) return;
+        if (initialSuggestionsTriggered) return;
         if (loading) return;
         if (!psy?.timeSuggestEnabled) return;
-        if (!returningPreference) return;
-        if (isKnownClient) return;
         if (bookingSuccess) return;
 
-        setReturnFlowTriggered(true);
-        setShowReturnBanner(true);
-        handlePreferenceSelect(returningPreference);
+        setInitialSuggestionsTriggered(true);
+        const isFreshReturn = !!returningPreference && !isKnownClient;
+        if (isFreshReturn) {
+            setShowReturnBanner(true);
+            handlePreferenceSelect(returningPreference as TimePreference);
+        } else {
+            loadSuggestions('any');
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loading, psy, returningPreference, isKnownClient, bookingSuccess, returnFlowTriggered]);
+    }, [loading, psy, returningPreference, isKnownClient, bookingSuccess, initialSuggestionsTriggered]);
 
     const handleForgetMe = () => {
         try {
@@ -354,7 +412,6 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
         setSelectedDate(date);
         setSelectedTimeSlot(null);
-        setSelectedFormat(null);
         setAvailableTimes([]);
 
         const dateStr = format(date, 'yyyy-MM-dd');
@@ -378,23 +435,18 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         }
     };
 
-    const handleTimeSlotSelect = (slot: TimeSlot) => {
+    // Task 14 point 5: a concrete option already IS a specific format/cabinet
+    // choice — clicking it is the decision, never a second question.
+    const handleTimeSlotSelect = (slot: ConcreteSlotOption) => {
         setSelectedTimeSlot(slot);
-        if (slot.format === 'both') {
-            setSelectedFormat(null);
-        } else {
-            setSelectedFormat(slot.format as 'online' | 'offline');
-        }
     };
 
-    const handlePreferenceSelect = async (pref: TimePreference) => {
-        setPreference(pref);
-        try {
-            localStorage.setItem(bookingPrefStorageKey(psychologistId), JSON.stringify({ preference: pref, savedAt: Date.now() }));
-        } catch {
-            // Приватный режим браузера и т.п. — S1-R просто не сработает при
-            // следующем визите, сама запись от этого не ломается.
-        }
+    // Task 14 point 1: separated from handlePreferenceSelect so the initial
+    // automatic 'any' load never persists a preference the client never
+    // chose (booking_pref_<id> in localStorage is S1-R state — writing it on
+    // page load, before any real signal, would fabricate a "return visit"
+    // that never happened).
+    const loadSuggestions = async (pref: TimePreference) => {
         setSuggestLoading(true);
         try {
             const times = await getSuggestedTimes(psychologistId, pref, clientId || null);
@@ -407,10 +459,29 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         }
     };
 
+    const handlePreferenceSelect = async (pref: TimePreference) => {
+        setPreference(pref);
+        try {
+            localStorage.setItem(bookingPrefStorageKey(psychologistId), JSON.stringify({ preference: pref, savedAt: Date.now() }));
+        } catch {
+            // Приватный режим браузера и т.п. — S1-R просто не сработает при
+            // следующем визите, сама запись от этого не ломается.
+        }
+        await loadSuggestions(pref);
+    };
+
     const handleSuggestedTimeSelect = (candidate: SuggestedTimeCandidate) => {
         const [y, m, d] = candidate.date.split('-').map(Number);
         setSelectedDate(new Date(y, m - 1, d));
-        handleTimeSlotSelect({ time: candidate.time, format: candidate.format, addressId: candidate.addressId, slotToken: candidate.slotToken });
+        handleTimeSlotSelect({
+            key: candidate.slotToken,
+            time: candidate.time,
+            format: candidate.format as 'online' | 'offline',
+            addressId: candidate.addressId,
+            slotToken: candidate.slotToken,
+            duration: candidate.duration,
+            addressName: candidate.addressName,
+        });
     };
 
     const handleWaitlistSubmit = async (e: React.FormEvent) => {
@@ -433,8 +504,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
     const handleBookingAttempt = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedDate || !selectedTimeSlot || !selectedFormat) {
-            toast.error('Выберите дату, время и формат встречи');
+        if (!selectedDate || !selectedTimeSlot) {
+            toast.error('Выберите дату и время встречи');
             return;
         }
         if (!form.phone || form.phone.length < 10) {
@@ -471,23 +542,16 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     };
 
     const performBooking = async () => {
-        if (!selectedDate || !selectedTimeSlot || !selectedFormat) return;
+        if (!selectedDate || !selectedTimeSlot) return;
 
         setBooking(true);
 
-        // Task 7: the slotToken IS the booking — format/addressId/duration
+        // Task 7/14: the slotToken IS the booking — format/addressId/duration
         // are never sent as separate fields the server would have to trust.
-        // A format:'both' slot carries two tokens, one per concrete choice;
-        // anything else carries exactly one.
-        const tokenToUse = selectedTimeSlot.format === 'both'
-            ? (selectedFormat === 'offline' ? selectedTimeSlot.slotTokenOffline : selectedTimeSlot.slotTokenOnline)
-            : selectedTimeSlot.slotToken;
-
-        if (!tokenToUse) {
-            toast.error('Это время больше недоступно — выберите другое.');
-            setBooking(false);
-            return;
-        }
+        // Every concrete option already carries exactly one real token —
+        // there is no more format:'both' ambiguity to resolve here.
+        const tokenToUse = selectedTimeSlot.slotToken;
+        const format_ = selectedTimeSlot.format;
 
         try {
             // Task 7 (founder review): the server must never trust a
@@ -499,6 +563,10 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
             const res = await bookSession(psychologistId, tgInitData, {
                 ...form,
                 slotToken: tokenToUse,
+                // Task 14 point 6: the same raw signed personal-link token
+                // already resolved at page load, re-verified server-side —
+                // never trusted as a pre-decoded id.
+                clientLinkToken,
             });
 
             if (res && !res.success) {
@@ -518,7 +586,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
             // Get address details for success screen
             let addressName: string | null = null;
             let addressFull: string | null = null;
-            if (selectedFormat === 'offline' && selectedTimeSlot.addressId) {
+            if (format_ === 'offline' && selectedTimeSlot.addressId) {
                 const addr = await getAddressById(selectedTimeSlot.addressId);
                 if (addr) {
                     addressName = addr.name;
@@ -532,7 +600,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
             setBookingSuccess({
                 date: `${dayOfWeek}, ${formattedDate}`,
                 time: selectedTimeSlot.time,
-                format: selectedFormat,
+                duration: selectedTimeSlot.duration,
+                format: format_,
                 psyName: psy?.name || 'Специалист',
                 addressName,
                 addressFull,
@@ -603,7 +672,10 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             </div>
                             <div>
                                 <p className="text-xs font-medium text-[var(--booking-muted)]">Дата и время</p>
-                                <p className="font-semibold text-[var(--booking-ink)]">{bookingSuccess.time}, {bookingSuccess.date}</p>
+                                <p className="font-semibold text-[var(--booking-ink)]">
+                                    {bookingSuccess.time}, {bookingSuccess.date}
+                                    {bookingSuccess.duration ? ` · ${bookingSuccess.duration} минут` : ''}
+                                </p>
                             </div>
                             <div>
                                 <p className="text-xs font-medium text-[var(--booking-muted)]">Формат</p>
@@ -712,6 +784,33 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             </div>
                         )}
                         <h3 className="font-medium mb-3 text-[var(--booking-ink)]">Когда вам удобнее?</h3>
+
+                        {suggestLoading && <p className="text-[var(--booking-muted)] text-sm text-center py-2">Подбираем время…</p>}
+
+                        {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                                {suggestedTimes.map(candidate => {
+                                    const isPicked = selectedTimeSlot?.slotToken === candidate.slotToken;
+                                    return (
+                                        <button
+                                            key={candidate.slotToken}
+                                            type="button"
+                                            onClick={() => handleSuggestedTimeSelect(candidate)}
+                                            className={`w-full py-2.5 px-3 rounded-xl border-2 text-left transition-colors haptic-light ${isPicked
+                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
+                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10'
+                                                }`}
+                                        >
+                                            <span className="block font-medium text-sm">{formatSlotHeading(candidate.date, candidate.time)}</span>
+                                            <span className={`block text-xs mt-0.5 ${isPicked ? 'text-white/80' : 'opacity-80'}`}>
+                                                {formatSlotMeta(candidate.duration, candidate.format, candidate.addressName)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 gap-2 mb-3">
                             {([
                                 ['weekday_evening', 'Будни, после 18:00'],
@@ -732,33 +831,9 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             ))}
                         </div>
 
-                        {suggestLoading && <p className="text-[var(--booking-muted)] text-sm text-center py-2">Подбираем время…</p>}
-
-                        {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
-                            <div className="space-y-2">
-                                {suggestedTimes.map(candidate => {
-                                    const isPicked = selectedTimeSlot?.time === candidate.time
-                                        && selectedDate && format(selectedDate, 'yyyy-MM-dd') === candidate.date;
-                                    return (
-                                        <button
-                                            key={`${candidate.date}-${candidate.time}`}
-                                            type="button"
-                                            onClick={() => handleSuggestedTimeSelect(candidate)}
-                                            className={`w-full py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${isPicked
-                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
-                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10'
-                                                }`}
-                                        >
-                                            {format(new Date(candidate.date + 'T00:00:00'), 'd MMMM', { locale: ru })}, {candidate.time}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-
                         {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && !waitlistSubmitted && (
                             <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-[var(--booking-line)]">
-                                <p className="text-[var(--booking-muted)] text-sm">Сейчас свободного времени нет. Оставьте контакт — предложим первое освободившееся.</p>
+                                <p className="text-[var(--booking-muted)] text-sm">Нет подходящего времени? Оставьте контакт — психолог увидит вашу заявку.</p>
                                 <input
                                     type="text" placeholder="Как к вам обращаться"
                                     value={waitlistForm.name}
@@ -778,7 +853,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                         )}
 
                         {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && waitlistSubmitted && (
-                            <p className="text-sm text-center py-2 text-[var(--booking-ink)]">Спасибо! Мы свяжемся, как только время освободится.</p>
+                            <p className="text-sm text-center py-2 text-[var(--booking-ink)]">Заявка сохранена. Психолог увидит её и сможет связаться с вами.</p>
                         )}
 
                         <button
@@ -786,7 +861,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             onClick={() => setShowFullCalendar(true)}
                             className="w-full text-center text-xs text-[var(--booking-muted)] underline mt-3"
                         >
-                            Показать все времена
+                            Показать весь календарь
                         </button>
                     </div>
                 )}
@@ -819,107 +894,94 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 </div>
                 )}
 
-                {/* Time selection */}
+                {/* Time selection — Task 14 point 5: online/offline/per-cabinet sections, never one flat grid */}
                 {selectedDate && (!psy?.timeSuggestEnabled || showFullCalendar) && (
                     <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
                         <h3 className="font-medium mb-3 text-[var(--booking-ink)]">Свободное время:</h3>
-                        {availableTimes.length === 0 ? (
+                        {concreteOptions.length === 0 ? (
                             <p className="text-[var(--booking-muted)] text-sm text-center py-4">Нет свободного времени на эту дату</p>
                         ) : (
-                            <div className="grid grid-cols-4 gap-2">
-                                {availableTimes.map(slot => {
-                                    if (slot.isOwnBooking) {
-                                        return (
-                                            <div
-                                                key={`${slot.time}-${slot.format}-own`}
-                                                className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-[var(--booking-accent)]/40 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]"
-                                                onClick={() => toast.info('Это ваше забронированное время')}
-                                            >
-                                                <span>{slot.time}</span>
-                                                <span className="text-[9px] leading-tight opacity-80 uppercase tracking-wider mt-0.5">Ваше</span>
-                                            </div>
-                                        );
-                                    }
-                                    return (
-                                        <button
-                                            key={`${slot.time}-${slot.format}`}
-                                            type="button"
-                                            onClick={() => handleTimeSlotSelect(slot)}
-                                            className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm'
-                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'
-                                                }`}
-                                        >
-                                            {slot.time}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {/* Format selection — only for hybrid slots */}
-                        {selectedTimeSlot?.format === 'both' && (
-                            <div className="mt-4 pt-4 border-t border-[var(--booking-line)] animate-in fade-in duration-200">
-                                <label className="block text-sm font-medium mb-3 text-[var(--booking-ink)]">Формат проведения <span className="text-destructive">*</span></label>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedFormat('online')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm' : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'}`}
-                                    >💻 Онлайн</button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedFormat('offline')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm' : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'}`}
-                                    >🏠 В кабинете</button>
-                                </div>
+                            <div className="space-y-4">
+                                {sections.map(section => (
+                                    <div key={section.key}>
+                                        <p className="text-xs font-semibold tracking-wide text-[var(--booking-muted)] mb-2">{section.label}</p>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {section.options.map(opt => opt.isOwnBooking ? (
+                                                <div
+                                                    key={opt.key}
+                                                    className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-[var(--booking-accent)]/40 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]"
+                                                    onClick={() => toast.info('Это ваше забронированное время')}
+                                                >
+                                                    <span>{opt.time}</span>
+                                                    <span className="text-[9px] leading-tight opacity-80 uppercase tracking-wider mt-0.5">Ваше</span>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    key={opt.key}
+                                                    type="button"
+                                                    onClick={() => handleTimeSlotSelect(opt)}
+                                                    className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.slotToken === opt.slotToken
+                                                        ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm'
+                                                        : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'
+                                                        }`}
+                                                >
+                                                    {opt.time}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
                 )}
 
                 <form onSubmit={handleBookingAttempt} className="space-y-4 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm">
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Имя</label>
-                        <input
-                            type="text"
-                            required
-                            value={form.name}
-                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                            className="w-full px-4 py-3 border border-[var(--booking-line)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--booking-accent-soft)] focus:border-[var(--booking-accent)] bg-[var(--booking-card)] text-[var(--booking-ink)] transition-all"
-                            placeholder="Ваше имя"
-                            readOnly={isKnownClient}
-                        />
-                        {isKnownClient && (
-                            <p className="text-xs text-[var(--booking-accent)] mt-1.5 flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> Данные заполнены автоматически
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Телефон</label>
-                        <PhoneInput
-                            country={'ru'}
-                            value={form.phone}
-                            onChange={phone => setForm(f => ({ ...f, phone }))}
-                            inputProps={{
-                                required: true,
-                            }}
-                            containerClass="!w-full"
-                            inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-[var(--booking-line)] !rounded-xl focus:!ring-2 focus:!ring-[var(--booking-accent-soft)] !bg-[var(--booking-card)] !text-[var(--booking-ink)] !transition-all"
-                            buttonClass="!bg-[var(--booking-card)] !border-[var(--booking-line)] !rounded-l-xl focus:!ring-[var(--booking-accent-soft)] hover:!bg-[var(--booking-accent-soft)]"
-                            dropdownClass="!bg-[var(--booking-card)] !text-[var(--booking-ink)] !border !border-[var(--booking-line)] !rounded-xl !shadow-lg"
-                            disabled={isKnownClient && !!form.phone}
-                        />
-                        <p className="text-xs text-[var(--booking-muted)] mt-2">
-                            Телефон нужен для связи. Уведомление о сессии придёт в {notificationChannel}.
+                    {/* Task 14 point 6: a known client's identity is already
+                        verified — never make them see or re-confirm name/phone. */}
+                    {isKnownClient ? (
+                        <p className="text-sm text-[var(--booking-ink)] flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-[var(--booking-accent)] flex-shrink-0" />
+                            {form.name ? `${form.name}, выберите` : 'Выберите'} удобное время — данные уже у нас.
                         </p>
-                    </div>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Имя</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={form.name}
+                                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-[var(--booking-line)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--booking-accent-soft)] focus:border-[var(--booking-accent)] bg-[var(--booking-card)] text-[var(--booking-ink)] transition-all"
+                                    placeholder="Ваше имя"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Телефон</label>
+                                <PhoneInput
+                                    country={'ru'}
+                                    value={form.phone}
+                                    onChange={phone => setForm(f => ({ ...f, phone }))}
+                                    inputProps={{
+                                        required: true,
+                                    }}
+                                    containerClass="!w-full"
+                                    inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-[var(--booking-line)] !rounded-xl focus:!ring-2 focus:!ring-[var(--booking-accent-soft)] !bg-[var(--booking-card)] !text-[var(--booking-ink)] !transition-all"
+                                    buttonClass="!bg-[var(--booking-card)] !border-[var(--booking-line)] !rounded-l-xl focus:!ring-[var(--booking-accent-soft)] hover:!bg-[var(--booking-accent-soft)]"
+                                    dropdownClass="!bg-[var(--booking-card)] !text-[var(--booking-ink)] !border !border-[var(--booking-line)] !rounded-xl !shadow-lg"
+                                />
+                                <p className="text-xs text-[var(--booking-muted)] mt-2">
+                                    Телефон нужен для связи. Уведомление о сессии придёт в {notificationChannel}.
+                                </p>
+                            </div>
+                        </>
+                    )}
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'}
-                        className={`w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'
+                        disabled={!selectedDate || !selectedTimeSlot || booking || scheduleMode === 'readonly'}
+                        className={`w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || booking || scheduleMode === 'readonly'
                             ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
                             : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}

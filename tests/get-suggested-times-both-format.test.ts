@@ -1,33 +1,18 @@
-// Task 7 (PRAKTIKA MVP, founder review before Task 7 started): getSuggestedTimes
-// used to collapse resolveAvailableTimesForDay's rich slot (availabilitySlotId,
-// scheduleRuleId, duration) back down to the old bare {date,time,format,addressId}
-// shape — losing exact-slot identity before it ever reached the client. A
-// signed slotToken can't be built from a candidate that no longer says which
-// rule/slot it came from. This locks in that every SuggestedTimeCandidate
-// carries the same exact-slot identity the full calendar (getAvailableTimes)
-// returns — one shared contract, not two.
+// Task 14 point 2 (founder correction): getSuggestedTimes used to collapse a
+// format:'both' rule to a single online candidate, silently discarding the
+// offline choice — never choose a format for the client. This locks in that
+// a 'both' rule now produces TWO real candidates, each with its own exact
+// slotToken, and that clicking either books that exact concrete choice.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const db = vi.hoisted(() => ({
-    psychologistSettings: {
-        findUnique: vi.fn(),
-    },
-    availabilitySlot: {
-        findMany: vi.fn(),
-    },
-    calendarIntegration: {
-        findMany: vi.fn().mockResolvedValue([]),
-    },
-    diaryBlock: {
-        findMany: vi.fn().mockResolvedValue([]),
-    },
-    diarySession: {
-        findMany: vi.fn().mockResolvedValue([]),
-    },
-    psychologistAddress: {
-        findMany: vi.fn().mockResolvedValue([]),
-    },
+    psychologistSettings: { findUnique: vi.fn() },
+    availabilitySlot: { findMany: vi.fn() },
+    calendarIntegration: { findMany: vi.fn().mockResolvedValue([]) },
+    diaryBlock: { findMany: vi.fn().mockResolvedValue([]) },
+    diarySession: { findMany: vi.fn().mockResolvedValue([]) },
+    psychologistAddress: { findMany: vi.fn() },
 }));
 vi.mock('@/lib/db', () => ({ db }));
 
@@ -44,9 +29,9 @@ vi.mock('@/lib/client-workflow', () => ({
 vi.mock('@/lib/telegram-webapp', () => ({ verifyTelegramWebAppInitData: vi.fn() }));
 
 const RULE = {
-    id: 'rule-evening',
+    id: 'rule-both',
     isActive: true,
-    format: 'offline',
+    format: 'both',
     addressId: 'address-yauzskaya',
     duration: 50,
     breakDuration: 15,
@@ -55,7 +40,7 @@ const RULE = {
     endDate: null,
 };
 
-describe('getSuggestedTimes — exact-slot identity survives the collapse to SuggestedTimeCandidate', () => {
+describe('getSuggestedTimes — a format:"both" rule never collapses to a single online candidate', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         db.psychologistSettings.findUnique.mockResolvedValue({
@@ -70,13 +55,13 @@ describe('getSuggestedTimes — exact-slot identity survives the collapse to Sug
         db.calendarIntegration.findMany.mockResolvedValue([]);
         db.diaryBlock.findMany.mockResolvedValue([]);
         db.diarySession.findMany.mockResolvedValue([]);
-        // A single Monday evening offline rule — matches any weekday scan.
+        db.psychologistAddress.findMany.mockResolvedValue([{ id: 'address-yauzskaya', name: 'Яузская' }]);
         db.availabilitySlot.findMany.mockResolvedValue([
             {
-                id: 'slot-evening',
+                id: 'slot-both',
                 dayOfWeek: 0,
-                startTime: '15:00',
-                endTime: '21:00',
+                startTime: '18:00',
+                endTime: '19:00',
                 duration: null,
                 format: null,
                 addressId: null,
@@ -88,16 +73,18 @@ describe('getSuggestedTimes — exact-slot identity survives the collapse to Sug
         ]);
     });
 
-    it('every suggested candidate carries availabilitySlotId, scheduleRuleId and duration', async () => {
+    it('produces both an online candidate AND an offline candidate for the same time, each with a distinct real slotToken', async () => {
         const { getSuggestedTimes } = await import('../src/app/bot/actions');
 
         const suggestions = await getSuggestedTimes('psy-1', 'any', null);
 
-        expect(suggestions.length).toBeGreaterThan(0);
-        for (const s of suggestions) {
-            expect(s.availabilitySlotId).toBe('slot-evening');
-            expect(s.scheduleRuleId).toBe('rule-evening');
-            expect(s.duration).toBe(50);
-        }
+        const online = suggestions.find((s) => s.format === 'online');
+        const offline = suggestions.find((s) => s.format === 'offline');
+        expect(online).toBeDefined();
+        expect(offline).toBeDefined();
+        expect(online!.slotToken).not.toBe(offline!.slotToken);
+        expect(online!.addressId).toBeNull();
+        expect(offline!.addressId).toBe('address-yauzskaya');
+        expect(offline!.addressName).toBe('Яузская');
     });
 });

@@ -19,6 +19,9 @@ export interface SuggestedTimeCandidate {
     scheduleRuleId: string | null;
     duration: number;
     slotToken: string;
+    // Task 14 point 4: the card needs to say WHAT the client is choosing
+    // ("Очно · Яузская"), not just a bare time — null for online.
+    addressName: string | null;
 }
 
 function dayOfWeekMondayFirst(dateStr: string): number {

@@ -81,7 +81,7 @@ describe('возврат без брони — баннер и свежий по
         await waitFor(() => expect(actions.getSuggestedTimes).toHaveBeenCalledWith(PSY_ID, 'weekend_morning', null));
     });
 
-    it('запись старше 30 дней — обычный первый экран, без баннера, запись стёрта', async () => {
+    it('запись старше 30 дней — обычный первый экран, без баннера, запись стёрта (но ближайшие варианты всё равно подбираются автоматически — Task 14 п.1)', async () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ preference: 'any', savedAt: Date.now() - 31 * 24 * 60 * 60 * 1000 }));
 
         render(<BookingPageClient psychologistId={PSY_ID} />);
@@ -89,7 +89,10 @@ describe('возврат без брони — баннер и свежий по
         await waitFor(() => expect(actions.getPsychologist).toHaveBeenCalled());
         await screen.findByText('Когда вам удобнее?');
         expect(screen.queryByText(/С возвращением/i)).not.toBeInTheDocument();
-        expect(actions.getSuggestedTimes).not.toHaveBeenCalled();
+        // Task 14 п.1: первый экран сразу подбирает ближайшие варианты через
+        // 'any' — независимо от истёкшего/отсутствующего S1-R предпочтения —
+        // но это НЕ явное предпочтение клиента, поэтому localStorage стёрта.
+        await waitFor(() => expect(actions.getSuggestedTimes).toHaveBeenCalledWith(PSY_ID, 'any', null));
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     });
 

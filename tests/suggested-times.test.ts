@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { pickSuggestedTimes, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 
 function slot(date: string, time: string): SuggestedTimeCandidate {
-    return { date, time, format: 'online', addressId: null, availabilitySlotId: `slot-${date}-${time}`, scheduleRuleId: null, duration: 50, slotToken: `token-${date}-${time}` };
+    return { date, time, format: 'online', addressId: null, availabilitySlotId: `slot-${date}-${time}`, scheduleRuleId: null, duration: 50, slotToken: `token-${date}-${time}`, addressName: null };
 }
 
 describe('pickSuggestedTimes (product/practice/CJM_booking_v1.md этап 2)', () => {

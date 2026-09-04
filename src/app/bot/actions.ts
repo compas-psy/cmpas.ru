@@ -13,6 +13,7 @@ import { slotToken } from '@/lib/practice/booking/slot-token';
 import { createSelfPracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
 import { fetchExternalBusyBlocks } from '@/lib/practice/booking/external-busy';
 import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
+import { expandToConcreteSlotOptions } from '@/lib/booking/concrete-slot-options';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
@@ -197,16 +198,28 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
 
     const resolved = resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
 
+    // Task 14 point 4/5: the full calendar groups options by address
+    // ("ОНЛАЙН" / "ЯУЗСКАЯ" / ...) and a suggested-slot card names the
+    // cabinet ("Очно · Яузская") — neither is derivable from addressId
+    // alone, so look up the display name for every address actually
+    // referenced. One query, only when an offline option exists at all.
+    const addressIds = Array.from(new Set(resolved.map(o => o.addressId).filter((id): id is string => !!id)));
+    const addresses = addressIds.length
+        ? await db.psychologistAddress.findMany({ where: { id: { in: addressIds } }, select: { id: true, name: true } })
+        : [];
+    const addressNameById = new Map(addresses.map(a => [a.id, a.name]));
+
     // Task 7: every option carries a signed slotToken — the ONLY thing a
     // booking commit trusts for exact slot identity. Minted here, at read
     // time, from the exact same resolved option the client sees; never
     // reconstructed from date/time later.
     //
-    // format:'both' is special: it means the RULE allows either format, and
-    // the client picks one in a follow-up step (see BookingPageClient's
-    // online/offline toggle) — there is no single concrete option to sign.
-    // Two tokens are minted instead, one per concrete choice, so the token
-    // always encodes exactly what will be booked, never an ambiguous format.
+    // format:'both' means the RULE allows either format — there is no
+    // single concrete option to sign, so two tokens are minted, one per
+    // concrete choice (online / offline-at-this-address). Callers expand
+    // this into two separate bookable options via expandToConcreteSlotOptions
+    // (src/lib/booking/concrete-slot-options.ts) — never silently defaulted
+    // to online here or anywhere downstream.
     return resolved.map(opt => {
         const mint = (format: string, addressId: string | null) => slotToken({
             psychologistId,
@@ -218,11 +231,12 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
             addressId,
             duration: opt.duration,
         });
+        const addressName = opt.addressId ? (addressNameById.get(opt.addressId) ?? null) : null;
 
         if (opt.format === 'both') {
-            return { ...opt, slotToken: null, slotTokenOnline: mint('online', null), slotTokenOffline: mint('offline', opt.addressId) };
+            return { ...opt, addressName, slotToken: null, slotTokenOnline: mint('online', null), slotTokenOffline: mint('offline', opt.addressId) };
         }
-        return { ...opt, slotToken: mint(opt.format, opt.addressId), slotTokenOnline: null, slotTokenOffline: null };
+        return { ...opt, addressName, slotToken: mint(opt.format, opt.addressId), slotTokenOnline: null, slotTokenOffline: null };
     });
 }
 
@@ -246,25 +260,25 @@ export async function getSuggestedTimes(
 
         for (const dateStr of dates) {
             const times = await getAvailableTimes(psychologistId, dateStr, false, undefined, clientId);
-            for (const slot of times) {
-                if (slot.isOwnBooking) continue;
-                // Task 7: carry exact-slot identity through — suggested-times and
-                // the full calendar must share one exact-slot contract, so a
-                // signed slotToken can be issued for a suggested candidate
-                // without re-resolving/guessing which rule it came from later.
-                // A format:'both' rule normally waits for a follow-up online/
-                // offline choice in the full grid — the one-tap suggestion
-                // quick-pick has no such step, so it defaults to online.
-                const isBoth = slot.format === 'both';
+            // Task 14 point 2 (founder correction): a format:'both' rule used
+            // to collapse to a single online candidate here, silently
+            // discarding the offline choice — never choose a format for the
+            // client. expandToConcreteSlotOptions (the same primitive the
+            // reschedule UIs use — Task 8) turns it into two real candidates,
+            // each with its own exact-slot identity and slotToken.
+            const concreteOptions = expandToConcreteSlotOptions(times);
+            for (const opt of concreteOptions) {
+                if (opt.isOwnBooking) continue;
                 candidates.push({
                     date: dateStr,
-                    time: slot.time,
-                    format: isBoth ? 'online' : slot.format,
-                    addressId: isBoth ? null : slot.addressId,
-                    availabilitySlotId: slot.availabilitySlotId,
-                    scheduleRuleId: slot.scheduleRuleId,
-                    duration: slot.duration,
-                    slotToken: (isBoth ? slot.slotTokenOnline : slot.slotToken) as string,
+                    time: opt.time,
+                    format: opt.format,
+                    addressId: opt.addressId,
+                    availabilitySlotId: opt.availabilitySlotId as string,
+                    scheduleRuleId: opt.scheduleRuleId ?? null,
+                    duration: opt.duration as number,
+                    slotToken: opt.slotToken,
+                    addressName: opt.addressName ?? null,
                 });
             }
         }
@@ -293,7 +307,7 @@ export async function submitWaitlistInterest(psychologistId: string, name: strin
     return { success: true };
 }
 
-export async function bookSession(psychologistId: string, telegramInitData: string | null, form: { name: string, phone: string, slotToken: string }) {
+export async function bookSession(psychologistId: string, telegramInitData: string | null, form: { name: string, phone: string, slotToken: string, clientLinkToken?: string | null }) {
     // Task 7 (founder review): client find-or-create, Telegram binding, and
     // consent sync now live INSIDE createSelfPracticeBooking's own
     // transaction — together with the slot commit, under the same
@@ -302,6 +316,13 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
     // of leaving an orphan. telegramInitData is the raw, signed
     // window.Telegram.WebApp.initData string; createSelfPracticeBooking
     // verifies it server-side and never trusts a client-supplied user id.
+    //
+    // Task 14 point 6: clientLinkToken is the SAME raw signed personal-link
+    // token BookingPageClient already resolved once at page load (the `?c=`
+    // param or a saved compas_clientToken) — re-verified again here, never
+    // trusted as-is. This is what lets a known client whose phone field is
+    // hidden in the UI still resolve to their EXISTING DiaryClient instead
+    // of the phone-string heuristic silently creating a duplicate.
     let result;
     try {
         result = await createSelfPracticeBooking({
@@ -310,6 +331,7 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
             phone: form.phone,
             slotToken: form.slotToken,
             telegramInitData,
+            clientLinkToken: form.clientLinkToken ?? null,
         });
     } catch (e) {
         if (e instanceof BookingConflictError) {
