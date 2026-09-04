@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Plus, X, Calendar, Trash2, Palmtree, User, Coffee, Edit2, Lock, Eye,
     CalendarCheck, RefreshCw, AlertCircle, ChevronDown, ChevronUp,
-    Clock, Minus, Shield, Zap, Sparkles, Copy, Layers, EyeOff,
+    Clock, Minus, Shield, Zap, Sparkles, Layers, EyeOff,
     Tag, MoreHorizontal, Check, Loader2, Monitor, Building2, Shuffle
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,8 +35,8 @@ import {
     getAvailableDates,
     getAvailableTimes,
 } from '@/app/bot/actions';
-import { ShareButton } from '@/components/psidairy/ShareSheet';
-import { humanizeUrl } from '@/lib/share/buildShareUrls';
+import { RuleWeekSchedule } from './RuleWeekSchedule';
+import { BookingLinkCard } from './BookingLinkCard';
 
 type ScheduleRule = {
     id: string; name: string; priority: number; isActive: boolean;
@@ -62,7 +62,6 @@ type Settings = {
 };
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const DAY_LABELS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const BLOCK_LABELS: Record<string, string> = { vacation: 'Отпуск', personal: 'Личное', other: 'Другое' };
 const BLOCK_ICONS: Record<string, typeof Palmtree> = { vacation: Palmtree, personal: User, other: Coffee };
 
@@ -93,53 +92,6 @@ function addMinutes(time: string, mins: number): string {
     const nh = Math.floor(total / 60);
     const nm = total % 60;
     return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
-}
-
-function BookingLinkCard({ psychologistId, isPrivate }: { psychologistId: string; isPrivate: boolean }) {
-    // §5.1 (O-260829): human-readable /u/<slug> link instead of the raw id.
-    // Starts on the old id-based URL (always valid) and swaps in the
-    // slug-based one once resolved/lazily created — no loading flicker either way.
-    const [bookingUrl, setBookingUrl] = useState(`https://cmpas.ru/bot/book/${psychologistId}`);
-
-    useEffect(() => {
-        let cancelled = false;
-        import('../actions/booking-link').then(({ getMyBookingUrl }) => {
-            getMyBookingUrl().then(url => { if (!cancelled) setBookingUrl(url); }).catch(() => { });
-        });
-        return () => { cancelled = true; };
-    }, [psychologistId]);
-
-    return (
-        <div className={`bg-card border border-border rounded-2xl shadow-card p-5 ${isPrivate ? 'opacity-60' : ''}`}>
-            <div className="flex items-center gap-2 mb-3">
-                <CalendarCheck className="w-4 h-4 text-primary" />
-                <div>
-                    <h3 className="text-[14px] font-bold text-foreground">Ссылка на самозапись</h3>
-                    <p className="text-[11px] text-muted-foreground">
-                        {isPrivate ? 'Недоступна в приватном режиме' : 'Поделитесь ссылкой с клиентами'}
-                    </p>
-                </div>
-            </div>
-            {isPrivate ? (
-                <div className="flex items-center gap-2 bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5">
-                    <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="text-[12px] text-muted-foreground">Включите режим «Просмотр» или «Запись» чтобы активировать ссылку</span>
-                </div>
-            ) : (
-                <>
-                    <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-3 py-2.5">
-                        <span className="flex-1 text-[13px] font-medium text-foreground truncate">{humanizeUrl(bookingUrl)}</span>
-                    </div>
-                    <ShareButton
-                        url={bookingUrl}
-                        text="Запишитесь на сессию:"
-                        icon={<Copy className="w-3.5 h-3.5" />}
-                        className="w-full flex items-center justify-center gap-1.5 mt-3 px-3 py-2.5 rounded-xl text-[12px] font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                    />
-                </>
-            )}
-        </div>
-    );
 }
 
 export default function AvailabilityPage() {
@@ -692,21 +644,14 @@ export default function AvailabilityPage() {
                                 const ruleSlots = slots.filter(s => s.scheduleRuleId === rule.id && !(s.endDate && new Date(s.endDate) < today));
                                 // Compute active days
                                 const activeDays = Array.from(new Set(ruleSlots.map(s => s.dayOfWeek))).sort();
-                                // Compute time range from slots
-                                const allStarts = ruleSlots.map(s => s.startTime).filter(Boolean);
-                                const allEnds = ruleSlots.map(s => s.endTime).filter(Boolean);
-                                const minTime = allStarts.length > 0 ? allStarts.sort()[0] : '--:--';
-                                const maxTime = allEnds.length > 0 ? allEnds.sort().reverse()[0] : '--:--';
                                 // Format label
                                 const FormatIcon = rule.format === 'online' ? Monitor : rule.format === 'offline' ? Building2 : Shuffle;
                                 const formatLabel = rule.format === 'online' ? 'Онлайн' : rule.format === 'offline' ? 'Офлайн' : 'Гибрид';
                                 const audienceLabel = rule.audienceFilter === 'all' ? 'Все клиенты' : rule.audienceFilter === 'new' ? 'Только новые' : 'Только постоянные';
-                                // Day range title
-                                const dayRangeTitle = activeDays.length > 0
-                                    ? activeDays.length === 1
-                                        ? DAY_LABELS_FULL[activeDays[0]]
-                                        : `${DAY_LABELS_FULL[activeDays[0]]} – ${DAY_LABELS_FULL[activeDays[activeDays.length - 1]]}`
-                                    : rule.name;
+                                // Задача 18 §1: заголовок называет правило, а не диапазон дней.
+                                // «Понедельник – Пятница» врал, когда дни шли не подряд, а окна
+                                // внутри дня складывались в один диапазон 09:00–21:00.
+                                const ruleTitle = rule.name;
 
                                 return (
                                     <div key={rule.id} className={`border rounded-2xl overflow-hidden transition-all shadow-sm ${rule.isActive ? 'border-border hover:border-primary/20' : 'border-border/50 opacity-60'}`}>
@@ -722,7 +667,7 @@ export default function AvailabilityPage() {
                                                         <span className="px-2 py-0.5 rounded-md text-[11px] font-bold" style={{ backgroundColor: (rule.color || '#4F46E5') + '20', color: rule.color || '#4F46E5' }}>
                                                             {formatLabel}
                                                         </span>
-                                                        <span className="text-[14px] sm:text-[15px] font-bold text-foreground truncate">{dayRangeTitle}</span>
+                                                        <span className="text-[14px] sm:text-[15px] font-bold text-foreground truncate">{ruleTitle}</span>
                                                         {!rule.isActive && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-destructive/10 text-destructive">ОТКЛ</span>}
                                                         {(rule.startDate || rule.endDate) && (
                                                             <span className="text-[11px] text-muted-foreground font-medium">
@@ -744,7 +689,6 @@ export default function AvailabilityPage() {
                                                     </div>
                                                     {/* Mobile time/duration info */}
                                                     <div className="flex items-center gap-3 mt-2 text-[12px] text-muted-foreground sm:hidden">
-                                                        <span className="font-bold text-foreground tabular-nums">{minTime} – {maxTime}</span>
                                                         <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {rule.duration} мин</span>
                                                         <span className="flex items-center gap-0.5"><Coffee className="w-3 h-3" /> {rule.breakDuration} мин</span>
                                                     </div>
@@ -752,8 +696,7 @@ export default function AvailabilityPage() {
                                                 {/* Right: time + duration + break + toggles */}
                                                 <div className="shrink-0 flex items-center gap-2 sm:gap-3 self-start sm:self-center">
                                                     <div className="text-right hidden sm:block">
-                                                        <div className="text-[14px] font-bold text-foreground tabular-nums">{minTime} – {maxTime}</div>
-                                                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 justify-end">
+                                                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground justify-end">
                                                             <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {rule.duration} мин</span>
                                                             <span className="flex items-center gap-0.5"><Coffee className="w-3 h-3" /> {rule.breakDuration} мин</span>
                                                         </div>
@@ -771,6 +714,16 @@ export default function AvailabilityPage() {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* Задача 18 §1/§2: каждое окно дня показано отдельно —
+                                                со своим временем, форматом и кабинетом. */}
+                                            <RuleWeekSchedule
+                                                windows={ruleSlots}
+                                                cabinets={addresses}
+                                                onEditWindow={w => setEditingSlot(slots.find(s => s.id === w.id) || null)}
+                                                onDeleteWindow={rmSlot}
+                                                emptyHint="Рабочих часов пока нет — нажмите «плюс»"
+                                            />
                                         </div>
                                     </div>
                                 );
@@ -1015,10 +968,6 @@ export default function AvailabilityPage() {
             {editingRule && (() => {
                 const ruleSlots = slots.filter(s => s.scheduleRuleId === editingRule.id && !(s.endDate && new Date(s.endDate) < today));
                 const activeDays = Array.from(new Set(ruleSlots.map(s => s.dayOfWeek))).sort();
-                const allStarts = ruleSlots.map(s => s.startTime).filter(Boolean).sort();
-                const allEnds = ruleSlots.map(s => s.endTime).filter(Boolean).sort().reverse();
-                const minTime = allStarts[0] || '09:00';
-                const maxTime = allEnds[0] || '18:00';
                 return (
                 <Modal title="Редактировать правило" onClose={() => setEditingRule(null)} onSubmit={handleSaveEditRule}>
                 <Field label="Название">
@@ -1054,12 +1003,6 @@ export default function AvailabilityPage() {
                     <p className="text-[11px] text-muted-foreground mt-1">Дни определяются рабочими часами ниже</p>
                 </Field>
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="Рабочее время">
-                        <div className="text-sm font-bold text-foreground tabular-nums">{minTime} – {maxTime}</div>
-                        <p className="text-[11px] text-muted-foreground">Редактируется через рабочие часы</p>
-                    </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                     <Field label="Формат">
                         <select value={editingRule.format} onChange={e => setEditingRule(r => r ? { ...r, format: e.target.value } : r)} className="inp bg-white">
                             <option value="online">Онлайн</option><option value="offline">Кабинет</option><option value="both">Онлайн + Кабинет</option>
@@ -1093,31 +1036,15 @@ export default function AvailabilityPage() {
                         <span className="text-sm font-bold text-foreground">Рабочие часы</span>
                         <button type="button" onClick={() => { setEditingRule(null); setSelectedRuleId(editingRule.id); setShowNewSlot(true); }} className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Добавить</button>
                     </div>
-                    {ruleSlots.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">Нет слотов. Нажмите «Добавить».</p>
-                    ) : (
-                        <div className="space-y-2">
-                            {DAY_LABELS.map((dayName, dayIndex) => {
-                                const daySlots = ruleSlots.filter(s => s.dayOfWeek === dayIndex).sort((a, b) => a.startTime.localeCompare(b.startTime));
-                                const seen = new Set<string>();
-                                const uniqueSlots = daySlots.filter(s => { const key = `${s.startTime}-${s.endTime}`; if (seen.has(key)) return false; seen.add(key); return true; });
-                                if (uniqueSlots.length === 0) return null;
-                                return (
-                                    <div key={dayIndex} className="flex items-center gap-2">
-                                        <span className="w-7 text-[11px] font-bold text-muted-foreground uppercase shrink-0">{dayName}</span>
-                                        <div className="flex flex-wrap gap-1.5 flex-1">
-                                            {uniqueSlots.map(s => (
-                                                <div key={s.id} className="flex items-center gap-1 px-2 py-1 bg-muted/30 border border-border/50 rounded-lg text-[12px] font-bold group/es">
-                                                    <span className="tabular-nums">{s.startTime}–{s.endTime}</span>
-                                                    <button type="button" onClick={() => rmSlot(s.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover/es:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                    {/* Задача 18 §1: окна одного дня не схлопываются и не
+                        дедуплицируются по времени — у каждого свой формат и кабинет. */}
+                    <RuleWeekSchedule
+                        windows={ruleSlots}
+                        cabinets={addresses}
+                        onEditWindow={w => { setEditingRule(null); setEditingSlot(slots.find(s => s.id === w.id) || null); }}
+                        onDeleteWindow={rmSlot}
+                        emptyHint="Нет рабочих часов. Нажмите «Добавить»."
+                    />
                 </div>
             </Modal>);
             })()}

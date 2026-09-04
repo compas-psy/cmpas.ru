@@ -846,10 +846,16 @@ model NotificationSettings {
 }
 
 model PsychologistAddress {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   psychologistId String
   name           String // e.g. "Центр", "Кабинет на Ленина"
   address        String // Actual physical address
+  // Задача 18: кабинет не удаляют, его выводят из работы. Удаление строки
+  // обнулило бы addressId у прошедших сессий (onDelete: SetNull) — история
+  // приёма потеряла бы место встречи. Неактивный кабинет пропадает из
+  // выбора, но остаётся у старых сессий и в правилах, которые на него
+  // ссылались до вывода.
+  isActive       Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
