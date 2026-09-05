@@ -1,48 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/auth';
+import { suggestAddresses } from '@/lib/dadata/suggest';
 
-// Proxy for DaData Suggestions API to keep the token server-side
+/**
+ * Прокси подсказок адресов DaData. Токен остаётся на сервере, но этого мало:
+ * подсказки платные и считаются по запросам, поэтому эндпоинт закрыт
+ * авторизацией и ограничен по частоте — иначе это открытый счёт, который
+ * может тратить кто угодно (Задача 19).
+ *
+ * Маршрут отвечает только на вопрос «кто спрашивает»; всё остальное —
+ * проверка запроса, лимит, кэш, таймаут и деградация — в
+ * src/lib/dadata/suggest.ts, где это проверяется тестами без Next.
+ */
 export async function POST(req: NextRequest) {
-    const { query } = await req.json();
-
-    const token = process.env.DADATA_API_KEY;
-    if (!token) {
-        return NextResponse.json({ suggestions: [] });
+    const session = await auth();
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    try {
-        const res = await fetch(
-            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Authorization': `Token ${token}`,
-                },
-                body: JSON.stringify({
-                    query,
-                    count: 7,
-                    locations: [{ country: 'Россия' }],
-                }),
-            }
-        );
+    // Кривое тело — не повод для 500: подсказки не обязательны, поле работает
+    // и без них.
+    const body = await req.json().catch(() => null);
 
-        const data = await res.json();
-        return NextResponse.json({
-            suggestions: (data.suggestions || []).map((s: any) => ({
-                value: s.value,
-                data: {
-                    fias_id: s.data?.fias_id,
-                    city: s.data?.city,
-                    street: s.data?.street,
-                    house: s.data?.house,
-                    block: s.data?.block,
-                    region: s.data?.region,
-                },
-            })),
-        });
-    } catch (e) {
-        console.error('DaData error:', e);
-        return NextResponse.json({ suggestions: [] });
-    }
+    const { suggestions } = await suggestAddresses({
+        userId: session.user.id,
+        query: (body as { query?: unknown } | null)?.query,
+        token: process.env.DADATA_API_KEY,
+    });
+
+    return NextResponse.json({ suggestions });
 }

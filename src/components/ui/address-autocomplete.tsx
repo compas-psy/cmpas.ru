@@ -27,26 +27,38 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     const [loading, setLoading] = useState(false);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    // Задача 19: ответ на устаревший запрос не должен затирать свежий. Пока
+    // отменялся только таймер дебаунса, два запроса в полёте могли вернуться
+    // в обратном порядке — и в списке оказывались подсказки к тому, что
+    // специалист уже дописал.
+    const abortRef = useRef<AbortController | null>(null);
 
     const fetchSuggestions = useCallback(async (query: string) => {
-        if (query.length < 3) {
+        abortRef.current?.abort();
+        if (query.trim().length < 3) {
             setSuggestions([]);
+            setLoading(false);
             return;
         }
+        const controller = new AbortController();
+        abortRef.current = controller;
         setLoading(true);
         try {
             const res = await fetch('/api/dadata', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query }),
+                signal: controller.signal,
             });
             const data = await res.json();
+            if (controller.signal.aborted) return;
             setSuggestions(data.suggestions || []);
             setShowDropdown(true);
         } catch {
+            if (controller.signal.aborted) return;
             setSuggestions([]);
         }
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
     }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,6 +74,12 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
         setShowDropdown(false);
         setSuggestions([]);
     };
+
+    // Незавершённый запрос и таймер дебаунса не должны пережить размонтирование.
+    useEffect(() => () => {
+        abortRef.current?.abort();
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+    }, []);
 
     // Close dropdown on outside click
     useEffect(() => {
