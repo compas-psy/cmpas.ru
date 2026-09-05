@@ -1,0 +1,186 @@
+name: Task 28 · Интеграции (только чтение)
+
+# Задача 28, §5–§9. Проверяется настоящая боевая конфигурация интеграций —
+# но ТОЛЬКО чтением.
+#
+# Чего здесь нет и не будет:
+#   · ни одной отправки сообщения человеку;
+#   · ни одной смены подписки MAX (только GET /subscriptions);
+#   · ни одной записи в чей-либо календарь;
+#   · ни одного значения секрета в журнале — только PRESENT/MISSING.
+#
+# Положительная сторона MAX-приёмника (валидный запрос принимается) здесь
+# намеренно НЕ проверяется: это означало бы влить синтетическое обновление
+# в боевой обработчик. Она проверяется на стенде, см. отчёт Задачи 28.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/praktika-mvp-launch'
+    paths:
+      - '.github/workflows/task28-integrations.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task28-integrations
+  cancel-in-progress: false
+
+jobs:
+  integrations:
+    name: Конфигурация и чтение
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── §5: наличие, а не значения ───────────────────────────────────
+      - name: Обязательные секреты — PRESENT / MISSING
+        env:
+          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+          MAX_BOT_USERNAME: ${{ secrets.MAX_BOT_USERNAME }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          DADATA_API_KEY: ${{ secrets.DADATA_API_KEY }}
+          YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
+          YANDEX_CLIENT_SECRET: ${{ secrets.YANDEX_CLIENT_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          present() { if [ -n "${!1:-}" ]; then echo "$1: PRESENT"; else echo "$1: MISSING"; fi; }
+          for v in MAX_BOT_TOKEN MAX_BOT_USERNAME TELEGRAM_BOT_TOKEN DADATA_API_KEY \
+                   YANDEX_CLIENT_ID YANDEX_CLIENT_SECRET SMTP_HOST SERVER_HOST; do
+            present "$v"
+          done
+
+      - name: Переменные окружения на сервере — только ИМЕНА
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/int_key
+          chmod 600 ~/.ssh/int_key
+          # cut -d= -f1 отрезает значения ещё на сервере: наружу уходят
+          # исключительно имена переменных.
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/int_key \
+            "$SSH_USER@$SSH_HOST" \
+            "grep -o '^[A-Z_0-9]*=' /var/www/cmpas.ru/.env 2>/dev/null | tr -d '=' | sort" \
+            > /tmp/envnames.txt 2>/dev/null || true
+          rm -f ~/.ssh/int_key
+          echo "===== ИМЕНА ПЕРЕМЕННЫХ НА СЕРВЕРЕ ====="
+          cat /tmp/envnames.txt
+          echo "===== ОЖИДАЕМЫЕ ДЛЯ ВЫПУСКА ====="
+          for v in DATABASE_URL AUTH_SECRET NEXTAUTH_SECRET AUTH_URL NEXT_PUBLIC_BASE_URL \
+                   TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET \
+                   MAX_BOT_TOKEN MAX_WEBHOOK_SECRET \
+                   DADATA_API_KEY GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+                   YANDEX_CLIENT_ID YANDEX_CLIENT_SECRET; do
+            if grep -qx "$v" /tmp/envnames.txt 2>/dev/null; then echo "$v: PRESENT"; else echo "$v: MISSING"; fi
+          done
+
+      # ── §6: MAX ──────────────────────────────────────────────────────
+      - name: MAX — подписка, адрес приёмника, защита секретом
+        env:
+          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+        run: |
+          set -u
+          if [ -z "$MAX_BOT_TOKEN" ]; then echo "MAX_BOT_TOKEN MISSING — проверка невозможна"; exit 0; fi
+
+          echo "===== Диагностика приёмника (GET, ничего не меняет) ====="
+          curl -sS --max-time 25 "https://cmpas.ru/api/max/admin?secret=$MAX_BOT_TOKEN" -o /tmp/max.json \
+            -w 'HTTP %{http_code}\n' || echo "запрос не прошёл"
+          # Печатаем строго отобранные поля. Ни токена, ни его префикса.
+          node -e '
+            const fs = require("fs");
+            let d = {};
+            try { d = JSON.parse(fs.readFileSync("/tmp/max.json","utf8")); } catch { console.log("ответ не разобран"); process.exit(0); }
+            const subs = d.subscriptions && d.subscriptions.subscriptions;
+            console.log("MAX_BOT_TOKEN_set:      ", d.MAX_BOT_TOKEN_set === true);
+            console.log("MAX_WEBHOOK_SECRET_set: ", d.MAX_WEBHOOK_SECRET_set === true);
+            console.log("webhook_url:            ", d.webhook_url || "нет");
+            if (d.configuration_error) console.log("configuration_error:    ", d.configuration_error);
+            if (Array.isArray(subs)) {
+              console.log("подписок зарегистрировано:", subs.length);
+              subs.forEach((s, i) => console.log(`  подписка ${i + 1}: url=${s.url} time=${s.time || "-"}`));
+            } else if (d.subscriptions_error) {
+              console.log("subscriptions_error:", d.subscriptions_error);
+            }
+            if (d.bot_info && d.bot_info.username) console.log("бот отвечает, username:", d.bot_info.username);
+            else if (d.bot_info_error) console.log("bot_info_error:", d.bot_info_error);
+          '
+
+          echo "===== Приёмник без секретного заголовка (ожидается отказ) ====="
+          CODE=$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"update_type":"bot_started","user":{"user_id":0}}' \
+            https://cmpas.ru/api/max/webhook || echo 000)
+          echo "POST /api/max/webhook без заголовка -> $CODE"
+          case "$CODE" in
+            401|403) echo "OK: приёмник закрыт без секрета" ;;
+            200) echo "ПРОВАЛ: приёмник принял запрос без секрета" ; exit 1 ;;
+            *) echo "ВНИМАНИЕ: неожиданный код $CODE" ;;
+          esac
+
+          echo "===== Приёмник с ЗАВЕДОМО НЕВЕРНЫМ секретом (ожидается отказ) ====="
+          CODE=$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            -H 'X-Max-Bot-Api-Secret: task28-deliberately-wrong-secret' \
+            -d '{"update_type":"bot_started","user":{"user_id":0}}' \
+            https://cmpas.ru/api/max/webhook || echo 000)
+          echo "POST /api/max/webhook с неверным секретом -> $CODE"
+          case "$CODE" in
+            401|403) echo "OK: подделанный секрет отвергнут" ;;
+            200) echo "ПРОВАЛ: подделанный секрет принят" ; exit 1 ;;
+            *) echo "ВНИМАНИЕ: неожиданный код $CODE" ;;
+          esac
+
+      # ── §9: DaData ───────────────────────────────────────────────────
+      - name: DaData — подсказки по синтетическому адресу
+        env:
+          DADATA_API_KEY: ${{ secrets.DADATA_API_KEY }}
+        run: |
+          set -u
+          if [ -z "$DADATA_API_KEY" ]; then echo "DADATA_API_KEY MISSING"; exit 0; fi
+          # Запрос заведомо публичный и синтетический: адрес известного здания,
+          # ничей не личный. Ответ в журнал не печатается — только количество.
+          curl -sS --max-time 25 -X POST \
+            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address' \
+            -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -H "Authorization: Token $DADATA_API_KEY" \
+            -d '{"query":"Москва Яузская 8","count":5}' -o /tmp/dadata.json \
+            -w 'HTTP %{http_code}\n' || echo "запрос не прошёл"
+          node -e '
+            const fs = require("fs");
+            try {
+              const d = JSON.parse(fs.readFileSync("/tmp/dadata.json","utf8"));
+              const n = Array.isArray(d.suggestions) ? d.suggestions.length : -1;
+              console.log("подсказок получено:", n);
+              console.log(n > 0 ? "OK: провайдер отвечает" : "ПРОВАЛ: подсказок нет");
+              process.exit(n > 0 ? 0 : 1);
+            } catch (e) { console.log("ответ не разобран"); process.exit(1); }
+          '
+
+      # ── §8: календари ────────────────────────────────────────────────
+      - name: Календари — что можно проверить, не читая чужой календарь
+        env:
+          YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
+          YANDEX_CLIENT_SECRET: ${{ secrets.YANDEX_CLIENT_SECRET }}
+        run: |
+          set -u
+          if [ -n "$YANDEX_CLIENT_ID" ] && [ -n "$YANDEX_CLIENT_SECRET" ]; then
+            echo "Яндекс OAuth-приложение: PRESENT"
+          else
+            echo "Яндекс OAuth-приложение: MISSING"
+          fi
+          echo
+          echo "Живое чтение календарей здесь НЕ выполняется намеренно."
+          echo "Подключённые интеграции на проде принадлежат настоящим людям;"
+          echo "прочитать их занятость — значит прочитать их личные события."
+          echo "Синтетического подключённого аккаунта у прогона нет."
+          echo "Итог по §8 см. в отчёте: путь чтения и устойчивость записи к"
+          echo "отказу календаря проверены на стенде, живое чтение —"
+          echo "NOT VERIFIED (требует подключения настоящего аккаунта)."
