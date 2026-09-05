@@ -77,6 +77,13 @@ export function resolveAvailableTimesForDay(params: ResolveDayParams): ResolvedS
     const daySlots = slots.filter(s => {
         if (s.dayOfWeek !== dayOfWeek) return false;
 
+        // Источник правды о доступности: действующий слот И (правила нет ИЛИ
+        // правило включено). Тумблер «выключить правило» в расписании
+        // специалиста менял только ScheduleRule.isActive, а резолвер этого
+        // поля не знал — выключенное правило продолжало публиковать часы
+        // клиентам. Сам слот фильтруется по isActive там, где читается из БД.
+        if (s.scheduleRule && !s.scheduleRule.isActive) return false;
+
         const ruleStart = s.scheduleRule?.startDate || s.startDate;
         if (ruleStart) {
             const slotStartStr = toDateStr(new Date(ruleStart));

@@ -18,7 +18,7 @@ const TUESDAY = '2026-09-08';
 
 function rule(): ScheduleRuleInput {
     return {
-        id: 'rule-a', format: 'online', addressId: null, duration: 50, breakDuration: 10,
+        id: 'rule-a', isActive: true, format: 'online', addressId: null, duration: 50, breakDuration: 10,
         audienceFilter: 'all', startDate: null, endDate: null,
     };
 }

@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
+import { resolveScheduleAddressId } from '@/lib/practice/ownership';
 
 async function fixMissingIsActive(psychologistId: string) {
     try {
@@ -92,6 +93,11 @@ export async function createAvailabilitySlot(data: {
 
         const isRecurring = start.getTime() !== end.getTime();
 
+        // Задача 18 P0-2: кабинет решается на сервере — чужой или выведенный
+        // из работы не сохранится, а у онлайн-окна кабинета не будет, что бы
+        // ни прислал вызывающий.
+        const addressId = await resolveScheduleAddressId(psychologistId, data.format, data.addressId);
+
         // Валидация: проверяем пересечения с существующими слотами
         const existingSlots = await db.availabilitySlot.findMany({
             where: { psychologistId, isActive: true },
@@ -137,7 +143,7 @@ export async function createAvailabilitySlot(data: {
                 startDate: start,
                 endDate: end,
                 format: data.format || 'online',
-                addressId: data.addressId || null,
+                addressId,
                 isActive: true,
                 scheduleRuleId: data.scheduleRuleId || null,
             };
@@ -195,6 +201,8 @@ export async function updateAvailabilitySlot(id: string, data: {
             throw new Error('Unauthorized');
         }
 
+        const addressId = await resolveScheduleAddressId(psychologistId, data.format, data.addressId);
+
         await db.availabilitySlot.update({
             where: { id },
             data: {
@@ -202,7 +210,7 @@ export async function updateAvailabilitySlot(id: string, data: {
                 endTime: data.endTime,
                 duration: data.duration,
                 format: data.format,
-                addressId: data.addressId || null,
+                addressId,
             }
         });
         revalidatePath('/diary/availability');
@@ -381,6 +389,7 @@ export async function createManualSlot(data: {
         });
 
         const duration = data.duration || settings?.defaultSessionDuration || 50;
+        const addressId = await resolveScheduleAddressId(psychologistId, data.format, data.addressId);
 
         // Check for overlaps
         const existing = await db.availabilitySlot.findMany({
@@ -418,7 +427,7 @@ export async function createManualSlot(data: {
                 endTime: data.endTime,
                 duration,
                 format: data.format || 'online',
-                addressId: data.addressId || null,
+                addressId,
                 isRecurring: true,
                 startDate: new Date(data.startDate),
                 endDate: new Date(data.endDate),

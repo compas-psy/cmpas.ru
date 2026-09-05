@@ -32,7 +32,7 @@ const DAY = '2026-09-10'; // Thursday
 const DAY_OF_WEEK = 3; // Mon=0 -> Thursday=3
 
 function rule(): ScheduleRuleInput {
-    return { id: 'rule-a', format: 'online', addressId: null, duration: 50, breakDuration: 10, audienceFilter: 'all', startDate: null, endDate: null };
+    return { id: 'rule-a', isActive: true, format: 'online', addressId: null, duration: 50, breakDuration: 10, audienceFilter: 'all', startDate: null, endDate: null };
 }
 function slot(): AvailabilitySlotInput {
     return { id: 'slot-a', dayOfWeek: DAY_OF_WEEK, startTime: '09:00', endTime: '18:00', duration: null, format: null, addressId: null, startDate: null, endDate: null, scheduleRuleId: 'rule-a', scheduleRule: rule() };

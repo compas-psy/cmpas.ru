@@ -24,6 +24,7 @@ const MONDAY = '2026-09-07'; // a real Monday, far enough in the future to be ou
 function ruleA(): ScheduleRuleInput {
     return {
         id: 'rule-a',
+        isActive: true,
         format: 'online',
         addressId: null,
         duration: 50,
@@ -37,6 +38,7 @@ function ruleA(): ScheduleRuleInput {
 function ruleB(): ScheduleRuleInput {
     return {
         id: 'rule-b',
+        isActive: true,
         format: 'offline',
         addressId: 'address-yauzskaya',
         duration: 50,

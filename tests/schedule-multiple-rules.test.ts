@@ -21,13 +21,26 @@ type SlotRow = {
     scheduleRuleId: string | null;
 };
 
-const world = vi.hoisted(() => ({ slots: [] as SlotRow[], nextId: 1 }));
+const world = vi.hoisted(() => ({
+    slots: [] as SlotRow[],
+    nextId: 1,
+    // Задача 18 P0-2: кабинет окна проверяется на сервере, поэтому у
+    // поддельной базы должны быть настоящие действующие кабинеты.
+    addresses: [
+        { id: 'a-yauzskaya', psychologistId: 'psy-1', isActive: true },
+        { id: 'a-kurkino', psychologistId: 'psy-1', isActive: true },
+    ],
+}));
 
 vi.mock('@/auth', () => ({ auth: vi.fn(async () => ({ user: { id: 'psy-1' } })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 vi.mock('@/lib/db', () => ({
     db: {
+        psychologistAddress: {
+            findFirst: vi.fn(async ({ where }: { where: { id: string; psychologistId: string } }) =>
+                world.addresses.find(a => a.id === where.id && a.psychologistId === where.psychologistId) ?? null),
+        },
         availabilitySlot: {
             findMany: vi.fn(async ({ where }: { where: { psychologistId: string; isActive?: boolean } }) =>
                 world.slots.filter(s => s.psychologistId === where.psychologistId

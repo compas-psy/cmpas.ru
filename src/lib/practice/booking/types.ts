@@ -6,6 +6,13 @@
 
 export interface ScheduleRuleInput {
     id: string;
+    /**
+     * Выключенное правило не публикует ни одного слота. Поле обязательное
+     * намеренно: адаптер, который забудет его передать, не соберётся, — а
+     * молчаливое «считаем активным» once again выпускало бы клиентам часы,
+     * которые специалист выключил тумблером.
+     */
+    isActive: boolean;
     format: string;
     addressId: string | null;
     duration: number;
