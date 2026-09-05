@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,10 +40,24 @@ fun CalendarScreen(
     onSessionClick: (String) -> Unit = {},
     onClientClick: (String) -> Unit = {},
     onAddSession: () -> Unit = {},
+    onWorkingHoursClick: () -> Unit = {},
+    onAddressesClick: () -> Unit = {},
     viewModel: CalendarViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sel = uiState.selectedDate
+    val uriHandler = LocalUriHandler.current
+    var tuneOpen by remember { mutableStateOf(false) }
+    var blockOpen by remember { mutableStateOf(false) }
+
+    // Форма закрывается только по подтверждению сервера — не по нажатию
+    // кнопки. Пока блокировки нет в базе, её нет вообще.
+    LaunchedEffect(uiState.blockSaved) {
+        if (uiState.blockSaved) {
+            blockOpen = false
+            viewModel.consumeBlockSaved()
+        }
+    }
     val daySessions = remember(uiState.sessions, sel) {
         uiState.sessions.filter { it.date == sel.toString() }.sortedBy { it.startTime }
     }
@@ -61,7 +76,9 @@ fun CalendarScreen(
                         Spacer(Modifier.height(4.dp))
                         Text("Календарь", style = tHero, color = CompasFg)
                     }
-                    IconButtonGlass(Icons.Outlined.Tune, "Фильтр", onClick = { /* TODO filters */ })
+                    // Задача 22: здесь была кнопка «Фильтр» с пустым
+                    // обработчиком — нажатие не делало ничего.
+                    IconButtonGlass(Icons.Outlined.Tune, "Настройки календаря", onClick = { tuneOpen = true })
                 }
             }
 
@@ -97,6 +114,40 @@ fun CalendarScreen(
             } else {
                 items(agenda, key = { it.id }) { s -> AgendaRow(s, onClick = { onSessionClick(s.id) }) }
             }
+        }
+
+        if (tuneOpen) {
+            CalendarTuneSheet(
+                onClose = { tuneOpen = false },
+                onAction = { action ->
+                    tuneOpen = false
+                    when (action) {
+                        // Свои экраны уже есть — второго расписания и второго
+                        // списка кабинетов заводить не нужно.
+                        CalendarTuneAction.WORKING_HOURS -> onWorkingHoursClick()
+                        CalendarTuneAction.CABINETS -> onAddressesClick()
+                        CalendarTuneAction.BLOCK_TIME -> blockOpen = true
+                        // Нативного экрана синхронизации нет: открывается
+                        // настоящая веб-настройка, а не нарисованная заглушка.
+                        CalendarTuneAction.CALENDAR_SYNC -> runCatching { uriHandler.openUri(CALENDAR_SYNC_URL) }
+                    }
+                },
+            )
+        }
+
+        if (blockOpen) {
+            BlockTimeSheet(
+                today = LocalDate.now(),
+                isSaving = uiState.isSavingBlock,
+                error = uiState.blockError,
+                onClose = {
+                    blockOpen = false
+                    viewModel.dismissBlockError()
+                },
+                onSave = { date, startTime, endTime, reason ->
+                    viewModel.createBlock(date, startTime, endTime, reason)
+                },
+            )
         }
     }
 }

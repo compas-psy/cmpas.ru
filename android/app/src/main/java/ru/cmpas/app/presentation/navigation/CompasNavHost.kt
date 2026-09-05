@@ -85,6 +85,10 @@ fun CompasNavHost(
                     onSessionClick = { navController.navigate(Screen.SessionDetail.createRoute(it)) },
                     onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
                     onAddSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    // Настройки календаря ведут в уже существующие экраны —
+                    // второго расписания и второго списка кабинетов нет.
+                    onWorkingHoursClick = { navController.navigate(Screen.Schedule.route) },
+                    onAddressesClick = { navController.navigate(Screen.Addresses.route) },
                 )
             }
             composable(Screen.Clients.route) {
