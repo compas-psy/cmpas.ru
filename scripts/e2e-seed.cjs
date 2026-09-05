@@ -110,11 +110,55 @@ async function main() {
     isActive: true, syncFrom: true,
   }});
 
+  // ── аттестация оператора ПДн (Задача 5)
+  //
+  // Специалист подтверждает её один раз, и до этого перенос практики и
+  // создание клиентов закрыты. Здесь она проставлена: сквозной прогон
+  // проверяет сам перенос, а не барьер перед ним — барьер закрыт
+  // tests/create-client-requires-attestation.test.ts.
+  await db.practiceOperatorAttestation.create({ data: {
+    id: 't27-attestation', psychologistId: a.id,
+    attestationCode: 'practice_client_data_operator', wordingVersion: '2026-09-03', serviceId: 'practice',
+  }});
+
   // ── сессии авторизации для обоих специалистов
   for (const [u, token] of [[a,'t27-session-a'],[b,'t27-session-b']]) {
     await db.session.create({ data: { sessionToken: token, userId: u.id, expires: new Date(Date.now() + 30*DAY) } });
   }
 
-  console.log('SEED OK');
+  // ── подписанные ссылки, которыми продукт пользуется в жизни
+  //
+  // Клиент попадает на перенос и отмену не по голому идентификатору, а по
+  // ссылке из сообщения бота: она подписана и привязана к паре
+  // (специалист, клиент, встреча, действие). Сквозной прогон должен ходить
+  // ровно этим путём, иначе он проверяет не тот вход, который есть у людей.
+  const { createHash } = require('crypto');
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || '';
+  const GRACE = 48 * 60 * 60 * 1000;
+  const actionToken = (psychologistId, clientId, sessionId, action, expiresAt) => {
+    const payload = `${psychologistId}|${clientId}|${sessionId}|${action}|${expiresAt}`;
+    const sig = createHash('sha256').update(`${payload}:${secret}`).digest('hex').slice(0, 32);
+    return 'sat1_' + Buffer.from(`${payload}|${sig}`).toString('base64url');
+  };
+  const personalToken = (clientId, issuedAt = Date.now()) => {
+    const expiresAt = issuedAt + 30 * 24 * 60 * 60 * 1000;
+    const payload = `${clientId}.${expiresAt}`;
+    const sig = createHash('sha256').update(`${payload}:${secret}`).digest('hex').slice(0, 32);
+    return 'st1_' + Buffer.from(`${payload}.${sig}`).toString('base64url');
+  };
+
+  const future = await db.diarySession.findUnique({ where: { id: 't27-sess-future' } });
+  const expiry = future.date.getTime() + GRACE;
+  const tokens = {
+    rescheduleSessionId: 't27-sess-future',
+    rescheduleToken: actionToken(a.id, c1.id, 't27-sess-future', 'reschedule', expiry),
+    cancelToken: actionToken(a.id, c1.id, 't27-sess-future', 'cancel', expiry),
+    knownClientToken: personalToken(c1.id),
+  };
+  const out = process.env.E2E_TOKENS_FILE || '/tmp/t27/e2e-tokens.json';
+  require('fs').mkdirSync(require('path').dirname(out), { recursive: true });
+  require('fs').writeFileSync(out, JSON.stringify(tokens, null, 2));
+
+  console.log('SEED OK; токены записаны в ' + out);
 }
 main().catch(e => { console.error(e); process.exit(1); }).finally(() => db.$disconnect());

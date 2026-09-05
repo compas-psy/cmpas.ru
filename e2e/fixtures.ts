@@ -1,6 +1,15 @@
+import { readFileSync } from 'node:fs';
 import { test as base, type Page } from '@playwright/test';
 
 /** Синтетические данные из scripts/e2e-seed.cjs: настоящих людей в прогоне нет. */
+/**
+ * Подписанные ссылки, которые посев выдал этому прогону: перенос, отмена и
+ * персональная ссылка известного клиента. Продукт раздаёт их сообщениями
+ * бота, а не голыми идентификаторами, поэтому сквозной прогон ходит теми же.
+ */
+export const TOKENS: { rescheduleSessionId: string; rescheduleToken: string; cancelToken: string; knownClientToken: string } =
+    JSON.parse(readFileSync(process.env.E2E_TOKENS_FILE || '/tmp/t27/e2e-tokens.json', 'utf8'));
+
 export const SEED = {
     psychologistA: 't27-psy-a',
     psychologistB: 't27-psy-b',

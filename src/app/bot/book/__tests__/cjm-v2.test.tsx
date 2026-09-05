@@ -192,7 +192,7 @@ describe('Task 14 п.7 — waitlist: только capture, без обещани
         expect(bodyText).not.toMatch(/мы свяжемся/i);
     });
 
-    it('после отправки — "Заявка сохранена", без обещания связаться автоматически', async () => {
+    it('после отправки — заявка принята, без обещания связаться автоматически', async () => {
         render(<BookingPageClient psychologistId={PSY_ID} />);
         await waitFor(() => expect(actions.getSuggestedTimes).toHaveBeenCalled());
 
@@ -202,7 +202,10 @@ describe('Task 14 п.7 — waitlist: только capture, без обещани
 
         await waitFor(() => expect(actions.submitWaitlistInterest).toHaveBeenCalled());
         const bodyText = document.body.textContent ?? '';
-        expect(bodyText).toContain('Заявка сохранена');
+        // Макет C12: нейтральная формулировка. Автоматическое уведомление
+        // листа ожидания в этот запуск не входит, поэтому текст говорит
+        // только о том, что заявку увидят.
+        expect(bodyText).toContain('Заявка отправлена');
         expect(bodyText).not.toMatch(/мы (обязательно )?напишем/i);
         expect(bodyText).not.toMatch(/как только освободится/i);
         expect(bodyText).not.toMatch(/уведомим автоматически/i);

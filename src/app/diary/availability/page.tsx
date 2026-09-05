@@ -720,6 +720,8 @@ export default function AvailabilityPage() {
                                             <RuleWeekSchedule
                                                 windows={ruleSlots}
                                                 cabinets={addresses}
+                                                ruleFormat={rule.format}
+                                                ruleAddressId={rule.addressId}
                                                 onEditWindow={w => setEditingSlot(slots.find(s => s.id === w.id) || null)}
                                                 onDeleteWindow={rmSlot}
                                                 emptyHint="Рабочих часов пока нет — нажмите «плюс»"
@@ -1041,6 +1043,8 @@ export default function AvailabilityPage() {
                     <RuleWeekSchedule
                         windows={ruleSlots}
                         cabinets={addresses}
+                        ruleFormat={editingRule.format}
+                        ruleAddressId={editingRule.addressId}
                         onEditWindow={w => { setEditingRule(null); setEditingSlot(slots.find(s => s.id === w.id) || null); }}
                         onDeleteWindow={rmSlot}
                         emptyHint="Нет рабочих часов. Нажмите «Добавить»."

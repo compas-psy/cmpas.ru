@@ -44,14 +44,36 @@ export function formatLabelOf(format?: string | null) {
 }
 
 /**
+ * Формат окна так, как его понимает ядро записи (Задача 27, макеты W11–W12).
+ *
+ * У окна формат может быть не задан — тогда он берётся у правила, которому
+ * окно принадлежит. Так решает src/lib/practice/booking/availability.ts:
+ * `slot.scheduleRule?.format ?? slot.format ?? 'online'`, и именно этот
+ * формат клиент видит на странице записи.
+ *
+ * Экран расписания читал только собственное поле окна и на пустом показывал
+ * «Онлайн». Вечерние часы очного правила подписывались как онлайн — то есть
+ * специалисту про его же расписание говорили не то, что получают его
+ * клиенты. Пустое поле здесь значит «как у правила», а не «онлайн».
+ *
+ * Порядок тот же, что в ядре: правило важнее окна. Иначе два экрана одного
+ * продукта расходились бы снова, только в другую сторону.
+ */
+export function resolveWindowFormat(window: ScheduleWindow, ruleFormat?: string | null) {
+    return ruleFormat ?? window.format ?? 'online';
+}
+
+/**
  * Подпись окна берётся из самого окна: его формат и его кабинет. Ни то, ни
  * другое не восстанавливается по дню недели и не наследуется от соседнего
  * окна того же дня (Задача 18 §2).
  */
-export function windowLabel(window: ScheduleWindow, cabinets: CabinetOption[] = []) {
-    const parts = [`${window.startTime}–${window.endTime}`, formatLabelOf(window.format)];
-    if (window.format !== 'online' && window.addressId) {
-        const cabinet = cabinets.find(c => c.id === window.addressId);
+export function windowLabel(window: ScheduleWindow, cabinets: CabinetOption[] = [], ruleFormat?: string | null, ruleAddressId?: string | null) {
+    const format = resolveWindowFormat(window, ruleFormat);
+    const parts = [`${window.startTime}–${window.endTime}`, formatLabelOf(format)];
+    const addressId = window.addressId ?? ruleAddressId ?? null;
+    if (format !== 'online' && addressId) {
+        const cabinet = cabinets.find(c => c.id === addressId);
         if (cabinet) parts.push(cabinet.name);
     }
     return parts.join(' · ');
@@ -70,12 +92,17 @@ function WindowIcon({ format }: { format?: string | null }) {
 export function RuleWeekSchedule({
     windows,
     cabinets,
+    ruleFormat,
+    ruleAddressId,
     onEditWindow,
     onDeleteWindow,
     emptyHint = 'Рабочих часов пока нет',
 }: {
     windows: ScheduleWindow[];
     cabinets: CabinetOption[];
+    /** Формат правила: окно без собственного формата берёт его отсюда. */
+    ruleFormat?: string | null;
+    ruleAddressId?: string | null;
     onEditWindow?: (window: ScheduleWindow) => void;
     onDeleteWindow?: (id: string) => void;
     emptyHint?: string;
@@ -100,18 +127,18 @@ export function RuleWeekSchedule({
                                 data-testid="schedule-window"
                                 className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 bg-muted/30 border border-border/60 rounded-lg text-[12px] font-semibold text-foreground"
                             >
-                                <WindowIcon format={window.format} />
+                                <WindowIcon format={resolveWindowFormat(window, ruleFormat)} />
                                 {onEditWindow ? (
                                     <button
                                         type="button"
                                         onClick={() => onEditWindow(window)}
                                         className="tabular-nums hover:text-primary transition-colors"
-                                        aria-label={`${WEEKDAY_FULL[window.dayOfWeek]}: ${windowLabel(window, cabinets)}`}
+                                        aria-label={`${WEEKDAY_FULL[window.dayOfWeek]}: ${windowLabel(window, cabinets, ruleFormat, ruleAddressId)}`}
                                     >
-                                        {windowLabel(window, cabinets)}
+                                        {windowLabel(window, cabinets, ruleFormat, ruleAddressId)}
                                     </button>
                                 ) : (
-                                    <span className="tabular-nums">{windowLabel(window, cabinets)}</span>
+                                    <span className="tabular-nums">{windowLabel(window, cabinets, ruleFormat, ruleAddressId)}</span>
                                 )}
                                 {onDeleteWindow && (
                                     <button

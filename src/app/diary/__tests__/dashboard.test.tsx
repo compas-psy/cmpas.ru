@@ -304,7 +304,13 @@ describe('§4 Онбординг по серверному состоянию (�
         onboardingProgress = onboardingState();
         await renderDashboard();
 
-        fireEvent.click(screen.getByTitle('Скрыть'));
+        // Задача 27: полоса онбординга приезжает своим запросом, отдельно от
+        // расписания. renderDashboard дожидается расписания — этого мало:
+        // кнопка «Скрыть» появляется позже, и тест то попадал по ней, то
+        // кликал в пустоту (4 падения из 8 прогонов). Ждём именно то, по чему
+        // собираемся нажать.
+        const hide = await screen.findByTitle('Скрыть', {}, { timeout: 5000 });
+        fireEvent.click(hide);
 
         expect(screen.queryByText('Добро пожаловать в ПРАКТИКУ')).not.toBeInTheDocument();
         await waitFor(() => expect(onboardingActions.dismissOnboarding).toHaveBeenCalled());

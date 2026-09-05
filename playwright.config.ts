@@ -21,6 +21,11 @@ export default defineConfig({
     use: {
         baseURL: process.env.E2E_BASE_URL || 'http://localhost:3100',
         locale: 'ru-RU',
+        // Постоянная ссылка записи не показывается текстом — её копируют.
+        // Чтобы прогон мог прочитать то, что действительно уходит клиенту,
+        // буфер обмена разрешён заранее (Playwright требует это на уровне
+        // контекста, выданное после перехода не действует).
+        permissions: ['clipboard-read', 'clipboard-write'],
         timezoneId: 'Europe/Moscow',
         screenshot: 'only-on-failure',
         trace: 'retain-on-failure',

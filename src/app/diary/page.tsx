@@ -307,10 +307,15 @@ export default function DiaryCalendarPage() {
     // Задача 17 §4: сигналы «требует внимания» больше НЕ вычисляются здесь —
     // и веб, и мобайл берут их из общего getPracticeAttention. Осталось
     // только представление: тип пункта решает вид и то, что открывается.
+    // Макет W03: «мини-инбокс задач, не warning-виджет; amber/sage, не
+    // красный». Отсутствие согласия было красным — на дашборде это читалось
+    // как авария, хотя это просто хвост, который надо закрыть. Красный на
+    // экране, который человек видит каждое утро, обесценивает сам себя:
+    // если тревожно всегда, то не тревожно никогда.
     const attentionStyles: Record<PracticeAttentionType, { icon: typeof AlertTriangle; rowClass: string; iconClass: string }> = {
-        client_without_consent: { icon: Shield, rowClass: 'bg-red-50 hover:bg-red-100/50', iconClass: 'bg-red-100 text-red-500' },
+        client_without_consent: { icon: Shield, rowClass: 'bg-sage-50 hover:bg-sage-100/50', iconClass: 'bg-sage-100 text-forest-700' },
         session_without_notes: { icon: FileText, rowClass: 'bg-amber-50 hover:bg-amber-100/50', iconClass: 'bg-amber-100 text-amber-600' },
-        session_unpaid: { icon: AlertTriangle, rowClass: 'bg-orange-50 hover:bg-orange-100/50', iconClass: 'bg-orange-100 text-orange-500' },
+        session_unpaid: { icon: AlertTriangle, rowClass: 'bg-amber-50 hover:bg-amber-100/50', iconClass: 'bg-amber-100 text-amber-600' },
         import_review: { icon: Upload, rowClass: 'bg-sage-50 hover:bg-sage-100/50', iconClass: 'bg-sage-100 text-forest-700' },
     };
 
@@ -406,35 +411,22 @@ export default function DiaryCalendarPage() {
     return (
         <>
         <div className="space-y-6 pb-12 w-full min-w-0">
-            {/* ── HEADER with WEEK STRIP ── */}
+            {/* ── ШАПКА ──
+                Макет W01, «судьба существующих элементов главной»: дата —
+                строка НАД приветствием; недельная полоска сохраняется, но
+                уезжает ниже героя, потому что она менее приоритетна, чем
+                ближайшая сессия. Раньше полоска стояла вровень с
+                приветствием и спорила с героем за первые три секунды. */}
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 min-w-0">
                 <div className="min-w-0">
-                    <h1 className="text-[26px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1]">
-                        {getGreeting()}{greetingName(settings?.fullName, authName) ? `, ${greetingName(settings?.fullName, authName)}` : ''} 👋
-                    </h1>
-                    <p className="text-muted-foreground text-[13px] mt-0.5 font-medium capitalize">
+                    <p className="text-muted-foreground text-[13px] font-medium capitalize">
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
+                    <h1 className="text-[26px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1] mt-0.5">
+                        {getGreeting()}{greetingName(settings?.fullName, authName) ? `, ${greetingName(settings?.fullName, authName)}` : ''} 👋
+                    </h1>
                 </div>
 
-                {/* Week strip */}
-                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0">
-                    <div className="grid grid-cols-7">
-                        {weekDays.map((wd, i) => (
-                            <div key={i} className={`flex flex-col items-center py-2.5 px-3 sm:px-4 ${wd.isToday ? 'bg-primary rounded-2xl -m-px z-10 shadow-sm' : ''}`}>
-                                <span className={`text-[10px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                                    {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', '')}
-                                </span>
-                                <span className={`text-[15px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
-                                    {wd.date.getDate()}
-                                </span>
-                                {wd.count > 0 && (
-                                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${wd.isToday ? 'bg-primary-foreground/60' : 'bg-forest-500'}`} />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
 
             {/* ── QUICK ACTIONS ──
@@ -640,6 +632,26 @@ export default function DiaryCalendarPage() {
                         );
                     })()}
 
+                    {/* Недельная полоска (макет W01): сохранена целиком, но
+                        стоит ниже героя — ближайшая сессия важнее обзора недели. */}
+                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0">
+                    <div className="grid grid-cols-7">
+                        {weekDays.map((wd, i) => (
+                            <div key={i} className={`flex flex-col items-center py-2.5 px-3 sm:px-4 ${wd.isToday ? 'bg-primary rounded-2xl -m-px z-10 shadow-sm' : ''}`}>
+                                <span className={`text-[10px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                    {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', '')}
+                                </span>
+                                <span className={`text-[15px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
+                                    {wd.date.getDate()}
+                                </span>
+                                {wd.count > 0 && (
+                                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${wd.isToday ? 'bg-primary-foreground/60' : 'bg-forest-500'}`} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                     {/* Задача 16 §1/§4: онбординг — контекстный блок ПОД героем,
                         а не первый экран. Дашборд остаётся дашбордом; у нового
                         специалиста, у которого ещё нет ближайшей сессии, этот
@@ -802,7 +814,7 @@ export default function DiaryCalendarPage() {
                                 <span className="text-[14px] font-bold text-foreground">Требует внимания</span>
                             </div>
                             {attentionCount > 0 && (
-                                <span className="text-[11px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full tabular-nums">{attentionCount}</span>
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full tabular-nums">{attentionCount}</span>
                             )}
                         </div>
                         <div className="p-3 space-y-1.5">

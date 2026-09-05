@@ -1,0 +1,122 @@
+name: Release Verification (Android)
+
+# Задача 27: доказательства сборки Android для выпуска.
+#
+# Отдельный маленький workflow, а не правка выкладочного. Android Build
+# собирает ПОДПИСАННЫЙ release и создаёт GitHub Release — гонять его на
+# ветке ради проверки значит рисковать выпуском. Здесь только три команды,
+# которых требует Задача 27, без ключей и без публикации.
+#
+# Окружение — то же, что у выкладки: Temurin JDK 17, Gradle 8.9, Android
+# SDK 35. Новой платформы не строится, повторяется существующая.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/release-verification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android unit + lint + assemble
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Install SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle 8.9
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.9/bin/gradle --version
+
+      # Тесты первыми: провалившийся тест обязан останавливать проверку, а не
+      # приезжать вместе с успешной сборкой.
+      - name: gradle testDebugUnitTest
+        working-directory: android
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/gradle-8.9/bin/gradle testDebugUnitTest --no-daemon 2>&1 | tee ../android-unit.log
+
+      - name: gradle lintDebug
+        working-directory: android
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/gradle-8.9/bin/gradle lintDebug --no-daemon 2>&1 | tee ../android-lint.log
+
+      - name: gradle assembleDebug
+        working-directory: android
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/gradle-8.9/bin/gradle assembleDebug --no-daemon 2>&1 | tee ../android-assemble.log
+
+      # Компактный итог прямо в журнал прогона: артефакты GitHub лежат в
+      # blob-хранилище, к которому из части сред нет доступа, и тогда
+      # «проверка упала» приходит без единого слова о том, что именно.
+      - name: Итог
+        if: always()
+        working-directory: android
+        shell: bash
+        run: |
+          results=app/build/test-results/testDebugUnitTest
+          echo "===== UNIT ====="
+          if [ -d "$results" ]; then
+            grep -h -o 'tests="[0-9]*"[^>]*failures="[0-9]*"[^>]*errors="[0-9]*"' "$results"/*.xml || true
+            for f in $(grep -l '<failure\|<error' "$results"/*.xml 2>/dev/null || true); do
+              echo "--- $(basename "$f")"
+              tr '<' '\n' < "$f" \
+                | sed -n -e 's/^testcase name="\([^"]*\)".*/  ТЕСТ: \1/p' \
+                         -e 's/^failure message="\([^"]*\)".*/      ПРИЧИНА: \1/p'
+            done
+          else
+            echo "результатов нет — тесты не запускались"
+          fi
+          echo "===== LINT ====="
+          lint=app/build/reports/lint-results-debug.xml
+          if [ -f "$lint" ]; then
+            echo "предупреждений: $(grep -c '<issue' "$lint" || echo 0)"
+            grep -o 'severity="Error"[^>]*id="[^"]*"' "$lint" | head -20 || echo "  ошибок нет"
+          else
+            echo "отчёта lint нет"
+          fi
+          echo "===== APK ====="
+          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "APK не собран"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-verification
+          path: |
+            android-unit.log
+            android-lint.log
+            android-assemble.log
+            android/app/build/reports/
+            android/app/build/test-results/
+          retention-days: 14

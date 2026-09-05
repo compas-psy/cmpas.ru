@@ -224,6 +224,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [suggestLoading, setSuggestLoading] = useState(false);
     const [waitlistForm, setWaitlistForm] = useState({ name: '', contact: '' });
     const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+    /** Форма заявки раскрыта человеком по ссылке «Нет подходящего времени?». */
+    const [waitlistOpen, setWaitlistOpen] = useState(false);
 
     // O-260829 §5.3 "Возврат по ссылке без брони" (S1-R)
     const [returningPreference, setReturningPreference] = useState<TimePreference | null>(null);
@@ -758,10 +760,15 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
             <BookingToaster />
             <div className="p-4 max-w-md mx-auto">
-                <h1 className="text-2xl font-semibold tracking-tight mb-1">Запись на сессию</h1>
-                <p className="text-[var(--booking-accent)] font-semibold text-sm mb-1">Специалист — {psy.name}</p>
+                {/* Макет C01: «начать человечнее, чем „Запись на сессию“».
+                    Человек открыл ссылку конкретного специалиста — первым он
+                    должен увидеть, к кому попал, а не название операции.
+                    Канцелярский заголовок сообщал ему то, что он и так знает,
+                    и занимал самое дорогое место на экране. */}
+                <p className="text-[var(--booking-accent)] font-semibold text-[15px] mb-1">{psy.name}</p>
+                <h1 className="text-2xl font-semibold tracking-tight mb-1">Подберу удобное время</h1>
                 <p className="text-[var(--booking-muted)] mb-6 text-sm">
-                    Выберите удобную дату и время.
+                    Выберите вариант ниже — это ни к чему не обязывает.
                 </p>
 
                 {/* Issue #2: Upcoming sessions for known client */}
@@ -864,9 +871,26 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             ))}
                         </div>
 
-                        {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && !waitlistSubmitted && (
+                        {/* Макет C01/C12: «Нет подходящего времени?» — постоянная
+                            дверь, а не аварийный выход. Раньше форма заявки
+                            появлялась ТОЛЬКО когда свободных часов не осталось
+                            вовсе. Но человеку может не подойти и то, что есть:
+                            предложено три утра, а он может только вечером. Ему
+                            оставалось закрыть страницу — и специалист никогда
+                            не узнавал, что клиент приходил. */}
+                        {!suggestLoading && !waitlistSubmitted && !waitlistOpen && (
+                            <button
+                                type="button"
+                                onClick={() => setWaitlistOpen(true)}
+                                className="w-full text-center text-xs text-[var(--booking-muted)] underline pt-1"
+                            >
+                                Нет подходящего времени?
+                            </button>
+                        )}
+
+                        {!suggestLoading && !waitlistSubmitted && (waitlistOpen || (suggestedTimes && suggestedTimes.length === 0)) && (
                             <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-[var(--booking-line)]">
-                                <p className="text-[var(--booking-muted)] text-sm">Нет подходящего времени? Оставьте контакт — психолог увидит вашу заявку.</p>
+                                <p className="text-[var(--booking-muted)] text-sm">Оставьте контакт и пожелания по времени — специалист увидит вашу заявку.</p>
                                 <input
                                     type="text" placeholder="Как к вам обращаться"
                                     value={waitlistForm.name}
@@ -885,8 +909,11 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             </form>
                         )}
 
-                        {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && waitlistSubmitted && (
-                            <p className="text-sm text-center py-2 text-[var(--booking-ink)]">Заявка сохранена. Психолог увидит её и сможет связаться с вами.</p>
+                        {/* Макет C12: нейтрально, без обещания автоматического
+                            уведомления — автонотификация листа ожидания в этот
+                            запуск не входит. */}
+                        {!suggestLoading && waitlistSubmitted && (
+                            <p className="text-sm text-center py-2 text-[var(--booking-ink)]">Заявка отправлена. Специалист увидит ваши пожелания по времени.</p>
                         )}
 
                         <button

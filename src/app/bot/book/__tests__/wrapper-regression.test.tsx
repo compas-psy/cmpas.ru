@@ -73,8 +73,11 @@ describe('/bot/book/<id> and /u/<slug> render the identical BookingPageClient (T
         render(<ClientBookingPage />);
 
         await waitFor(() => expect(actions.getPsychologist).toHaveBeenCalledWith('psy-1'));
-        expect(await screen.findByText('Специалист — Анна Волкова')).toBeInTheDocument();
-        expect(screen.getByText('Запись на сессию')).toBeInTheDocument();
+        expect(await screen.findByText('Анна Волкова')).toBeInTheDocument();
+        // Макет C01: экран открывается именем специалиста, а не названием
+        // операции. Раньше здесь проверялся заголовок «Запись на сессию» —
+        // ровно то, от чего утверждённый handoff просит уйти.
+        expect(screen.getByText('Подберу удобное время')).toBeInTheDocument();
         cleanup();
     });
 
@@ -85,8 +88,11 @@ describe('/bot/book/<id> and /u/<slug> render the identical BookingPageClient (T
 
         expect(resolvePsychologistIdBySlug).toHaveBeenCalledWith('anna-volkova');
         await waitFor(() => expect(actions.getPsychologist).toHaveBeenCalledWith('psy-1'));
-        expect(await screen.findByText('Специалист — Анна Волкова')).toBeInTheDocument();
-        expect(screen.getByText('Запись на сессию')).toBeInTheDocument();
+        expect(await screen.findByText('Анна Волкова')).toBeInTheDocument();
+        // Макет C01: экран открывается именем специалиста, а не названием
+        // операции. Раньше здесь проверялся заголовок «Запись на сессию» —
+        // ровно то, от чего утверждённый handoff просит уйти.
+        expect(screen.getByText('Подберу удобное время')).toBeInTheDocument();
     });
 
     it('the Cyrillic /у/<slug> alias resolves the same way and renders the same output', async () => {
@@ -96,7 +102,7 @@ describe('/bot/book/<id> and /u/<slug> render the identical BookingPageClient (T
 
         expect(resolvePsychologistIdBySlug).toHaveBeenCalledWith('анна-волкова');
         await waitFor(() => expect(actions.getPsychologist).toHaveBeenCalledWith('psy-1'));
-        expect(await screen.findByText('Специалист — Анна Волкова')).toBeInTheDocument();
+        expect(await screen.findByText('Анна Волкова')).toBeInTheDocument();
     });
 
     it('an unresolvable slug shows NotFoundSpecialist instead of rendering the booking flow', async () => {
