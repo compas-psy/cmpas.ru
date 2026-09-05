@@ -126,6 +126,14 @@ interface CompasApi {
     @GET("me")
     suspend fun getProfile(): Response<User>
 
+    // Задача 20 §11: тумблеры напоминаний читаются и пишутся на сервере, а
+    // не живут в памяти экрана.
+    @GET("notification-settings")
+    suspend fun getNotificationSettings(): Response<MobileNotificationSettings>
+
+    @PATCH("notification-settings")
+    suspend fun updateNotificationSettings(@Body body: MobileNotificationSettingsPatch): Response<MobileNotificationSettings>
+
     @GET("legal/status")
     suspend fun getLegalStatus(): Response<MobileLegalStatus>
 

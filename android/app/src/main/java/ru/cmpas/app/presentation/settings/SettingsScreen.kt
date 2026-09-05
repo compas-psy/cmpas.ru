@@ -17,13 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.BuildConfig
 import ru.cmpas.app.domain.model.MobileLegalDoc
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -35,14 +34,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var dayBefore by rememberSaveable { mutableStateOf(true) }
-    var twoHoursBefore by rememberSaveable { mutableStateOf(true) }
-    var paymentReminder by rememberSaveable { mutableStateOf(true) }
-    var consentReminder by rememberSaveable { mutableStateOf(false) }
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
-    var copied by rememberSaveable { mutableStateOf(false) }
-    val clipboard = LocalClipboardManager.current
-    val paymentLink = "cmpas.ru/pay/ilya-martynov"
     val displayName = uiState.user?.name ?: "Профиль специалиста"
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
@@ -66,8 +58,13 @@ fun SettingsScreen(
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(displayName, style = tSection, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(3.dp))
-                            Text(uiState.user?.email ?: "Психолог · схема-терапия", style = tBody2, color = Color.White.copy(alpha = .76f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // Задача 20 §9: при отсутствии почты экран
+                            // подставлял выдуманную специализацию, которой у
+                            // человека может не быть. Нет данных — нет строки.
+                            uiState.user?.email?.takeIf { it.isNotBlank() }?.let { email ->
+                                Spacer(Modifier.height(3.dp))
+                                Text(email, style = tBody2, color = Color.White.copy(alpha = .76f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             Spacer(Modifier.height(8.dp))
                             ProfilePill(if (uiState.legalStatus?.requiresTermsAcceptance == true) "Нужно принять документы" else "Документы актуальны")
                         }
@@ -76,51 +73,44 @@ fun SettingsScreen(
                 }
             }
 
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Kpi(Icons.Outlined.Groups, "24", "клиента", Forest700, Modifier.weight(1f))
-                    Kpi(Icons.Outlined.EventAvailable, "312", "сессий", Blue, Modifier.weight(1f))
-                    Kpi(Icons.Outlined.StarOutline, "4,9", "оценка", CompasAccent, Modifier.weight(1f))
-                }
-            }
+            // Задача 20 §6: здесь стояли три придуманных показателя —
+            // клиенты, сессии и «оценка». Ни у одного не было источника:
+            // счётчиков практики за всё время в контракте нет, а системы
+            // оценок в продукте нет вовсе. Карточка убрана целиком —
+            // подменять одно выдуманное число другим смысла нет.
 
-            item { SectionTitle("Автонапоминания") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    ReminderSwitch("За 24 часа", "Подтвердить встречу и показать оплату", dayBefore) { dayBefore = it }
-                    ThinDivider()
-                    ReminderSwitch("За 2 часа", "Короткое напоминание перед сессией", twoHoursBefore) { twoHoursBefore = it }
-                    ThinDivider()
-                    ReminderSwitch("Об оплате", "Если сессия ещё не оплачена", paymentReminder) { paymentReminder = it }
-                    ThinDivider()
-                    ReminderSwitch("О документах", "Если согласие не получено", consentReminder) { consentReminder = it }
-                }
-            }
-
-            item { SectionTitle("Оплата") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        QrBox()
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Ссылка на оплату", style = tBody, color = CompasFg)
-                            Spacer(Modifier.height(4.dp))
-                            Text(paymentLink, style = tBody2, color = Forest700, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(10.dp))
-                            GhostButton(
-                                text = if (copied) "Скопировано" else "Скопировать",
-                                icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
-                                onClick = {
-                                    clipboard.setText(AnnotatedString("https:" + "//$paymentLink"))
-                                    copied = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
+            // Задача 20 §11: остались только те два напоминания, за которыми
+            // стоит настоящая серверная рассылка — за сутки и за час до
+            // сессии. Три остальных тумблера жили в памяти экрана:
+            // переключались, ничего не меняли и забывались при
+            // переустановке. Пока серверное состояние не пришло, тумблеров
+            // нет вовсе — тумблер без известного состояния это выдумка.
+            uiState.reminders?.let { reminders ->
+                item { SectionTitle("Автонапоминания клиенту") }
+                item {
+                    GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                        ReminderSwitch(
+                            title = "За 24 часа",
+                            subtitle = "Напоминание клиенту накануне встречи",
+                            checked = reminders.clientReminder25hEnabled,
+                            saving = uiState.savingReminder == ReminderKind.DAY_BEFORE,
+                        ) { viewModel.setClientReminder(ReminderKind.DAY_BEFORE, it) }
+                        ThinDivider()
+                        ReminderSwitch(
+                            title = "За 1 час",
+                            subtitle = "Короткое напоминание перед началом",
+                            checked = reminders.clientReminder1hEnabled,
+                            saving = uiState.savingReminder == ReminderKind.HOUR_BEFORE,
+                        ) { viewModel.setClientReminder(ReminderKind.HOUR_BEFORE, it) }
                     }
                 }
             }
+
+            // Задача 20 §7: здесь была «ссылка на оплату» вида
+            // cmpas.ru/pay/<имя-из-профиля> и декоративный QR к ней. Такого
+            // ресурса не существует — ни на сервере, ни в контракте: ссылка
+            // собиралась из имени пользователя, а QR вёл в никуда. Блок
+            // убран целиком; появится настоящая ссылка — появится и блок.
 
             item { SectionTitle("Аналитика") }
             item {
@@ -136,9 +126,13 @@ fun SettingsScreen(
             item { SectionTitle("Мессенджеры и данные") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    ConnectionRow("Telegram", "Подключён · @CompasProBot", Tg, true) { activeSheet = ProfileSheet.TELEGRAM }
+                    // Задача 20 §8: состояние приходит с сервера. Раньше
+                    // Telegram был «подключён» всегда, MAX — «не подключён»
+                    // всегда, независимо от реальности, да ещё и с именем
+                    // бота, которого экран знать не мог.
+                    ConnectionRow("Telegram", connectionSubtitle(uiState.user?.telegramConnected), Tg, uiState.user?.telegramConnected == true) { activeSheet = ProfileSheet.TELEGRAM }
                     ThinDivider()
-                    ConnectionRow("MAX", "Не подключён", Max, false) { activeSheet = ProfileSheet.MAX }
+                    ConnectionRow("MAX", connectionSubtitle(uiState.user?.maxConnected), Max, uiState.user?.maxConnected == true) { activeSheet = ProfileSheet.MAX }
                 }
             }
             item {
@@ -151,7 +145,9 @@ fun SettingsScreen(
                     ThinDivider()
                     SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Экспорт, доступ и удаление") { activeSheet = ProfileSheet.DATA }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.HelpOutline, "Помощь и поддержка", "Версия 1.0.5") { activeSheet = ProfileSheet.HELP }
+                    // Задача 20 §10: версия та, что реально собрана, а не
+                    // вписанная руками в код когда-то давно.
+                    SettingRow(Icons.Outlined.HelpOutline, "Помощь и поддержка", "Версия ${BuildConfig.VERSION_NAME}") { activeSheet = ProfileSheet.HELP }
                 }
             }
 
@@ -186,8 +182,13 @@ private fun ProfilePill(text: String) {
     }
 }
 
+/**
+ * Тумблер показывает СЕРВЕРНОЕ состояние. Пока запись идёт, он заблокирован:
+ * мигать желаемым состоянием до подтверждения — то же самое обещание, что и
+ * прежние локальные тумблеры, только быстрее.
+ */
 @Composable
-private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, saving: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = tBody, color = CompasFg)
@@ -196,6 +197,7 @@ private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, on
         Spacer(Modifier.width(12.dp))
         Switch(
             checked = checked,
+            enabled = !saving,
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
@@ -266,6 +268,16 @@ private fun AnalyticsConsentRow(checked: Boolean, saving: Boolean, onChange: (Bo
     }
 }
 
+/**
+ * Подпись состояния мессенджера. Пока профиль не загружен, состояние
+ * неизвестно — и так и говорим, а не показываем «не подключён» как факт.
+ */
+internal fun connectionSubtitle(connected: Boolean?): String = when (connected) {
+    true -> "Подключён"
+    false -> "Не подключён"
+    null -> "Проверяем подключение…"
+}
+
 @Composable
 private fun ConnectionRow(name: String, status: String, accent: Color, bound: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -305,22 +317,6 @@ private fun SettingRow(icon: ImageVector, title: String, subtitle: String, onCli
 @Composable
 private fun ThinDivider() {
     HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
-}
-
-@Composable
-private fun QrBox() {
-    val cells = remember { List(121) { i -> val x = i % 11; val y = i / 11; x < 3 && y < 3 || x > 7 && y < 3 || x < 3 && y > 7 || ((x * 5 + y * 3 + i) % 7 < 3) } }
-    Box(Modifier.size(104.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(9.dp)) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            repeat(11) { y ->
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                    repeat(11) { x ->
-                        Box(Modifier.weight(1f).fillMaxHeight().background(if (cells[y * 11 + x]) Forest900 else Color.Transparent))
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable

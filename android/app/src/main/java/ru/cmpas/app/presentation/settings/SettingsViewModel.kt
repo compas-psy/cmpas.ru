@@ -13,6 +13,8 @@ import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.local.AnalyticsEventStore
 import ru.cmpas.app.domain.model.DashboardDataV2
 import ru.cmpas.app.domain.model.MobileLegalAcceptBody
+import ru.cmpas.app.domain.model.MobileNotificationSettings
+import ru.cmpas.app.domain.model.MobileNotificationSettingsPatch
 import ru.cmpas.app.domain.model.MobileLegalStatus
 import ru.cmpas.app.domain.model.User
 import javax.inject.Inject
@@ -73,17 +75,47 @@ class SettingsViewModel @Inject constructor(
                 val profileResponse = api.getProfile()
                 val legalResponse = api.getLegalStatus()
                 val dashboardResponse = runCatching { api.getDashboard() }.getOrNull()
+                // Тумблеры напоминаний показывают серверное состояние. Не
+                // дошли до сервера — не показываем выдуманное: остаётся
+                // последнее известное, а нового обещания экран не даёт.
+                val remindersResponse = runCatching { api.getNotificationSettings() }.getOrNull()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         user = if (profileResponse.isSuccessful) profileResponse.body() else it.user,
                         legalStatus = if (legalResponse.isSuccessful) legalResponse.body() else it.legalStatus,
                         bookingLink = mergeBookingLink(dashboardResponse, it.bookingLink),
+                        reminders = mergeReminders(remindersResponse, it.reminders),
                         error = if (!legalResponse.isSuccessful) "Не удалось загрузить документы" else null,
                     )
                 }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = "Ошибка подключения") }
+            }
+        }
+    }
+
+    /**
+     * Задача 20 §11: тумблер меняет НАСТОЯЩУЮ настройку на сервере. До этого
+     * оба напоминания жили в rememberSaveable — переключались, ничего не
+     * меняли и забывались. Пока ответ не пришёл, показывается прежнее
+     * состояние: рисовать желаемое как действительное нельзя.
+     */
+    fun setClientReminder(kind: ReminderKind, enabled: Boolean) {
+        val current = _uiState.value.reminders ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(savingReminder = kind, error = null) }
+            val patch = when (kind) {
+                ReminderKind.DAY_BEFORE -> MobileNotificationSettingsPatch(clientReminder25hEnabled = enabled)
+                ReminderKind.HOUR_BEFORE -> MobileNotificationSettingsPatch(clientReminder1hEnabled = enabled)
+            }
+            try {
+                val response = api.updateNotificationSettings(patch)
+                val saved = response.body()
+                if (!response.isSuccessful || saved == null) throw IllegalStateException()
+                _uiState.update { it.copy(savingReminder = null, reminders = saved) }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(savingReminder = null, reminders = current, error = "Не удалось сохранить напоминание") }
             }
         }
     }
@@ -124,6 +156,17 @@ class SettingsViewModel @Inject constructor(
 internal fun mergeBookingLink(dashboardResponse: Response<DashboardDataV2>?, previous: String?): String? =
     dashboardResponse?.takeIf { it.isSuccessful }?.body()?.bookingLink ?: previous
 
+/**
+ * Настройки напоминаний берутся с сервера; неудачный запрос оставляет
+ * последнее известное состояние, а не подставляет умолчания — иначе экран
+ * показал бы «включено» там, где на сервере может быть выключено.
+ */
+internal fun mergeReminders(
+    response: Response<MobileNotificationSettings>?,
+    previous: MobileNotificationSettings?,
+): MobileNotificationSettings? =
+    response?.takeIf { it.isSuccessful }?.body() ?: previous
+
 data class SettingsUiState(
     val isLoading: Boolean = false,
     val isSavingLegal: Boolean = false,
@@ -136,4 +179,13 @@ data class SettingsUiState(
     // загружено.
     val analyticsConsentGranted: Boolean = false,
     val isSavingAnalyticsConsent: Boolean = false,
+    /**
+     * null — серверное состояние ещё не получено. Тумблеры в этом случае не
+     * показываются вовсе: тумблер без известного состояния — это выдумка.
+     */
+    val reminders: MobileNotificationSettings? = null,
+    val savingReminder: ReminderKind? = null,
 )
+
+/** Две настоящие серверные рассылки клиенту: за сутки и за час до сессии. */
+enum class ReminderKind { DAY_BEFORE, HOUR_BEFORE }

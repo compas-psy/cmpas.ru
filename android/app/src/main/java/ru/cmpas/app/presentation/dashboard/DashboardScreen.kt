@@ -16,9 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,11 +47,14 @@ fun DashboardScreen(
     onNoteClick: (String) -> Unit = {},
     onCalendarClick: () -> Unit = {},
     onClientClick: (String) -> Unit = {},
+    // Задача 20 §2: тонкие колбэки к УЖЕ существующим экранам создания —
+    // второго редактора записи и второй формы клиента не заводится.
+    onCreateSession: () -> Unit = {},
+    onCreateClient: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = LocalUriHandler.current
-    val context = LocalContext.current
     var showNotifications by rememberSaveable { mutableStateOf(false) }
     var showBookingSheet by rememberSaveable { mutableStateOf(false) }
 
@@ -99,17 +103,18 @@ fun DashboardScreen(
                 }
             }
 
-            // Основной призыв к действию «пригласить клиента записаться» —
-            // основатель проверил приложение и не нашёл его на главном экране:
-            // раньше единственный путь лежал через Настройки → «Ссылка для
-            // записи», в двух тапах и не на виду. Карточка стоит сразу под
-            // приветствием, до расписания — это то, что специалист видит
-            // первым, открыв приложение.
+            // Задача 20 §2/§3: три ежедневных действия компактным рядом сразу
+            // под приветствием. Раньше здесь стояла большая постоянная
+            // карточка «поделиться ссылкой» — витрина в самом дорогом месте
+            // экрана под действие, которое нужно раз в неделю. Само действие
+            // никуда не делось: оно здесь, третьей кнопкой, и открывает ту же
+            // единственную шторку с QR, копированием и системным шерингом.
             item {
-                BookingShareCard(
-                    bookingLink = uiState.bookingLink,
-                    onShare = { uiState.bookingLink?.let { shareBookingLink(context, it) } },
-                    onShowQr = { showBookingSheet = true },
+                QuickActionsRow(
+                    shareEnabled = uiState.bookingLink != null,
+                    onCreateSession = onCreateSession,
+                    onCreateClient = onCreateClient,
+                    onShare = { showBookingSheet = true },
                 )
             }
 
@@ -218,45 +223,43 @@ fun DashboardScreen(
 }
 
 /**
- * Заметный блок «поделиться ссылкой для записи» на главном экране. Раньше
- * единственный путь к этому действию лежал в Настройках — основатель
- * проверил приложение и не нашёл кнопки на главном экране. Шторка с QR и
- * копированием (BookingLinkSheet) переиспользуется как есть: здесь только
- * витрина с прямым системным шерингом в один тап и быстрым переходом к QR.
+ * Компактный ряд быстрых действий (Задача 20 §2). Все три ведут в уже
+ * существующие потоки: создание записи, создание клиента и общая шторка
+ * ссылки для записи. Пока постоянная ссылка не пришла с сервера, «Поделиться»
+ * честно недоступна — выдуманного адреса вместо неё не показывается.
  */
 @Composable
-private fun BookingShareCard(bookingLink: String?, onShare: () -> Unit, onShowQr: () -> Unit) {
-    val isReady = bookingLink != null
-    GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(CompasAccent.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Outlined.Link, null, Modifier.size(21.dp), tint = Forest700)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Ссылка для записи", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
-                Text(
-                    bookingLink?.removePrefix("https://")?.removePrefix("http://") ?: "Загружаем…",
-                    style = tBody2,
-                    color = CompasMutedFg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            IconButtonGlass(icon = Icons.Outlined.QrCode2, contentDescription = "Показать QR-код", onClick = onShowQr)
+private fun QuickActionsRow(
+    shareEnabled: Boolean,
+    onCreateSession: () -> Unit,
+    onCreateClient: () -> Unit,
+    onShare: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        QuickAction(Icons.Outlined.EventAvailable, "Запись", Modifier.weight(1f), onClick = onCreateSession)
+        QuickAction(Icons.Outlined.PersonAdd, "Клиент", Modifier.weight(1f), onClick = onCreateClient)
+        QuickAction(Icons.Outlined.Share, "Поделиться", Modifier.weight(1f), enabled = shareEnabled, onClick = onShare)
+    }
+}
+
+@Composable
+private fun QuickAction(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    GlassCard(
+        modifier = modifier.alpha(if (enabled) 1f else 0.5f),
+        padding = 12.dp,
+        onClick = if (enabled) onClick else null,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Icon(icon, null, Modifier.size(20.dp), tint = Forest700)
+            Spacer(Modifier.height(6.dp))
+            Text(label, style = tMeta, color = CompasFg, maxLines = 1)
         }
-        Spacer(Modifier.height(14.dp))
-        PrimaryButton(
-            text = if (isReady) "Поделиться ссылкой с клиентом" else "Загружаем ссылку…",
-            icon = Icons.Outlined.Share,
-            enabled = isReady,
-            onClick = onShare,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 

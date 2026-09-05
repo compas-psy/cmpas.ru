@@ -73,6 +73,10 @@ fun CompasNavHost(
                     onNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute(it)) },
                     onCalendarClick = { navController.navigateTopLevel(Screen.Calendar) },
                     onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
+                    // Задача 20 §2: те же самые адреса создания, что у
+                    // календаря и списка клиентов, — не вторые формы.
+                    onCreateSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    onCreateClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
                 )
             }
             composable(Screen.Calendar.route) {

@@ -59,6 +59,11 @@ open class FakeCompasApi(
     override suspend fun getNotifications(cursor: String?, limit: Int?): Response<NotificationsPage> = notStubbed("getNotifications")
     override suspend fun markNotificationsRead(body: MarkNotificationsReadRequest): Response<Unit> = notStubbed("markNotificationsRead")
     override suspend fun getProfile(): Response<User> = notStubbed("getProfile")
+
+    override suspend fun getNotificationSettings(): Response<MobileNotificationSettings> = notStubbed("getNotificationSettings")
+
+    override suspend fun updateNotificationSettings(body: MobileNotificationSettingsPatch): Response<MobileNotificationSettings> =
+        notStubbed("updateNotificationSettings")
     override suspend fun getLegalStatus(): Response<MobileLegalStatus> = notStubbed("getLegalStatus")
     override suspend fun acceptLegal(body: MobileLegalAcceptBody): Response<MobileLegalAcceptResponse> = notStubbed("acceptLegal")
     override suspend fun markFeatureInterest(body: FeatureInterestRequest): Response<FeatureInterestResponse> = notStubbed("markFeatureInterest")
