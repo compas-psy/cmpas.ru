@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
-import { ShareButton } from '@/components/psidairy/ShareSheet';
+import { ShareButton, notifyBookingLinkShared } from '@/components/psidairy/ShareSheet';
 import type { PracticeAttentionItem, PracticeAttentionType } from '@/lib/practice/attention';
 
 type Session = {
@@ -442,6 +442,10 @@ export default function DiaryCalendarPage() {
                     label="Поделиться"
                     title="Ссылка для записи"
                     icon={<Share2 className="w-4 h-4" />}
+                    // Задача 24: шаг «Поделиться» закрывается состоявшимся
+                    // действием с ПОСТОЯННОЙ ссылкой записи — открытие шторки
+                    // не считается.
+                    onShared={notifyBookingLinkShared}
                     className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97] disabled:opacity-60"
                 />
                 <a

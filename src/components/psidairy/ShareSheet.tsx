@@ -11,6 +11,19 @@ type ShareSheetProps = {
     url: string;
     text: string;
     title?: string;
+    /**
+     * Ссылкой действительно поделились (Задача 24).
+     *
+     * Зовётся ТОЛЬКО с состоявшегося действия: буфер обмена принял ссылку,
+     * система приняла share, QR построился и показан. Открытие шторки,
+     * отменённый системный диалог и неудачное копирование сюда не приходят —
+     * иначе шаг онбординга закрывался бы тем, что человек передумал.
+     *
+     * Переходы в мессенджер (Telegram/WhatsApp) считаются: они открываются с
+     * той же постоянной ссылкой записи и никакого другого подтверждения дать
+     * не могут — окно уходит из-под контроля страницы.
+     */
+    onShared?: () => void;
 };
 
 async function copyToClipboard(value: string): Promise<boolean> {
@@ -33,8 +46,23 @@ async function copyToClipboard(value: string): Promise<boolean> {
     }
 }
 
+/**
+ * Ссылкой действительно поделились (Задача 24).
+ *
+ * Отметка ставится на сервере и закрывает шаг «Поделиться» в чек-листе;
+ * событие перерисовывает полосу на этой же странице, без перезагрузки.
+ * Зовётся только с успешного пути шторки — открытие шторки сюда не приходит.
+ */
+export async function notifyBookingLinkShared(): Promise<void> {
+    const { confirmBookingLinkShared } = await import('@/app/diary/actions/onboarding');
+    await confirmBookingLinkShared();
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('practice-onboarding-changed'));
+    }
+}
+
 /** One "Поделиться" bottom sheet, used identically everywhere a booking link is shared. */
-export function ShareSheet({ isOpen, onClose, url, text, title = 'Поделиться ссылкой' }: ShareSheetProps) {
+export function ShareSheet({ isOpen, onClose, url, text, title = 'Поделиться ссылкой', onShared }: ShareSheetProps) {
     const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
     const [loadingQr, setLoadingQr] = useState(false);
 
@@ -46,26 +74,34 @@ export function ShareSheet({ isOpen, onClose, url, text, title = 'Поделит
         if (typeof navigator !== 'undefined' && navigator.share) {
             try {
                 await navigator.share({ title, text, url });
+                onShared?.();
                 return;
             } catch {
+                // Пользователь закрыл системный диалог или он не сработал —
+                // ничем не поделились.
                 return;
             }
         }
         const copied = await copyToClipboard(`${text} ${url}`);
         toast[copied ? 'success' : 'error'](copied ? 'Ссылка скопирована — вставьте её в MAX' : 'Не удалось скопировать ссылку');
+        if (copied) onShared?.();
     };
 
     const handleTelegram = () => {
         window.open(buildTelegramShareUrl(url, text), '_blank');
+        onShared?.();
     };
 
     const handleWhatsApp = () => {
         window.open(buildWhatsAppShareUrl(url, text), '_blank');
+        onShared?.();
     };
 
     const handleCopy = async () => {
         const copied = await copyToClipboard(url);
         toast[copied ? 'success' : 'error'](copied ? 'Ссылка скопирована' : 'Не удалось скопировать ссылку');
+        // Не скопировалось — делиться нечем.
+        if (copied) onShared?.();
     };
 
     const handleShowQr = async () => {
@@ -74,6 +110,9 @@ export function ShareSheet({ isOpen, onClose, url, text, title = 'Поделит
         try {
             const QRCode = (await import('qrcode')).default;
             setQrDataUrl(await QRCode.toDataURL(url, { margin: 1, width: 240 }));
+            // QR построился и сейчас окажется на экране — его показывают
+            // клиенту, это и есть «поделились».
+            onShared?.();
         } catch {
             toast.error('Не удалось построить QR-код');
         } finally {
@@ -139,10 +178,12 @@ type ShareButtonProps = {
     title?: string;
     className?: string;
     icon?: React.ReactNode;
+    /** Пробрасывается в шторку: срабатывает только на состоявшемся действии. */
+    onShared?: () => void;
 };
 
 /** Trigger + sheet in one, for call sites that just need a "Поделиться" button. */
-export function ShareButton({ url, text, label = 'Поделиться', title, className, icon }: ShareButtonProps) {
+export function ShareButton({ url, text, label = 'Поделиться', title, className, icon, onShared }: ShareButtonProps) {
     const [open, setOpen] = useState(false);
     const [resolvedUrl, setResolvedUrl] = useState<string | null>(typeof url === 'string' ? url : null);
     const [loading, setLoading] = useState(false);
@@ -169,7 +210,7 @@ export function ShareButton({ url, text, label = 'Поделиться', title, 
                 {icon}
                 {label}
             </button>
-            {resolvedUrl && <ShareSheet isOpen={open} onClose={() => setOpen(false)} url={resolvedUrl} text={text} title={title} />}
+            {resolvedUrl && <ShareSheet isOpen={open} onClose={() => setOpen(false)} url={resolvedUrl} text={text} title={title} onShared={onShared} />}
         </>
     );
 }

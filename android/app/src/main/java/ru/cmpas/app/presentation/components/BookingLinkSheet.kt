@@ -38,9 +38,14 @@ import ru.cmpas.app.presentation.theme.tBody
  * и из настроек, и с главного экрана: логика живёт здесь одна, чтобы поведение
  * (в т.ч. состояние загрузки, пока `bookingLink` ещё не пришёл с бэкенда) не
  * разъезжалось между двумя копиями.
+ *
+ * Задача 24: onShared зовётся ТОЛЬКО с состоявшегося действия — скопировали
+ * ссылку или система приняла шеринг. Не с открытия шторки. QR здесь тоже не
+ * считается: он рисуется сразу при открытии, то есть по нему не отличить
+ * «показал клиенту» от «заглянул и закрыл».
  */
 @Composable
-fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
+fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit, onShared: () -> Unit = {}) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
@@ -63,6 +68,7 @@ fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
                 onClick = {
                     clipboard.setText(AnnotatedString(bookingLink))
                     copied = true
+                    onShared()
                 },
             ) {
                 Eyebrow(if (copied) "Скопировано" else "Нажмите, чтобы скопировать")
@@ -77,7 +83,8 @@ fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
             PrimaryButton(
                 text = "Поделиться",
                 icon = Icons.Outlined.Share,
-                onClick = { shareBookingLink(context, bookingLink) },
+                // Системный диалог не открылся — делиться было нечем.
+                onClick = { if (shareBookingLink(context, bookingLink)) onShared() },
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
@@ -86,12 +93,16 @@ fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
     }
 }
 
-/** Системный шеринг ссылки для записи — используется шторкой и главным экраном. */
-fun shareBookingLink(context: Context, link: String) {
+/**
+ * Системный шеринг ссылки для записи — используется шторкой и главным экраном.
+ * Возвращает, открылся ли системный диалог: не открылся — значит человек ничем
+ * не поделился, и отмечать шаг настройки нечем.
+ */
+fun shareBookingLink(context: Context, link: String): Boolean {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, "Ссылка для записи")
         putExtra(Intent.EXTRA_TEXT, link)
     }
-    runCatching { context.startActivity(Intent.createChooser(intent, "Отправить через")) }
+    return runCatching { context.startActivity(Intent.createChooser(intent, "Отправить через")) }.isSuccess
 }

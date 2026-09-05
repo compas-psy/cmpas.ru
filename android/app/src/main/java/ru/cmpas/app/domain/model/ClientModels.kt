@@ -69,9 +69,41 @@ data class DashboardDataV2(
     val attentionItems: List<AttentionItem> = emptyList(),
     val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
+    // Задача 24: полноценное состояние чек-листа с сервера — то же, что видит
+    // веб. Старые поля остаются ради уже установленных сборок.
+    val onboarding: PracticeOnboarding? = null,
     val needsOnboarding: Boolean = false,
     val onboardingUrl: String? = null,
 )
+
+/**
+ * Чек-лист настройки практики (Задача 24).
+ *
+ * Три шага сервер ВЫЧИСЛЯЕТ из настоящих данных практики, четвёртый —
+ * «поделиться» — по отметке о состоявшемся действии. Приложение эти шаги не
+ * считает и отметить их не может: оно только показывает и сообщает о двух
+ * действиях человека (поделился, скрыл).
+ */
+@Serializable
+data class PracticeOnboarding(
+    val dismissed: Boolean = false,
+    val completed: Boolean = false,
+    /** Ни клиентов, ни расписания, ни записей — только такому предлагают выбор входа. */
+    val empty: Boolean = false,
+    val steps: PracticeOnboardingSteps = PracticeOnboardingSteps(),
+)
+
+@Serializable
+data class PracticeOnboardingSteps(
+    val client: Boolean = false,
+    val schedule: Boolean = false,
+    val session: Boolean = false,
+    val share: Boolean = false,
+)
+
+/** Имя состоявшегося действия, а не «новое состояние»: шаги отметить нельзя. */
+@Serializable
+data class PracticeOnboardingAction(val action: String)
 
 @Serializable
 data class WeekStats(

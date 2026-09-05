@@ -78,6 +78,7 @@ fun CompasNavHost(
                     // календаря и списка клиентов, — не вторые формы.
                     onCreateSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
                     onCreateClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
+                    onScheduleClick = { navController.navigate(Screen.Schedule.route) },
                     // Задача 23: пункт «требует внимания» ведёт прямо в
                     // действие — форму заметки, оплату сессии, отправку
                     // документа-согласия. Новых экранов при этом нет.

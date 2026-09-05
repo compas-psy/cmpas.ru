@@ -1,117 +1,68 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { X, Check, Users, Clock, Bot, Sparkles, CalendarPlus } from 'lucide-react';
+import { X, Check, Users, Clock, CalendarPlus, Share2, Sparkles, Upload } from 'lucide-react';
+import type { PracticeOnboardingState } from '@/lib/practice/onboarding';
 
-type State = {
-    loaded: boolean;
-    clientsCount: number;
-    sessionsCount: number;
-    availabilityCount: number;
-    botConnected: boolean;
-};
+/**
+ * Чек-лист настройки практики (Задача 24).
+ *
+ * Состояние целиком серверное и общее с приложением: шаги вычисляются из
+ * настоящих данных практики, «поделиться» — по отметке о состоявшемся
+ * действии, «скрыть» — по отметке на сервере. localStorage здесь больше нет
+ * вовсе: раньше «скрыть» жило в браузере, и другой браузер или телефон
+ * возвращали подсказку тому, кто её уже убрал.
+ *
+ * Шага «Telegram-бот» в чек-листе нет: он не входит в четыре продуктовых
+ * шага MVP. Интеграции никуда не делись — они в своём разделе.
+ */
 
-const DISMISS_KEY = 'compas_welcome_dismissed_v1';
+const STEPS = [
+    { key: 'client', label: 'Клиенты', description: 'Карточки людей, с которыми работаете', href: '/diary/clients', icon: Users },
+    { key: 'schedule', label: 'Расписание', description: 'Часы, когда вы принимаете', href: '/diary/availability', icon: Clock },
+    { key: 'session', label: 'Запись', description: 'Первая встреча в календаре', href: '/diary/calendar', icon: CalendarPlus },
+    { key: 'share', label: 'Поделиться', description: 'Отдать ссылку для записи клиенту', href: '/diary/availability', icon: Share2 },
+] as const;
 
 export function WelcomeStrip() {
-    const [state, setState] = useState<State>({
-        loaded: false,
-        clientsCount: 0,
-        sessionsCount: 0,
-        availabilityCount: 0,
-        botConnected: false,
-    });
-    const [dismissed, setDismissed] = useState(true);
+    const [state, setState] = useState<PracticeOnboardingState | null>(null);
+    const [hidden, setHidden] = useState(false);
+    /** Выбор «перенести или с нуля» уже сделан в этот заход. */
+    const [entryChosen, setEntryChosen] = useState(false);
 
-    useEffect(() => {
-        // Never show on server / first render — avoid flash
+    const load = useCallback(async () => {
         try {
-            const stored = typeof window !== 'undefined' ? localStorage.getItem(DISMISS_KEY) : null;
-            setDismissed(stored === '1');
+            const res = await fetch('/api/onboarding/progress', { cache: 'no-store' });
+            if (res.ok) setState(await res.json());
         } catch {
-            setDismissed(false);
+            /* тихо: подсказка не важнее самого кабинета */
         }
-
-        (async () => {
-            try {
-                const res = await fetch('/api/onboarding/progress', { cache: 'no-store' });
-                if (res.ok) {
-                    const data = await res.json();
-                    setState({
-                        loaded: true,
-                        clientsCount: data.clientsCount ?? 0,
-                        sessionsCount: data.sessionsCount ?? 0,
-                        availabilityCount: data.availabilityCount ?? 0,
-                        botConnected: !!data.botConnected,
-                    });
-                } else {
-                    setState(s => ({ ...s, loaded: true }));
-                }
-            } catch {
-                setState(s => ({ ...s, loaded: true }));
-            }
-        })();
     }, []);
 
-    const handleDismiss = () => {
-        try {
-            localStorage.setItem(DISMISS_KEY, '1');
-        } catch {
-            /* silent */
-        }
-        setDismissed(true);
+    useEffect(() => { void load(); }, [load]);
+
+    // Полоса перерисовывается по событию успешного «поделиться» — чтобы шаг
+    // закрылся сразу, без перезагрузки страницы. Событие шлёт то же место,
+    // которое сообщило серверу о состоявшемся действии.
+    useEffect(() => {
+        const onShared = () => { void load(); };
+        window.addEventListener('practice-onboarding-changed', onShared);
+        return () => window.removeEventListener('practice-onboarding-changed', onShared);
+    }, [load]);
+
+    const handleDismiss = async () => {
+        // Прячем сразу, но решение уходит на сервер: оно должно пережить
+        // смену браузера и переустановку приложения.
+        setHidden(true);
+        const { dismissOnboarding } = await import('@/app/diary/actions/onboarding');
+        await dismissOnboarding();
     };
 
-    if (!state.loaded || dismissed) return null;
+    if (!state || hidden || state.dismissed || state.completed) return null;
 
-    // Задача 16 §4: каждый шаг закрывается реальными данными из БД
-    // (/api/onboarding/progress). localStorage — только для «скрыть», он
-    // никогда не считается доказательством выполненного шага. Поэтому
-    // специалист, перенёсший практику импортом, приходит с уже закрытыми
-    // шагами «клиенты» и «записи», а не с предложением завести их заново.
-    const steps = [
-        {
-            key: 'clients',
-            label: 'Добавить клиентов',
-            href: '/diary/clients',
-            icon: Users,
-            done: state.clientsCount > 0,
-        },
-        {
-            key: 'sessions',
-            label: 'Первая запись',
-            href: '/diary/calendar',
-            icon: CalendarPlus,
-            done: state.sessionsCount > 0,
-        },
-        {
-            key: 'schedule',
-            label: 'Настроить расписание',
-            href: '/diary/availability',
-            icon: Clock,
-            done: state.availabilityCount > 0,
-        },
-        {
-            key: 'bot',
-            label: 'Telegram-бот',
-            description: 'Уведомления о записях',
-            href: '/diary/integrations',
-            icon: Bot,
-            done: state.botConnected,
-        },
-    ];
-
-    const allDone = steps.every(s => s.done);
-    if (allDone) {
-        // Auto-hide once all three are done; dismiss for next visits
-        try {
-            localStorage.setItem(DISMISS_KEY, '1');
-        } catch {
-            /* silent */
-        }
-        return null;
-    }
+    const steps = STEPS.map((step) => ({ ...step, done: state.steps[step.key] }));
+    const left = steps.filter((s) => !s.done).length;
 
     return (
         <div className="relative bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5 border border-primary/20 rounded-2xl p-5 md:p-6 shadow-sm">
@@ -130,10 +81,39 @@ export function WelcomeStrip() {
                 <div>
                     <h2 className="font-bold text-foreground text-base md:text-lg">Добро пожаловать в ПРАКТИКУ</h2>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        {`Осталось шагов до готового кабинета: ${steps.filter(s => !s.done).length}.`}
+                        {`Осталось шагов до готового кабинета: ${left}.`}
                     </p>
                 </div>
             </div>
+
+            {/*
+              Совсем пустой практике сначала предлагается выбор: перенести уже
+              существующую или начать с нуля. «Начать с нуля» ничего не
+              отмечает выполненным — просто оставляет чек-лист, по которому
+              человек заводит клиентов и расписание руками.
+            */}
+            {state.empty && !entryChosen && (
+                <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                    <Link
+                        href="/diary/clients/import-calendar"
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+                    >
+                        <Upload className="w-4 h-4" /> Перенести практику
+                    </Link>
+                    <button
+                        type="button"
+                        // «С нуля» ничего не отмечает выполненным и ничего не
+                        // создаёт: выбор просто сворачивается, а чек-лист
+                        // ниже остаётся — по нему человек и заводит клиентов,
+                        // расписание и первую запись.
+                        onClick={() => setEntryChosen(true)}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-background/60 transition-colors"
+                    >
+                        Начать с нуля
+                    </button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 {steps.map((step, i) => {
                     const Icon = step.icon;
@@ -161,9 +141,7 @@ export function WelcomeStrip() {
                                 <div className={`text-sm font-semibold truncate ${step.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                                     {step.label}
                                 </div>
-                                {('description' in step) && step.description && (
-                                    <div className="text-xs text-muted-foreground mt-0.5 truncate">{(step as any).description}</div>
-                                )}
+                                <div className="text-xs text-muted-foreground mt-0.5 truncate">{step.description}</div>
                             </div>
                         </Link>
                     );

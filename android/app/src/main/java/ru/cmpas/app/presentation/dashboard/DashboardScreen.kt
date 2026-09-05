@@ -30,6 +30,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ru.cmpas.app.domain.model.PaymentStatus
+import ru.cmpas.app.domain.model.PracticeOnboarding
+import ru.cmpas.app.domain.model.PracticeOnboardingSteps
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
@@ -41,6 +43,13 @@ import ru.cmpas.app.presentation.util.canRecordSessionOutcome
 import java.time.Duration
 import java.time.LocalTime
 
+/**
+ * Перенос практики (Задача 24 §9): существующий веб-поток импорта календаря.
+ * Нативного импорта в приложении нет, и рисовать его заглушкой нельзя.
+ * Что адрес существует, сторожит tests/android-web-links.test.ts.
+ */
+internal const val PRACTICE_MIGRATION_URL = "https://cmpas.ru/diary/clients/import-calendar"
+
 @Composable
 fun DashboardScreen(
     onSessionClick: (String) -> Unit = {},
@@ -51,6 +60,8 @@ fun DashboardScreen(
     // второго редактора записи и второй формы клиента не заводится.
     onCreateSession: () -> Unit = {},
     onCreateClient: () -> Unit = {},
+    // Задача 24: шаг «Расписание» ведёт в уже существующий экран расписания.
+    onScheduleClick: () -> Unit = {},
     // Задача 23 §2: «требует внимания» ведёт к действию, а не к объекту.
     // Колбэки тонкие — существующие экраны открываются на нужном шаге.
     onWriteNote: (String) -> Unit = onNoteClick,
@@ -153,10 +164,25 @@ fun DashboardScreen(
                 }
             }
 
-            if (uiState.needsOnboarding) {
+            // Задача 24: чек-лист — ДОПОЛНЕНИЕ дашборда, а не экран вместо
+            // него. Ядро дашборда (приветствие, следующая сессия, расписание
+            // дня) остаётся на месте при любом состоянии онбординга.
+            uiState.onboarding?.takeIf { !it.dismissed && !it.completed }?.let { onboarding ->
                 item {
-                    OnboardingBridgeCard(
-                        onOpen = { uriHandler.openUri("https://cmpas.ru${uiState.onboardingUrl ?: "/onboarding"}") },
+                    OnboardingChecklistCard(
+                        onboarding = onboarding,
+                        onStep = { step ->
+                            when (step) {
+                                OnboardingStep.CLIENT -> onCreateClient()
+                                OnboardingStep.SCHEDULE -> onScheduleClick()
+                                OnboardingStep.SESSION -> onCreateSession()
+                                // Шаг закроется не открытием шторки, а
+                                // состоявшимся действием внутри неё.
+                                OnboardingStep.SHARE -> showBookingSheet = true
+                            }
+                        },
+                        onMigrate = { uriHandler.openUri(PRACTICE_MIGRATION_URL) },
+                        onDismiss = viewModel::dismissOnboarding,
                     )
                 }
             }
@@ -227,7 +253,13 @@ fun DashboardScreen(
         }
 
         if (showBookingSheet) {
-            BookingLinkSheet(uiState.bookingLink, onClose = { showBookingSheet = false })
+            BookingLinkSheet(
+                uiState.bookingLink,
+                onClose = { showBookingSheet = false },
+                // Шаг «Поделиться» закрывает не открытие шторки, а
+                // состоявшееся действие внутри неё.
+                onShared = viewModel::confirmBookingLinkShared,
+            )
         }
     }
 }
@@ -274,37 +306,91 @@ private fun QuickAction(
 }
 
 @Composable
-private fun OnboardingBridgeCard(onOpen: () -> Unit) {
+private fun OnboardingChecklistCard(
+    onboarding: PracticeOnboarding,
+    onStep: (OnboardingStep) -> Unit,
+    onMigrate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val left = OnboardingStep.entries.count { !it.isDone(onboarding.steps) }
+
     GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Tune, null, Modifier.size(22.dp), tint = Forest700)
-            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text("Начните с настройки", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
-                Text("Клиенты · расписание · мессенджер. Полный визард открыт в веб-кабинете.", style = tMeta, color = CompasMutedFg)
+                Text("Настройка практики", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text("Осталось шагов: $left", style = tMeta, color = CompasMutedFg)
             }
+            GhostButton(text = null, icon = Icons.Outlined.Close, onClick = onDismiss, modifier = Modifier.width(44.dp))
         }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TinySetupStep("1", "Клиент", Modifier.weight(1f))
-            TinySetupStep("2", "Расписание", Modifier.weight(1f))
-            TinySetupStep("3", "Мессенджер", Modifier.weight(1f))
+
+        // Совсем пустой практике сначала предлагается перенести уже
+        // сложившуюся. «Начать с нуля» — это и есть чек-лист ниже: он никуда
+        // не девается и ничего не отмечает выполненным сам.
+        if (onboarding.empty) {
+            Spacer(Modifier.height(12.dp))
+            PrimaryButton(
+                text = "Перенести практику",
+                icon = Icons.Outlined.OpenInNew,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onMigrate,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text("Или начните с нуля — по шагам ниже.", style = tMeta, color = CompasMutedFg)
         }
+
         Spacer(Modifier.height(12.dp))
-        PrimaryButton(
-            text = "Полная настройка в веб-кабинете",
-            icon = Icons.Outlined.OpenInNew,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onOpen,
-        )
+        OnboardingStep.entries.forEachIndexed { index, step ->
+            if (index > 0) Spacer(Modifier.height(8.dp))
+            OnboardingStepRow(step, step.isDone(onboarding.steps)) { onStep(step) }
+        }
+    }
+}
+
+/**
+ * Четыре шага настройки практики (Задача 24).
+ *
+ * Ровно те же, что в вебе, и приходят они с сервера — раньше здесь были три
+ * нарисованные плашки «Клиент · Расписание · Мессенджер», которые не зависели
+ * ни от чего и не нажимались. «Мессенджер» среди шагов MVP нет вовсе.
+ */
+internal enum class OnboardingStep(val title: String, val subtitle: String, val icon: ImageVector) {
+    CLIENT("Клиенты", "Карточки людей, с которыми работаете", Icons.Outlined.Groups),
+    SCHEDULE("Расписание", "Часы, когда вы принимаете", Icons.Outlined.Schedule),
+    SESSION("Запись", "Первая встреча в календаре", Icons.Outlined.EventAvailable),
+    SHARE("Поделиться", "Отдать ссылку для записи клиенту", Icons.Outlined.Share);
+
+    fun isDone(steps: PracticeOnboardingSteps): Boolean = when (this) {
+        CLIENT -> steps.client
+        SCHEDULE -> steps.schedule
+        SESSION -> steps.session
+        SHARE -> steps.share
     }
 }
 
 @Composable
-private fun TinySetupStep(number: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Sage100).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(number, style = tBody, color = Forest700, fontWeight = FontWeight.Bold)
-        Text(label, style = tMeta, color = CompasMutedFg, maxLines = 1)
+private fun OnboardingStepRow(step: OnboardingStep, done: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (done) Sage100 else Color.White.copy(alpha = .55f))
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (done) Icons.Outlined.CheckCircle else step.icon,
+            null,
+            Modifier.size(19.dp),
+            tint = if (done) Forest700 else CompasMutedFg,
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(step.title, style = tBody, color = if (done) CompasMutedFg else CompasFg)
+            Text(step.subtitle, style = tMeta, color = CompasMutedFg, maxLines = 1)
+        }
+        if (!done) Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
     }
 }
 

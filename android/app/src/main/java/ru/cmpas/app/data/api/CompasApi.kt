@@ -153,6 +153,11 @@ interface CompasApi {
     @DELETE("addresses/{id}")
     suspend fun deactivateAddress(@Path("id") id: String): Response<PracticeAddressList>
 
+    // Чек-лист настройки практики (Задача 24). Ресурс принимает имя
+    // состоявшегося действия, а не готовое состояние: шаги считает сервер.
+    @POST("onboarding")
+    suspend fun postOnboardingAction(@Body body: PracticeOnboardingAction): Response<PracticeOnboarding>
+
     @GET("legal/status")
     suspend fun getLegalStatus(): Response<MobileLegalStatus>
 

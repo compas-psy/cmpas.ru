@@ -42,6 +42,18 @@ vi.mock('@/lib/notifications', () => ({
     })),
 }));
 
+// Задача 24: мобильный дашборд отдаёт ещё и состояние онбординга. Этот тест
+// про паритет «требует внимания», поэтому онбординг подменяется целиком — его
+// собственные правила проверяет tests/practice-onboarding.test.ts.
+vi.mock('@/lib/practice/onboarding', () => ({
+    getPracticeOnboarding: vi.fn(async () => ({
+        dismissed: false,
+        completed: false,
+        empty: true,
+        steps: { client: false, schedule: false, session: false, share: false },
+    })),
+}));
+
 vi.mock('@/lib/client-workflow', () => ({ clientBookingLink: () => 'https://cmpas.ru/u/anna' }));
 vi.mock('@/lib/booking/slug', () => ({ getPsychologistBookingUrl: async () => 'https://cmpas.ru/u/anna' }));
 

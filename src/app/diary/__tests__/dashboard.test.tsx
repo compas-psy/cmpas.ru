@@ -7,7 +7,7 @@
 // расписание, активность, статистика недели, дата и неделя, размер заголовка.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 
 // Дашборд грузит записи через серверное действие getSessions. Подменяем не
 // само действие, а то, на чём оно стоит (auth + Prisma): страница дважды
@@ -46,6 +46,14 @@ vi.mock('@/app/diary/actions/booking-link', () => bookingLinkActions);
 const attentionActions = vi.hoisted(() => ({ getDashboardAttention: vi.fn() }));
 vi.mock('@/app/diary/actions/attention', () => attentionActions);
 
+/** Задача 24: «скрыть» и «поделились» — серверные действия, не браузерные. */
+const onboardingActions = {
+    dismissOnboarding: vi.fn(async () => null),
+    confirmBookingLinkShared: vi.fn(async () => null),
+    readOnboardingState: vi.fn(async () => null),
+};
+vi.mock('@/app/diary/actions/onboarding', () => onboardingActions);
+
 // Модалки заменяем маркерами: нас интересует, ЧТО дашборд в них передаёт
 // (какую конкретно запись открыл клик), а не их внутренняя вёрстка.
 vi.mock('@/app/diary/components/SessionModal', () => ({
@@ -74,14 +82,29 @@ function session(over: SessionRow = {}): SessionRow {
     };
 }
 
-/** Ответы onboarding-прогресса приходят из реальной БД (/api/onboarding/progress). */
+/**
+ * Состояние онбординга приходит с сервера целиком (Задача 24): четыре шага,
+ * «скрыто» и производное «пройдено». Веб его не считает — считает общее ядро
+ * src/lib/practice/onboarding.ts, одно на веб и приложение.
+ */
 let onboardingProgress: Record<string, unknown>;
+
+function onboardingState(over: Partial<Record<'client' | 'schedule' | 'session' | 'share', boolean>> = {}, extra: Record<string, unknown> = {}) {
+    const steps = { client: false, schedule: false, session: false, share: false, ...over };
+    return {
+        dismissed: false,
+        completed: Object.values(steps).every(Boolean),
+        empty: !steps.client && !steps.schedule && !steps.session,
+        steps,
+        ...extra,
+    };
+}
 
 beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
 
-    onboardingProgress = { clientsCount: 0, sessionsCount: 0, availabilityCount: 0, botConnected: false };
+    onboardingProgress = onboardingState();
 
     store.sessions = [session()];
     attentionActions.getDashboardAttention.mockResolvedValue([]);
@@ -207,45 +230,89 @@ describe('§1 Иерархия и §7 Preserve', () => {
     });
 });
 
-describe('§4 Онбординг по реальным данным', () => {
-    it('выполненные по факту шаги показаны выполненными, а не по отметке в браузере', async () => {
-        onboardingProgress = { clientsCount: 4, sessionsCount: 0, availabilityCount: 2, botConnected: false };
+describe('§4 Онбординг по серверному состоянию (Задача 24)', () => {
+    /**
+     * Слова «Клиенты», «Запись» и «Поделиться» встречаются и в других местах
+     * дашборда — это нормально. Проверяем именно полосу настройки.
+     */
+    async function strip() {
+        const heading = await screen.findByText('Добро пожаловать в ПРАКТИКУ');
+        return heading.closest('div.relative') as HTMLElement;
+    }
+
+    function stepCard(scope: HTMLElement, label: string) {
+        return within(scope).getByText(label).closest('a')!;
+    }
+
+    it('четыре продуктовых шага, и «Telegram-бот» среди них больше нет', async () => {
+        onboardingProgress = onboardingState({ client: true, schedule: true });
         await renderDashboard();
+        const scope = await strip();
 
-        const clientsStep = (await screen.findByText('Добавить клиентов')).closest('a')!;
-        const scheduleStep = screen.getByText('Настроить расписание').closest('a')!;
-        const botStep = screen.getByText('Telegram-бот').closest('a')!;
+        expect(within(scope).getAllByText(/^(Клиенты|Расписание|Запись|Поделиться)$/)).toHaveLength(4);
+        expect(stepCard(scope, 'Клиенты').className).toContain('bg-primary/5');
+        expect(stepCard(scope, 'Расписание').className).toContain('bg-primary/5');
+        expect(stepCard(scope, 'Запись').className).not.toContain('bg-primary/5');
+        expect(stepCard(scope, 'Поделиться').className).not.toContain('bg-primary/5');
 
-        expect(clientsStep.className).toContain('bg-primary/5');
-        expect(scheduleStep.className).toContain('bg-primary/5');
-        expect(botStep.className).not.toContain('bg-primary/5');
+        // Бот — не один из четырёх шагов MVP; интеграции живут своим разделом.
+        expect(screen.queryByText('Telegram-бот')).not.toBeInTheDocument();
     });
 
-    it('импортировавший практику специалист получает закрытые шаги «клиенты» и «записи»', async () => {
-        // Импорт: клиенты и будущие сессии уже есть в БД, руками ничего не заводили.
-        onboardingProgress = { clientsCount: 23, sessionsCount: 41, availabilityCount: 0, botConnected: false };
+    it('импортировавший практику получает закрытые «Клиенты» и «Запись», остальное — по факту', async () => {
+        onboardingProgress = onboardingState({ client: true, session: true });
         await renderDashboard();
+        const scope = await strip();
 
-        const clientsStep = (await screen.findByText('Добавить клиентов')).closest('a')!;
-        const sessionsStep = screen.getByText('Первая запись').closest('a')!;
-
-        expect(clientsStep.className).toContain('bg-primary/5');
-        expect(sessionsStep.className).toContain('bg-primary/5');
-        // Остались только реально незакрытые шаги.
+        expect(stepCard(scope, 'Клиенты').className).toContain('bg-primary/5');
+        expect(stepCard(scope, 'Запись').className).toContain('bg-primary/5');
+        expect(stepCard(scope, 'Расписание').className).not.toContain('bg-primary/5');
         expect(screen.getByText('Осталось шагов до готового кабинета: 2.')).toBeInTheDocument();
+        // Практика не пустая — выбора «перенести или с нуля» ей не предлагают.
+        expect(screen.queryByText('Перенести практику')).not.toBeInTheDocument();
     });
 
-    it('отметка в localStorage не считается выполнением шага — только скрывает блок', async () => {
-        onboardingProgress = { clientsCount: 0, sessionsCount: 0, availabilityCount: 0, botConnected: false };
+    it('существующая ссылка записи сама шаг «Поделиться» не закрывает', async () => {
+        // Ссылка есть у всех с первого дня — и дашборд её уже показывает.
+        onboardingProgress = onboardingState({ client: true, schedule: true, session: true });
+        await renderDashboard();
+        const scope = await strip();
+
+        expect(stepCard(scope, 'Поделиться').className).not.toContain('bg-primary/5');
+    });
+
+    it('совсем пустой практике предлагают перенести или начать с нуля', async () => {
+        onboardingProgress = onboardingState();
         await renderDashboard();
 
-        const clientsStep = (await screen.findByText('Добавить клиентов')).closest('a')!;
-        expect(clientsStep.className).not.toContain('bg-primary/5');
+        const migrate = await screen.findByText('Перенести практику');
+        expect(migrate.closest('a')!.getAttribute('href')).toBe('/diary/clients/import-calendar');
+
+        // «С нуля» ничего не отмечает выполненным: чек-лист остаётся на месте.
+        fireEvent.click(screen.getByText('Начать с нуля'));
+        expect(screen.queryByText('Перенести практику')).not.toBeInTheDocument();
+        expect(stepCard(await strip(), 'Клиенты').className).not.toContain('bg-primary/5');
+        expect(screen.getByText('Добро пожаловать в ПРАКТИКУ')).toBeInTheDocument();
+    });
+
+    it('«Скрыть» уходит на сервер, а не в localStorage', async () => {
+        onboardingProgress = onboardingState();
+        await renderDashboard();
 
         fireEvent.click(screen.getByTitle('Скрыть'));
 
         expect(screen.queryByText('Добро пожаловать в ПРАКТИКУ')).not.toBeInTheDocument();
-        expect(localStorage.getItem('compas_welcome_dismissed_v1')).toBe('1');
+        await waitFor(() => expect(onboardingActions.dismissOnboarding).toHaveBeenCalled());
+        // Браузерная отметка ушла совсем: другой браузер и телефон обязаны
+        // узнать о решении человека, а localStorage им ничего не расскажет.
+        expect(localStorage.getItem('compas_welcome_dismissed_v1')).toBeNull();
+    });
+
+    it('скрытое на сервере состояние не показывает подсказку вовсе', async () => {
+        onboardingProgress = onboardingState({}, { dismissed: true });
+        await renderDashboard();
+
+        expect(screen.queryByText('Добро пожаловать в ПРАКТИКУ')).not.toBeInTheDocument();
     });
 });
 

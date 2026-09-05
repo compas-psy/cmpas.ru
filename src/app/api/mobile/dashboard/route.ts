@@ -7,6 +7,7 @@ import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { listNotifications } from '@/lib/notifications';
 import { compareSessionStart, isSessionFuture, settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 import { getPracticeAttention } from '@/lib/practice/attention';
+import { getPracticeOnboarding } from '@/lib/practice/onboarding';
 
 function normalizePaymentStatus(value: unknown) {
     const raw = String(value || 'not_required').toLowerCase();
@@ -106,6 +107,8 @@ export async function GET(req: NextRequest) {
         // §5.1 (O-260829): human-readable /u/<slug> link for the Android app's
         // "Ссылка для записи" — assigns a slug on first use, falls back to
         // the old /bot/book/<id> form if slug resolution fails.
+        const onboarding = await getPracticeOnboarding(auth.userId);
+
         const slugBase = await getPsychologistBookingUrl(auth.userId).catch(() => null);
         const bookingLink = clientBookingLink(auth.userId, '', slugBase || undefined);
         const baseBookingLink = bookingLink.replace(/\/c\/[^?]+/, '');
@@ -120,7 +123,14 @@ export async function GET(req: NextRequest) {
                 cancelledCount: weekSessions.filter(s => s.status === 'cancelled').length,
             },
             userName: user?.psychologistSettings?.fullName || user?.name || null,
-            needsOnboarding: !user?.psychologistSettings?.onboardingCompleted,
+            // Задача 24: то же состояние онбординга, что и в вебе — из общего
+            // ядра, а не своя мобильная трактовка.
+            onboarding,
+            // Старые поля остаются ради уже установленных сборок, но теперь
+            // выводятся из того же состояния: подсказку показывать, пока
+            // чек-лист не пройден и не скрыт. Прежний грубый
+            // onboardingCompleted здесь больше ничего не решает.
+            needsOnboarding: !onboarding.completed && !onboarding.dismissed,
             onboardingUrl: '/onboarding',
             attentionItems,
             notifications,

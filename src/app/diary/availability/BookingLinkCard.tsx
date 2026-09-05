@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CalendarCheck, Copy, Eye, Lock } from 'lucide-react';
-import { ShareButton } from '@/components/psidairy/ShareSheet';
+import { ShareButton, notifyBookingLinkShared } from '@/components/psidairy/ShareSheet';
 import { humanizeUrl } from '@/lib/share/buildShareUrls';
 
 export function BookingLinkCard({ psychologistId, isPrivate }: { psychologistId: string; isPrivate: boolean }) {
@@ -55,6 +55,9 @@ export function BookingLinkCard({ psychologistId, isPrivate }: { psychologistId:
                         url={bookingUrl}
                         text="Запишитесь на сессию:"
                         icon={<Copy className="w-3.5 h-3.5" />}
+                        // Задача 24: это и есть постоянная ссылка записи —
+                        // состоявшееся действие с ней закрывает шаг чек-листа.
+                        onShared={notifyBookingLinkShared}
                         className="w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-2.5 rounded-xl text-[12px] font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                     />
                 </>
