@@ -82,8 +82,15 @@ export default function ClientsPage() {
             const { getClients } = await import('../actions/clients');
             const data = await getClients(search || undefined, statusFilter);
             setClients(data as unknown as Client[]);
-            // Auto-select client with most recent session (desktop only, first load)
-            if (!suppressAutoSelect.current && !selectedClient && !search && data.length > 0 && !isMobile) {
+            // Auto-select client with most recent session (desktop only, first load).
+            //
+            // Ширина берётся здесь и сейчас, а не из состояния isMobile: оно
+            // выставляется эффектом ПОСЛЕ монтирования, а этот колбэк создан
+            // раньше и держит его первое значение — false. На телефоне из-за
+            // этого срабатывал «десктопный» автовыбор, и переход «Клиенты»
+            // открывал карточку случайного клиента вместо списка.
+            const wideEnoughForMasterDetail = typeof window !== 'undefined' && window.innerWidth >= 1024;
+            if (!suppressAutoSelect.current && !selectedClient && !search && data.length > 0 && wideEnoughForMasterDetail) {
                 const withDates = (data as any[]).filter(c => c.nextSessionDate);
                 const sorted = withDates.sort((a, b) => new Date(b.nextSessionDate).getTime() - new Date(a.nextSessionDate).getTime());
                 const autoId = sorted.length > 0 ? sorted[0].id : data[0].id;
@@ -249,7 +256,12 @@ export default function ClientsPage() {
                         { key: 'manage' as const, icon: Settings2, label: 'Управление' },
                     ]).map(t => (
                         <button key={t.key} onClick={() => setMobileTab(t.key)}
-                            className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 text-xs font-semibold transition-colors border-b-2 min-w-[70px] ${mobileTab === t.key ? 'text-primary border-primary' : 'text-muted-foreground border-transparent'}`}>
+                            // min-w-fit вместо фиксированных 70px: «Документы» и
+                            // «Управление» длиннее и на кадре 390 налезали друг
+                            // на друга. Ряд и так прокручивается по горизонтали,
+                            // так что вкладке достаточно не сжиматься уже своего
+                            // текста.
+                            className={`flex-1 shrink-0 min-w-fit whitespace-nowrap flex flex-col items-center gap-1 py-3 px-3 text-xs font-semibold transition-colors border-b-2 ${mobileTab === t.key ? 'text-primary border-primary' : 'text-muted-foreground border-transparent'}`}>
                             <t.icon className="w-4 h-4" /> {t.label}
                         </button>
                     ))}

@@ -766,9 +766,9 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     Канцелярский заголовок сообщал ему то, что он и так знает,
                     и занимал самое дорогое место на экране. */}
                 <p className="text-[var(--booking-accent)] font-semibold text-[15px] mb-1">{psy.name}</p>
-                <h1 className="text-2xl font-semibold tracking-tight mb-1">Подберу удобное время</h1>
+                <h1 className="text-2xl font-semibold tracking-tight mb-1">Когда вам удобнее?</h1>
                 <p className="text-[var(--booking-muted)] mb-6 text-sm">
-                    Выберите вариант ниже — это ни к чему не обязывает.
+                    Подберу ближайшие варианты. Это ни к чему не обязывает.
                 </p>
 
                 {/* Issue #2: Upcoming sessions for known client */}
@@ -823,7 +823,9 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                 </button>
                             </div>
                         )}
-                        <h3 className="font-medium mb-3 text-[var(--booking-ink)]">Когда вам удобнее?</h3>
+                        {/* Кадр C01 задаёт этот вопрос один раз — заголовком
+                            страницы. Второй такой же над чипами спрашивал о том
+                            же самом на полэкрана ниже. */}
 
                         {suggestLoading && <p className="text-[var(--booking-muted)] text-sm text-center py-2">Подбираем время…</p>}
 

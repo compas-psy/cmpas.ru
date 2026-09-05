@@ -421,14 +421,15 @@ export default function SettingsPage() {
                                     <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Без штрафа до (часов)</label>
                                         <input type="number" value={settings.cancellationHours} onChange={e => setSettings(s => ({ ...s, cancellationHours: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} /></div>
                                     <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Удержание при поздней отмене (%)</label>
-                                        <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} max={100} /></div>
+                                        <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} max={100} />
+                                        <p className="mt-2 text-[12px] text-muted-foreground leading-relaxed">ПРАКТИКА не принимает оплату и ничего не удерживает — это ваша договорённость с клиентом. Число хранится как памятка и в текст правил само не подставляется.</p></div>
                                 </div>
                                 <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Текст правил для клиента</label>
                                     <textarea value={settings.cancellationText || ''} onChange={e => setSettings(s => ({ ...s, cancellationText: e.target.value }))} rows={4}
                                         className="w-full px-4 py-3 bg-background border border-border rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-sm resize-none" placeholder="Опишите ваши условия отмены..." /></div>
                                 <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-forest-800"><Eye className="w-4 h-4" />{showPreview ? 'Скрыть' : 'Предпросмотр'}</button>
                                 {showPreview && (
-                                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5"><h4 className="font-bold text-sm mb-2">Отмена сеанса</h4><p className="text-sm text-foreground/80 leading-relaxed">{settings.cancellationText || `Бесплатная отмена за ${settings.cancellationHours}ч. При поздней отмене удержание ${settings.cancellationFee}%.`}</p></div>
+                                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5"><h4 className="font-bold text-sm mb-2">Отмена сеанса</h4><p className="text-sm text-foreground/80 leading-relaxed">{settings.cancellationText || `Отмена без вопросов за ${settings.cancellationHours}ч до начала. Позже — напишите мне, договоримся.`}</p></div>
                                 )}
                             </div>
                         </div>

@@ -77,7 +77,7 @@ describe('/bot/book/<id> and /u/<slug> render the identical BookingPageClient (T
         // Макет C01: экран открывается именем специалиста, а не названием
         // операции. Раньше здесь проверялся заголовок «Запись на сессию» —
         // ровно то, от чего утверждённый handoff просит уйти.
-        expect(screen.getByText('Подберу удобное время')).toBeInTheDocument();
+        expect(screen.getByText('Когда вам удобнее?')).toBeInTheDocument();
         cleanup();
     });
 
@@ -92,7 +92,7 @@ describe('/bot/book/<id> and /u/<slug> render the identical BookingPageClient (T
         // Макет C01: экран открывается именем специалиста, а не названием
         // операции. Раньше здесь проверялся заголовок «Запись на сессию» —
         // ровно то, от чего утверждённый handoff просит уйти.
-        expect(screen.getByText('Подберу удобное время')).toBeInTheDocument();
+        expect(screen.getByText('Когда вам удобнее?')).toBeInTheDocument();
     });
 
     it('the Cyrillic /у/<slug> alias resolves the same way and renders the same output', async () => {

@@ -17,10 +17,14 @@ test.describe('специалист', () => {
         await expect(page.locator('body')).toContainText('Расписание на сегодня');
         await expect(page.locator('body')).toContainText(SEED.clientLongName);
         // К человеку обращаются по имени, а не по фамилии (Задача 27).
-        await expect(page.locator('body')).toContainText('Добрый день, Мария');
+        // Само приветствие зависит от часа («утро/день/вечер»), поэтому
+        // проверяется обращение, а не время суток: иначе прогон после 18:00
+        // по Москве падал бы на исправном экране.
+        await expect(page.locator('body')).toContainText(/Добр(ое утро|ый день|ый вечер), Мария/);
 
-        // Чек-лист присутствует и не перекрывает работу.
-        await expect(page.locator('body')).toContainText('Добро пожаловать в ПРАКТИКУ');
+        // Наличие самого чек-листа проверяет сценарий 1 в release-journeys:
+        // он же его и проходит, поэтому здесь достаточно того, что рабочий
+        // экран открыт, а не подменён визардом.
         expect(page.url()).toContain('/diary');
         expect(page.url()).not.toContain('/onboarding');
     });

@@ -34,8 +34,20 @@ export default defineConfig({
         launchOptions: process.env.E2E_CHROMIUM ? { executablePath: process.env.E2E_CHROMIUM } : {},
     },
     projects: [
-        { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-        { name: 'laptop', use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } } },
-        { name: 'mobile', use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } } },
+        // Двенадцать обязательных сценариев меняют состояние: принимают
+        // документы, занимают часы, заводят клиентов. Прогонять их три раза
+        // подряд по одной базе бессмысленно — второй проход видит мир,
+        // изменённый первым, и падает не на дефекте, а на собственном следе.
+        // Поэтому они идут ровно один раз и на самом тесном кадре (390×844):
+        // что прошло там, пройдёт и шире.
+        {
+            name: 'journeys',
+            testMatch: /release-(journeys|paths)\.spec\.ts/,
+            use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } },
+        },
+        // Кадровые проверки только читают, поэтому их и гоняем на трёх ширинах.
+        { name: 'desktop', testIgnore: /release-(journeys|paths)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+        { name: 'laptop', testIgnore: /release-(journeys|paths)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } } },
+        { name: 'mobile', testIgnore: /release-(journeys|paths)\.spec\.ts/, use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } } },
     ],
 });

@@ -42,9 +42,15 @@ export function CancelSessionDialog({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-            <div className="bg-card w-full max-w-sm rounded-2xl shadow-lg border border-border p-6 animate-in zoom-in-95 duration-200">
-                <h3 className="text-xl font-bold text-foreground mb-2">Отменить сессию?</h3>
-                <p className="text-muted-foreground text-sm mb-4">
+            {/* Кадр C11: спокойное, но недвусмысленное подтверждение. Токены —
+                клиентские (.practice-booking-theme): диалог живёт только на
+                клиентской странице «Мои записи», и до этой правки он рисовался
+                двумя вписанными в разметку оттенками зелёного и золота вместо
+                единых переменных (см. W16–W18 «единые токены вместо трёх
+                оттенков»). */}
+            <div className="bg-[var(--booking-card)] w-full max-w-sm rounded-[var(--booking-radius-card)] shadow-lg border border-[var(--booking-line)] p-6 animate-in zoom-in-95 duration-200">
+                <h3 className="text-xl font-bold text-[var(--booking-ink)] mb-2">Отменить сессию?</h3>
+                <p className="text-[var(--booking-muted)] text-sm mb-4">
                     Вы уверены, что хотите отменить запись на {sessionDate} в {sessionTime}? Это действие нельзя отменить.
                 </p>
                 {error && (
@@ -56,14 +62,14 @@ export function CancelSessionDialog({
                     <button
                         onClick={onClose}
                         disabled={isCancelling}
-                        className="flex-1 py-3 px-4 rounded-xl border-2 font-medium transition-colors text-sm hover:bg-[#1e3a2f]/10 dark:hover:bg-[#b89a4e]/10 haptic-light border-[#1e3a2f] text-[#1e3a2f] dark:border-[#b89a4e] dark:text-[#b89a4e] bg-transparent disabled:opacity-50"
+                        className="flex-1 py-3 px-4 rounded-[var(--booking-radius-card)] border-2 font-medium transition-colors text-sm haptic-light border-[var(--booking-line)] text-[var(--booking-ink)] bg-[var(--booking-card)] hover:border-[var(--booking-accent)] hover:text-[var(--booking-accent)] disabled:opacity-50"
                     >
-                        Назад
+                        Оставить как есть
                     </button>
                     <button
                         onClick={handleCancel}
                         disabled={isCancelling}
-                        className="flex-1 py-3 px-4 rounded-xl font-medium transition-colors text-sm bg-destructive text-destructive-foreground hover:opacity-90 haptic-light disabled:opacity-50"
+                        className="flex-1 py-3 px-4 rounded-[var(--booking-radius-card)] font-medium transition-colors text-sm bg-destructive text-destructive-foreground hover:opacity-90 haptic-light disabled:opacity-50"
                     >
                         {isCancelling ? 'Отмена...' : 'Да, отменить'}
                     </button>
