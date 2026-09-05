@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Loader2, CheckCircle2, MapPin, Video, Calendar, X, Shield } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast, Toaster } from 'sonner';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ru } from 'date-fns/locale/ru';
 import { format } from 'date-fns';
@@ -116,6 +116,25 @@ function buildSections(options: ConcreteSlotOption[]): OptionSection[] {
 // duplicating ~900 lines of logic. The id route reads psychologistId via
 // useParams() and passes it in; the slug routes resolve the slug to an id
 // server-side first. Nothing about the booking flow itself changed here.
+/**
+ * Задача 27: сообщения об ошибках на клиентском экране записи было некуда
+ * показывать.
+ *
+ * Экран честно звал toast.error — и на конфликте часа, и на отказе сервера,
+ * и на неверном телефоне. Только <Toaster /> стоял единственный раз, в
+ * кабинете специалиста (src/app/diary/layout.tsx). Публичная страница записи
+ * его не наследует, поэтому все эти сообщения уходили в пустоту.
+ *
+ * Как это выглядело для человека: он выбрал час, подтвердил согласие, нажал
+ * «Подтвердить и записаться» — и НИЧЕГО. Список часов молча обновлялся
+ * (занятого в нём уже не было), а записан он или нет — понять было нельзя.
+ * Тишина на месте ответа хуже, чем текст ошибки: код можно хотя бы
+ * переспросить, а пустоту не о чем спрашивать.
+ */
+function BookingToaster() {
+    return <Toaster position="top-center" richColors closeButton duration={6000} />;
+}
+
 export default function BookingPageClient({ psychologistId }: { psychologistId: string }) {
     // Extract clientId manually inside the init function to avoid race conditions.
     const [clientId, setClientId] = useState<string | null>(null);
@@ -138,9 +157,16 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [verifiedTelegramUserId, setVerifiedTelegramUserId] = useState<string | null>(null);
     // O-260829 §4.2: канал доставки уведомления — по факту контекста, в
     // котором открыта ссылка, а не хардкод "Telegram" для всех. Второй
-    // мессенджер бота — Max (см. sendMaxMessage в src/lib/max*.ts); других
-    // каналов у ссылки специалиста сегодня нет, поэтому выбор бинарный.
-    const [notificationChannel, setNotificationChannel] = useState<'Telegram' | 'Max'>('Max');
+    // мессенджер бота — Max (см. sendMaxMessage в src/lib/max*.ts).
+    //
+    // Задача 27: третье состояние — null, и оно самое частое. Постоянную
+    // ссылку /у/<slug> открывают в обычном браузере, и тогда у человека нет
+    // ни привязанного Telegram, ни привязанного Max: он оставил только имя и
+    // телефон. Раньше в этом случае обещали «уведомление придёт в Max» —
+    // мессенджер, которого у него может не быть и в который система всё
+    // равно ничего не отправит, потому что отправлять некуда. Обещание, за
+    // которым ничего не следует, хуже молчания: человек ждёт и не приходит.
+    const [notificationChannel, setNotificationChannel] = useState<'Telegram' | 'Max' | null>(null);
     const [psy, setPsy] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -263,7 +289,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
             setNotificationChannel('Telegram');
         } else {
-            setNotificationChannel('Max');
+            // Вне мессенджера канала нет, пока человек сам его не привяжет.
+            setNotificationChannel(null);
         }
 
         const init = async () => {
@@ -657,13 +684,18 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     if (bookingSuccess) {
         return (
             <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+                <BookingToaster />
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
                     <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
                         <div className="rounded-full flex items-center justify-center mx-auto mb-4 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]" style={{ width: 52, height: 52 }}>
                             <CheckCircle2 className="w-6 h-6" />
                         </div>
                         <h2 className="text-2xl font-semibold mb-2 text-[var(--booking-ink)]">Вы записаны!</h2>
-                        <p className="text-[var(--booking-muted)] text-sm mb-6">Уведомление придёт в {notificationChannel}</p>
+                        <p className="text-[var(--booking-muted)] text-sm mb-6">
+                            {notificationChannel
+                                ? `Уведомление придёт в ${notificationChannel}`
+                                : 'Специалист получил вашу запись и свяжется с вами по телефону.'}
+                        </p>
 
                         <div className="bg-[var(--booking-paper)] rounded-[var(--booking-radius-card)] p-5 text-left space-y-3 border border-[var(--booking-line)]">
                             <div>
@@ -724,6 +756,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
     return (
         <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <BookingToaster />
             <div className="p-4 max-w-md mx-auto">
                 <h1 className="text-2xl font-semibold tracking-tight mb-1">Запись на сессию</h1>
                 <p className="text-[var(--booking-accent)] font-semibold text-sm mb-1">Специалист — {psy.name}</p>
@@ -972,7 +1005,9 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                     dropdownClass="!bg-[var(--booking-card)] !text-[var(--booking-ink)] !border !border-[var(--booking-line)] !rounded-xl !shadow-lg"
                                 />
                                 <p className="text-xs text-[var(--booking-muted)] mt-2">
-                                    Телефон нужен для связи. Уведомление о сессии придёт в {notificationChannel}.
+                                    {notificationChannel
+                                        ? `Телефон нужен для связи. Уведомление о сессии придёт в ${notificationChannel}.`
+                                        : 'Телефон нужен, чтобы специалист мог связаться с вами и напомнить о встрече.'}
                                 </p>
                             </div>
                         </>

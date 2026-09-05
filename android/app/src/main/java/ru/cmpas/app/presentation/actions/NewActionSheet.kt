@@ -20,8 +20,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientStatus
-import ru.cmpas.app.presentation.comms.DocumentTemplate
-import ru.cmpas.app.presentation.comms.SendDocumentSheet
 import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -33,6 +31,7 @@ fun NewActionSheet(
     onNewSession: () -> Unit,
     onNewClient: () -> Unit,
     onClient: (String) -> Unit,
+    onClientDocument: (String) -> Unit,
     viewModel: QuickCommsViewModel = hiltViewModel(),
 ) {
     var mode by remember { mutableStateOf(QuickClientMode.OPEN) }
@@ -55,13 +54,20 @@ fun NewActionSheet(
                 onClose = onClose,
                 onSend = { viewModel.sendMessage(client.id, it) },
             )
-            QuickClientMode.DOCUMENT -> SendDocumentSheet(
-                clientName = client.name,
-                channel = channel,
-                bound = bound,
-                onClose = onClose,
-                onSend = { document -> viewModel.sendMessage(client.id, documentMessage(document)) },
-            )
+            // Задача 27: отправка документа не дублируется здесь.
+            //
+            // Эта шторка собирала сообщение сама и вставляла в него ссылку
+            // адрес вида /d/<id>. Маршрута с таким адресом в вебе нет —
+            // клиент получал битую ссылку. Список документов сюда тоже не
+            // загружался, поэтому экран честно писал «Нет активных
+            // документов» даже тому, у кого документы есть.
+            //
+            // Настоящая отправка живёт в карточке клиента: она просит сервер
+            // создать доставку и подписать адрес. Быстрое действие ведёт
+            // туда — к работающему пути, а не к его половине.
+            QuickClientMode.DOCUMENT -> {
+                LaunchedEffect(client.id) { onClientDocument(client.id) }
+            }
             QuickClientMode.OPEN -> Unit
         }
         if (mode != QuickClientMode.OPEN) return
@@ -155,14 +161,6 @@ private fun QuickClientRow(client: Client, onClick: () -> Unit) {
             ChannelChip(channel, channel != null)
         }
     }
-}
-
-private fun documentMessage(document: DocumentTemplate): String = buildString {
-    append("Здравствуйте! Направляю документ «")
-    append(document.title)
-    append("»: https://cmpas.ru/d/")
-    append(document.id)
-    if (document.requiresAck) append(". Пожалуйста, ознакомьтесь и подтвердите принятие в ПРАКТИКУ.")
 }
 
 private enum class QuickClientMode { OPEN, MESSAGE, DOCUMENT }

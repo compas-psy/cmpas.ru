@@ -103,7 +103,7 @@ async function fillAndSubmitBookingForm() {
 }
 
 describe('экран подтверждения называет настоящий канал доставки (§4.2)', () => {
-    it('без window.Telegram — канал Max, текст не содержит "Telegram"', async () => {
+    it('вне мессенджера мессенджер не называется вовсе', async () => {
         render(<ClientBookingPage />);
         await waitFor(() => expect(actions.getPsychologist).toHaveBeenCalled());
 
@@ -112,8 +112,16 @@ describe('экран подтверждения называет настоящ�
         await waitFor(() => expect(screen.getByText(/Вы записаны/i)).toBeInTheDocument());
 
         const screenText = document.body.textContent ?? '';
+        // Задача 27 уточнила правило O-260829 §4.2. Тогда чинили обратное:
+        // экран называл Telegram всем подряд, и его научили смотреть на
+        // контекст. Но «не Telegram» превратилось в «значит Max», а Max —
+        // это не любой человек с телефоном. Постоянную ссылку открывают в
+        // обычном браузере, привязанного канала там нет, и система в него
+        // ничего не отправит. Поэтому вне мессенджера не называется НИКАКОЙ
+        // канал: обещание, за которым ничего не следует, хуже молчания.
         expect(screenText).not.toContain('Telegram');
-        expect(screenText).toContain('Уведомление придёт в Max');
+        expect(screenText).not.toContain('Уведомление придёт в Max');
+        expect(screenText).toContain('свяжется с вами по телефону');
     });
 
     it('с window.Telegram.WebApp — канал Telegram', async () => {

@@ -96,6 +96,31 @@ export function attentionHref(item: PracticeAttentionItem): string {
     }
 }
 
+/**
+ * Как обратиться к человеку на его же дашборде (Задача 27).
+ *
+ * Здесь было одно предположение на два разных источника, и из-за него
+ * специалиста встречали фамилией: «Добрый день, Соколова-Преображенская».
+ *
+ * Источников действительно два, и порядок слов у них ПРОТИВОПОЛОЖНЫЙ:
+ *
+ *  • PsychologistSettings.fullName — поле профиля, подписанное «Фамилия и
+ *    Имя», с подсказкой «Иванова Анна». Имя там последнее;
+ *  • User.name — то, что отдал провайдер входа. Яндекс присылает обычный
+ *    человеческий порядок, «Мария Соколова», и имя там первое.
+ *
+ * Раньше брали последнее слово всегда — то есть угадывали только у тех, кто
+ * заполнил профиль, а всем вошедшим через Яндекс говорили «здравствуйте,
+ * фамилия». Теперь у каждого источника своё правило, а профиль важнее: его
+ * человек заполнял сам.
+ */
+export function greetingName(fullName?: string | null, authName?: string | null): string {
+    const fromProfile = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (fromProfile.length) return fromProfile[fromProfile.length - 1];
+    const fromAuth = (authName || '').trim().split(/\s+/).filter(Boolean);
+    return fromAuth[0] || '';
+}
+
 function getGreeting(): string {
     const hour = new Date().getHours();
     if (hour < 6) return 'Доброй ночи';
@@ -116,7 +141,7 @@ export default function DiaryCalendarPage() {
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
     const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
     const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
-    const [userName, setUserName] = useState('');
+    const [authName, setAuthName] = useState('');
     const [scheduleFilter, setScheduleFilter] = useState<'all' | 'confirmed' | 'completed' | 'pending'>('all');
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
@@ -175,11 +200,7 @@ export default function DiaryCalendarPage() {
         fetch('/api/auth/session')
             .then(r => r.json())
             .then(d => {
-                if (d?.user?.name) {
-                    // Russian name format: "LastName FirstName" — take last token as first name
-                    const parts = d.user.name.trim().split(/\s+/);
-                    setUserName(parts.length > 1 ? parts[parts.length - 1] : parts[0]);
-                }
+                if (d?.user?.name) setAuthName(String(d.user.name));
             })
             .catch(() => { });
 
@@ -389,7 +410,7 @@ export default function DiaryCalendarPage() {
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 min-w-0">
                 <div className="min-w-0">
                     <h1 className="text-[26px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1]">
-                        {getGreeting()}{userName ? `, ${userName}` : ''} 👋
+                        {getGreeting()}{greetingName(settings?.fullName, authName) ? `, ${greetingName(settings?.fullName, authName)}` : ''} 👋
                     </h1>
                     <p className="text-muted-foreground text-[13px] mt-0.5 font-medium capitalize">
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}

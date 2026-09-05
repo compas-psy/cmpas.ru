@@ -18,7 +18,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 type SessionRow = Record<string, unknown>;
 const store = vi.hoisted(() => ({ sessions: [] as Record<string, unknown>[] }));
 
-vi.mock('@/auth', () => ({ auth: vi.fn(async () => ({ user: { id: 'psy-1', name: 'Мартынов Илья' } })) }));
+vi.mock('@/auth', () => ({ auth: vi.fn(async () => ({ user: { id: 'psy-1', name: 'Илья Мартынов' } })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn(), unstable_cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db', () => ({
     db: {
@@ -116,7 +116,7 @@ beforeEach(() => {
         if (String(url).includes('/api/onboarding/progress')) {
             return { ok: true, json: async () => onboardingProgress } as unknown as Response;
         }
-        return { ok: true, json: async () => ({ user: { id: 'psy-1', name: 'Мартынов Илья' } }) } as unknown as Response;
+        return { ok: true, json: async () => ({ user: { id: 'psy-1', name: 'Илья Мартынов' } }) } as unknown as Response;
     }));
 });
 
@@ -201,7 +201,12 @@ describe('§1 Иерархия и §7 Preserve', () => {
 
         const heading = screen.getByRole('heading', { level: 1 });
         expect(heading.className).toContain('md:text-[36px]');
-        expect(heading.textContent).toContain('Мартынов'.slice(0, 0) + 'Илья');
+        // Задача 27: имя берётся из User.name, а его отдаёт провайдер входа.
+        // Яндекс присылает display_name ?? real_name — обычный человеческий
+        // порядок «Имя Фамилия», поэтому имя здесь первое слово. Раньше тест
+        // (и код) исходили из обратного порядка, и специалиста встречали
+        // фамилией. Разбор источников — в tests/dashboard-greeting.test.ts.
+        expect(heading.textContent).toContain('Илья');
 
         // Дата сегодняшнего дня прописью и полоска недели с числами.
         const dateLine = TODAY.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });

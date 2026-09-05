@@ -17,7 +17,7 @@ type Integration = {
 
 const providerInfo: Record<string, { name: string; color: string; image?: string; icon: string; description: string }> = {
     google: {
-        name: 'Google Calendar',
+        name: 'Google Календарь',
         color: 'bg-white',
         image: '/icons/google-calendar.svg',
         icon: '📅',
@@ -93,12 +93,12 @@ export default function IntegrationsPage() {
         const error = params.get('error');
 
         if (success === 'google') {
-            toast.success('Google Calendar подключён!');
+            toast.success('Google Календарь подключён!');
             window.history.replaceState({}, '', '/diary/integrations');
             fetchData();
         }
         if (error === 'google_failed') {
-            toast.error('Не удалось подключить Google Calendar');
+            toast.error('Не удалось подключить Google Календарь');
             window.history.replaceState({}, '', '/diary/integrations');
         }
         if (error === 'denied') {

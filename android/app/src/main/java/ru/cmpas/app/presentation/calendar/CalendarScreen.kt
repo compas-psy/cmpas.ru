@@ -112,7 +112,15 @@ fun CalendarScreen(
             if (agenda.isEmpty()) {
                 item { GlassCard(padding = 18.dp) { Text("Нет записей на этот день", style = tBody2) } }
             } else {
-                items(agenda, key = { it.id }) { s -> AgendaRow(s, onClick = { onSessionClick(s.id) }) }
+                items(agenda, key = { it.id }) { s ->
+                    // Задача 27: тап по блоку вёл в карточку сессии
+                    // «block-<id>», которой не существует, — человек получал
+                    // пустой сломанный экран. Блок и не должен открываться:
+                    // это занятое время, а не встреча. Строка блока больше не
+                    // предлагает нажатие — ни шевроном, ни откликом.
+                    val isBlock = s.id.startsWith(CalendarViewModel.BLOCK_ID_PREFIX)
+                    AgendaRow(s, onClick = if (isBlock) null else ({ onSessionClick(s.id) }))
+                }
             }
         }
 
@@ -246,7 +254,7 @@ private fun RoundChev(icon: androidx.compose.ui.graphics.vector.ImageVector, onC
 }
 
 @Composable
-private fun AgendaRow(s: Session, onClick: () -> Unit) {
+private fun AgendaRow(s: Session, onClick: (() -> Unit)?) {
     GlassCard(padding = 12.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor(s.status.name)))
@@ -258,7 +266,7 @@ private fun AgendaRow(s: Session, onClick: () -> Unit) {
                 Spacer(Modifier.height(2.dp))
                 FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
             }
-            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
+            if (onClick != null) Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
         }
     }
 }

@@ -217,6 +217,10 @@ fun CompasNavHost(
                     showActionSheet = false
                     navController.navigate(Screen.ClientDetail.createRoute(id))
                 },
+                onClientDocument = { id ->
+                    showActionSheet = false
+                    navController.navigate(Screen.ClientDetail.createRoute(id, ScreenFocus.DOCUMENT))
+                },
             )
         }
 

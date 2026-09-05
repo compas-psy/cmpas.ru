@@ -172,7 +172,16 @@ export default async function DiaryLayout({
                 <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
             </MobileSidebar>
 
-            <main className="flex-1 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
+            {/*
+              * Задача 27: min-w-0 — не косметика, а причина, по которой кабинет
+              * вообще помещался в телефон. flex-элемент по умолчанию не
+              * сжимается уже своего содержимого (min-width: auto), поэтому
+              * одна широкая строка внутри страницы растягивала <main> шире
+              * экрана — и вместе с ним уезжали вправо и шапка, и нижняя
+              * панель, и кнопка «Сохранить». Внутренний overflow-x-hidden от
+              * этого не спасал: переполнение случалось этажом выше.
+              */}
+            <main className="flex-1 min-w-0 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
                 {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
                 <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto overflow-x-hidden">
                     {children}

@@ -71,3 +71,8 @@ graphify-out/
 android/keystore/
 *.jks
 *.keystore
+
+# Задача 27: отчёты Playwright — временные, в репозиторий не идут.
+# Сами снимки лежат в artifacts/praktika-mvp/task27 и коммитятся.
+/test-results/
+/playwright-report/

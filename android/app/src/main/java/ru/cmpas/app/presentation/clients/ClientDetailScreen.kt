@@ -90,7 +90,7 @@ fun ClientDetailScreen(
     // доезжает.
     val consentPreselectionId = if (focus == ScreenFocus.CONSENT) consentDocumentId(uiState.documents) else null
     LaunchedEffect(focus, client?.id) {
-        if (focus == ScreenFocus.CONSENT && client != null && !consentFocusHandled) {
+        if ((focus == ScreenFocus.CONSENT || focus == ScreenFocus.DOCUMENT) && client != null && !consentFocusHandled) {
             consentFocusHandled = true
             sheet = ClientSheet.DOCUMENT
         }
@@ -194,11 +194,19 @@ fun ClientDetailScreen(
                             } else items(notes, key = { it.id }) { session ->
                                 NoteCard(session) { onNoteClick(session.id) }
                             }
-                            item {
+                            // Задача 27: заметка в ПРАКТИКЕ принадлежит
+                            // встрече. Когда встреч у клиента нет, писать
+                            // заметку не к чему — раньше кнопка всё равно
+                            // показывалась и уводила на экран заметки по
+                            // сессии «client-<id>», которой не существует.
+                            // Теперь кнопка есть ровно тогда, когда есть
+                            // встреча, к которой заметку можно прикрепить.
+                            val noteTarget = upcoming?.id ?: sessions.firstOrNull()?.id
+                            if (noteTarget != null) item {
                                 GhostButton(
                                     text = "Добавить заметку",
                                     icon = Icons.Outlined.Add,
-                                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
+                                    onClick = { onNoteClick(noteTarget) },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }

@@ -30,6 +30,16 @@ class CalendarViewModel @Inject constructor(
     private val api: CompasApi,
     private val localStore: LocalPracticeStore,
 ) : ViewModel() {
+    companion object {
+        /**
+         * Задача 27: блок в календаре показывается строкой того же вида, что
+         * и встреча, но встречей не является — карточки у него нет. Префикс
+         * нужен именно для того, чтобы это было видно коду, а не только
+         * человеку: по нему список отличает блок и не предлагает его открыть.
+         */
+        const val BLOCK_ID_PREFIX = "block-"
+    }
+
 
     private val _uiState = MutableStateFlow(CalendarUiState())
     val uiState = _uiState.asStateFlow()
@@ -116,7 +126,7 @@ class CalendarViewModel @Inject constructor(
             else -> "Блокировка"
         }
         return Session(
-            id = "block-$id",
+            id = "$BLOCK_ID_PREFIX$id",
             clientId = "local-block",
             clientName = typeLabel,
             date = date,

@@ -138,7 +138,15 @@ export function WelcomeStrip() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="text-xs font-semibold text-muted-foreground">Шаг {i + 1}</div>
-                                <div className={`text-sm font-semibold truncate ${step.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                                {/*
+                                  * Задача 27: название шага не обрезается. Это
+                                  * имя действия — «Расписание», «Поделиться», —
+                                  * и «Расписа…» вместо него на экране шириной
+                                  * 1440 читается как недоделанная вёрстка.
+                                  * Слов в названии одно-два, перенос дешевле
+                                  * многоточия.
+                                  */}
+                                <div className={`text-sm font-semibold ${step.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                                     {step.label}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-0.5 truncate">{step.description}</div>
