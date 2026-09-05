@@ -1,5 +1,10 @@
 import { db } from '@/lib/db';
+import { resolveWallClockParts } from '@/lib/calendar/normalized-event';
+import { calendarDateToUtcMidnight, utcDatePart } from '@/lib/practice/migration/date-utils';
 import { OwnershipError } from './ownership';
+
+/** Тот же умолчательный пояс, что стоит в PsychologistSettings.timezone. */
+const DEFAULT_PRACTICE_TIMEZONE = 'Europe/Moscow';
 
 /**
  * Кабинеты практики — одно ядро на веб и приложение (Задача 21).
@@ -183,12 +188,33 @@ export async function setPrimaryPracticeAddress(psychologistId: string, addressI
     });
 }
 
+/** «HH:MM» в минуты от полуночи. Неразборчивое время считаем началом дня. */
+function minutesOfDay(time: string | null | undefined): number {
+    const match = /^(\d{1,2}):(\d{2})/.exec(time?.trim() ?? '');
+    if (!match) return 0;
+    return Number(match[1]) * 60 + Number(match[2]);
+}
+
 /**
  * Что держит кабинет в работе.
  *
- * Будущие сессии — назначенные и ещё не прошедшие: отменённые и завершённые
- * уже история, они кабинет не держат. Прошедшие сессии не считаются
+ * Будущие сессии — назначенные и ещё не наступившие: отменённые и
+ * завершённые уже история, они кабинет не держат. Прошедшие не считаются
  * никогда — иначе кабинет нельзя было бы вывести вообще.
+ *
+ * Почему сравнение не одним условием в запросе. DiarySession.date — это НЕ
+ * момент времени: там календарный день, привязанный к полуночи UTC, а само
+ * время встречи лежит отдельной строкой в time (см. комментарий к схеме и
+ * src/lib/practice/migration/date-utils.ts). Условие `date >= now` поэтому
+ * отбрасывало весь сегодняшний день целиком: в два часа дня сессия на
+ * восемь вечера считалась прошедшей, и кабинет выводился из работы прямо
+ * из-под назначенной встречи.
+ *
+ * Правильное сравнение — по стенным часам практики: берём сегодняшний день
+ * и текущее время в её часовом поясе (resolveWallClockParts — та же
+ * семантика, которой уже пользуются календарные фетчеры и импорт), тянем
+ * сессии от начала этого дня и сами решаем по паре (день, time). Часы
+ * сервера в сравнении не участвуют.
  *
  * Правила расписания — и окна (AvailabilitySlot), и правила (ScheduleRule),
  * но только действующие: выключенное правило клиентов никуда не ведёт.
@@ -198,18 +224,36 @@ export async function findAddressBlockers(
     addressId: string,
     now: Date = new Date(),
 ): Promise<AddressBlockers> {
-    const [futureSessions, slots, rules] = await Promise.all([
-        db.diarySession.count({
+    const settings = await db.psychologistSettings.findUnique({
+        where: { psychologistId },
+        select: { timezone: true },
+    });
+    const timezone = settings?.timezone || DEFAULT_PRACTICE_TIMEZONE;
+    const { date: today, time: nowTime } = resolveWallClockParts(now, timezone);
+    const nowMinutes = minutesOfDay(nowTime);
+
+    const [candidates, slots, rules] = await Promise.all([
+        db.diarySession.findMany({
             where: {
                 psychologistId,
                 addressId,
-                date: { gte: now },
+                // От начала сегодняшнего дня практики: всё, что раньше, —
+                // история при любом времени встречи.
+                date: { gte: calendarDateToUtcMidnight(today) },
                 status: { in: ['pending', 'confirmed'] },
             },
+            select: { date: true, time: true },
         }),
         db.availabilitySlot.count({ where: { psychologistId, addressId, isActive: true } }),
         db.scheduleRule.count({ where: { psychologistId, addressId, isActive: true } }).catch(() => 0),
     ]);
+
+    const futureSessions = candidates.filter((session) => {
+        const day = utcDatePart(session.date);
+        if (day > today) return true;
+        // Сегодняшняя держит кабинет, пока её время не наступило.
+        return day === today && minutesOfDay(session.time) > nowMinutes;
+    }).length;
 
     return { futureSessions, activeSchedule: slots + rules };
 }

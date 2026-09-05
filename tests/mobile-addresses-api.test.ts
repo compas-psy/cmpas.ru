@@ -13,7 +13,7 @@
 //   • пока кабинет держат будущие записи или действующее расписание, вывод
 //     не проходит — 409 ADDRESS_IN_USE и ни одного молчаливого переноса.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 
 type AddressRow = {
     id: string;
@@ -26,10 +26,13 @@ type AddressRow = {
 
 const world = vi.hoisted(() => ({
     addresses: [] as AddressRow[],
-    sessions: [] as Array<{ id: string; psychologistId: string; addressId: string | null; date: Date; status: string }>,
+    // date — календарный день, привязанный к полуночи UTC; время встречи
+    // лежит отдельно в time. Ровно как в схеме.
+    sessions: [] as Array<{ id: string; psychologistId: string; addressId: string | null; date: Date; time: string; status: string }>,
     slots: [] as Array<{ psychologistId: string; addressId: string | null; isActive: boolean }>,
     rules: [] as Array<{ psychologistId: string; addressId: string | null; isActive: boolean }>,
     officeAddress: null as string | null,
+    timezone: 'Europe/Moscow',
     settingsExists: true,
     deletedAddressIds: [] as string[],
     authUserId: 'psy-1' as string | null,
@@ -82,12 +85,12 @@ vi.mock('@/lib/db', () => ({
                 world.addresses.filter((a) => a.psychologistId === where.psychologistId).length),
         },
         diarySession: {
-            count: vi.fn(async ({ where }: {
+            findMany: vi.fn(async ({ where }: {
                 where: { psychologistId: string; addressId: string; date: { gte: Date }; status: { in: string[] } };
             }) => world.sessions.filter((s) => s.psychologistId === where.psychologistId
                 && s.addressId === where.addressId
                 && s.date >= where.date.gte
-                && where.status.in.includes(s.status)).length),
+                && where.status.in.includes(s.status))),
         },
         availabilitySlot: {
             count: vi.fn(async ({ where }: { where: { psychologistId: string; addressId: string; isActive: boolean } }) =>
@@ -100,7 +103,9 @@ vi.mock('@/lib/db', () => ({
                     && r.addressId === where.addressId && r.isActive === where.isActive).length),
         },
         psychologistSettings: {
-            findUnique: vi.fn(async () => (world.settingsExists ? { officeAddress: world.officeAddress } : null)),
+            findUnique: vi.fn(async () => (world.settingsExists
+                ? { officeAddress: world.officeAddress, timezone: world.timezone }
+                : null)),
             update: vi.fn(async ({ data }: { data: { officeAddress: string | null } }) => {
                 world.officeAddress = data.officeAddress;
                 return { officeAddress: world.officeAddress };
@@ -127,16 +132,44 @@ function params(id: string) {
     return { params: Promise.resolve({ id }) };
 }
 
-const TOMORROW = new Date(Date.now() + 24 * 60 * 60 * 1000);
-const LAST_YEAR = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+/** Календарный день, привязанный к полуночи UTC, — как в DiarySession.date. */
+function day(iso: string): Date {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+}
+
+/**
+ * Сегодня по часам практики — 5 сентября 2026, 14:00 в Москве.
+ * В UTC это 11:00, и именно на этом расхождении ловится сравнение по
+ * серверным часам вместо часов практики.
+ */
+const NOW = new Date('2026-09-05T11:00:00.000Z');
+const TODAY = '2026-09-05';
+const TOMORROW = '2026-09-06';
+const YESTERDAY = '2026-09-04';
+
+/** Назначенная запись в этом кабинете. */
+function sessionAt(date: string, time: string, status = 'confirmed') {
+    return { id: 's-planned', psychologistId: 'psy-1', addressId: 'a-yauzskaya', date: day(date), time, status };
+}
+
+// Подменяется только Date: таймеры настоящие, чтобы промисы вели себя как в
+// обычном прогоне.
+beforeAll(() => vi.useFakeTimers({ toFake: ['Date'] }));
+afterAll(() => vi.useRealTimers());
 
 beforeEach(() => {
+    vi.setSystemTime(NOW);
     world.addresses = [
         { id: 'a-yauzskaya', psychologistId: 'psy-1', name: 'Яузская', address: 'Москва, Яузская ул., 8с2', isActive: true, createdAt: new Date(2026, 0, 1) },
         { id: 'a-kurkino', psychologistId: 'psy-1', name: 'Куркино', address: 'Москва, Соловьиная роща, 1', isActive: true, createdAt: new Date(2026, 0, 2) },
         { id: 'a-alien', psychologistId: 'psy-2', name: 'Чужой', address: 'Не ваш адрес', isActive: true, createdAt: new Date(2026, 0, 3) },
     ];
-    world.sessions = [{ id: 's-past', psychologistId: 'psy-1', addressId: 'a-yauzskaya', date: LAST_YEAR, status: 'completed' }];
+    world.sessions = [{
+        id: 's-past', psychologistId: 'psy-1', addressId: 'a-yauzskaya',
+        date: day('2025-09-05'), time: '10:00', status: 'completed',
+    }];
+    world.timezone = 'Europe/Moscow';
     world.slots = [];
     world.rules = [];
     world.officeAddress = 'a-yauzskaya';
@@ -288,7 +321,8 @@ describe('DELETE /api/mobile/addresses/:id — вывод из работы', ()
     });
 
     it('будущая запись держит кабинет — 409 ADDRESS_IN_USE', async () => {
-        world.sessions.push({ id: 's-future', psychologistId: 'psy-1', addressId: 'a-yauzskaya', date: TOMORROW, status: 'confirmed' });
+        vi.setSystemTime(NOW);
+        world.sessions.push(sessionAt(TOMORROW, '10:00'));
 
         const res = await one.DELETE(request(), params('a-yauzskaya'));
         const body = await res.json();
@@ -298,7 +332,7 @@ describe('DELETE /api/mobile/addresses/:id — вывод из работы', ()
         expect(body.futureSessions).toBe(1);
         // Ничего не изменилось и ничего не переназначилось молча.
         expect(world.addresses.find((a) => a.id === 'a-yauzskaya')!.isActive).toBe(true);
-        expect(world.sessions.find((s) => s.id === 's-future')!.addressId).toBe('a-yauzskaya');
+        expect(world.sessions.find((s) => s.id === 's-planned')!.addressId).toBe('a-yauzskaya');
     });
 
     it('действующее правило расписания держит кабинет — 409 ADDRESS_IN_USE', async () => {
@@ -325,6 +359,62 @@ describe('DELETE /api/mobile/addresses/:id — вывод из работы', ()
 
         expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(200);
         expect(world.addresses.find((a) => a.id === 'a-yauzskaya')!.isActive).toBe(false);
+    });
+
+    // ── День + время, а не только день ──
+    //
+    // DiarySession.date хранит календарный день в 00:00, время встречи лежит
+    // отдельно в time. Проверка «date >= now» отбрасывала весь сегодняшний
+    // день: в два часа дня встреча на восемь вечера считалась прошедшей, и
+    // кабинет выводился из работы прямо из-под назначенной записи.
+
+    it('сегодня 14:00, встреча сегодня в 20:00 — держит кабинет, DELETE даёт 409', async () => {
+        world.sessions.push(sessionAt(TODAY, '20:00'));
+
+        const res = await one.DELETE(request(), params('a-yauzskaya'));
+
+        expect(res.status).toBe(409);
+        expect((await res.json()).futureSessions).toBe(1);
+        expect(world.addresses.find((a) => a.id === 'a-yauzskaya')!.isActive).toBe(true);
+    });
+
+    it('сегодня 14:00, встреча сегодня в 10:00 — уже прошла, кабинет не держит', async () => {
+        world.sessions.push(sessionAt(TODAY, '10:00'));
+
+        expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(200);
+        expect(world.addresses.find((a) => a.id === 'a-yauzskaya')!.isActive).toBe(false);
+    });
+
+    it('встреча завтра утром держит кабинет', async () => {
+        world.sessions.push(sessionAt(TOMORROW, '10:00'));
+
+        expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(409);
+    });
+
+    it('вчерашняя встреча кабинет не держит', async () => {
+        world.sessions.push(sessionAt(YESTERDAY, '20:00'));
+
+        expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(200);
+    });
+
+    it('отменённая сегодняшняя встреча на 20:00 кабинет не держит', async () => {
+        world.sessions.push(sessionAt(TODAY, '20:00', 'cancelled'));
+
+        expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(200);
+    });
+
+    it('«сейчас» берётся по часам практики, а не по UTC сервера', async () => {
+        // Тот же момент времени: 11:00 UTC — это 14:00 в Москве и 21:00 во
+        // Владивостоке. Встреча на 20:00 в московской практике ещё впереди,
+        // во владивостокской — уже позади.
+        world.sessions.push(sessionAt(TODAY, '20:00'));
+
+        world.timezone = 'Asia/Vladivostok';
+        expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(200);
+
+        world.addresses.find((a) => a.id === 'a-yauzskaya')!.isActive = true;
+        world.timezone = 'Europe/Moscow';
+        expect((await one.DELETE(request(), params('a-yauzskaya'))).status).toBe(409);
     });
 
     it('чужой кабинет вывести из работы нельзя', async () => {

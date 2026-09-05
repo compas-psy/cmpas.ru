@@ -11,7 +11,22 @@
 // (src/lib/practice/addresses.ts), поэтому набор блокировок у них общий:
 // кабинет, который держит завтрашняя встреча, не выводится ни там, ни там.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+
+/** Календарный день, привязанный к полуночи UTC, — как в DiarySession.date. */
+function day(iso: string): Date {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+}
+
+/** Сегодня по часам практики — 5 сентября 2026, 14:00 в Москве (11:00 UTC). */
+const NOW = new Date('2026-09-05T11:00:00.000Z');
+const TODAY = '2026-09-05';
+const TOMORROW = '2026-09-06';
+const YESTERDAY = '2026-09-04';
+
+beforeAll(() => vi.useFakeTimers({ toFake: ['Date'] }));
+afterAll(() => vi.useRealTimers());
 
 type AddressRow = { id: string; psychologistId: string; name: string; address: string; isActive: boolean };
 
@@ -21,7 +36,7 @@ const world = vi.hoisted(() => ({
     activeSlots: [] as Array<{ psychologistId: string; addressId: string | null; isActive: boolean }>,
     activeRules: [] as Array<{ psychologistId: string; addressId: string | null; isActive: boolean }>,
     /** Сессии: прошедшие — история, будущие — блокирующая зависимость. */
-    sessions: [] as Array<{ id: string; addressId: string | null; date: Date; status: string }>,
+    sessions: [] as Array<{ id: string; addressId: string | null; date: Date; time: string; status: string }>,
     officeAddress: null as string | null,
     deletedAddressIds: [] as string[],
 }));
@@ -55,11 +70,11 @@ vi.mock('@/lib/db', () => ({
             count: vi.fn(async () => world.addresses.length),
         },
         diarySession: {
-            count: vi.fn(async ({ where }: {
+            findMany: vi.fn(async ({ where }: {
                 where: { addressId: string; date: { gte: Date }; status: { in: string[] } };
             }) => world.sessions.filter(s => s.addressId === where.addressId
                 && s.date >= where.date.gte
-                && where.status.in.includes(s.status)).length),
+                && where.status.in.includes(s.status))),
         },
         availabilitySlot: {
             count: vi.fn(async ({ where }: { where: { psychologistId: string; addressId: string; isActive: boolean } }) =>
@@ -72,7 +87,7 @@ vi.mock('@/lib/db', () => ({
                     && r.addressId === where.addressId && r.isActive === where.isActive).length),
         },
         psychologistSettings: {
-            findUnique: vi.fn(async () => ({ officeAddress: world.officeAddress })),
+            findUnique: vi.fn(async () => ({ officeAddress: world.officeAddress, timezone: 'Europe/Moscow' })),
             update: vi.fn(async ({ data }: { data: { officeAddress: string | null } }) => {
                 world.officeAddress = data.officeAddress;
                 return { officeAddress: world.officeAddress };
@@ -96,12 +111,8 @@ beforeEach(() => {
     ];
     world.activeSlots = [];
     world.activeRules = [];
-    world.sessions = [{
-        id: 's-past',
-        addressId: 'a-yauzskaya',
-        date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
-        status: 'completed',
-    }];
+    vi.setSystemTime(NOW);
+    world.sessions = [{ id: 's-past', addressId: 'a-yauzskaya', date: day('2025-09-05'), time: '10:00', status: 'completed' }];
     world.officeAddress = 'a-yauzskaya';
     world.deletedAddressIds = [];
 });
@@ -140,27 +151,43 @@ describe('§6 вывод кабинета, на который ссылаютс�
 });
 
 describe('Задача 21: будущая запись держит кабинет так же, как правило', () => {
+    /** Назначенная запись: день отдельно, время встречи отдельно — как в схеме. */
+    function planned(date: string, time: string, status = 'confirmed') {
+        return { id: 's-planned', addressId: 'a-yauzskaya', date: day(date), time, status };
+    }
+
     it('назначенная встреча блокирует вывод, и ничего не переназначается молча', async () => {
-        world.sessions.push({
-            id: 's-future',
-            addressId: 'a-yauzskaya',
-            date: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            status: 'confirmed',
-        });
+        world.sessions.push(planned(TOMORROW, '10:00'));
 
         await expect(deactivateAddress('a-yauzskaya')).rejects.toThrow(/перенесите будущие записи/);
 
         expect(world.addresses.find(a => a.id === 'a-yauzskaya')!.isActive).toBe(true);
-        expect(world.sessions.find(s => s.id === 's-future')!.addressId).toBe('a-yauzskaya');
+        expect(world.sessions.find(s => s.id === 's-planned')!.addressId).toBe('a-yauzskaya');
+    });
+
+    // DiarySession.date хранит день в 00:00, время встречи — отдельной
+    // строкой. Сравнение только по дню отбрасывало весь сегодняшний день: в
+    // два часа дня встреча на восемь вечера считалась прошедшей.
+    it('сегодняшняя встреча, время которой ещё не наступило, держит кабинет', async () => {
+        world.sessions.push(planned(TODAY, '20:00'));
+
+        await expect(deactivateAddress('a-yauzskaya')).rejects.toThrow(/перенесите будущие записи/);
+    });
+
+    it('сегодняшняя встреча, время которой прошло, кабинет не держит', async () => {
+        world.sessions.push(planned(TODAY, '10:00'));
+
+        await expect(deactivateAddress('a-yauzskaya')).resolves.toEqual({ success: true });
+    });
+
+    it('вчерашняя встреча кабинет не держит', async () => {
+        world.sessions.push(planned(YESTERDAY, '20:00'));
+
+        await expect(deactivateAddress('a-yauzskaya')).resolves.toEqual({ success: true });
     });
 
     it('отменённая будущая встреча кабинет не держит', async () => {
-        world.sessions.push({
-            id: 's-cancelled',
-            addressId: 'a-yauzskaya',
-            date: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            status: 'cancelled',
-        });
+        world.sessions.push(planned(TOMORROW, '10:00', 'cancelled'));
 
         await expect(deactivateAddress('a-yauzskaya')).resolves.toEqual({ success: true });
     });
