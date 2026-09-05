@@ -90,6 +90,30 @@ step() {
     return 1
 }
 
+# Размеры экрана — для попаданий по месту там, где у значка нет подписи.
+read -r SCR_W SCR_H < <(adb shell wm size 2>/dev/null | sed -n 's/.*: \([0-9]*\)x\([0-9]*\).*/\1 \2/p')
+SCR_W=${SCR_W:-1080}; SCR_H=${SCR_H:-2340}
+
+# uiautomator показывает только ОТРИСОВАННЫЕ узлы: всё, что ниже сгиба, для
+# него не существует. Поэтому «нет на экране» — не то же самое, что «нет в
+# продукте», и прежде чем так сказать, надо долистать.
+scroll_to_text() {
+    local needle="$1" tries="${2:-6}"
+    for _ in $(seq 1 "$tries"); do
+        if has_text "$needle"; then return 0; fi
+        adb shell input swipe $((SCR_W / 2)) $((SCR_H * 70 / 100)) $((SCR_W / 2)) $((SCR_H * 30 / 100)) 300
+        sleep 1
+    done
+    has_text "$needle"
+}
+
+# Нажать значок без подписи — по месту. Колокольчик живёт в правом верхнем
+# углу шапки.
+tap_bell() {
+    adb shell input tap $((SCR_W * 90 / 100)) $((SCR_H * 9 / 100))
+    sleep 2
+}
+
 echo "===== Устройство ====="
 adb devices
 adb shell wm size
@@ -171,15 +195,20 @@ if step "Поделиться" "открыл шторку ссылки"; then
 fi
 
 echo "===== A13: центр внимания ====="
-if step "Уведомления" "открыл центр внимания" || step "внимания" "открыл центр внимания"; then
-    shot "attention-A13" 3
-    adb shell input keyevent KEYCODE_BACK; sleep 2
+# Колокольчик — значок без подписи, по тексту его не найти: жмём по месту.
+tap_bell
+shot "attention-A13" 3
+if has_text "Требует внимания" || has_text "Уведомления" || has_text "спокойно"; then
+    ok "A13: центр внимания открылся"
+    if has_text "Добавить" || has_text "Отправить" || has_text "Отметить"; then
+        ok "A13: у строки внимания назван глагол действия (правка Задачи 27)"
+    else
+        note "A13: задач сейчас нет — глагол проверять не на чем"
+    fi
 else
-    note "колокольчик не найден по тексту — пробую по описанию"
-    adb shell input tap 1000 200; sleep 2
-    shot "attention-A13" 3
-    adb shell input keyevent KEYCODE_BACK; sleep 2
+    fail "A13: центр внимания не открылся"
 fi
+adb shell input keyevent KEYCODE_BACK; sleep 2
 
 echo "===== Календарь и настройка (A05–A06) ====="
 step "Календарь" "перешёл в календарь" && shot "calendar-A05" 3
@@ -200,7 +229,10 @@ else
 fi
 
 echo "===== A06/A07: quick sheet и блокировка времени ====="
-if step "Настроить" "открыл quick sheet" || tap_text "Рабочее время"; then
+# Кнопка настройки календаря — значок в шапке, подписи у неё нет.
+tap_bell
+sleep 1
+if has_text "Рабочее время" || tap_text "Рабочее время"; then
     shot "calendar-tune-A06" 3
     if step "Заблокировать время" "открыл форму блокировки"; then
         shot "block-time-A07" 3
@@ -253,11 +285,22 @@ if tap_text "Анастасия" || tap_text "Клиент"; then
 fi
 
 echo "===== Профиль (A04) и кабинеты (A08) ====="
-if step "Ещё" "перешёл в профиль" || step "Профиль" "перешёл в профиль"; then
-    shot "profile-A04" 3
-    if has_text "Практика"; then ok "A04: группа «Практика» подписана (правка Задачи 27)"; else fail "A04: заголовка группы «Практика» нет"; fi
+if step "Профиль" "перешёл в профиль"; then
+    shot "profile-A04-верх" 3
+    # Заголовки групп лежат ниже сгиба — доскроллим, иначе «нет на экране»
+    # скажет не о продукте, а о высоте экрана.
+    if scroll_to_text "Практика"; then
+        ok "A04: группа «Практика» подписана (правка Задачи 27)"
+    else
+        fail "A04: заголовка группы «Практика» нет даже после прокрутки"
+    fi
+    shot "profile-A04-группы" 2
+    for group in "Аналитика" "Мессенджеры и данные"; do
+        if has_text "$group"; then ok "A04: группа «$group» подписана"; fi
+    done
     if step "Кабинеты" "открыл кабинеты"; then
         shot "cabinets-A08" 3
+        if has_text "Кабинет" || has_text "Добавить кабинет"; then ok "A08: экран кабинетов открылся"; fi
         adb shell input keyevent KEYCODE_BACK; sleep 2
     fi
 fi
