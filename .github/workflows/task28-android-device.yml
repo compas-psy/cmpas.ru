@@ -176,6 +176,14 @@ jobs:
         run: |
           set -e
           TARGET=artifacts/praktika-mvp/task28/android
+          # Шаг идёт с if: always(), поэтому сюда попадает и отменённый, и
+          # упавший прогон. Стирать доказательства предыдущего прогона, когда
+          # своих не сняли, нельзя — именно так прогон 3 (отменённый) удалил
+          # снимки прогона 2.
+          if [ -z "$(ls -A artifacts-out/android 2>/dev/null)" ]; then
+            echo "снимков в этом прогоне нет — оставляю прежние нетронутыми"
+            exit 0
+          fi
           rm -rf "$TARGET"
           mkdir -p "$TARGET"
           cp -r artifacts-out/android/* "$TARGET"/ 2>/dev/null || true
