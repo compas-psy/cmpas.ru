@@ -5,6 +5,14 @@ import { resolveAvailableTimesForDay } from './availability';
 import { fetchExternalBusyBlocks } from './external-busy';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 import { resolveSignedPersonalClientToken } from '@/lib/client-workflow';
+import { randomUUID } from 'crypto';
+import { logSafeFailure } from '@/lib/observability/log';
+import {
+    trackBookingAttempted,
+    trackBookingConflict,
+    trackBookingSucceeded,
+    type BookingSource,
+} from '@/lib/analytics/practice-events';
 import type { BlockInput } from './types';
 
 // Task 7 (PRAKTIKA MVP): the single atomic entry point for turning a signed
@@ -22,10 +30,73 @@ import type { BlockInput } from './types';
 
 export class BookingConflictError extends Error {
     code: 'INVALID_TOKEN' | 'SLOT_UNAVAILABLE' | 'CLIENT_ALREADY_BOOKED' | 'SESSION_NOT_FOUND';
+    /**
+     * Ниточка для поддержки (Задача 25 §6): по ней в логах находится ровно
+     * этот отказ. Проставляется наблюдателем ниже, поэтому необязательна —
+     * ядро может бросить конфликт и напрямую, из теста например.
+     */
+    correlationId?: string;
     constructor(code: BookingConflictError['code'], message: string) {
         super(message);
         this.name = 'BookingConflictError';
         this.code = code;
+    }
+}
+
+/**
+ * Наблюдаемость записи (Задача 25 §5–§6) — одна точка на все три пути.
+ *
+ * Каноническая точка каждого факта именно здесь, в общем ядре: веб, бот и
+ * мобильный API проходят через эти функции, и события, расставленные в
+ * маршрутах, считали бы одно и то же по два раза.
+ *
+ * Попыткой считается запрос, ДОШЕДШИЙ до бронирования: подпись слота уже
+ * проверена, ядро начало работу. Мусорный запрос с протухшим токеном
+ * попыткой записи не является и в счётчик не идёт.
+ *
+ * Успех пишется после того, как транзакция вернула управление, — не до
+ * коммита: до коммита ничего ещё не произошло.
+ *
+ * Конфликт пишется вместе с безопасным логом: correlation_id, source и
+ * машинный код. Ни времени, ни имени, ни телефона, ни токена в этом логе
+ * нет — по нему можно найти инцидент, но нельзя узнать человека.
+ */
+async function observeBooking<T>(
+    source: BookingSource,
+    psychologistId: string,
+    run: (correlationId: string) => Promise<T>,
+): Promise<T> {
+    const correlationId = randomUUID();
+    await trackBookingAttempted({ accountId: psychologistId }, { source });
+
+    try {
+        const result = await run(correlationId);
+        await trackBookingSucceeded({ accountId: psychologistId }, { source });
+        return result;
+    } catch (error) {
+        if (error instanceof BookingConflictError) {
+            error.correlationId = correlationId;
+            logSafeFailure('practice-booking', {
+                correlation_id: correlationId,
+                source,
+                error_code: error.code,
+            });
+            // INVALID_TOKEN сюда не доходит: подпись слота проверяется до
+            // входа в observeBooking, то есть до попытки. Конфликтом
+            // попытки, которой не было, он быть не может.
+            if (error.code !== 'INVALID_TOKEN') {
+                await trackBookingConflict({ accountId: psychologistId }, { source, error_code: error.code });
+            }
+        } else {
+            // Неожиданная ошибка: код категории вместо текста, чтобы в лог
+            // не утекло сообщение исключения.
+            logSafeFailure('practice-booking', {
+                correlation_id: correlationId,
+                source,
+                error_code: 'INTERNAL_ERROR',
+            });
+        }
+        throw error;
     }
 }
 
@@ -271,7 +342,7 @@ export async function createPracticeBooking(input: CreatePracticeBookingInput): 
     const window = dayWindowFor(identity);
     const externalBusy = input.externalBusy ?? [];
 
-    return db.$transaction(async (tx) => {
+    return observeBooking('known_client', input.psychologistId, () => db.$transaction(async (tx) => {
         await acquireDayLock(tx, input.psychologistId, identity.dateStr);
 
         return resolveAndCommitSession(tx, {
@@ -285,7 +356,7 @@ export async function createPracticeBooking(input: CreatePracticeBookingInput): 
             externalBusy,
             window,
         });
-    });
+    }));
 }
 
 function normalizePhone(phone: string): { normalizedPhone: string; plainDigits: string } {
@@ -367,7 +438,7 @@ export async function createSelfPracticeBooking(input: CreateSelfPracticeBooking
     const linkResolution = input.clientLinkToken ? resolveSignedPersonalClientToken(input.clientLinkToken) : null;
     const verifiedLinkClientId = linkResolution?.clientId ?? null;
 
-    return db.$transaction(async (tx) => {
+    return observeBooking('public_booking', input.psychologistId, () => db.$transaction(async (tx) => {
         await acquireDayLock(tx, input.psychologistId, identity.dateStr);
 
         // Task 14 point 6: a client already identified through a VERIFIED
@@ -466,7 +537,7 @@ export async function createSelfPracticeBooking(input: CreateSelfPracticeBooking
         });
 
         return { session, client };
-    });
+    }));
 }
 
 // Task 8 (PRAKTIKA MVP): "reschedule uses same booking core" — before this,
@@ -511,7 +582,7 @@ export async function reschedulePracticeBooking(input: ReschedulePracticeBooking
         blockConflicts: settingsForFetch?.blockConflicts ?? true,
     });
 
-    return db.$transaction(async (tx) => {
+    return observeBooking('reschedule', input.psychologistId, () => db.$transaction(async (tx) => {
         // Session lock FIRST (see acquireSessionLock) — serializes this
         // against any other reschedule of the SAME session before either
         // side has even read it, regardless of which day(s) each targets.
@@ -570,7 +641,7 @@ export async function reschedulePracticeBooking(input: ReschedulePracticeBooking
         });
 
         return { session: session as BookedPracticeSession, previousDate: existing.date, previousTime: existing.time };
-    });
+    }));
 }
 
 // Task 8: the mobile/Android reschedule is, like createManualPracticeSession,

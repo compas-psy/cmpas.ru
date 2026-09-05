@@ -3,7 +3,7 @@ import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-au
 import {
     dismissPracticeOnboarding,
     getPracticeOnboarding,
-    markBookingLinkShared,
+    recordBookingLinkShared,
 } from '@/lib/practice/onboarding';
 
 /**
@@ -14,9 +14,11 @@ import {
  * вычисляются из данных практики, и отметить их снаружи нельзя ни отсюда, ни
  * откуда бы то ни было ещё — их можно только сделать.
  *
- * Это НЕ аналитика: событий здесь не заводится, счётчиков не ведётся.
- * Хранятся ровно две отметки времени, каждая из которых меняет то, что
- * человек видит на экране.
+ * Ресурс не хранит ничего, кроме двух отметок времени, каждая из которых
+ * меняет то, что человек видит на экране. Аналитика состоявшегося
+ * «поделиться» отправляется общим ядром (Задача 25 §7) — тем же самым, что и
+ * в вебе, чтобы «поделился с телефона» и «поделился в браузере» не считались
+ * по разным правилам.
  */
 
 const ACTIONS = ['shared', 'dismiss'] as const;
@@ -52,11 +54,10 @@ export async function POST(req: NextRequest) {
             // Приходит только с состоявшегося действия в приложении:
             // скопировали, система приняла share, показали QR. Открытие
             // шторки сюда не доходит.
-            await markBookingLinkShared(auth.userId);
-        } else {
-            await dismissPracticeOnboarding(auth.userId);
+            return NextResponse.json(await recordBookingLinkShared(auth.userId, 'android'));
         }
 
+        await dismissPracticeOnboarding(auth.userId);
         return NextResponse.json(await getPracticeOnboarding(auth.userId));
     } catch (error) {
         console.error('[mobile/onboarding POST]', error);

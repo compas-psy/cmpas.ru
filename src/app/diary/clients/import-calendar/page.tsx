@@ -218,13 +218,23 @@ export default function ImportFromCalendarPage() {
                 });
                 const body = await res.json();
                 if (!res.ok) throw new Error(body.error || 'Ошибка при импорте');
-                return body as { imported: number; skipped: number };
+                return body as { imported: number; skipped: number; failed: number };
             });
+            // Задача 25 §4: в отчёте не хватало третьего числа. Commit давно
+            // возвращает failed, но человек его не видел: при частичном
+            // провале ему говорили «Импортировано: 5» и умалчивали о двух
+            // строках, которые не прошли, а при полном — «не удалось» без
+            // единой цифры. Молчание о неудаче хуже самой неудачи: человек
+            // уходит уверенным, что перенёс всё.
+            const tail = [
+                result.skipped > 0 ? `пропущено: ${result.skipped}` : null,
+                result.failed > 0 ? `не удалось: ${result.failed}` : null,
+            ].filter(Boolean).join(', ');
             if (result.imported > 0) {
-                toast.success(`Импортировано сессий: ${result.imported}${result.skipped > 0 ? `, пропущено: ${result.skipped}` : ''}`);
+                toast.success(`Импортировано сессий: ${result.imported}${tail ? `, ${tail}` : ''}`);
                 router.push('/diary/clients');
             } else {
-                toast.error('Не удалось импортировать сессии');
+                toast.error(tail ? `Ничего не импортировано — ${tail}` : 'Не удалось импортировать сессии');
             }
         } catch (err) {
             if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при импорте');

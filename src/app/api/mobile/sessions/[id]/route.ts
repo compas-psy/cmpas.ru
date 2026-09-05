@@ -7,6 +7,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
 import { formatSession, notesPlainFromStructured, toDatabasePaymentStatus } from '@/lib/mobile-sessions';
 import { rescheduleManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
+import { observeNotesFilled, observePaymentSettled } from '@/lib/practice/attention-completion';
 
 function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientSummary?: string | null; notes?: string | null } | null) {
     if (!session) return null;
@@ -25,6 +26,17 @@ async function readPaymentStatus(sessionId: string) {
         SELECT "paymentStatus" FROM "DiarySession" WHERE id = ${sessionId} LIMIT 1
     `.catch(() => []);
     return rows[0]?.paymentStatus || 'not_required';
+}
+
+/**
+ * Задача 25 §8: одна точка отметки оплаты на оба ветвления PATCH. Событие
+ * «проблема закрыта» рождается здесь и только здесь, из настоящего перехода
+ * прежнего значения в новое — а не из факта, что кто-то открыл шторку оплаты.
+ */
+async function applyPaymentStatus(psychologistId: string, sessionId: string, value: string) {
+    const before = await readPaymentStatus(sessionId);
+    await writePaymentStatus(sessionId, value);
+    await observePaymentSettled(psychologistId, before, value);
 }
 
 async function writePaymentStatus(sessionId: string, value: string) {
@@ -124,7 +136,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
             // Task 12: autoSyncSessionToCalendars is link-aware — updates
             // the already-linked event in place, so no delete-then-recreate.
-            if (paymentStatus) await writePaymentStatus(id, paymentStatus);
+            if (paymentStatus) await applyPaymentStatus(auth.userId, id, paymentStatus);
+            // Перенос может нести с собой заметку: extraUpdateData — это тот
+            // же notePatch. Состояние «после» складывается из прежней сессии и
+            // применённой правки; отдельного чтения ради этого не делаем.
+            await observeNotesFilled(auth.userId, session, { ...session, ...notePatch(body) });
 
             const fullUpdated = await db.diarySession.findUnique({ where: { id }, include: { client: { select: { name: true } } } });
             if (fullUpdated) autoSyncSessionToCalendars(auth.userId, fullUpdated as any).catch(console.error);
@@ -157,7 +173,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const updated = Object.keys(updateData).length > 0
             ? await db.diarySession.update({ where: { id }, data: updateData, include: { client: { select: { id: true, name: true } } } })
             : await db.diarySession.findFirstOrThrow({ where: { id, psychologistId: auth.userId }, include: { client: { select: { id: true, name: true } } } });
-        if (paymentStatus) await writePaymentStatus(id, paymentStatus);
+        if (paymentStatus) await applyPaymentStatus(auth.userId, id, paymentStatus);
+        await observeNotesFilled(auth.userId, session, updated);
         return NextResponse.json(formatSession({ ...updated, paymentStatus: paymentStatus || await readPaymentStatus(id) }));
     } catch (error) {
         console.error('[mobile/sessions/id PATCH]', error);

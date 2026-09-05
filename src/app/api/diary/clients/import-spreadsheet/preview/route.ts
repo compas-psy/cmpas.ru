@@ -3,12 +3,37 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { parseDelimitedTable } from '@/lib/practice/migration/spreadsheet/csv';
 import { listXlsxSheets, readXlsxSheet } from '@/lib/practice/migration/spreadsheet/xlsx';
-import { buildClientOnlyPreviewFromLines, buildClientOnlyPreviewFromTable, buildSessionPreviewFromTable, type PreviewContext } from '@/lib/practice/migration/spreadsheet/preview';
+import { buildClientOnlyPreviewFromLines, buildClientOnlyPreviewFromTable, buildSessionPreviewFromTable, type PreviewBucket, type PreviewContext } from '@/lib/practice/migration/spreadsheet/preview';
+import { trackMigrationFailed, trackMigrationPreviewed, trackMigrationStarted, type MigrationProvider } from '@/lib/analytics/practice-events';
 
 // Task 13: preview — parse (csv/xlsx/paste) -> normalize -> match -> bucket.
 // Never mutates anything; commit only happens through apply -> commitPracticeImport.
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // same cap as /api/diary/documents/upload
 const MAX_ROWS = 2000;
+
+// Задача 25 §3: provider в аналитике — не то, что прислал браузер, а одно из
+// пяти известных значений реестра. Строку из тела запроса нельзя отправлять
+// как есть: в prop с произвольным текстом рано или поздно приезжает имя файла,
+// а в имени файла — фамилия клиента. Неизвестный источник просто не даёт
+// provider вовсе.
+function analyticsProvider(source: string): MigrationProvider | undefined {
+    if (source === 'xlsx') return 'xlsx';
+    if (source === 'csv') return 'csv';
+    if (source === 'paste' || source === 'paste_table') return 'paste';
+    return undefined;
+}
+
+/** Уже посчитанные корзины строк — только числа, без единой ячейки файла. */
+function bucketCounts(rows: { bucket: PreviewBucket }[]) {
+    const count = (bucket: PreviewBucket) => rows.filter((row) => row.bucket === bucket).length;
+    return {
+        items_count: rows.length,
+        ready_count: count('ready'),
+        review_count: count('review'),
+        skipped_count: count('skipped'),
+        error_count: count('error'),
+    };
+}
 
 export async function POST(req: NextRequest) {
     const session = await auth();
@@ -45,6 +70,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'INVALID_MODE' }, { status: 400 });
         }
 
+        const provider = analyticsProvider(source);
+        const account = { accountId: psychologistId };
+        // Разбор файла и есть начало переноса: дальше человек уже принимает
+        // решения по строкам.
+        await trackMigrationStarted(account, { source: 'spreadsheet', provider });
+
         let headers: string[] = [];
         let dataRows: (string | number | Date | null)[][] = [];
 
@@ -63,8 +94,12 @@ export async function POST(req: NextRequest) {
             dataRows = table.rows;
         } else if (source === 'paste') {
             // Free-form "one line = one client" — client-only mode only (§9).
-            if (mode !== 'client_only') return NextResponse.json({ error: 'INVALID_MODE' }, { status: 400 });
+            if (mode !== 'client_only') {
+                await trackMigrationFailed(account, { source: 'spreadsheet', provider, error_code: 'invalid_input' });
+                return NextResponse.json({ error: 'INVALID_MODE' }, { status: 400 });
+            }
         } else {
+            await trackMigrationFailed(account, { source: 'spreadsheet', provider, error_code: 'invalid_input' });
             return NextResponse.json({ error: 'INVALID_SOURCE' }, { status: 400 });
         }
 
@@ -83,19 +118,31 @@ export async function POST(req: NextRequest) {
                 const lines = text.split(/\r?\n/);
                 const pasteTruncated = lines.length > MAX_ROWS;
                 const limitedText = pasteTruncated ? lines.slice(0, MAX_ROWS).join('\n') : text;
-                return NextResponse.json({ rows: buildClientOnlyPreviewFromLines(limitedText, ctx), unusedHeaders: [], truncated: pasteTruncated });
+                const pasteRows = buildClientOnlyPreviewFromLines(limitedText, ctx);
+                await trackMigrationPreviewed(account, { source: 'spreadsheet', provider, ...bucketCounts(pasteRows) });
+                return NextResponse.json({ rows: pasteRows, unusedHeaders: [], truncated: pasteTruncated });
             }
             const { rows, unusedHeaders } = buildClientOnlyPreviewFromTable(headers, dataRows, ctx);
+            await trackMigrationPreviewed(account, { source: 'spreadsheet', provider, ...bucketCounts(rows) });
             return NextResponse.json({ rows, unusedHeaders, truncated });
         }
 
         const result = buildSessionPreviewFromTable(headers, dataRows, ctx);
-        if ('errorCode' in result) return NextResponse.json({ error: result.errorCode }, { status: 400 });
+        if ('errorCode' in result) {
+            await trackMigrationFailed(account, { source: 'spreadsheet', provider, error_code: 'invalid_input' });
+            return NextResponse.json({ error: result.errorCode }, { status: 400 });
+        }
+        await trackMigrationPreviewed(account, { source: 'spreadsheet', provider, ...bucketCounts(result.rows) });
         return NextResponse.json({ rows: result.rows, unusedHeaders: result.unusedHeaders, truncated });
     } catch (error) {
+        const account = { accountId: psychologistId };
         if (error instanceof Error && (error.message === 'SHEET_NOT_FOUND' || error.message === 'SHEET_SELECTION_REQUIRED')) {
+            await trackMigrationFailed(account, { source: 'spreadsheet', error_code: 'invalid_input' });
             return NextResponse.json({ error: error.message }, { status: 400 });
         }
+        // В аналитику уходит категория, а не текст исключения: в сообщении
+        // разбора таблицы может оказаться содержимое ячейки.
+        await trackMigrationFailed(account, { source: 'spreadsheet', error_code: 'internal_error' });
         console.error('[import-spreadsheet/preview POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }

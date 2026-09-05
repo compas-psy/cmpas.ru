@@ -6,11 +6,26 @@ import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
 import { practiceImportRange } from '@/lib/practice/migration/import-range';
 import { classifyCalendarEvents, importLinkKey, countByReviewState } from '@/lib/practice/migration/classify';
 import type { PracticeSourceEvent } from '@/lib/practice/migration/types';
+import {
+    trackMigrationFailed,
+    trackMigrationPreviewed,
+    trackMigrationStarted,
+    type MigrationProvider,
+} from '@/lib/analytics/practice-events';
 
 export async function GET() {
     const session = await auth();
     const psychologistId = session?.user?.id;
     if (!psychologistId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Задача 25 §3: перенос начался — это момент, когда запрос дошёл до
+    // работы, а не когда человек открыл страницу.
+    //
+    // Провайдер здесь не указан намеренно: в начале переноса из календаря
+    // ещё неизвестно, какие подключения у практики есть — это выяснится
+    // ниже. В practice_migration_previewed он уже настоящий. Выдумывать его
+    // заранее, чтобы поле не пустовало, значит врать первым же событием.
+    await trackMigrationStarted({ accountId: psychologistId }, { source: 'calendar' });
 
     try {
         const settings = await db.psychologistSettings.findUnique({
@@ -58,10 +73,28 @@ export async function GET() {
         // (suggestedClientId vs. resolvedClientId — a name is NEVER an
         // auto-match, see src/lib/clients/match.ts) both happen here.
         const items = classifyCalendarEvents(events, existingClients, linkedEventKeys);
+        const counts = countByReviewState(items);
 
-        return NextResponse.json({ items, counts: countByReviewState(items) });
+        // Только числа и уже известный провайдер. Ни названий событий, ни
+        // имён клиентов — их в этом ответе полно, но в аналитике им нечего
+        // делать.
+        const providers = new Set(integrations.map((i) => i.provider));
+        await trackMigrationPreviewed({ accountId: psychologistId }, {
+            source: 'calendar',
+            // Провайдер указывается, только когда он один: «google и yandex
+            // сразу» — это не провайдер, и врать одним из двух незачем.
+            provider: providers.size === 1 ? (integrations[0].provider as MigrationProvider) : undefined,
+            items_count: items.length,
+            ready_count: counts.ready,
+            review_count: counts.review,
+            personal_count: counts.personal,
+            skipped_count: counts.skipped,
+        });
+
+        return NextResponse.json({ items, counts });
     } catch (error) {
         console.error('[calendar/import/preview GET]', error);
+        await trackMigrationFailed({ accountId: psychologistId }, { source: 'calendar', error_code: 'internal_error' });
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }
 }

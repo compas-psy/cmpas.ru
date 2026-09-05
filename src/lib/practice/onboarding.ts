@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { resolveWallClockParts } from '@/lib/calendar/normalized-event';
 import { calendarDateToUtcMidnight, utcDatePart } from '@/lib/practice/migration/date-utils';
 import { CALENDAR_IMPORT_ORIGIN, SPREADSHEET_IMPORT_ORIGIN } from '@/lib/practice/session-origin';
+import { trackBookingLinkShared, trackOnboardingCompleted, type ShareSurface } from '@/lib/analytics/practice-events';
 
 /**
  * Состояние онбординга практики — одно на веб и приложение (Задача 24).
@@ -181,4 +182,43 @@ export async function dismissPracticeOnboarding(
         create: { psychologistId, onboardingDismissedAt: now },
         update: { onboardingDismissedAt: now },
     });
+}
+
+/**
+ * Состоявшееся «поделиться» целиком: отметка, событие и — если этим шагом
+ * настройка закончилась — событие о завершении (Задача 25 §7, §9).
+ *
+ * Одна точка на веб и приложение, потому что правила здесь тонкие и
+ * разъезжаются мгновенно, если написать их дважды.
+ *
+ * Отметка и событие живут по РАЗНЫМ правилам, и это не небрежность:
+ *
+ *  • bookingLinkSharedAt — признак продукта: «шаг сделан». Он ставится один
+ *    раз, потому что второй раз шаг сделать нельзя;
+ *  • practice_booking_link_shared — факт поведения: человек поделился
+ *    ссылкой. Второй раз поделился — второе событие. Считать только первый
+ *    значило бы утверждать, что ссылкой делятся однажды в жизни.
+ *
+ * Завершение считается по НАСТОЯЩЕМУ переходу: состояние до мутации против
+ * состояния после. Никакого отдельного булева «аналитика уже отправлена» не
+ * заводится — переход из false в true случается ровно один раз сам по себе,
+ * а повторное «поделиться» уже ничего не переводит. Старый
+ * PsychologistSettings.onboardingCompleted источником правды тоже не служит:
+ * он про другой, снятый Задачей 24 барьер.
+ */
+export async function recordBookingLinkShared(
+    psychologistId: string,
+    surface: ShareSurface,
+    now: Date = new Date(),
+): Promise<PracticeOnboardingState> {
+    const before = await getPracticeOnboarding(psychologistId, now);
+
+    await markBookingLinkShared(psychologistId, now);
+    await trackBookingLinkShared({ accountId: psychologistId }, { source: surface });
+
+    const after = await getPracticeOnboarding(psychologistId, now);
+    if (!before.completed && after.completed) {
+        await trackOnboardingCompleted({ accountId: psychologistId });
+    }
+    return after;
 }

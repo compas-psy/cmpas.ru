@@ -277,13 +277,20 @@ export default function ImportSpreadsheetPage() {
                 });
                 const body = await res.json();
                 if (!res.ok) throw new Error(body.error || 'Ошибка при импорте');
-                return body as { imported: number; skipped: number };
+                return body as { imported: number; skipped: number; failed: number };
             });
+            // Задача 25 §4: то же третье число, что и в импорте календаря —
+            // строки, которые commit не смог провести, больше не исчезают
+            // из отчёта молча.
+            const tail = [
+                result.skipped > 0 ? `пропущено: ${result.skipped}` : null,
+                result.failed > 0 ? `не удалось: ${result.failed}` : null,
+            ].filter(Boolean).join(', ');
             if (result.imported > 0) {
-                toast.success(`Добавлено: ${result.imported}${result.skipped > 0 ? `, пропущено: ${result.skipped}` : ''}`);
+                toast.success(`Добавлено: ${result.imported}${tail ? `, ${tail}` : ''}`);
                 router.push('/diary/clients');
             } else {
-                toast.error('Не удалось импортировать');
+                toast.error(tail ? `Ничего не добавлено — ${tail}` : 'Не удалось импортировать');
             }
         } catch (err) {
             if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при импорте');

@@ -1,6 +1,8 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
+import { logSafeFailure, providerErrorCode } from '@/lib/observability/log';
 
 // Task 12 (PRAKTIKA MVP, founder correction round 3): the sync adapter is
 // now link-aware, closing the gap the Task 8 comment tracked here for two
@@ -23,6 +25,31 @@ import { db } from '@/lib/db';
 //   - `excludeIntegrationId` lets commit.ts, after importing a session FROM
 //     integration X, sync it OUT to the psychologist's OTHER connected
 //     integrations without reflecting a second event back into X.
+
+// Задача 25 §11: синхронизация календарей ломается тихо и незаметно, потому
+// что она best-effort: вызывающий её код ничего не ждёт и ничего не проверяет.
+// Отсюда требование к логу — быть годным для разбора и при этом безопасным.
+//
+// Прежние строки вида `Auto-sync failed for google: ${e}` выглядели невинно,
+// пока не вспомнишь, ЧТО именно синхронизируется. В теле ответа Google или
+// CalDAV лежит само событие: заголовок «Сессия — Анна Волкова», описание с
+// заметкой, иногда адрес кабинета. Один console.error — и имя клиента живёт в
+// логах ровно столько, сколько живут логи.
+//
+// Поэтому наружу выходят три поля: какой провайдер, какая категория отказа и
+// какой операции это касается. Ни исключения, ни его текста, ни стека, ни тела
+// ответа провайдера, ни токенов, ни названия встречи. Одна операция
+// синхронизации — один correlation_id, чтобы отказ по двум подключённым
+// календарям читался как один случай, а не как два несвязанных.
+//
+// Наблюдаемость остаётся тише самой синхронизации: логирование обёрнуто так,
+// что не может бросить, и ни один отказ по-прежнему не мешает создать,
+// перенести или отменить встречу (§12).
+
+/** Только известные провайдеры: строка из базы в лог как есть не идёт. */
+function providerName(value: string): 'google' | 'yandex' | 'other' {
+    return value === 'google' || value === 'yandex' ? value : 'other';
+}
 
 type SyncableSession = {
     id: string;
@@ -47,6 +74,7 @@ export async function autoSyncSessionToCalendars(
     session: SyncableSession,
     options?: { excludeIntegrationId?: string }
 ) {
+    const correlationId = randomUUID();
     try {
         const settings = await db.psychologistSettings.findUnique({
             where: { psychologistId },
@@ -109,11 +137,18 @@ export async function autoSyncSessionToCalendars(
                     }
                 }
             } catch (e) {
-                console.error(`Auto-sync failed for ${integration.provider}:`, e);
+                logSafeFailure('calendar-sync', {
+                    provider: providerName(integration.provider),
+                    error_code: providerErrorCode(e),
+                    correlation_id: correlationId,
+                    source: 'session_sync',
+                });
             }
         }
-    } catch (e) {
-        console.error('autoSyncSessionToCalendars error:', e);
+    } catch {
+        // Сюда попадают отказы до обращения к провайдеру: настройки, список
+        // подключений. Провайдера здесь ещё нет, поэтому и в логе его нет.
+        logSafeFailure('calendar-sync', { error_code: 'SYNC_SETUP_FAILED', correlation_id: correlationId, source: 'session_sync' });
     }
 }
 
@@ -126,6 +161,7 @@ export async function autoDeleteSessionFromCalendars(
     psychologistId: string,
     sessionId: string
 ) {
+    const correlationId = randomUUID();
     try {
         const settings = await db.psychologistSettings.findUnique({
             where: { psychologistId },
@@ -148,7 +184,12 @@ export async function autoDeleteSessionFromCalendars(
                     await deleteYandexCalendarEventById(link.integrationId, link.externalEventId);
                 }
             } catch (e) {
-                console.error(`Auto-delete from ${link.integration.provider} failed:`, e);
+                logSafeFailure('calendar-sync', {
+                    provider: providerName(link.integration.provider),
+                    error_code: providerErrorCode(e),
+                    correlation_id: correlationId,
+                    source: 'session_delete',
+                });
             }
         }
 
@@ -169,11 +210,16 @@ export async function autoDeleteSessionFromCalendars(
                     const { deleteGoogleCalendarEvent } = await import('@/lib/calendar/google');
                     await deleteGoogleCalendarEvent(integration.id, sessionId);
                 } catch (e) {
-                    console.error('Legacy (unlinked) Google auto-delete failed:', e);
+                    logSafeFailure('calendar-sync', {
+                        provider: 'google',
+                        error_code: providerErrorCode(e),
+                        correlation_id: correlationId,
+                        source: 'legacy_delete',
+                    });
                 }
             }
         }
-    } catch (e) {
-        console.error('autoDeleteSessionFromCalendars error:', e);
+    } catch {
+        logSafeFailure('calendar-sync', { error_code: 'DELETE_SETUP_FAILED', correlation_id: correlationId, source: 'session_delete' });
     }
 }

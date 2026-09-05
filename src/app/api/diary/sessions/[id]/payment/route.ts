@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
+import { observePaymentSettled } from '@/lib/practice/attention-completion';
 
 const ALLOWED = new Set(['not_required', 'unpaid', 'paid']);
 
@@ -41,8 +42,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     try {
-        const rows = await db.$queryRaw<Array<{ id: string; clientId: string; clientName: string | null }>>(Prisma.sql`
-            SELECT s.id, s."clientId", c.name as "clientName"
+        const rows = await db.$queryRaw<Array<{ id: string; clientId: string; clientName: string | null; paymentStatus: string | null }>>(Prisma.sql`
+            SELECT s.id, s."clientId", s."paymentStatus", c.name as "clientName"
             FROM "DiarySession" s
             LEFT JOIN "DiaryClient" c ON c.id = s."clientId"
             WHERE s.id = ${id} AND s."psychologistId" = ${psychologistId}
@@ -56,6 +57,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             SET "paymentStatus" = ${paymentStatus}, "updatedAt" = NOW()
             WHERE id = ${id} AND "psychologistId" = ${psychologistId}
         `);
+
+        // Задача 25 §8: проблема «не отмечена оплата» закрыта только если
+        // сессия действительно ушла из unpaid — повторное «оплачено» у уже
+        // оплаченной ничего не закрывает.
+        await observePaymentSettled(psychologistId, found.paymentStatus, paymentStatus);
 
         if (paymentStatus === 'paid') {
             await db.$executeRaw(Prisma.sql`

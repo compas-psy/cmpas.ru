@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import {
     dismissPracticeOnboarding,
     getPracticeOnboarding,
-    markBookingLinkShared,
+    recordBookingLinkShared,
     type PracticeOnboardingState,
 } from '@/lib/practice/onboarding';
 
@@ -39,9 +39,9 @@ export async function readOnboardingState(): Promise<PracticeOnboardingState | n
 export async function confirmBookingLinkShared(): Promise<PracticeOnboardingState | null> {
     try {
         const psychologistId = await getPsychologistId();
-        await markBookingLinkShared(psychologistId);
+        const state = await recordBookingLinkShared(psychologistId, 'web');
         revalidatePath('/diary');
-        return await getPracticeOnboarding(psychologistId);
+        return state;
     } catch (error) {
         console.error('confirmBookingLinkShared error:', error);
         return null;

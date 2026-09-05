@@ -6,6 +6,7 @@ import { ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
 import { commitPracticeImport, CommitConflictError } from '@/lib/practice/migration/commit';
 import { calendarDateTimeToUtc } from '@/lib/practice/migration/date-utils';
 import { computeClientKey, computeSourceFingerprint } from '@/lib/practice/migration/spreadsheet/fingerprint';
+import { trackMigrationCommitted, trackMigrationFailed } from '@/lib/analytics/practice-events';
 
 // Task 13: thin front for the shared Task 12 commit core, same pattern as
 // /api/diary/calendar/import/apply. The psychologist's file/paste never
@@ -119,6 +120,17 @@ export async function POST(req: NextRequest) {
 
         const result = await commitPracticeImport(psychologistId, batch.id);
 
+        // Задача 25 §3: только после состоявшегося commit, только числами
+        // самого результата. provider здесь не указывается: тело применения
+        // знает режим (клиенты или сессии), но не то, из чего файл был
+        // разобран, а выдумывать источник ради заполненного поля незачем.
+        await trackMigrationCommitted({ accountId: psychologistId }, {
+            source: 'spreadsheet',
+            imported_count: result.imported,
+            skipped_count: result.skipped,
+            failed_count: result.failed,
+        });
+
         if (result.imported > 0) {
             await createNotification({
                 psychologistId,
@@ -136,12 +148,16 @@ export async function POST(req: NextRequest) {
             outcomes: result.outcomes,
         });
     } catch (error) {
+        const account = { accountId: psychologistId };
         if (error instanceof Error && error.message === ATTESTATION_REQUIRED_CODE) {
+            await trackMigrationFailed(account, { source: 'spreadsheet', error_code: 'attestation_required' });
             return NextResponse.json({ error: ATTESTATION_REQUIRED_CODE }, { status: 403 });
         }
         if (error instanceof CommitConflictError) {
+            await trackMigrationFailed(account, { source: 'spreadsheet', error_code: 'commit_in_progress' });
             return NextResponse.json({ error: error.code }, { status: 409 });
         }
+        await trackMigrationFailed(account, { source: 'spreadsheet', error_code: 'internal_error' });
         console.error('[import-spreadsheet/apply POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }

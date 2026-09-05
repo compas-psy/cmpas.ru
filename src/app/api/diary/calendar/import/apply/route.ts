@@ -5,6 +5,7 @@ import { createNotification } from '@/lib/notifications';
 import { ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
 import { commitPracticeImport, CommitConflictError } from '@/lib/practice/migration/commit';
 import { calendarDateTimeToUtc } from '@/lib/practice/migration/date-utils';
+import { trackMigrationCommitted, trackMigrationFailed, type MigrationProvider } from '@/lib/analytics/practice-events';
 
 // Task 12 (PRAKTIKA MVP, founder correction round 3): this route is a thin
 // front for the real commit path. It does two things: (1) persist exactly
@@ -29,6 +30,16 @@ import { calendarDateTimeToUtc } from '@/lib/practice/migration/date-utils';
 const VALID_FORMATS = new Set(['online', 'offline']);
 const VALID_DECISIONS = new Set(['session', 'personal', 'skip']);
 const VALID_CLIENT_MODES = new Set(['existing', 'new']);
+
+// Задача 25 §3: provider в аналитике — только известное значение реестра и
+// только когда партия целиком из одного календаря. Смешанную партию честнее
+// оставить без provider, чем назвать её именем первого элемента.
+function analyticsProvider(items: { provider: string | null }[]): MigrationProvider | undefined {
+    const providers = new Set(items.map((item) => item.provider));
+    if (providers.size !== 1) return undefined;
+    const only = items[0]?.provider;
+    return only === 'google' || only === 'yandex' ? only : undefined;
+}
 
 function coerceItem(raw: Record<string, unknown>) {
     const format = typeof raw.format === 'string' && VALID_FORMATS.has(raw.format) ? raw.format : 'online';
@@ -98,6 +109,16 @@ export async function POST(req: NextRequest) {
 
         const result = await commitPracticeImport(psychologistId, batch.id);
 
+        // Только после состоявшегося commit и только его собственными
+        // числами: ни одной строки календаря, ни одного названия встречи.
+        await trackMigrationCommitted({ accountId: psychologistId }, {
+            source: 'calendar',
+            provider: analyticsProvider(items),
+            imported_count: result.imported,
+            skipped_count: result.skipped,
+            failed_count: result.failed,
+        });
+
         if (result.imported > 0) {
             await createNotification({
                 psychologistId,
@@ -115,12 +136,16 @@ export async function POST(req: NextRequest) {
             sessionIds: result.outcomes.filter((o) => o.status === 'imported' && o.createdSessionId).map((o) => o.createdSessionId),
         });
     } catch (error) {
+        const account = { accountId: psychologistId };
         if (error instanceof Error && error.message === ATTESTATION_REQUIRED_CODE) {
+            await trackMigrationFailed(account, { source: 'calendar', error_code: 'attestation_required' });
             return NextResponse.json({ error: ATTESTATION_REQUIRED_CODE }, { status: 403 });
         }
         if (error instanceof CommitConflictError) {
+            await trackMigrationFailed(account, { source: 'calendar', error_code: 'commit_in_progress' });
             return NextResponse.json({ error: error.code }, { status: 409 });
         }
+        await trackMigrationFailed(account, { source: 'calendar', error_code: 'internal_error' });
         console.error('[calendar/import/apply POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }

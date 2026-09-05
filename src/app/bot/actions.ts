@@ -14,6 +14,7 @@ import { createSelfPracticeBooking, BookingConflictError } from '@/lib/practice/
 import { fetchExternalBusyBlocks } from '@/lib/practice/booking/external-busy';
 import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 import { expandToConcreteSlotOptions } from '@/lib/booking/concrete-slot-options';
+import { observeConsentRecorded } from '@/lib/practice/attention-completion';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
  * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
@@ -335,7 +336,9 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
         });
     } catch (e) {
         if (e instanceof BookingConflictError) {
-            return { success: false, error: e.message };
+            // Задача 25 §6: ниточка для поддержки. По ней в логах находится
+            // ровно этот отказ — и ничего о человеке.
+            return { success: false, error: e.message, errorCode: e.code, correlationId: e.correlationId ?? null };
         }
         throw e;
     }
@@ -666,6 +669,10 @@ export async function saveConsent(
                 consentDate: new Date(),
             }
         });
+        // Задача 25 §8: «нет согласия» закрывается ровно здесь — записью
+        // consentDate там, где его не было. Открытый документ и показанный
+        // текст согласия не закрывают ничего.
+        await observeConsentRecorded(psychologistId, client.consentDate);
     }
 
     // Also update TelegramClient consent
@@ -680,6 +687,13 @@ export async function saveConsent(
     });
 
     if (tgClient.diaryClientId && !client) {
+        // Тот же переход, но у клиента, найденного через связь Telegram:
+        // прежнее значение нужно прочитать, иначе «закрыто» не отличить от
+        // «и так было закрыто».
+        const linked = await db.diaryClient.findUnique({
+            where: { id: tgClient.diaryClientId },
+            select: { consentDate: true },
+        });
         await db.diaryClient.update({
             where: { id: tgClient.diaryClientId },
             data: {
@@ -688,6 +702,7 @@ export async function saveConsent(
                 consentDate: new Date(),
             }
         });
+        await observeConsentRecorded(psychologistId, linked?.consentDate ?? null);
     }
 
     return { hash: consentHash, timestamp };
