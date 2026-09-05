@@ -78,21 +78,33 @@ describe('проверка запроса до обращения к платн�
         expect(real.reason).toBe('ok');
     });
 
-    it('слишком длинный запрос обрезается, а не уходит целиком', async () => {
+    it('слишком длинный запрос отклоняется целиком, а не обрезается', async () => {
         const stores = freshStores();
         const fetchImpl = vi.fn(async () => dadataResponse([]));
         const long = 'Яузская '.repeat(200);
 
-        await suggestAddresses({ userId: 'psy-1', query: long, token: TOKEN, now: NOW, fetchImpl: fetchImpl as unknown as typeof fetch, ...stores });
+        // Молча искать по обрезку — значит отвечать не на то, о чём спросили,
+        // и выдавать это за результат.
+        const res = await suggestAddresses({ userId: 'psy-1', query: long, token: TOKEN, now: NOW, fetchImpl: fetchImpl as unknown as typeof fetch, ...stores });
 
-        const body = JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body));
-        expect(body.query.length).toBeLessThanOrEqual(MAX_QUERY_LENGTH);
+        expect(res.reason).toBe('invalid_query');
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('запрос ровно предельной длины ещё проходит', async () => {
+        const stores = freshStores();
+        const fetchImpl = vi.fn(async () => dadataResponse([]));
+
+        const res = await suggestAddresses({ userId: 'psy-1', query: 'я'.repeat(MAX_QUERY_LENGTH), token: TOKEN, now: NOW, fetchImpl: fetchImpl as unknown as typeof fetch, ...stores });
+
+        expect(res.reason).toBe('ok');
     });
 
     it('normalizeQuery схлопывает пробелы и режет по краям', () => {
         expect(normalizeQuery('  Москва,   Яузская  ')).toBe('Москва, Яузская');
         expect(normalizeQuery('  ')).toBeNull();
         expect(normalizeQuery('я'.repeat(MIN_QUERY_LENGTH))).toHaveLength(MIN_QUERY_LENGTH);
+        expect(normalizeQuery('я'.repeat(MAX_QUERY_LENGTH + 1))).toBeNull();
     });
 });
 

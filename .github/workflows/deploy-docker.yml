@@ -194,6 +194,16 @@ jobs:
       # клиент не шлёт заголовок Authorization вовсе.
       ANALYTICS_INGEST_SECRET_MOMENTS: ${{ secrets.ANALYTICS_INGEST_SECRET_MOMENTS }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Задача 19: интеграция без ключа ломается тихо. Приложение отвечает
+      # честным 503 NOT_CONFIGURED, но узнавать об этом от специалиста поздно —
+      # отсутствие ключа называется до выкладки, в логе прогона. Прогон при
+      # этом не роняется: подсказки адресов не критичны для работы практики.
+      - name: Check deploy configuration
+        run: bash scripts/check-deploy-config.sh
+
       - name: Deploy via SSH
         id: deploy
         uses: appleboy/ssh-action@v1.0.3
