@@ -143,7 +143,38 @@ class DashboardSurfaceTest {
     fun `версия приложения — фактически собранная`() {
         val body = code(settings)
         assertTrue(body.contains("BuildConfig.VERSION_NAME"))
-        assertFalse(body.contains(Regex("""Версия 1\.0\.\d""")))
+        // Не только в строке списка: вписанная версия в шторке помощи
+        // расходилась бы со сборкой ровно так же.
+        assertFalse("нигде на экране нет вписанного номера версии", body.contains(Regex("""1\.0\.\d""")))
+    }
+
+    // ── Шторки подключения: текст тоже от сервера ──
+
+    @Test
+    fun `шторка канала говорит о подключении со слов сервера`() {
+        val body = code(settings)
+        val telegram = body.lines().single { it.contains("ProfileSheet.TELEGRAM ->") }
+        val max = body.lines().single { it.contains("ProfileSheet.MAX ->") }
+
+        assertTrue("подпись из состояния", telegram.contains("connectionSubtitle(state.user?.telegramConnected)"))
+        assertTrue("пояснение из состояния", telegram.contains("connectionSheetBody(\"Telegram\", state.user?.telegramConnected)"))
+        assertTrue("подпись из состояния", max.contains("connectionSubtitle(state.user?.maxConnected)"))
+        assertTrue("пояснение из состояния", max.contains("connectionSheetBody(\"MAX\", state.user?.maxConnected)"))
+    }
+
+    @Test
+    fun `пояснение к каналу не объявляет подключение, пока сервер его не подтвердил`() {
+        val connected = ru.cmpas.app.presentation.settings.connectionSheetBody("Telegram", true)
+        val notConnected = ru.cmpas.app.presentation.settings.connectionSheetBody("Telegram", false)
+        val unknown = ru.cmpas.app.presentation.settings.connectionSheetBody("Telegram", null)
+
+        assertTrue(connected.contains("подключён"))
+        assertTrue(notConnected.contains("не подключён"))
+        // Ни «подключено», ни «не подключено» — состояние ещё не известно.
+        assertFalse(unknown.contains("подключён"))
+        // Приложение подключать канал не умеет и не должно этого обещать.
+        assertFalse(connected.contains("CompasProBot"))
+        assertFalse(notConnected.contains("CompasProBot"))
     }
 
     @Test

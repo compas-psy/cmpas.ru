@@ -269,6 +269,20 @@ private fun AnalyticsConsentRow(checked: Boolean, saving: Boolean, onChange: (Bo
 }
 
 /**
+ * Пояснение к каналу в шторке подключения — тоже от сервера.
+ *
+ * Задача 20 (P0): в шторке было написано «Канал подключён» независимо от того,
+ * подключён он или нет. Подключение делается в веб-кабинете, раздел
+ * «Интеграции» — приложение его не умеет и обещать не должно; имени бота оно
+ * тоже не знает, поэтому здесь его нет.
+ */
+internal fun connectionSheetBody(channel: String, connected: Boolean?): String = when (connected) {
+    true -> "Канал подключён: уведомления о записях и напоминания приходят вам в $channel."
+    false -> "Канал не подключён — уведомления в $channel не приходят. Подключить его можно в веб-кабинете, раздел «Интеграции»."
+    null -> "Состояние канала пока не загрузилось — обновите экран."
+}
+
+/**
  * Подпись состояния мессенджера. Пока профиль не загружен, состояние
  * неизвестно — и так и говорим, а не показываем «не подключён» как факт.
  */
@@ -339,10 +353,10 @@ private fun ProfileInfoSheet(
 
     val (title, subtitle, body) = when (sheet) {
         ProfileSheet.PROFILE -> Triple("Профессиональный профиль", "Данные, которые видит клиент", "Имя, специализация и описание практики будут редактироваться в следующем шаге настройки профиля.")
-        ProfileSheet.TELEGRAM -> Triple("Telegram", "Канал подключён", "Бот может отправлять клиентам сервисные сообщения после того, как клиент открыл его и подтвердил связь.")
-        ProfileSheet.MAX -> Triple("MAX", "Подключение канала", "После подключения клиенты смогут получать уведомления в MAX. До этого приложение подготовит текст для ручной отправки.")
+        ProfileSheet.TELEGRAM -> Triple("Telegram", connectionSubtitle(state.user?.telegramConnected), connectionSheetBody("Telegram", state.user?.telegramConnected))
+        ProfileSheet.MAX -> Triple("MAX", connectionSubtitle(state.user?.maxConnected), connectionSheetBody("MAX", state.user?.maxConnected))
         ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
-        ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android 1.0.5", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+        ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
         ProfileSheet.DOCUMENTS, ProfileSheet.BOOKING -> Triple("", "", "")
     }
     CompasBottomSheet(onClose = onClose) {

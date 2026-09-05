@@ -154,6 +154,32 @@ function reminderDueAt(session: any, kind: ClientReminderKind): Date {
     return new Date(session.date.getTime() - offsetMs);
 }
 
+type ClientReminderToggles = {
+    clientReminder25hEnabled?: boolean;
+    clientReminder1hEnabled?: boolean;
+};
+
+/**
+ * Настройка клиентских напоминаний у специалиста (NotificationSettings).
+ *
+ * Задача 20: в приложении появились два тумблера — «за 24 часа» и «за час».
+ * Тумблер, который ничего не выключает, — это обман, поэтому рассылка обязана
+ * их читать. Отсутствие строки NotificationSettings означает не «выключено», а
+ * «специалист ничего не менял»: значения по умолчанию в схеме — true, и до
+ * появления тумблеров напоминания уходили всегда. Нет строки — нет и запрета.
+ */
+function clientReminderEnabled(
+    session: { psychologist?: { notificationSettings?: ClientReminderToggles | null } | null },
+    kind: ClientReminderKind,
+): boolean {
+    const settings = session.psychologist?.notificationSettings;
+    if (!settings) return true;
+    const value = kind === 'session_24h_client'
+        ? settings.clientReminder25hEnabled
+        : settings.clientReminder1hEnabled;
+    return value !== false;
+}
+
 function sessionActions(session: { id: string; psychologistId: string; clientId: string; date: Date }, pending: boolean) {
     // Task 3 (item D): a per-action token — the 'confirm' button's token
     // does not work as the 'cancel' button's, and neither works past this
@@ -192,7 +218,7 @@ export async function processReminders() {
             } as any,
             include: {
                 client: { include: { telegramClient: true } },
-                psychologist: { include: { psychologistSettings: true } },
+                psychologist: { include: { psychologistSettings: true, notificationSettings: true } },
                 address: true,
             },
         });
@@ -227,7 +253,21 @@ export async function processReminders() {
             // query-level filter would incorrectly hide the session from
             // the psychologist-facing reminder too, which must stay
             // unaffected by this flag.
-            if ((telegramTarget || maxId) && session.clientNotificationsEnabled) {
+            // Задача 20 (P0): тумблер «за 24 часа» из приложения. Гейт стоит
+            // здесь же, в цикле, и ровно по той же причине, что и
+            // clientNotificationsEnabled выше: 24-часовой проход общий с
+            // блоком для специалиста — та же выборка и тот же флаг
+            // notified24h. Убери сессию из WHERE — и вместе с напоминанием
+            // клиенту пропадёт напоминание специалисту, которое этот тумблер
+            // не выключает.
+            //
+            // Флаг notified24h после выключенного напоминания выставляется по
+            // прежнему правилу (`!anyAttempted || anySucceeded`): отправки не
+            // было, значит и повторять каждые 15 минут нечего — выключенное
+            // пользователем напоминание не превращается в вечную ошибку
+            // доставки.
+            if ((telegramTarget || maxId) && session.clientNotificationsEnabled
+                && clientReminderEnabled(session, 'session_24h_client')) {
                 const outcome = await sendNotification(
                     telegramTarget,
                     maxId,
@@ -278,12 +318,25 @@ export async function processReminders() {
         // is filtered right in the WHERE clause — a session with it false
         // never enters this job at all, and never gets notified1h set, so
         // re-enabling the flag later picks it straight back up.
+        //
+        // Задача 20 (P0): тумблер «за час» отсекается там же и по той же
+        // логике. Ветки для специалиста в этом проходе нет, значит убрать
+        // сессию из выборки безопасно — и это лучше гейта в цикле: notified1h
+        // остаётся false, поэтому включить напоминание обратно можно до самого
+        // момента отправки, и следующий проход его подхватит.
+        //
+        // Отсутствие строки NotificationSettings — это «по умолчанию
+        // включено», отсюда OR: нет настроек ИЛИ настройки разрешают.
         const sessions1 = await db.diarySession.findMany({
             where: {
                 status: { in: ['pending', 'confirmed'] },
                 notified1h: false,
                 clientNotificationsEnabled: true,
                 date: { lte: max1 },
+                OR: [
+                    { psychologist: { notificationSettings: { is: null } } },
+                    { psychologist: { notificationSettings: { is: { clientReminder1hEnabled: true } } } },
+                ],
             } as any,
             include: {
                 client: { include: { telegramClient: true } },
