@@ -598,7 +598,17 @@ private fun StatusRow(detail: ClientDetail?, session: Session?) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         StatusMini(Icons.Outlined.VerifiedUser, "Согласие", if (!detail?.consentDate.isNullOrBlank()) "Получено" else "Нужно", if (!detail?.consentDate.isNullOrBlank()) Success else Orange, Modifier.weight(1f))
         StatusMini(Icons.Outlined.CurrencyRuble, "Оплата", if (session?.paymentStatus == PaymentStatus.UNPAID) "Ожидает" else "В порядке", if (session?.paymentStatus == PaymentStatus.UNPAID) Orange else Success, Modifier.weight(1f))
-        StatusMini(Icons.Outlined.Assignment, "Д/з", if (session?.homeworkStatus == HomeworkStatus.MISSING) "Нет" else "В порядке", if (session?.homeworkStatus == HomeworkStatus.MISSING) Orange else Forest600, Modifier.weight(1f))
+        // Задача 28: здесь стоял третий показатель — «Д/з». Он всегда говорил
+        // «В порядке», потому что homeworkStatus нигде не приходит с сервера:
+        // мобильный контракт такого поля не отдаёт, а во всех трёх местах,
+        // где модель сессии собирается, статус проставляется константой
+        // NOT_ASSIGNED. Домашних заданий в продукте нет вовсе — это Горизонт
+        // 2. Специалисту сообщалось, что с несуществующими заданиями клиента
+        // всё в порядке.
+        //
+        // Убрано целиком, тем же правилом, что и выдуманные «24 клиента /
+        // 312 сессий / рейтинг 4,9» в Задаче 20: появятся настоящие домашние
+        // задания — появится и показатель.
     }
 }
 

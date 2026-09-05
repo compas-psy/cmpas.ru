@@ -44,6 +44,21 @@ class HandoffAlignmentTest {
     }
 
     @Test
+    fun `A15 — карточка клиента не показывает того, чего в продукте нет`() {
+        val screen = source("presentation/clients/ClientDetailScreen.kt")
+        // «Д/з» всегда говорил «В порядке»: homeworkStatus не приходит с
+        // сервера ни в одном ответе, а в модели он константа. Домашних
+        // заданий в продукте нет — это Горизонт 2.
+        assertFalse("показателя домашних заданий нет", screen.contains("\"Д/з\""))
+        // Сверяется само чтение, а не слово: объяснение «здесь было X» в
+        // комментарии — это не показ X.
+        assertFalse("и статус, которого никто не присылает, не читается", screen.contains("session?.homeworkStatus"))
+        // Два оставшихся показателя настоящие: оба считаются по данным.
+        assertTrue(screen.contains("\"Согласие\""))
+        assertTrue(screen.contains("\"Оплата\""))
+    }
+
+    @Test
     fun `A15 — приглашение отличимо от постоянной ссылки записи`() {
         val sheets = source("presentation/comms/CommunicationSheets.kt")
         assertTrue(
