@@ -30,6 +30,12 @@ fun NotificationCenterSheet(
     onClose: () -> Unit,
     onOpenSession: (String) -> Unit,
     onOpenClient: (String) -> Unit,
+    // Задача 23 §2: у «требует внимания» свои адресаты — не объект, а
+    // действие, которым проблему закрывают. История уведомлений ниже
+    // по-прежнему открывает объект: там это и есть ожидаемое поведение.
+    onWriteNote: (String) -> Unit = onOpenSession,
+    onMarkPayment: (String) -> Unit = onOpenSession,
+    onRequestConsent: (String) -> Unit = onOpenClient,
     viewModel: NotificationCenterViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -67,8 +73,9 @@ fun NotificationCenterSheet(
                     else Modifier.fillMaxWidth().clickable {
                         onClose()
                         when (target) {
-                            is AttentionTarget.OpenSession -> onOpenSession(target.sessionId)
-                            is AttentionTarget.OpenClient -> onOpenClient(target.clientId)
+                            is AttentionTarget.WriteNote -> onWriteNote(target.sessionId)
+                            is AttentionTarget.MarkPayment -> onMarkPayment(target.sessionId)
+                            is AttentionTarget.RequestConsent -> onRequestConsent(target.clientId)
                         }
                     }
                     Row(rowModifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -138,28 +145,44 @@ fun NotificationCenterSheet(
 }
 
 /**
- * Куда ведёт строка «требует внимания». Отдельная от Composable функция —
- * так решение проверяется обычным JVM-тестом, без Compose UI-инфраструктуры
- * (её в модуле нет, тот же приём уже применён в DashboardViewModelTest).
+ * Куда ведёт строка «требует внимания» — не «к объекту», а К ДЕЙСТВИЮ,
+ * которым проблему закрывают (Задача 23 §2).
+ *
+ * Отдельная от Composable функция: так решение проверяется обычным
+ * JVM-тестом, без Compose UI-инфраструктуры (её в модуле нет, тот же приём
+ * уже применён в DashboardViewModelTest).
  */
 internal sealed interface AttentionTarget {
-    data class OpenSession(val sessionId: String) : AttentionTarget
-    data class OpenClient(val clientId: String) : AttentionTarget
+    /** Заметка по конкретной сессии — сразу форма, а не карточка сессии. */
+    data class WriteNote(val sessionId: String) : AttentionTarget
+    /** Оплата конкретной сессии — карточка сессии с раскрытым действием оплаты. */
+    data class MarkPayment(val sessionId: String) : AttentionTarget
+    /** Согласие конкретного клиента — карточка клиента с раскрытой отправкой документа. */
+    data class RequestConsent(val clientId: String) : AttentionTarget
 }
 
 /**
- * Сессия важнее клиента: у пунктов про сессию есть оба идентификатора, и
- * открыть нужно именно ту запись, из-за которой пункт появился. У
- * import_review нет ни того, ни другого — в приложении пока нет экрана
- * разбора импорта, и придумывать переход «куда-нибудь» хуже, чем не
- * предлагать его вовсе: строка остаётся некликабельной (Задача 17 §6).
+ * Маршрут выбирается ПО ТИПУ пункта, а не по тому, какой идентификатор
+ * оказался заполнен.
+ *
+ * Раньше правило было «есть sessionId — открываем сессию, иначе клиента».
+ * У пункта про сессию заполнены оба, и человек попадал на верхушку
+ * карточки — оттуда до заметки или до оплаты ещё надо догадаться дойти.
+ * Пункт «требует внимания» называет действие, значит и вести обязан прямо в
+ * него; заодно тип и идентификатор больше не могут разойтись: у неоплаты
+ * есть clientId, но повести по нему она уже не может.
+ *
+ * import_review не получает цели: экрана разбора импорта в приложении нет, и
+ * переход «куда-нибудь похоже» хуже, чем честно некликабельная строка
+ * (Задача 17 §6). Неизвестный серверу тип — так же.
  */
 internal fun attentionTarget(item: AttentionItem): AttentionTarget? {
-    val sessionId = item.sessionId
-    val clientId = item.clientId
-    return when {
-        !sessionId.isNullOrBlank() -> AttentionTarget.OpenSession(sessionId)
-        !clientId.isNullOrBlank() -> AttentionTarget.OpenClient(clientId)
+    val sessionId = item.sessionId?.takeIf { it.isNotBlank() }
+    val clientId = item.clientId?.takeIf { it.isNotBlank() }
+    return when (item.type) {
+        "session_without_notes" -> sessionId?.let(AttentionTarget::WriteNote)
+        "session_unpaid" -> sessionId?.let(AttentionTarget::MarkPayment)
+        "client_without_consent" -> clientId?.let(AttentionTarget::RequestConsent)
         else -> null
     }
 }

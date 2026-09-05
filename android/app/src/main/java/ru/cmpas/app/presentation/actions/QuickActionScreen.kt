@@ -46,6 +46,12 @@ fun QuickActionScreen(
     type: String,
     onBack: () -> Unit,
     onDone: () -> Unit,
+    /**
+     * Клиент, для которого создаётся запись, если форму открыли из его
+     * карточки (Задача 23 §4). Второго редактора записи не появляется —
+     * это та же форма с уже выбранным клиентом.
+     */
+    initialClientId: String? = null,
     viewModel: QuickActionViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -58,7 +64,7 @@ fun QuickActionScreen(
     var email by rememberSaveable { mutableStateOf("") }
     var genderIndex by rememberSaveable { mutableIntStateOf(-1) }
 
-    var selectedClientId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedClientId by rememberSaveable { mutableStateOf(initialClientId) }
     val selectedClient = uiState.clients.firstOrNull { it.id == selectedClientId }
     var selectedDateText by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedDate = selectedDateText?.let { runCatching { LocalDate.parse(it) }.getOrNull() }

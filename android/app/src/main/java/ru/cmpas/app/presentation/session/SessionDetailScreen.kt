@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.*
 import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.navigation.ScreenFocus
 import ru.cmpas.app.presentation.theme.*
 import ru.cmpas.app.presentation.util.canRecordSessionOutcome
 import ru.cmpas.app.presentation.util.handleVideoLink
@@ -43,6 +44,8 @@ fun SessionDetailScreen(
     onClientClick: (String) -> Unit = {},
     onNoteClick: (String) -> Unit = {},
     onQuickAction: (String) -> Unit = {},
+    /** Задача 23: с чем именно пришли. PAYMENT — сразу раскрыть отметку оплаты. */
+    focus: ScreenFocus? = null,
     viewModel: SessionDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -50,6 +53,14 @@ fun SessionDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showCancelSheet by remember { mutableStateOf(false) }
     var showMessage by remember { mutableStateOf(false) }
+    var showPayment by remember { mutableStateOf(false) }
+
+    // Пришли из «требует внимания» по неоплате — открываем действие оплаты,
+    // а не верхушку карточки: пункт назвал действие, значит в него и ведёт.
+    // Ждём саму сессию: до неё показывать нечего.
+    LaunchedEffect(focus, uiState.session?.id) {
+        if (focus == ScreenFocus.PAYMENT && uiState.session != null) showPayment = true
+    }
     var messageText by remember { mutableStateOf("") }
     // Исход отправки называется вслух. Раньше и повторная отправка, и ручное
     // сообщение завершались молча: окно закрывалось одинаково при успехе и при
@@ -217,6 +228,18 @@ fun SessionDetailScreen(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Оплата — серверное поле сессии (PATCH /sessions/:id,
+                    // paymentStatus). Действие в ViewModel было и работало, а
+                    // кнопки к нему на экране не было вовсе: отметить оплату
+                    // из карточки сессии было нечем.
+                    GhostButton(
+                        text = if (session.paymentStatus == PaymentStatus.PAID) "Оплачено" else "Оплата",
+                        icon = Icons.Outlined.Payments,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showPayment = true },
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GhostButton(
                         text = "Перенести",
                         icon = Icons.Outlined.Schedule,
@@ -242,6 +265,21 @@ fun SessionDetailScreen(
                 onDateSelected = viewModel::loadFreeTimes,
                 onConfirm = { date, time -> viewModel.reschedule(session.id, date, time) },
                 onDismiss = viewModel::closeRescheduleDialog,
+            )
+        }
+
+        if (showPayment && session != null) {
+            PaymentSheet(
+                clientName = session.clientName,
+                status = session.paymentStatus,
+                isLoading = uiState.isActionLoading,
+                error = uiState.actionError,
+                onDismiss = { showPayment = false },
+                onSelect = { status ->
+                    // То же серверное действие, что и на дашборде: статус
+                    // оплаты живёт в сессии, а не в памяти экрана.
+                    viewModel.setPaymentStatus(session.id, status)
+                },
             )
         }
 
@@ -549,6 +587,59 @@ private fun RescheduleSheet(
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Отмена") } },
         )
     }
+}
+
+/**
+ * Отметка оплаты. Никаких ссылок на оплату и никаких платёжных страниц:
+ * приложение отмечает ФАКТ, известный специалисту, и отправляет его на
+ * сервер тем же полем, которым живёт остальной продукт.
+ */
+@Composable
+private fun PaymentSheet(
+    clientName: String,
+    status: PaymentStatus,
+    isLoading: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onSelect: (PaymentStatus) -> Unit,
+) {
+    CompasBottomSheet(onClose = onDismiss) {
+        SheetHead("Оплата", clientName)
+        Spacer(Modifier.height(6.dp))
+        Text(paymentStatusLabel(status), style = tBody2)
+        Spacer(Modifier.height(14.dp))
+
+        PrimaryButton(
+            text = "Отметить оплаченной",
+            onClick = { onSelect(PaymentStatus.PAID) },
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.Check,
+            enabled = !isLoading && status != PaymentStatus.PAID,
+        )
+        Spacer(Modifier.height(8.dp))
+        GhostButton(
+            text = "Отметить неоплаченной",
+            onClick = { onSelect(PaymentStatus.UNPAID) },
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.Undo,
+            enabled = !isLoading && status != PaymentStatus.UNPAID,
+        )
+
+        if (error != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(error, style = tMeta, color = CompasDestructive)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        GhostButton("Готово", onDismiss, Modifier.fillMaxWidth())
+    }
+}
+
+internal fun paymentStatusLabel(status: PaymentStatus): String = when (status) {
+    PaymentStatus.PAID -> "Оплачено"
+    PaymentStatus.UNPAID -> "Не оплачено"
+    PaymentStatus.PARTIAL -> "Оплачено частично"
+    PaymentStatus.NOT_REQUIRED -> "Оплата не требуется"
 }
 
 @Composable

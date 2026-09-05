@@ -51,6 +51,11 @@ fun DashboardScreen(
     // второго редактора записи и второй формы клиента не заводится.
     onCreateSession: () -> Unit = {},
     onCreateClient: () -> Unit = {},
+    // Задача 23 §2: «требует внимания» ведёт к действию, а не к объекту.
+    // Колбэки тонкие — существующие экраны открываются на нужном шаге.
+    onWriteNote: (String) -> Unit = onNoteClick,
+    onMarkPayment: (String) -> Unit = onSessionClick,
+    onRequestConsent: (String) -> Unit = onClientClick,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -211,8 +216,13 @@ fun DashboardScreen(
             NotificationCenterSheet(
                 attentionItems = uiState.attentionItems,
                 onClose = { showNotifications = false },
+                // История уведомлений открывает объект — там это и ожидается.
                 onOpenSession = { id -> onSessionClick(id) },
                 onOpenClient = { id -> onClientClick(id) },
+                // «Требует внимания» открывает действие.
+                onWriteNote = { id -> onWriteNote(id) },
+                onMarkPayment = { id -> onMarkPayment(id) },
+                onRequestConsent = { id -> onRequestConsent(id) },
             )
         }
 

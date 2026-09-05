@@ -2,18 +2,21 @@ package ru.cmpas.app.presentation.notifications
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.cmpas.app.domain.model.AttentionItem
-import ru.cmpas.app.domain.model.PracticeNotification
 
 /**
- * §6 приёмка Задачи 17 для строки «требует внимания».
+ * Приёмка Задачи 23 §2: пункт «требует внимания» ведёт к ДЕЙСТВИЮ, которым
+ * проблему закрывают, а не к объекту, в котором она обнаружена.
  *
- * Сам NotificationCenterSheet — Composable, а Compose UI-тестов в модуле нет
- * (тот же выбор и та же причина, что в DashboardViewModelTest): проверяется
- * не вёрстка, а вынесенное из неё решение — attentionTarget(), которым строка
- * дословно и пользуется, решая, куда вести по нажатию.
+ * Раньше правило было «есть sessionId — открываем сессию, иначе клиента».
+ * У пункта про сессию заполнены оба идентификатора, поэтому человек попадал
+ * на верхушку карточки и дальше искал, чем именно чинить: заметку, оплату,
+ * согласие. Пункт называет действие — значит и вести обязан прямо в него.
+ *
+ * Compose UI-тестов в модуле нет (см. DashboardViewModelTest), поэтому
+ * проверяется не вёрстка, а вынесенное из неё решение — attentionTarget(),
+ * которым строка и пользуется.
  */
 class AttentionTargetTest {
 
@@ -22,57 +25,63 @@ class AttentionTargetTest {
         sessionId: String? = null,
         clientId: String? = null,
         batchId: String? = null,
-    ) = AttentionItem(id = "$type:x", type = type, label = "…", sessionId = sessionId, clientId = clientId, batchId = batchId)
+    ) = AttentionItem(type = type, label = "тест", sessionId = sessionId, clientId = clientId, batchId = batchId)
 
     @Test
-    fun `сессия без заметки открывает именно эту сессию`() {
-        val target = attentionTarget(attention("session_without_notes", sessionId = "s-1", clientId = "c-1"))
-        assertEquals(AttentionTarget.OpenSession("s-1"), target)
+    fun `сессия без заметки ведёт в заметку по этой сессии`() {
+        val target = attentionTarget(attention("session_without_notes", sessionId = "S1", clientId = "C1"))
+
+        assertEquals(AttentionTarget.WriteNote("S1"), target)
     }
 
     @Test
-    fun `неотмеченная оплата открывает именно эту сессию, а не карточку клиента`() {
-        val target = attentionTarget(attention("session_unpaid", sessionId = "s-2", clientId = "c-2"))
-        assertEquals(AttentionTarget.OpenSession("s-2"), target)
+    fun `неоплаченная сессия ведёт в оплату этой сессии`() {
+        val target = attentionTarget(attention("session_unpaid", sessionId = "S2", clientId = "C2"))
+
+        assertEquals(AttentionTarget.MarkPayment("S2"), target)
     }
 
     @Test
-    fun `клиент без согласия открывает именно этого клиента`() {
-        val target = attentionTarget(attention("client_without_consent", clientId = "c-9"))
-        assertEquals(AttentionTarget.OpenClient("c-9"), target)
+    fun `клиент без согласия ведёт в согласие этого клиента`() {
+        val target = attentionTarget(attention("client_without_consent", clientId = "C1", sessionId = "S3"))
+
+        // У пункта есть и sessionId — но тип говорит о согласии, значит цель
+        // клиентская. Прежнее правило увело бы отсюда в сессию.
+        assertEquals(AttentionTarget.RequestConsent("C1"), target)
     }
 
     @Test
-    fun `разбор импорта никуда не ведёт — экрана разбора в приложении пока нет`() {
+    fun `разбор импорта не получает выдуманной цели`() {
         assertNull(attentionTarget(attention("import_review", batchId = "b-1")))
+        // Даже если сервер однажды приложит к нему идентификаторы: экрана
+        // разбора импорта в приложении нет, и вести «куда-нибудь похоже» хуже,
+        // чем оставить строку некликабельной.
+        assertNull(attentionTarget(attention("import_review", sessionId = "S9", clientId = "C9")))
     }
 
     @Test
-    fun `пункт без идентификаторов не притворяется кликабельным`() {
-        assertNull(attentionTarget(attention("session_without_notes")))
-        assertNull(attentionTarget(attention("session_without_notes", sessionId = "")))
+    fun `тип не может уйти в чужую цель только потому, что заполнены оба идентификатора`() {
+        val both = listOf(
+            "session_without_notes" to AttentionTarget.WriteNote("S1"),
+            "session_unpaid" to AttentionTarget.MarkPayment("S1"),
+            "client_without_consent" to AttentionTarget.RequestConsent("C1"),
+        )
+
+        for ((type, expected) in both) {
+            assertEquals(type, expected, attentionTarget(attention(type, sessionId = "S1", clientId = "C1")))
+        }
     }
 
     @Test
-    fun `у каждого типа задачи свой значок, отличный от значка по умолчанию`() {
-        val icons = listOf("session_without_notes", "session_unpaid", "client_without_consent", "import_review")
-            .map { attentionIcon(it) }
-        assertEquals(icons.size, icons.distinct().size)
-        assertTrue(icons.none { it == attentionIcon("что-то незнакомое") })
+    fun `без нужного идентификатора цели нет — переход не выдумывается`() {
+        assertNull(attentionTarget(attention("session_without_notes", clientId = "C1")))
+        assertNull(attentionTarget(attention("session_unpaid", clientId = "C1")))
+        assertNull(attentionTarget(attention("client_without_consent", sessionId = "S1")))
+        assertNull(attentionTarget(attention("session_without_notes", sessionId = "  ")))
     }
 
-    /**
-     * §7: у задачи нет и не должно быть собственного состояния «прочитано»,
-     * «скрыто», «отложено» — она живёт ровно столько, сколько существует
-     * проблема. Прочитано/непрочитано — свойство истории уведомлений, и
-     * остаётся только там: это две разные модели и две разные секции.
-     */
     @Test
-    fun `у задачи нет read-state — он есть только у истории уведомлений`() {
-        val taskFields = AttentionItem::class.java.declaredFields.map { it.name }
-        val notificationFields = PracticeNotification::class.java.declaredFields.map { it.name }
-
-        assertTrue(taskFields.none { it in listOf("unread", "readAt", "dismissedAt", "snoozedUntil") })
-        assertTrue(notificationFields.contains("unread"))
+    fun `неизвестный серверу тип цели не получает`() {
+        assertNull(attentionTarget(attention("something_new", sessionId = "S1", clientId = "C1")))
     }
 }

@@ -78,6 +78,12 @@ fun CompasNavHost(
                     // календаря и списка клиентов, — не вторые формы.
                     onCreateSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
                     onCreateClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
+                    // Задача 23: пункт «требует внимания» ведёт прямо в
+                    // действие — форму заметки, оплату сессии, отправку
+                    // документа-согласия. Новых экранов при этом нет.
+                    onWriteNote = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
+                    onMarkPayment = { id -> navController.navigate(Screen.SessionDetail.createRoute(id, ScreenFocus.PAYMENT)) },
+                    onRequestConsent = { id -> navController.navigate(Screen.ClientDetail.createRoute(id, ScreenFocus.CONSENT)) },
                 )
             }
             composable(Screen.Calendar.route) {
@@ -117,12 +123,16 @@ fun CompasNavHost(
             }
             composable(
                 Screen.QuickAction.route,
-                arguments = listOf(navArgument("type") { type = NavType.StringType }),
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType },
+                    navArgument("clientId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
             ) {
                 QuickActionScreen(
                     type = it.arguments?.getString("type") ?: "default",
                     onBack = { navController.popBackStack() },
                     onDone = { navController.popBackStack() },
+                    initialClientId = it.arguments?.getString("clientId"),
                 )
             }
             composable(
@@ -135,24 +145,39 @@ fun CompasNavHost(
                     onSaved = { navController.popBackStack() },
                 )
             }
-            composable(Screen.SessionDetail.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            composable(
+                Screen.SessionDetail.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) {
                 SessionDetailScreen(
                     sessionId = it.arguments?.getString("id") ?: "",
                     onBack = { navController.popBackStack() },
                     onClientClick = { id -> navController.navigate(Screen.ClientDetail.createRoute(id)) },
                     onNoteClick = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
+                    focus = ScreenFocus.from(it.arguments?.getString("focus")),
                 )
             }
-            composable(Screen.ClientDetail.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            composable(
+                Screen.ClientDetail.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { entry ->
                 val clientId = entry.arguments?.getString("id") ?: ""
                 ClientDetailScreen(
                     clientId = clientId,
                     onBack = { navController.popBackStack() },
                     onSessionClick = { id -> navController.navigate(Screen.SessionDetail.createRoute(id)) },
-                    onScheduleClick = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    // Та же форма записи, что и везде, но с уже выбранным клиентом.
+                    onScheduleClick = { id -> navController.navigate(Screen.QuickAction.createRoute("new-session", id)) },
                     onNoteClick = { sessionId -> navController.navigate(Screen.PostSessionNote.createRoute(sessionId)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
+                    focus = ScreenFocus.from(entry.arguments?.getString("focus")),
                 )
             }
         }
