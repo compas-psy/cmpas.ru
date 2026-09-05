@@ -38,6 +38,43 @@ const REQUIRED_COLUMNS = {
         'readAt',
         'createdAt',
     ],
+    // Задача 26. Пять таблиц продукта живут только в SQL миграций и не
+    // описаны в schema.prisma, поэтому schemaColumnsFromPrisma() их не видит
+    // вовсе: если такой таблицы не окажется, проверка отрапортует «всё на
+    // месте», а продукт упадёт на первом же обращении. FeatureInterest
+    // попала в этот список раньше и одна и защищала — остальные четыре
+    // проверялись только надеждой. Оплата и документы клиенту — не
+    // второстепенные функции, чтобы узнавать об их пропаже от человека.
+    SessionPaymentRequest: [
+        'id',
+        'sessionId',
+        'psychologistId',
+        'clientId',
+        'status',
+        'markedPaidAt',
+    ],
+    PsychologistPaymentSettings: [
+        'id',
+        'psychologistId',
+        'isEnabled',
+        'prepaymentRequired',
+    ],
+    PsychologistClientDocument: [
+        'id',
+        'psychologistId',
+        'title',
+        'version',
+        'contentHash',
+        'isActive',
+    ],
+    ClientDocumentDelivery: [
+        'id',
+        'psychologistId',
+        'clientId',
+        'documentId',
+        'status',
+        'documentContentHash',
+    ],
 };
 
 // Каждая скалярная колонка, которую ожидает сгенерированный Prisma-клиент.

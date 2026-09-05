@@ -26,11 +26,11 @@ CREATE INDEX "Order_createdAt_idx" ON "Order"("createdAt");
 -- CreateIndex
 CREATE INDEX "Order_visitorId_idx" ON "Order"("visitorId");
 
--- Add GEO columns to VisitorAnalytics if not exists
-ALTER TABLE "VisitorAnalytics" ADD COLUMN IF NOT EXISTS "country" TEXT;
-ALTER TABLE "VisitorAnalytics" ADD COLUMN IF NOT EXISTS "countryCode" TEXT;
-ALTER TABLE "VisitorAnalytics" ADD COLUMN IF NOT EXISTS "city" TEXT;
-ALTER TABLE "VisitorAnalytics" ADD COLUMN IF NOT EXISTS "region" TEXT;
-
--- Add index for country
-CREATE INDEX IF NOT EXISTS "VisitorAnalytics_country_idx" ON "VisitorAnalytics"("country");
+-- Задача 26. Здесь стояли четыре GEO-колонки VisitorAnalytics и индекс по
+-- country. На чистой базе эта миграция падала: по имени каталога она идёт
+-- ПЕРЕД 20260118_add_visitor_analytics, то есть таблицы ещё нет.
+-- («ERROR: relation "VisitorAnalytics" does not exist».) На проде это было
+-- незаметно — там таблица появилась раньше, вне этой цепочки.
+--
+-- Колонки переехали в 20260118_add_visitor_analytics, к своей таблице, где
+-- они и создаются теперь. Смысл миграции не изменился: она добавляет Order.
