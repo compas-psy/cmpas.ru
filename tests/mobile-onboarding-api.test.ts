@@ -28,7 +28,12 @@ vi.mock('@/lib/db', () => ({
         diaryClient: { count: vi.fn(async () => world.clients) },
         availabilitySlot: { count: vi.fn(async () => world.slots) },
         scheduleRule: { count: vi.fn(async () => 0) },
-        diarySession: { count: vi.fn(async () => world.sessions) },
+        // Ближайшие встречи читаются парой (день, время): «сегодня в 10:00»
+        // в шесть вечера уже не будущая — см. tests/practice-onboarding.test.ts.
+        diarySession: {
+            count: vi.fn(async () => world.sessions),
+            findMany: vi.fn(async () => []),
+        },
         psychologistSettings: {
             findUnique: vi.fn(async () => world.settings),
             upsert: vi.fn(async ({ update }: { update: Record<string, unknown> }) => {

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { resolveWallClockParts } from '@/lib/calendar/normalized-event';
-import { calendarDateToUtcMidnight } from '@/lib/practice/migration/date-utils';
+import { calendarDateToUtcMidnight, utcDatePart } from '@/lib/practice/migration/date-utils';
 import { CALENDAR_IMPORT_ORIGIN, SPREADSHEET_IMPORT_ORIGIN } from '@/lib/practice/session-origin';
 
 /**
@@ -41,14 +41,32 @@ export type PracticeOnboardingState = {
 
 const IMPORT_ORIGINS = [CALENDAR_IMPORT_ORIGIN, SPREADSHEET_IMPORT_ORIGIN];
 
-/** Начало сегодняшнего дня по часам практики — как в src/lib/practice/addresses.ts. */
-async function todayStart(psychologistId: string, now: Date): Promise<Date> {
+/** Тот же умолчательный пояс, что стоит в PsychologistSettings.timezone. */
+const DEFAULT_PRACTICE_TIMEZONE = 'Europe/Moscow';
+
+/** «ЧЧ:ММ» в минуты от полуночи. Неразборчивое время считаем началом дня. */
+function minutesOfDay(time: string | null | undefined): number {
+    const match = /^(\d{1,2}):(\d{2})/.exec(time?.trim() ?? '');
+    if (!match) return 0;
+    return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * Сегодняшний день и текущее время по стенным часам практики.
+ *
+ * Та же семантика, что в src/lib/practice/addresses.ts и у календарных
+ * фетчеров: DiarySession.date хранит календарный день (полночь UTC), а время
+ * встречи лежит отдельной строкой. Сравнивать это время с часами сервера
+ * нельзя — «сегодня в 20:00» для московской практики и для владивостокской
+ * наступает в разные моменты.
+ */
+async function practiceNow(psychologistId: string, now: Date): Promise<{ dayStart: Date; today: string; minutes: number }> {
     const settings = await db.psychologistSettings.findUnique({
         where: { psychologistId },
         select: { timezone: true },
     });
-    const { date } = resolveWallClockParts(now, settings?.timezone || 'Europe/Moscow');
-    return calendarDateToUtcMidnight(date);
+    const { date, time } = resolveWallClockParts(now, settings?.timezone || DEFAULT_PRACTICE_TIMEZONE);
+    return { dayStart: calendarDateToUtcMidnight(date), today: date, minutes: minutesOfDay(time) };
 }
 
 /**
@@ -62,8 +80,10 @@ async function todayStart(psychologistId: string, now: Date): Promise<Date> {
  *    считаются: практика, где всех архивировали, не настроена;
  *  • расписание — хотя бы одно ДЕЙСТВУЮЩЕЕ окно или правило (Задача 18:
  *    выключенное правило никого никуда не ведёт);
- *  • запись — либо будущая встреча, либо перенесённая импортом. Отменённая
- *    встреча настройку не доказывает: она как раз не состоялась;
+ *  • запись — либо ДЕЙСТВИТЕЛЬНО будущая встреча, либо перенесённая импортом.
+ *    «Будущая» считается по стенным часам практики: сегодняшняя встреча,
+ *    время которой уже прошло, будущей не является. Отменённая настройку не
+ *    доказывает ни в каком виде: она как раз не состоялась;
  *  • поделиться — только по отметке bookingLinkSharedAt. Ни существование
  *    ссылки, ни открытие шторки, ни аналитика шагом не являются.
  */
@@ -71,18 +91,22 @@ export async function getPracticeOnboarding(
     psychologistId: string,
     now: Date = new Date(),
 ): Promise<PracticeOnboardingState> {
-    const dayStart = await todayStart(psychologistId, now);
+    const { dayStart, today, minutes } = await practiceNow(psychologistId, now);
 
-    const [clients, slots, rules, futureSessions, importedSessions, settings] = await Promise.all([
+    const [clients, slots, rules, upcoming, importedSessions, settings] = await Promise.all([
         db.diaryClient.count({ where: { psychologistId, status: { not: 'archived' } } }),
         db.availabilitySlot.count({ where: { psychologistId, isActive: true } }),
         db.scheduleRule.count({ where: { psychologistId, isActive: true } }).catch(() => 0),
-        db.diarySession.count({
+        // От начала сегодняшнего дня практики: что раньше — точно прошло. По
+        // самому дню решить нельзя, поэтому тянем пару (день, time) и
+        // сравниваем ниже.
+        db.diarySession.findMany({
             where: {
                 psychologistId,
                 date: { gte: dayStart },
-                status: { notIn: ['cancelled', 'no_show'] },
+                status: { notIn: ['cancelled', 'no_show', 'completed'] },
             },
+            select: { date: true, time: true },
         }),
         db.diarySession.count({
             where: { psychologistId, origin: { in: IMPORT_ORIGINS }, status: { not: 'cancelled' } },
@@ -93,10 +117,17 @@ export async function getPracticeOnboarding(
         }),
     ]);
 
+    const hasFutureSession = upcoming.some((row) => {
+        const day = utcDatePart(row.date);
+        if (day > today) return true;
+        // Сегодняшняя встреча будущая, пока её время не наступило.
+        return day === today && minutesOfDay(row.time) > minutes;
+    });
+
     const steps: Record<OnboardingStepKey, boolean> = {
         client: clients > 0,
         schedule: slots + rules > 0,
-        session: futureSessions > 0 || importedSessions > 0,
+        session: hasFutureSession || importedSessions > 0,
         share: settings?.bookingLinkSharedAt != null,
     };
 

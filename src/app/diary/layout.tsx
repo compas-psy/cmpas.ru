@@ -91,15 +91,11 @@ function SidebarContent({
 
 export default async function DiaryLayout({
     children,
-    searchParams,
 }: {
     children: React.ReactNode;
     params?: Promise<any>;
     searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-    const resolvedSearch = searchParams ? await searchParams : {};
-    const fromOnboarding = resolvedSearch?.from === 'onboarding';
-
     const session = await auth();
 
     if (!session?.user?.email) {
@@ -133,9 +129,17 @@ export default async function DiaryLayout({
         redirect('/legal-acceptance');
     }
 
-    if (!dbUser.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
-        redirect('/onboarding');
-    }
+    // Задача 24: обязательный барьер после legal остался ровно один —
+    // сами документы. Раньше следом стоял второй: пока
+    // onboardingCompleted=false, /diary целиком подменялся визардом
+    // /onboarding, и человек не мог даже посмотреть кабинет, не пройдя его.
+    //
+    // Настройка практики — помощь, а не пропуск: она живёт чек-листом на
+    // дашборде, который можно закрыть. Подменять этот барьер новым, по
+    // completed из чек-листа, тем более нельзя — чек-лист не барьер вовсе.
+    //
+    // Страница /onboarding остаётся доступной сама по себе: на неё ведут
+    // письма и старые ссылки, и её проходят по желанию.
 
     const trialEndsAt = dbUser.trialEndsAt;
     const now = new Date();
