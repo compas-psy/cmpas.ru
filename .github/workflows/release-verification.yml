@@ -10,8 +10,17 @@ name: Release Verification (Android)
 # Окружение — то же, что у выкладки: Temurin JDK 17, Gradle 8.9, Android
 # SDK 35. Новой платформы не строится, повторяется существующая.
 
+# workflow_dispatch регистрируется GitHub только для файлов, уже лежащих в
+# ветке по умолчанию, поэтому до слияния запустить проверку на ветке выпуска
+# можно единственным способом — событием push самой этой ветки.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'feat/praktika-mvp-launch'
+    paths:
+      - 'android/**'
+      - '.github/workflows/release-verification.yml'
   pull_request:
     paths:
       - 'android/**'
