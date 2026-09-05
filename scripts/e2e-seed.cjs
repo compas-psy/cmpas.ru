@@ -52,6 +52,14 @@ async function main() {
   await db.psychologistAddress.create({ data: {
     id: 't27-address-2', psychologistId: a.id, name: 'Второй кабинет', address: 'Москва, улица Правды, 24, офис 7',
   }});
+  // Кабинет ВТОРОГО специалиста. Нужен, чтобы проверять не «чужого кабинета
+  // не нашлось», а настоящий отказ: подставили чужой идентификатор — встреча
+  // не создалась (Задача 28, §24).
+  await db.psychologistAddress.create({ data: {
+    id: 't27-address-b', psychologistId: b.id, name: 'Кабинет второго специалиста',
+    address: 'Казань, улица Баумана, 1',
+    isActive: true,
+  }});
 
   // ── расписание: онлайн утром и очно вечером в один и тот же день недели
   const online = await db.scheduleRule.create({ data: {

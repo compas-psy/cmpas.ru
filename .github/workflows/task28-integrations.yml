@@ -109,34 +109,44 @@ jobs:
             } else if (d.subscriptions_error) {
               console.log("subscriptions_error:", d.subscriptions_error);
             }
-            if (d.bot_info && d.bot_info.username) console.log("бот отвечает, username:", d.bot_info.username);
+            if (d.bot_info && d.bot_info.username) console.log("бот отвечает: да");
             else if (d.bot_info_error) console.log("bot_info_error:", d.bot_info_error);
+            if (d.MAX_WEBHOOK_SECRET_set !== true) {
+              console.log("");
+              console.log("ФАКТ: на проде секрет приёмника ещё не заведён.");
+              console.log("Это ожидаемо до выкладки выпуска: scripts/deploy-production-remote.sh");
+              console.log("сам заводит MAX_WEBHOOK_SECRET, если его нет, и тут же перерегистрирует");
+              console.log("подписку с ним. До выкладки проверить «защита включена» на проде нечем —");
+              console.log("поведение проверяется на стенде.");
+            }
           '
 
-          echo "===== Приёмник без секретного заголовка (ожидается отказ) ====="
-          CODE=$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' \
+          # ВАЖНО про коды ответа. Приёмник отвечает 200 и на принятое, и на
+          # отвергнутое обновление — намеренно (src/app/api/max/webhook:99):
+          # иначе по коду можно было бы подбирать секрет, да и MAX на 200 не
+          # шлёт повторов. Поэтому здесь код ответа НЕ является приёмкой: он
+          # проверяется только на то, что ответ ОДИНАКОВ и наружу ничего не
+          # рассказывает. Настоящая приёмка «принято/отвергнуто» — по
+          # наблюдаемому следствию, и она делается на стенде, а не здесь: на
+          # проде это означало бы влить обновление в живой обработчик.
+          echo "===== Приёмник не подсказывает подбирающему (ожидается один и тот же ответ) ====="
+          NOHDR=$(curl -sS --max-time 25 -o /tmp/nohdr.txt -w '%{http_code}' \
             -X POST -H 'Content-Type: application/json' \
             -d '{"update_type":"bot_started","user":{"user_id":0}}' \
             https://cmpas.ru/api/max/webhook || echo 000)
-          echo "POST /api/max/webhook без заголовка -> $CODE"
-          case "$CODE" in
-            401|403) echo "OK: приёмник закрыт без секрета" ;;
-            200) echo "ПРОВАЛ: приёмник принял запрос без секрета" ; exit 1 ;;
-            *) echo "ВНИМАНИЕ: неожиданный код $CODE" ;;
-          esac
-
-          echo "===== Приёмник с ЗАВЕДОМО НЕВЕРНЫМ секретом (ожидается отказ) ====="
-          CODE=$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' \
+          WRONG=$(curl -sS --max-time 25 -o /tmp/wrong.txt -w '%{http_code}' \
             -X POST -H 'Content-Type: application/json' \
             -H 'X-Max-Bot-Api-Secret: task28-deliberately-wrong-secret' \
             -d '{"update_type":"bot_started","user":{"user_id":0}}' \
             https://cmpas.ru/api/max/webhook || echo 000)
-          echo "POST /api/max/webhook с неверным секретом -> $CODE"
-          case "$CODE" in
-            401|403) echo "OK: подделанный секрет отвергнут" ;;
-            200) echo "ПРОВАЛ: подделанный секрет принят" ; exit 1 ;;
-            *) echo "ВНИМАНИЕ: неожиданный код $CODE" ;;
-          esac
+          echo "без заголовка      -> $NOHDR $(cat /tmp/nohdr.txt | head -c 80)"
+          echo "с неверным секретом -> $WRONG $(cat /tmp/wrong.txt | head -c 80)"
+          if [ "$NOHDR" = "$WRONG" ] && cmp -s /tmp/nohdr.txt /tmp/wrong.txt; then
+            echo "OK: ответы неразличимы — подобрать секрет по реакции нельзя"
+          else
+            echo "ПРОВАЛ: ответы различаются, приёмник подсказывает подбирающему"
+            exit 1
+          fi
 
       # ── §9: DaData ───────────────────────────────────────────────────
       - name: DaData — подсказки по синтетическому адресу

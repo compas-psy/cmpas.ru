@@ -42,12 +42,12 @@ export default defineConfig({
         // что прошло там, пройдёт и шире.
         {
             name: 'journeys',
-            testMatch: /release-(journeys|paths)\.spec\.ts/,
+            testMatch: /(release-(journeys|paths)|task28-acceptance)\.spec\.ts/,
             use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } },
         },
         // Кадровые проверки только читают, поэтому их и гоняем на трёх ширинах.
-        { name: 'desktop', testIgnore: /release-(journeys|paths)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-        { name: 'laptop', testIgnore: /release-(journeys|paths)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } } },
-        { name: 'mobile', testIgnore: /release-(journeys|paths)\.spec\.ts/, use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } } },
+        { name: 'desktop', testIgnore: /(release-(journeys|paths)|task28-acceptance)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+        { name: 'laptop', testIgnore: /(release-(journeys|paths)|task28-acceptance)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } } },
+        { name: 'mobile', testIgnore: /(release-(journeys|paths)|task28-acceptance)\.spec\.ts/, use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } } },
     ],
 });

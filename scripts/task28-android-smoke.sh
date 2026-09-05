@@ -283,15 +283,23 @@ else
 fi
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null || true
 
-echo
-echo "===== ИТОГ (${VARIANT}) ====="
-echo "снимков: $SHOTS"
-if [ ${#FAILURES[@]} -eq 0 ]; then
-    echo "провалов: 0"
-    echo "ИТОГ: PASS"
-    exit 0
-fi
-echo "провалов: ${#FAILURES[@]}"
-for f in "${FAILURES[@]}"; do echo "  - $f"; done
-echo "ИТОГ: ЕСТЬ ЗАМЕЧАНИЯ"
-exit 1
+# Итог пишется и в журнал, и в файл: журнал прогона длинный, а сводку надо
+# уметь прочитать одним взглядом и вынести в артефакт.
+SUMMARY="$OUT/SUMMARY.txt"
+{
+    echo "===== ИТОГ (${VARIANT}) ====="
+    echo "устройство: $(adb shell wm size 2>/dev/null | tr -d '\r') / $(adb shell wm density 2>/dev/null | tr -d '\r')"
+    echo "снимков: $SHOTS"
+    if [ ${#FAILURES[@]} -eq 0 ]; then
+        echo "замечаний: 0"
+        echo "ИТОГ: PASS"
+    else
+        echo "замечаний: ${#FAILURES[@]}"
+        for f in "${FAILURES[@]}"; do echo "  - $f"; done
+        echo "ИТОГ: ЕСТЬ ЗАМЕЧАНИЯ"
+    fi
+} | tee "$SUMMARY"
+
+# Код возврата НЕ роняет прогон: снимки и журнал нужны в любом исходе, а
+# вердикт ставится отдельным шагом по сводкам обоих кадров.
+exit 0

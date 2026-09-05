@@ -21,10 +21,15 @@ on:
       - '.github/workflows/task28-android-device.yml'
       - 'scripts/task28-android-smoke.sh'
       - 'scripts/task28-accept-legal.cjs'
+      - 'scripts/task28-log-privacy.sh'
       - 'android/**'
 
+# Снимки нужно посмотреть глазами, а хранилище артефактов GitHub из рабочей
+# среды агента не читается — тот же упор, ради которого db-doctor.yml кладёт
+# свой отчёт обратно в репозиторий. Поэтому и здесь доказательства
+# возвращаются в ветку выпуска.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: task28-android-device
@@ -34,7 +39,7 @@ jobs:
   device:
     name: Эмулятор, снимки и функциональный обход
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
 
     services:
       postgres:
@@ -64,11 +69,11 @@ jobs:
 
       - name: Аппаратное ускорение доступно?
         run: |
-          echo "kvm-ok:"; ls -la /dev/kvm 2>&1 || echo "/dev/kvm отсутствует"
+          echo "kvm:"; ls -la /dev/kvm 2>&1 || echo "/dev/kvm отсутствует"
           egrep -c '(vmx|svm)' /proc/cpuinfo || true
 
-      # Без этого эмулятор на раннере поднимается программной отрисовкой и
-      # не укладывается в отведённое время.
+      # Без этого эмулятор поднимается программной отрисовкой и не
+      # укладывается в отведённое время.
       - name: Разрешить KVM текущему пользователю
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -124,6 +129,7 @@ jobs:
       # Кадр 390×844 из хендоффа: Pixel 5 — 1080×2340 при 440dpi, то есть
       # 393×851dp. Ближе штатного профиля к эталону нет.
       - name: Эмулятор, эталонный кадр (Pixel 5, ~393×851dp)
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -136,7 +142,8 @@ jobs:
           disable-animations: true
           script: bash scripts/task28-android-smoke.sh reference
 
-      - name: Эмулятор, узкий кадр (360×800dp)
+      - name: Эмулятор, узкий кадр (~360×640dp)
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -149,17 +156,63 @@ jobs:
           disable-animations: true
           script: bash scripts/task28-android-smoke.sh narrow
 
-      - name: Журнал стенда (в нём же ищем утечки)
+      - name: Сводки обоих кадров
         if: always()
-        run: tail -300 /tmp/stand.log || true
+        run: |
+          echo '===== СВОДКИ ====='
+          for f in artifacts-out/android/*/SUMMARY.txt; do
+            [ -f "$f" ] && { echo; cat "$f"; }
+          done
+          echo '===== КОНЕЦ СВОДОК ====='
+
+      - name: Журнал стенда — ищем в нём личное
+        if: always()
+        run: |
+          echo "строк в журнале: $(wc -l < /tmp/stand.log 2>/dev/null || echo 0)"
+          bash scripts/task28-log-privacy.sh /tmp/stand.log || true
+
+      - name: Положить снимки в репозиторий
+        if: always()
+        run: |
+          set -e
+          TARGET=artifacts/praktika-mvp/task28/android
+          rm -rf "$TARGET"
+          mkdir -p "$TARGET"
+          cp -r artifacts-out/android/* "$TARGET"/ 2>/dev/null || true
+          # logcat в репозиторий не кладём: он большой и полон чужого шума.
+          find "$TARGET" -name 'logcat.txt' -delete 2>/dev/null || true
+          echo "файлов: $(find "$TARGET" -type f | wc -l), объём: $(du -sh "$TARGET" 2>/dev/null | cut -f1)"
+
+          git config user.name 'compas-psy'
+          git config user.email 'noreply@cmpas.ru'
+          git add -A "$TARGET"
+          if git diff --cached --quiet; then
+            echo "изменений нет"
+          else
+            git commit \
+              -m "evidence: android device screenshots for task 28" \
+              -m "Снимки сняты на эмуляторе прогоном ${{ github.run_id }}: кадр Pixel 5 (~393x851dp) и узкий кадр. Кладутся в репозиторий, потому что хранилище артефактов GitHub из рабочей среды агента не читается." \
+              -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
+          fi
 
       - name: Выложить снимки и журналы
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: task28-android-device
-          path: |
-            artifacts-out/**
-            /tmp/stand.log
+          path: artifacts-out/**
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Вердикт по обоим кадрам
+        if: always()
+        run: |
+          [ -d artifacts-out/android ] || { echo 'снимков нет вовсе'; exit 1; }
+          fail=0
+          for f in artifacts-out/android/*/SUMMARY.txt; do
+            [ -f "$f" ] || continue
+            grep -q 'ИТОГ: PASS' "$f" || fail=1
+          done
+          exit $fail

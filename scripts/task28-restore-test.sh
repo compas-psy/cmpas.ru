@@ -105,11 +105,23 @@ run_in_app() {
     "$IMAGE" sh -c "$1" 2>&1
 }
 
+# Отдельно от run_in_app: здесь важен КОД ВОЗВРАТА верификатора, а не текст.
+# Искать слово «PASS» в выводе нельзя — verify-production-schema.js говорит
+# по-русски и об успехе сообщает именно кодом (process.exitCode).
+verify_schema() {
+  docker run --rm --network "$NET" \
+    -v "$RC/prisma:/app/prisma:ro" \
+    -v "$RC/scripts:/app/scripts:ro" \
+    -w /app -e DATABASE_URL="$DBURL" \
+    "$IMAGE" sh -c 'node node_modules/prisma/build/index.js generate >/dev/null 2>&1; node scripts/verify-production-schema.js' 2>&1
+}
+
 say "Проверка схемы ДО миграций"
-VERIFY_BEFORE=$(run_in_app 'node node_modules/prisma/build/index.js generate >/dev/null 2>&1; node scripts/verify-production-schema.js')
+VERIFY_BEFORE=$(verify_schema); VERIFY_BEFORE_RC=$?
 echo "$VERIFY_BEFORE" | tail -25
-if printf '%s' "$VERIFY_BEFORE" | grep -qi "PASS"; then
-  echo "(до миграций схема уже сходится — значит новых миграций нет)"
+echo "--- код возврата верификатора ДО: $VERIFY_BEFORE_RC"
+if [ "$VERIFY_BEFORE_RC" -eq 0 ]; then
+  echo "(до миграций схема уже сходится — значит применять нечего)"
 else
   echo "(ожидаемо: боевая схема ещё не знает про новые миграции выпуска)"
 fi
@@ -133,9 +145,10 @@ if [ "${UNFIN:-1}" != "0" ]; then bad "остались незавершённы
 echo "записей в журнале стало: $(psql_tmp 'SELECT count(*) FROM _prisma_migrations;')"
 
 say "Проверка схемы ПОСЛЕ миграций"
-VERIFY_AFTER=$(run_in_app 'node node_modules/prisma/build/index.js generate >/dev/null 2>&1; node scripts/verify-production-schema.js')
+VERIFY_AFTER=$(verify_schema); VERIFY_AFTER_RC=$?
 echo "$VERIFY_AFTER" | tail -30
-if printf '%s' "$VERIFY_AFTER" | grep -qi "SCHEMA OK\|PASS"; then good "verify-production-schema прошёл"; else bad "verify-production-schema не прошёл"; fi
+echo "--- код возврата верификатора ПОСЛЕ: $VERIFY_AFTER_RC"
+if [ "$VERIFY_AFTER_RC" -eq 0 ]; then good "verify-production-schema прошёл"; else bad "verify-production-schema не прошёл"; fi
 
 # ── 5. Идемпотентность ───────────────────────────────────────────────────
 say "prisma migrate deploy — второй прогон (ожидается «нечего применять»)"
@@ -180,8 +193,9 @@ psql_tmp "SELECT 'PracticeOperatorAttestation без пользователя: '
 
 say "Значения по умолчанию сохранили смысл (только числа)"
 psql_tmp "SELECT 'сессий с origin IS NULL: ' || count(*) FROM \"DiarySession\" WHERE origin IS NULL;"
-psql_tmp "SELECT 'пользователей с bookingLinkSharedAt: ' || count(*) FROM \"User\" WHERE \"bookingLinkSharedAt\" IS NOT NULL;"
-psql_tmp "SELECT 'пользователей с onboardingDismissedAt: ' || count(*) FROM \"User\" WHERE \"onboardingDismissedAt\" IS NOT NULL;"
+psql_tmp "SELECT 'практик с bookingLinkSharedAt: ' || count(*) FROM \"PsychologistSettings\" WHERE \"bookingLinkSharedAt\" IS NOT NULL;"
+psql_tmp "SELECT 'практик с onboardingDismissedAt: ' || count(*) FROM \"PsychologistSettings\" WHERE \"onboardingDismissedAt\" IS NOT NULL;"
+psql_tmp "SELECT 'практик с onboardingCompleted=true: ' || count(*) FROM \"PsychologistSettings\" WHERE \"onboardingCompleted\" = true;"
 
 echo
 say "ИТОГ"
