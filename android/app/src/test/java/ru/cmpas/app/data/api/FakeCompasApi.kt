@@ -64,6 +64,10 @@ open class FakeCompasApi(
 
     override suspend fun updateNotificationSettings(body: MobileNotificationSettingsPatch): Response<MobileNotificationSettings> =
         notStubbed("updateNotificationSettings")
+    override suspend fun getAddresses(): Response<PracticeAddressList> = notStubbed("getAddresses")
+    override suspend fun createAddress(body: CreatePracticeAddressRequest): Response<PracticeAddress> = notStubbed("createAddress")
+    override suspend fun updateAddress(id: String, body: UpdatePracticeAddressRequest): Response<PracticeAddressList> = notStubbed("updateAddress")
+    override suspend fun deactivateAddress(id: String): Response<PracticeAddressList> = notStubbed("deactivateAddress")
     override suspend fun getLegalStatus(): Response<MobileLegalStatus> = notStubbed("getLegalStatus")
     override suspend fun acceptLegal(body: MobileLegalAcceptBody): Response<MobileLegalAcceptResponse> = notStubbed("acceptLegal")
     override suspend fun markFeatureInterest(body: FeatureInterestRequest): Response<FeatureInterestResponse> = notStubbed("markFeatureInterest")

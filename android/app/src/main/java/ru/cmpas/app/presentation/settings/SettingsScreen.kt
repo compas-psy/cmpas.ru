@@ -31,6 +31,7 @@ import ru.cmpas.app.presentation.theme.*
 fun SettingsScreen(
     onLogout: () -> Unit = {},
     onScheduleClick: () -> Unit = {},
+    onAddressesClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -138,6 +139,10 @@ fun SettingsScreen(
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                     SettingRow(Icons.Outlined.EventBusy, "Расписание", "Блокировки, выходные и режим записи") { onScheduleClick() }
+                    ThinDivider()
+                    // Задача 21: кабинеты заводятся и правятся с телефона, а
+                    // не только в веб-кабинете.
+                    SettingRow(Icons.Outlined.Place, "Кабинеты", "Места очного приёма") { onAddressesClick() }
                     ThinDivider()
                     SettingRow(Icons.Outlined.Link, "Ссылка для записи", uiState.bookingLink?.removePrefix("https://")?.removePrefix("http://") ?: "Загружаем…") { activeSheet = ProfileSheet.BOOKING }
                     ThinDivider()

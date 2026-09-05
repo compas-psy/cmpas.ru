@@ -12,6 +12,7 @@ sealed class Screen(val route: String) {
     data object Notes : Screen("notes")
     data object Settings : Screen("settings")
     data object Schedule : Screen("schedule")
+    data object Addresses : Screen("addresses")
     data object QuickAction : Screen("quick-action/{type}") {
         fun createRoute(type: String) = "quick-action/$type"
     }

@@ -38,6 +38,41 @@ data class MobileNotificationSettingsPatch(
     val clientReminder1hEnabled: Boolean? = null,
 )
 
+/**
+ * Кабинет практики (Задача 21).
+ *
+ * «Основной» — свойство набора, а не строки: на сервере его держит
+ * PsychologistSettings.officeAddress, поэтому изменение одного кабинета
+ * меняет метку и у другого, и список всегда приходит целиком.
+ */
+@Serializable
+data class PracticeAddress(
+    val id: String,
+    val name: String,
+    val address: String,
+    val isPrimary: Boolean = false,
+    val isActive: Boolean = true,
+)
+
+@Serializable
+data class PracticeAddressList(
+    val addresses: List<PracticeAddress> = emptyList(),
+)
+
+@Serializable
+data class CreatePracticeAddressRequest(
+    val name: String,
+    val address: String,
+)
+
+/** Меняется только то, что передано: остальные поля кабинета не трогаются. */
+@Serializable
+data class UpdatePracticeAddressRequest(
+    val name: String? = null,
+    val address: String? = null,
+    val isPrimary: Boolean? = null,
+)
+
 @Serializable
 enum class UserRole { PSYCHOLOGIST, CLIENT }
 

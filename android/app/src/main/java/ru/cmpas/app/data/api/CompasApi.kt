@@ -134,6 +134,25 @@ interface CompasApi {
     @PATCH("notification-settings")
     suspend fun updateNotificationSettings(@Body body: MobileNotificationSettingsPatch): Response<MobileNotificationSettings>
 
+    // Кабинеты практики (Задача 21). Удаления кабинета в контракте нет:
+    // DELETE выводит кабинет из работы, а строка остаётся — иначе у прошедших
+    // сессий пропало бы место встречи. Занятый кабинет сервер не выводит и
+    // отвечает 409 ADDRESS_IN_USE.
+    @GET("addresses")
+    suspend fun getAddresses(): Response<PracticeAddressList>
+
+    @POST("addresses")
+    suspend fun createAddress(@Body body: CreatePracticeAddressRequest): Response<PracticeAddress>
+
+    @PATCH("addresses/{id}")
+    suspend fun updateAddress(
+        @Path("id") id: String,
+        @Body body: UpdatePracticeAddressRequest,
+    ): Response<PracticeAddressList>
+
+    @DELETE("addresses/{id}")
+    suspend fun deactivateAddress(@Path("id") id: String): Response<PracticeAddressList>
+
     @GET("legal/status")
     suspend fun getLegalStatus(): Response<MobileLegalStatus>
 

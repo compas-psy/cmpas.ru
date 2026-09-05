@@ -5,6 +5,11 @@
 // сессий. И пока на кабинет ссылается хотя бы одно ДЕЙСТВУЮЩЕЕ правило
 // расписания, выводить его нельзя — иначе правило продолжит вести клиентов
 // туда, где приёма уже нет.
+//
+// Задача 21 добавила сюда вторую блокирующую зависимость — будущие записи.
+// Действия веб-кабинета и мобильные ресурсы теперь ходят в одно ядро
+// (src/lib/practice/addresses.ts), поэтому набор блокировок у них общий:
+// кабинет, который держит завтрашняя встреча, не выводится ни там, ни там.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -15,8 +20,8 @@ const world = vi.hoisted(() => ({
     /** Действующие окна расписания: addressId → сколько ссылается. */
     activeSlots: [] as Array<{ psychologistId: string; addressId: string | null; isActive: boolean }>,
     activeRules: [] as Array<{ psychologistId: string; addressId: string | null; isActive: boolean }>,
-    /** Прошедшие сессии — их не должен трогать никто. */
-    sessions: [] as Array<{ id: string; addressId: string | null }>,
+    /** Сессии: прошедшие — история, будущие — блокирующая зависимость. */
+    sessions: [] as Array<{ id: string; addressId: string | null; date: Date; status: string }>,
     officeAddress: null as string | null,
     deletedAddressIds: [] as string[],
 }));
@@ -48,6 +53,13 @@ vi.mock('@/lib/db', () => ({
                 return { id: where.id };
             }),
             count: vi.fn(async () => world.addresses.length),
+        },
+        diarySession: {
+            count: vi.fn(async ({ where }: {
+                where: { addressId: string; date: { gte: Date }; status: { in: string[] } };
+            }) => world.sessions.filter(s => s.addressId === where.addressId
+                && s.date >= where.date.gte
+                && where.status.in.includes(s.status)).length),
         },
         availabilitySlot: {
             count: vi.fn(async ({ where }: { where: { psychologistId: string; addressId: string; isActive: boolean } }) =>
@@ -84,7 +96,12 @@ beforeEach(() => {
     ];
     world.activeSlots = [];
     world.activeRules = [];
-    world.sessions = [{ id: 's-past', addressId: 'a-yauzskaya' }];
+    world.sessions = [{
+        id: 's-past',
+        addressId: 'a-yauzskaya',
+        date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
+        status: 'completed',
+    }];
     world.officeAddress = 'a-yauzskaya';
     world.deletedAddressIds = [];
 });
@@ -118,6 +135,33 @@ describe('§6 вывод кабинета, на который ссылаютс�
 
     it('выключенное правило кабинет не держит', async () => {
         world.activeSlots = [{ psychologistId: 'psy-1', addressId: 'a-yauzskaya', isActive: false }];
+        await expect(deactivateAddress('a-yauzskaya')).resolves.toEqual({ success: true });
+    });
+});
+
+describe('Задача 21: будущая запись держит кабинет так же, как правило', () => {
+    it('назначенная встреча блокирует вывод, и ничего не переназначается молча', async () => {
+        world.sessions.push({
+            id: 's-future',
+            addressId: 'a-yauzskaya',
+            date: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            status: 'confirmed',
+        });
+
+        await expect(deactivateAddress('a-yauzskaya')).rejects.toThrow(/перенесите будущие записи/);
+
+        expect(world.addresses.find(a => a.id === 'a-yauzskaya')!.isActive).toBe(true);
+        expect(world.sessions.find(s => s.id === 's-future')!.addressId).toBe('a-yauzskaya');
+    });
+
+    it('отменённая будущая встреча кабинет не держит', async () => {
+        world.sessions.push({
+            id: 's-cancelled',
+            addressId: 'a-yauzskaya',
+            date: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            status: 'cancelled',
+        });
+
         await expect(deactivateAddress('a-yauzskaya')).resolves.toEqual({ success: true });
     });
 });

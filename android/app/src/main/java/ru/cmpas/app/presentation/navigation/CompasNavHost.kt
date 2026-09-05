@@ -29,6 +29,7 @@ import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
 import ru.cmpas.app.presentation.schedule.ScheduleScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
+import ru.cmpas.app.presentation.settings.AddressesScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
 import ru.cmpas.app.presentation.theme.Ambient
 import ru.cmpas.app.presentation.theme.CompasBg
@@ -101,10 +102,14 @@ fun CompasNavHost(
                         navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
                     },
                     onScheduleClick = { navController.navigate(Screen.Schedule.route) },
+                    onAddressesClick = { navController.navigate(Screen.Addresses.route) },
                 )
             }
             composable(Screen.Schedule.route) {
                 ScheduleScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.Addresses.route) {
+                AddressesScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 Screen.QuickAction.route,
