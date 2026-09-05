@@ -136,6 +136,10 @@ fun SettingsScreen(
                     ConnectionRow("MAX", connectionSubtitle(uiState.user?.maxConnected), Max, uiState.user?.maxConnected == true) { activeSheet = ProfileSheet.MAX }
                 }
             }
+            // Задача 27, кадр A04: у этой карточки не было заголовка, хотя
+            // ровно ради названных групп кадр и заведён — «Практика /
+            // Мессенджеры / Аналитика», а не двадцать разделов подряд.
+            item { SectionTitle("Практика") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                     SettingRow(Icons.Outlined.EventBusy, "Расписание", "Блокировки, выходные и режим записи") { onScheduleClick() }

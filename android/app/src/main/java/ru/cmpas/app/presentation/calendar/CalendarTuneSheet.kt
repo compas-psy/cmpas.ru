@@ -150,7 +150,10 @@ internal fun BlockTimeSheet(
             DateChip("Сегодня", date == today, Modifier.weight(1f)) { dateText = today.toString() }
             DateChip("Завтра", date == tomorrow, Modifier.weight(1f)) { dateText = tomorrow.toString() }
             DateChip(
-                if (date == today || date == tomorrow) "Дата" else prettyDate(date),
+                // Кадр A07 называет третью фишку «Другая дата»: одно слово
+                // «Дата» рядом с «Сегодня» и «Завтра» читается как заголовок
+                // группы, а не как третий выбор.
+                if (date == today || date == tomorrow) "Другая дата" else prettyDate(date),
                 date != today && date != tomorrow,
                 Modifier.weight(1f),
             ) { showPicker = true }

@@ -83,7 +83,13 @@ fun NotificationCenterSheet(
                         Spacer(Modifier.width(10.dp))
                         Text(attention.label, style = tBody2, color = CompasFg, modifier = Modifier.weight(1f))
                         if (target != null) {
+                            // Кадр A13 подписывает у каждой строки её действие
+                            // («Добавить», «Отправить»), а не одну стрелку на
+                            // все: строка называет, что не сделано, а глагол —
+                            // что произойдёт по нажатию.
                             Spacer(Modifier.width(8.dp))
+                            Text(attentionActionLabel(target), style = tMeta, color = Forest700)
+                            Spacer(Modifier.width(4.dp))
                             Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
                         }
                     }
@@ -185,6 +191,13 @@ internal fun attentionTarget(item: AttentionItem): AttentionTarget? {
         "client_without_consent" -> clientId?.let(AttentionTarget::RequestConsent)
         else -> null
     }
+}
+
+/** Глагол действия строки «Требует внимания» — ровно то, что делает тап. */
+internal fun attentionActionLabel(target: AttentionTarget): String = when (target) {
+    is AttentionTarget.WriteNote -> "Добавить"
+    is AttentionTarget.MarkPayment -> "Отметить"
+    is AttentionTarget.RequestConsent -> "Отправить"
 }
 
 internal fun attentionIcon(type: String): ImageVector = when (type) {
