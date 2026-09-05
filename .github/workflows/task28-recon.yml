@@ -1,0 +1,56 @@
+name: Task 28 · Разведка сервера (только чтение)
+
+# Задача 28 требует restore свежей боевой копии и production-style прогон
+# истории миграций. Прежде чем что-то поднимать, надо знать факты: какой
+# образ приложения лежит на сервере, есть ли в нём Prisma, сколько свободного
+# места под временную базу, как называется сеть контейнеров и что сейчас
+# в журнале миграций.
+#
+# Этот прогон НИЧЕГО не меняет: scripts/task28-recon.sh состоит из docker
+# inspect, psql SELECT и ls. Ни боевой базы, ни выкладки он не касается.
+#
+# Запуск — событием push самой ветки выпуска: workflow_dispatch GitHub
+# регистрирует только для файлов, уже лежащих в ветке по умолчанию.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/praktika-mvp-launch'
+    paths:
+      - 'scripts/task28-recon.sh'
+      - '.github/workflows/task28-recon.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task28-recon
+  cancel-in-progress: false
+
+jobs:
+  recon:
+    name: Снять состояние сервера
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Опросить сервер
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/recon_key
+          chmod 600 ~/.ssh/recon_key
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -i ~/.ssh/recon_key "$SSH_USER@$SSH_HOST" 'bash -s' \
+              < scripts/task28-recon.sh > /tmp/recon.out 2>&1 || true
+          rm -f ~/.ssh/recon_key
+          echo '===== НАЧАЛО ОТЧЁТА ====='
+          cat /tmp/recon.out
+          echo '===== КОНЕЦ ОТЧЁТА ====='

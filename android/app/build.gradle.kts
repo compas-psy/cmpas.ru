@@ -8,6 +8,15 @@ plugins {
     // alias(libs.plugins.google.services) // Enable when google-services.json is added
 }
 
+// Задача 28: приёмочный прогон обязан идти против одноразового стенда, а не
+// против боевого сервера с данными живых клиентов. Адрес берётся из свойства
+// сборки, и ТОЛЬКО если его передали снаружи; по умолчанию — тот же боевой
+// адрес, что и был. Ни выкладка, ни релизная сборка своего поведения не
+// меняют: `-PapiBaseUrl=...` передаёт только приёмочный workflow.
+val apiBaseUrl: String = (project.findProperty("apiBaseUrl") as String?)
+    ?.takeIf { it.isNotBlank() }
+    ?: "https://cmpas.ru/api/mobile/"
+
 android {
     namespace = "ru.cmpas.app"
     compileSdk = 35
@@ -21,7 +30,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     // Ключ подписи приходит ИЗВНЕ, а не из репозитория.
@@ -57,7 +66,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "API_BASE_URL", "\"https://cmpas.ru/api/mobile/\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
         release {
             if (hasSigningKey) {

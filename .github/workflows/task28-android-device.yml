@@ -1,0 +1,165 @@
+name: Task 28 · Android на устройстве
+
+# Главное недостающее доказательство Задачи 27: Android, отрисованный
+# по-настоящему, а не сверенный по исходнику.
+#
+# Здесь на одной машине поднимается ВЕСЬ стенд: PostgreSQL, миграции,
+# синтетический посев, собранное приложение Next.js — и рядом эмулятор
+# Android, которому этот стенд виден как http://10.0.2.2:3100. Боевого
+# сервера прогон не касается вовсе: адрес передаётся сборке свойством
+# `-PapiBaseUrl`, по умолчанию оставшимся боевым.
+#
+# Данные только синтетические (scripts/e2e-seed.cjs). Ни одного настоящего
+# клиента, ни одной отправки в мессенджер: токенов ботов job не получает.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/praktika-mvp-launch'
+    paths:
+      - '.github/workflows/task28-android-device.yml'
+      - 'scripts/task28-android-smoke.sh'
+      - 'scripts/task28-accept-legal.cjs'
+      - 'android/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task28-android-device
+  cancel-in-progress: true
+
+jobs:
+  device:
+    name: Эмулятор, снимки и функциональный обход
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: task28_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/task28_db
+      AUTH_SECRET: task28-staging-secret-not-a-real-one
+      AUTH_TRUST_HOST: 'true'
+      AUTH_URL: http://localhost:3100
+      NEXTAUTH_URL: http://localhost:3100
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Аппаратное ускорение доступно?
+        run: |
+          echo "kvm-ok:"; ls -la /dev/kvm 2>&1 || echo "/dev/kvm отсутствует"
+          egrep -c '(vmx|svm)' /proc/cpuinfo || true
+
+      # Без этого эмулятор на раннере поднимается программной отрисовкой и
+      # не укладывается в отведённое время.
+      - name: Разрешить KVM текущему пользователю
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Поднять стенд
+        run: |
+          set -e
+          npm ci --legacy-peer-deps
+          npx prisma generate
+          npx prisma migrate deploy
+          node scripts/e2e-seed.cjs
+          npm run build
+
+      - name: Запустить приложение
+        run: |
+          nohup npx next start -p 3100 > /tmp/stand.log 2>&1 &
+          for i in $(seq 1 30); do
+            sleep 2
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3100/ || true)
+            [ "$code" = "200" ] && { echo "стенд поднялся"; break; }
+          done
+          curl -sS -o /dev/null -w 'GET /  -> %{http_code}\n' http://localhost:3100/
+
+      - name: Принять обязательные документы за синтетических специалистов
+        run: node scripts/task28-accept-legal.cjs
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Собрать отладочную сборку против стенда
+        working-directory: android
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.9/bin/gradle assembleDebug --no-daemon \
+            -PapiBaseUrl=http://10.0.2.2:3100/api/mobile/
+          ls -la app/build/outputs/apk/debug/
+
+      # Кадр 390×844 из хендоффа: Pixel 5 — 1080×2340 при 440dpi, то есть
+      # 393×851dp. Ближе штатного профиля к эталону нет.
+      - name: Эмулятор, эталонный кадр (Pixel 5, ~393×851dp)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 4096M
+          disk-size: 6G
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash scripts/task28-android-smoke.sh reference
+
+      - name: Эмулятор, узкий кадр (360×800dp)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 5
+          ram-size: 4096M
+          disk-size: 6G
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash scripts/task28-android-smoke.sh narrow
+
+      - name: Журнал стенда (в нём же ищем утечки)
+        if: always()
+        run: tail -300 /tmp/stand.log || true
+
+      - name: Выложить снимки и журналы
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task28-android-device
+          path: |
+            artifacts-out/**
+            /tmp/stand.log
+          if-no-files-found: warn
+          retention-days: 14
