@@ -1,0 +1,83 @@
+name: Task 28 · Restore свежей копии и история миграций
+
+# Задача 28, §2–§4. Самая тяжёлая часть приёмки: проверить, что свежая боевая
+# копия восстанавливается, что `prisma migrate deploy` работает по НАСТОЯЩЕЙ
+# истории `_prisma_migrations` (а не по смоделированной через
+# `migrate resolve --applied`), что второй прогон — пустая операция и что
+# данные это пережили.
+#
+# Всё происходит на сервере, во ВРЕМЕННОЙ базе того же кластера: боевые
+# данные никуда не уезжают, наружу отдаются только числа. Боевая база
+# cmpas_db при этом не изменяется — в scripts/task28-restore-test.sh нет ни
+# одной пишущей команды к ней, а имя временной базы защищено префиксом.
+#
+# Выкладка НЕ запускается. Контейнер приложения не пересоздаётся: образ
+# используется только как готовая среда с Node и Prisma, поверх которой
+# монтируются prisma/ и scripts/ версии release candidate.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/praktika-mvp-launch'
+    paths:
+      - 'scripts/task28-restore-test.sh'
+      - '.github/workflows/task28-restore.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task28-restore
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: Восстановить копию и прогнать миграции
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout release candidate
+        uses: actions/checkout@v4
+
+      - name: Собрать посылку с миграциями выпуска
+        run: |
+          mkdir -p rc28/scripts
+          cp -r prisma rc28/prisma
+          cp scripts/verify-production-schema.js rc28/scripts/
+          cp scripts/task28-restore-test.sh rc28/
+          echo "миграций в посылке: $(ls rc28/prisma/migrations | wc -l)"
+          tar czf rc28.tar.gz rc28
+
+      - name: Доставить посылку и выполнить проверку
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -u
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/rc28_key
+          chmod 600 ~/.ssh/rc28_key
+          SSHOPT="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/rc28_key"
+
+          scp $SSHOPT rc28.tar.gz "$SSH_USER@$SSH_HOST:/tmp/rc28.tar.gz"
+          ssh $SSHOPT "$SSH_USER@$SSH_HOST" \
+            'set -e; rm -rf /tmp/rc28; cd /tmp; tar xzf rc28.tar.gz; ls -d /tmp/rc28/prisma /tmp/rc28/scripts'
+
+          set +e
+          ssh $SSHOPT "$SSH_USER@$SSH_HOST" \
+            'bash /tmp/rc28/task28-restore-test.sh' > /tmp/restore.out 2>&1
+          STATUS=$?
+          set -e
+
+          # Посылку с сервера убираем в любом случае: держать там копию
+          # исходников выпуска после проверки незачем.
+          ssh $SSHOPT "$SSH_USER@$SSH_HOST" 'rm -rf /tmp/rc28 /tmp/rc28.tar.gz' || true
+          rm -f ~/.ssh/rc28_key
+
+          echo '===== НАЧАЛО ОТЧЁТА ====='
+          cat /tmp/restore.out
+          echo '===== КОНЕЦ ОТЧЁТА ====='
+          echo "код возврата проверки: $STATUS"
+          exit $STATUS
