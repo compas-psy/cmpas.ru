@@ -37,11 +37,13 @@ class DashboardSurfaceTest {
         val body = code(dashboard)
         // Ни одной ранней остановки отрисовки по признаку онбординга или
         // списка задач: иначе обычный дашборд подменялся бы заглушкой.
-        assertFalse(body.contains(Regex("""if \(uiState\.needsOnboarding\)[^{]*\{\s*return""")))
+        assertFalse(body.contains(Regex("""if \(uiState\.onboarding[^)]*\)[^{]*\{\s*return""")))
         assertFalse(body.contains(Regex("""if \(uiState\.attentionItems[^)]*\)[^{]*\{\s*return""")))
-        // Онбординг — обычный элемент того же списка.
-        assertTrue(body.contains("if (uiState.needsOnboarding)"))
-        assertTrue(body.contains("OnboardingBridgeCard"))
+        // Онбординг — обычный элемент того же списка. Имя карточки поменялось
+        // в Задаче 24 (BookingBridge -> чек-лист), проверяемое свойство — нет:
+        // блок живёт внутри item { } общего списка, а не вместо него.
+        assertTrue("онбординг читается из состояния", body.contains("uiState.onboarding"))
+        assertTrue("онбординг — карточка в списке", body.contains("OnboardingChecklistCard"))
     }
 
     @Test
@@ -89,8 +91,10 @@ class DashboardSurfaceTest {
         val body = code(dashboard)
         assertFalse("большая витрина ссылки убрана", body.contains("BookingShareCard"))
         assertFalse("прямого системного шеринга с главного экрана нет", body.contains("shareBookingLink("))
-        // Действие осталось: оно открывает ту же единственную шторку.
-        assertTrue(body.contains("BookingLinkSheet(uiState.bookingLink"))
+        // Действие осталось: оно открывает ту же единственную шторку и передаёт
+        // ей ровно серверную ссылку. Вызов с Задачи 24 разнесён по строкам,
+        // поэтому сверяется первый аргумент, а не одна склеенная строка.
+        assertTrue(body.contains(Regex("""BookingLinkSheet\(\s*uiState\.bookingLink""")))
     }
 
     @Test
