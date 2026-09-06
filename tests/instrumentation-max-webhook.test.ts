@@ -39,6 +39,13 @@ describe('instrumentation.ts — регистрация MAX webhook на ста�
         process.env.NEXT_RUNTIME = 'nodejs';
         process.env.MAX_BOT_TOKEN = 'test-token';
         process.env.MAX_WEBHOOK_SECRET = 'webhook-secret-value';
+        // Адрес вебхука собирается из AUTH_URL. Закрепляем его здесь, как и
+        // остальные переменные: без этого тест читал бы окружение прогона —
+        // локально AUTH_URL не задан и подставляется боевой домен, а в
+        // веб-преflight стоит http://localhost:3000, потому что он нужен
+        // сборке. Тест, ответ которого зависит от окружения, проверяет не
+        // продукт, а окружение.
+        process.env.AUTH_URL = 'https://cmpas.ru';
         fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
         vi.stubGlobal('fetch', fetchMock);
     });

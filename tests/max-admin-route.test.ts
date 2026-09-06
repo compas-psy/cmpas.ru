@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const ORIGINAL_TOKEN = process.env.MAX_BOT_TOKEN;
 const ORIGINAL_SECRET = process.env.MAX_WEBHOOK_SECRET;
 const ORIGINAL_ADMIN_SECRET = process.env.ADMIN_SECRET;
+const ORIGINAL_AUTH_URL = process.env.AUTH_URL;
 
 function req(url: string) {
     return { nextUrl: new URL(url) } as any;
@@ -21,6 +22,10 @@ describe('POST/GET /api/max/admin — единый platform-api2.max.ru, DELETE 
         process.env.MAX_BOT_TOKEN = 'test-token';
         process.env.ADMIN_SECRET = 'admin-secret';
         process.env.MAX_WEBHOOK_SECRET = 'webhook-secret-value';
+        // См. пояснение в instrumentation-max-webhook.test.ts: адрес вебхука
+        // берётся из AUTH_URL, и его надо закрепить, а не наследовать от
+        // прогона.
+        process.env.AUTH_URL = 'https://cmpas.ru';
         fetchMock = vi.fn().mockImplementation((url: string) => {
             if (url.includes('DELETE') || true) {
                 return Promise.resolve({ ok: true, json: async () => ({ success: true }) });
@@ -33,6 +38,8 @@ describe('POST/GET /api/max/admin — единый platform-api2.max.ru, DELETE 
         process.env.MAX_BOT_TOKEN = ORIGINAL_TOKEN;
         process.env.MAX_WEBHOOK_SECRET = ORIGINAL_SECRET;
         process.env.ADMIN_SECRET = ORIGINAL_ADMIN_SECRET;
+        if (ORIGINAL_AUTH_URL === undefined) delete process.env.AUTH_URL;
+        else process.env.AUTH_URL = ORIGINAL_AUTH_URL;
         vi.unstubAllGlobals();
     });
 
