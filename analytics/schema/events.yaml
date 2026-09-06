@@ -501,6 +501,24 @@ events:
       # здесь нет: событие о том, ЧТО закрыли, а не у кого.
       source: [session_without_notes, session_unpaid, client_without_consent]
 
+  practice_client_intake_contact:
+    product: practice
+    question: "Приживается ли заведение клиента пересылкой контакта боту и на чём оно спотыкается?"
+    required: [source, result]
+    optional: []
+    props:
+      source: string
+      result: string
+    values:
+      # Мессенджер, из которого переслали контакт.
+      source: [telegram, max]
+      # Чем кончилось. Имени и телефона здесь нет и быть не может: событие
+      # о том, ЧТО произошло, а не с кем. duplicate — карточка уже была,
+      # conflict — претендовало несколько, incomplete — в контакте не
+      # хватило обязательного поля, blocked_attestation — нет аттестации
+      # оператора персональных данных.
+      result: [created, filled, duplicate, conflict, incomplete, blocked_attestation, cancelled]
+
   practice_onboarding_completed:
     product: practice
     question: "Доходят ли до пройденного чек-листа настройки практики?"

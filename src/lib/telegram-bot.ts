@@ -1,4 +1,5 @@
 import { Telegraf, Context, Markup } from 'telegraf';
+import { message } from 'telegraf/filters';
 import type { Agent } from 'http';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
@@ -8,6 +9,8 @@ import { telegramSendAgent } from '@/lib/telegram-proxy';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
+import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
+import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -90,6 +93,51 @@ export function setupBot() {
             'Чтобы привязать аккаунт психолога, войдите в кабинет:',
             Markup.inlineKeyboard([[Markup.button.webApp('💼 Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot`)]])
         );
+    });
+
+    // Специалист пересылает боту контакт клиента из телефонной книги —
+    // самый короткий путь завести карточку. Разбор, сверка с базой и
+    // создание живут в общем модуле: MAX делает ровно то же самое, и
+    // расходиться эти два пути не должны.
+    //
+    // Карточка здесь НЕ создаётся: сначала показываем, что разобрали, и
+    // ждём кнопки. Пересылка контакта бывает и случайной.
+    bot.on(message('contact'), async (ctx) => {
+        const tgId = ctx.from?.id.toString();
+        if (!tgId) return;
+
+        const preview = await previewContactIntake({
+            source: 'telegram',
+            senderChatId: tgId,
+            contact: ctx.message.contact,
+        });
+
+        const reply = previewMessage(preview, TELEGRAM_APP_URL);
+        if (!reply) return;
+
+        await ctx.reply(reply.text, reply.buttons.length > 0
+            ? Markup.inlineKeyboard(reply.buttons.map((b) => [Markup.button.callback(b.label, b.payload)]))
+            : undefined);
+    });
+
+    bot.action(/intake_(ok|no|fill)_(.+)/, async (ctx) => {
+        const tgId = ctx.from?.id.toString();
+        if (!tgId) return;
+
+        const psy = await db.user.findUnique({ where: { telegramChatId: tgId }, select: { id: true } });
+        if (!psy) return ctx.answerCbQuery();
+
+        const action = ctx.match[1] === 'ok' ? 'create' : ctx.match[1] === 'fill' ? 'fill' : 'cancel';
+        const result = await commitContactIntake({
+            draftId: ctx.match[2],
+            psychologistId: psy.id,
+            action,
+        });
+
+        await ctx.answerCbQuery();
+        // Кнопки убираем: черновик погашен, второй раз нажимать нечего.
+        await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+        await ctx.reply(commitMessage(result, TELEGRAM_APP_URL));
     });
 
     bot.start(async (ctx: Context) => {

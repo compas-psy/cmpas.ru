@@ -1153,6 +1153,35 @@ model ClientInviteToken {
   @@index([clientId])
 }
 
+// Черновик карточки клиента, разобранной из контакта, который специалист
+// переслал боту (Telegram или MAX).
+//
+// Оба бота stateless — ни сцен, ни сессий. Кнопка подтверждения должна
+// что-то нести, а callback_data в Telegram ограничен 64 байтами: имя с
+// телефоном туда не влезают. Поэтому разобранные поля лежат здесь, а
+// кнопка несёт только id черновика — тем же приёмом, что ClientInviteToken
+// выше.
+//
+// В строке лежат имя и телефон живого человека, который ещё не давал
+// согласия. Отсюда короткий срок жизни (час), погашение через usedAt и
+// чистка истёкших вместе с истечением приглашений.
+model ClientIntakeDraft {
+  id               String    @id @default(cuid())
+  psychologistId   String
+  source           String // "telegram" | "max"
+  name             String
+  phone            String?
+  // Заполнен, если контакт совпал с существующей карточкой по телефону:
+  // тогда кнопка предлагает дополнить её, а не завести дубль.
+  existingClientId String?
+  usedAt           DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+
+  @@index([psychologistId])
+  @@index([expiresAt])
+}
+
 // Persistent notification feed for the psychologist (Android/web bell icon).
 // Written at the moment an event happens, so unread state and history survive
 // past the old 7-day rolling window computed on the fly by the dashboard.
