@@ -19,10 +19,21 @@ import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
+import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
+import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 
 const MAX_API = 'https://platform-api2.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
+
+/** Вложение входящего сообщения MAX. Нас интересует только contact. */
+export type MaxAttachment = {
+    type: string;
+    payload?: {
+        vcf_info?: string;
+        max_info?: { user_id?: number; first_name?: string; last_name?: string; name?: string } | null;
+    };
+};
 
 export type MaxUpdate = {
     update_id: number;
@@ -31,7 +42,10 @@ export type MaxUpdate = {
     message?: {
         sender: { user_id: number; name?: string; username?: string };
         recipient: { chat_id: string };
-        body: { mid: string; text?: string };
+        // Вложения: MAX кладёт сюда в том числе пересланный контакт
+        // (type: 'contact', payload.vcf_info — строка vCard). Раньше поле
+        // не читалось вовсе, и контакт для бота не существовал.
+        body: { mid: string; text?: string; attachments?: MaxAttachment[] };
     };
     callback?: {
         callback_id: string;
@@ -294,8 +308,49 @@ async function handleShareLink(userId: number) {
     return sendMaxMessage(userId, `🔗 Ссылка для записи клиентов:\n\n${bookUrl}\n\nОтправьте эту ссылку клиенту — он сможет выбрать удобное время.`, [[{ text: '📅 Открыть страницу записи', url: bookUrl }]]);
 }
 
+/**
+ * Специалист переслал боту контакт клиента.
+ *
+ * Разбор, сверка с базой и создание — в общем модуле: Telegram делает
+ * ровно то же самое, и расходиться эти пути не должны. Здесь только
+ * доставка: MAX присылает контакт строкой vCard, а не полями.
+ */
+async function handleContactShared(userId: number, payload: NonNullable<MaxAttachment['payload']>) {
+    const preview = await previewContactIntake({
+        source: 'max',
+        senderChatId: maxId(userId),
+        contact: { vcf_info: payload.vcf_info, max_info: payload.max_info },
+    });
+
+    const reply = previewMessage(preview, APP_URL);
+    if (!reply) return;
+
+    await sendMaxMessage(
+        userId,
+        reply.text,
+        reply.buttons.length > 0 ? reply.buttons.map((b) => [{ text: b.label, payload: b.payload }]) : undefined
+    );
+}
+
+async function handleContactIntakeCallback(callbackId: string, userId: number, payload: string) {
+    await maxApi(`/answers/${callbackId}`, {});
+
+    const psy = await db.user.findFirst({ where: { maxChatId: maxId(userId) }, select: { id: true } });
+    if (!psy) return;
+
+    const kind = payload.startsWith('intake_ok_') ? 'create' : payload.startsWith('intake_fill_') ? 'fill' : 'cancel';
+    const draftId = payload.replace('intake_ok_', '').replace('intake_fill_', '').replace('intake_no_', '');
+
+    const result = await commitContactIntake({ draftId, psychologistId: psy.id, action: kind });
+    await sendMaxMessage(userId, commitMessage(result, APP_URL));
+}
+
 async function handleCallback(callbackId: string, userId: number, payload: string) {
     const mid = maxId(userId);
+
+    if (payload.startsWith('intake_ok_') || payload.startsWith('intake_fill_') || payload.startsWith('intake_no_')) {
+        return handleContactIntakeCallback(callbackId, userId, payload);
+    }
 
     if (payload.startsWith('cancel_session_') || payload.startsWith('cancel_')) {
         const sessionId = payload.replace('cancel_session_', '').replace('cancel_', '');
@@ -406,6 +461,15 @@ export async function handleMaxUpdate(update: MaxUpdate) {
 
         if (update.update_type === 'message_created' && update.message) {
             const userId = update.message.sender.user_id;
+
+            // Контакт разбираем до текста: у сообщения с вложением текста
+            // обычно нет вовсе, и оно ушло бы в меню-заглушку.
+            const contact = update.message.body.attachments?.find((a) => a.type === 'contact');
+            if (contact?.payload) {
+                await handleContactShared(userId, contact.payload);
+                return;
+            }
+
             const text = update.message.body.text?.trim() || '';
             if (text === '/start' || text.startsWith('/start ')) {
                 const param = text.split(' ')[1];

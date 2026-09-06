@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { expireClientChannelInvites } from '@/lib/channel-binding';
+import { expireContactIntakeDrafts } from '@/lib/clients/contact-intake';
 
 export async function POST(req: Request) {
     const session = await auth();
@@ -16,7 +17,11 @@ export async function POST(req: Request) {
 
     try {
         const result = await expireClientChannelInvites();
-        return NextResponse.json({ success: true, ...result });
+        // Черновики карточек, разобранных из пересланных контактов, чистятся
+        // здесь же: в них лежат имя и телефон человека, который согласия не
+        // давал, и держать их дольше часа незачем.
+        const draftsRemoved = await expireContactIntakeDrafts();
+        return NextResponse.json({ success: true, ...result, draftsRemoved });
     } catch (error) {
         console.error('[admin/channel-invites/expire POST]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

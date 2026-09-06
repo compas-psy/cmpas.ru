@@ -8,6 +8,7 @@ import { getPsychologistBookingUrl } from '@/lib/booking/slug';
 import { requireOwnedClient, requireOwnedSession } from '@/lib/practice/ownership';
 import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
 import { matchClientIdentity, type ClientIdentity } from '@/lib/clients/match';
+import { createClientRecord } from '@/lib/clients/create';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -71,23 +72,9 @@ export async function createClient(data: {
     gender?: string;
 }) {
     const psychologistId = await getPsychologistId();
-    await requirePracticeOperatorAttestation(psychologistId);
-    const client = await db.diaryClient.create({
-        data: {
-            psychologistId,
-            name: data.name,
-            phone: data.phone || null,
-            email: data.email || null,
-            dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
-            age: data.age || null,
-            gender: data.gender || null,
-            // UI uses nextSessionDate only to auto-select the most relevant client
-            // when no card is selected. For a just-created client we want the new card
-            // to stay selected until the psychologist creates the first session,
-            // instead of jumping to the client with the latest old session.
-            nextSessionDate: new Date('9999-12-31T00:00:00.000Z'),
-        },
-    });
+    // Само создание и правовой гейт живут в ядре: тем же ядром пользуется
+    // приём контакта, пересланного боту, где сессии нет (src/lib/clients/create.ts).
+    const client = await createClientRecord({ psychologistId, ...data });
     revalidatePath('/diary');
     revalidatePath('/diary/clients');
     return client;

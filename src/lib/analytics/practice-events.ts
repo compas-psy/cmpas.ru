@@ -50,6 +50,19 @@ export type ShareSurface = 'web' | 'android';
 /** Вид проблемы «требует внимания», которую действительно закрыли. */
 export type AttentionKind = 'session_without_notes' | 'session_unpaid' | 'client_without_consent';
 
+/** Мессенджер, из которого специалист переслал контакт клиента. */
+export type ContactIntakeSource = 'telegram' | 'max';
+
+/** Чем кончился приём контакта. Ни имени, ни телефона — только исход. */
+export type ContactIntakeResult =
+    | 'created'
+    | 'filled'
+    | 'duplicate'
+    | 'conflict'
+    | 'incomplete'
+    | 'blocked_attestation'
+    | 'cancelled';
+
 type Account = { accountId: string | null | undefined };
 
 function envelope(account: Account) {
@@ -131,4 +144,11 @@ export function trackAttentionActionCompleted(account: Account, props: { source:
 
 export function trackOnboardingCompleted(account: Account): Promise<void> {
     return track(db, { event: 'practice_onboarding_completed', ...envelope(account), props: {} });
+}
+
+export function trackClientIntakeContact(
+    account: Account,
+    props: { source: ContactIntakeSource; result: ContactIntakeResult }
+): Promise<void> {
+    return track(db, { event: 'practice_client_intake_contact', ...envelope(account), props: clean(props) });
 }
