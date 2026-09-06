@@ -12,7 +12,7 @@ const DEFAULT_FLAGS: Record<string, { label: string; category: string }> = {
   client_notes_sharing: { label: 'Отправка заметок клиенту', category: 'features' },
   diagnostics: { label: 'Диагностика (тесты)', category: 'features' },
   telegram_vpn_proxy: {
-    label: 'Telegram через VPN (server2server, mieru)',
+    label: 'Telegram через VPN (server2server, hysteria2)',
     category: 'network',
   },
 };

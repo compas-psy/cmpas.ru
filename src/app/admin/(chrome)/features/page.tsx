@@ -101,7 +101,7 @@ export default function FeaturesPage() {
               ? <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               : <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />}
             <div className="flex-1">
-              <div className="text-sm font-semibold text-foreground">VPN (mieru) для Telegram</div>
+              <div className="text-sm font-semibold text-foreground">VPN (hysteria2) для Telegram</div>
               {!msgStatus ? (
                 <div className="text-xs text-muted-foreground mt-1">Проверка…</div>
               ) : !msgStatus.vpn.configured ? (

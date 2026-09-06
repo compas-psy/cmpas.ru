@@ -1,6 +1,8 @@
 /**
  * Single source of truth for whether Telegram traffic should go through the
- * mieru VPN sidecar (TELEGRAM_PROXY) or directly.
+ * VPN sidecar (TELEGRAM_PROXY) or directly. Транспорт сейчас hysteria2 —
+ * mieru перестал работать; сам sidecar как был sing-box, так и остался,
+ * поэтому здесь ничего не поменялось: адрес прокси тот же.
  *
  * Hard rule: the proxy is used ONLY when BOTH the admin flag telegram_vpn_proxy
  * is ON *and* a live health probe through the proxy succeeds. If the proxy is
@@ -92,7 +94,7 @@ export async function getVpnProxyStatus(force = false): Promise<VpnProxyStatus> 
             clearTimeout(timer);
         }
     } else if (!configured) {
-        error = 'TELEGRAM_PROXY не задан (нет секретов MIERU_* или деплой не поднял sidecar)';
+        error = 'TELEGRAM_PROXY не задан (нет секретов HYSTERIA_* или деплой не поднял sidecar)';
     } else if (!BOT_TOKEN) {
         error = 'TELEGRAM_BOT_TOKEN не задан';
     }

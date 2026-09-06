@@ -254,27 +254,31 @@ ensure_env ANALYTICS_TRACKING_ENABLED 'true'
 
 log "AUTH_SECRET fingerprint: $(grep '^AUTH_SECRET=' .env | cut -d= -f2- | cut -c1-8)..."
 
+# Тоннель для Telegram: hysteria2 вместо mieru.
+#
+# Mieru перестал работать, и держать в шаблоне мёртвый транспорт незачем —
+# он бы только выглядел рабочим. Sidecar тот же sing-box, hysteria2 он
+# умеет из коробки, меняется одно исходящее соединение.
+#
+# Сама подстановка вынесена в scripts/render-singbox-config.sh: там же
+# записаны значения по умолчанию для SNI и insecure и объяснение, почему
+# insecure=true не ослабляет HTTPS до Telegram. Вынесена ради сторожа —
+# tests/singbox-config-render.test.ts зовёт тот скрипт, а внутри выкладки
+# проверить подстановку нечем.
 vpn_enabled=0
-if [ -n "${MIERU_SERVER:-}" ] && [ -n "${MIERU_PORT:-}" ] && [ -n "${MIERU_USERNAME:-}" ] && [ -n "${MIERU_PASSWORD:-}" ]; then
-  log 'Preparing sing-box configuration.'
-  escaped_server=$(printf '%s' "$MIERU_SERVER" | sed 's/[&|]/\\&/g')
-  escaped_port=$(printf '%s' "$MIERU_PORT" | sed 's/[&|]/\\&/g')
-  escaped_username=$(printf '%s' "$MIERU_USERNAME" | sed 's/[&|]/\\&/g')
-  escaped_password=$(printf '%s' "$MIERU_PASSWORD" | sed 's/[&|]/\\&/g')
-  sed \
-    -e "s|\${MIERU_SERVER}|${escaped_server}|g" \
-    -e "s|\${MIERU_PORT}|${escaped_port}|g" \
-    -e "s|\${MIERU_USERNAME}|${escaped_username}|g" \
-    -e "s|\${MIERU_PASSWORD}|${escaped_password}|g" \
-    deploy/singbox-config.template.json > deploy/singbox-config.json
-
-  if docker run --rm \
-      -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" \
-      ghcr.io/sagernet/sing-box:latest check -c /c.json; then
+if [ -n "${HYSTERIA_SERVER:-}" ] && [ -n "${HYSTERIA_PORT:-}" ] && [ -n "${HYSTERIA_PASSWORD:-}" ]; then
+  log 'Preparing sing-box configuration (hysteria2).'
+  # Ошибка подстановки не роняет выкладку: сайт важнее тоннеля, а без
+  # тоннеля Telegram уходит напрямую (src/lib/telegram-proxy.ts). Молчать
+  # об этом нельзя — отсюда WARNING в журнале выкладки.
+  if bash scripts/render-singbox-config.sh deploy/singbox-config.json \
+      && docker run --rm \
+        -v "$(pwd)/deploy/singbox-config.json:/c.json:ro" \
+        ghcr.io/sagernet/sing-box:latest check -c /c.json; then
     vpn_enabled=1
     upsert_env TELEGRAM_PROXY 'http://singbox:1080'
   else
-    log 'WARNING: sing-box configuration check failed; deploying without VPN sidecar.'
+    log 'WARNING: sing-box configuration is invalid; deploying without VPN sidecar (Telegram will go direct).'
     upsert_env TELEGRAM_PROXY ''
   fi
 else

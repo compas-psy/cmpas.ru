@@ -12,14 +12,16 @@
   ],
   "outbounds": [
     {
-      "type": "mieru",
-      "tag": "mieru-out",
-      "server": "${MIERU_SERVER}",
-      "server_port": ${MIERU_PORT},
-      "transport": "UDP",
-      "username": "${MIERU_USERNAME}",
-      "password": "${MIERU_PASSWORD}",
-      "multiplexing": "MULTIPLEXING_HIGH"
+      "type": "hysteria2",
+      "tag": "hysteria2-out",
+      "server": "${HYSTERIA_SERVER}",
+      "server_port": ${HYSTERIA_PORT},
+      "password": "${HYSTERIA_PASSWORD}",
+      "tls": {
+        "enabled": true,
+        "insecure": ${HYSTERIA_INSECURE},
+        "server_name": "${HYSTERIA_SNI}"
+      }
     },
     {
       "type": "direct",
@@ -33,6 +35,6 @@
         "outbound": "direct"
       }
     ],
-    "final": "mieru-out"
+    "final": "hysteria2-out"
   }
 }
