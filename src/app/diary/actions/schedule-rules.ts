@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { RULE_COLORS } from './schedule-constants';
+import { resolveScheduleAddressId } from '@/lib/practice/ownership';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -96,6 +97,10 @@ export async function createScheduleRule(data: {
             color = RULE_COLORS.find(c => !usedColors.has(c)) || RULE_COLORS[0];
         }
 
+        // Задача 18 P0-2: кабинет правила проверяется на сервере — чужой или
+        // выведенный из работы не сохранится, у онлайн-правила кабинета нет.
+        const addressId = await resolveScheduleAddressId(psychologistId, data.format, data.addressId);
+
         const rule = await db.scheduleRule.create({
             data: {
                 psychologistId,
@@ -103,7 +108,7 @@ export async function createScheduleRule(data: {
                 color,
                 priority: data.priority ?? 0,
                 format: data.format || 'online',
-                addressId: data.addressId || null,
+                addressId,
                 duration: data.duration ?? 50,
                 breakDuration: data.breakDuration ?? 15,
                 audienceFilter: data.audienceFilter || 'all',
@@ -145,9 +150,19 @@ export async function updateScheduleRule(id: string, data: {
             throw new Error('Unauthorized');
         }
 
+        // Кабинет пересчитывается всегда, когда меняется формат ИЛИ кабинет:
+        // перевод правила в online обязан обнулить кабинет, а новый кабинет —
+        // пройти проверку владения и работы.
+        const touchesAddress = data.format !== undefined || data.addressId !== undefined;
+        const nextFormat = data.format ?? existing.format;
+        const nextAddressId = data.addressId !== undefined ? data.addressId : existing.addressId;
+        const addressPatch = touchesAddress
+            ? { addressId: await resolveScheduleAddressId(psychologistId, nextFormat, nextAddressId) }
+            : {};
+
         const rule = await db.scheduleRule.update({
             where: { id },
-            data,
+            data: { ...data, ...addressPatch },
         });
 
         revalidatePath('/diary/availability');
@@ -225,6 +240,15 @@ export async function cloneScheduleRule(id: string, data: {
         const usedColors = new Set(allRules.map(r => r.color));
         const color = RULE_COLORS.find(c => !usedColors.has(c)) || existing.color || RULE_COLORS[0];
 
+        // Задача 18 P0-2: клон создаёт ДЕЙСТВУЮЩИЕ окна, поэтому каждый
+        // переносимый кабинет проверяется заново. Если кабинет успели вывести
+        // из работы, клонировать нечего — сначала правило нужно поправить,
+        // молча ронять адрес или оживлять кабинет нельзя.
+        const clonedAddressBySlotId = new Map<string, string | null>();
+        for (const slot of existing.slots) {
+            clonedAddressBySlotId.set(slot.id, await resolveScheduleAddressId(psychologistId, slot.format, slot.addressId));
+        }
+
         // Create new rule
         const newRule = await db.scheduleRule.create({
             data: {
@@ -245,7 +269,7 @@ export async function cloneScheduleRule(id: string, data: {
                     endTime: slot.endTime,
                     duration: slot.duration,
                     format: slot.format,
-                    addressId: slot.addressId,
+                    addressId: clonedAddressBySlotId.get(slot.id) ?? null,
                     isRecurring: slot.isRecurring,
                     startDate: newStart,
                     endDate: newEnd,

@@ -6,12 +6,46 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
-import { resolvePersonalClientToken } from '@/lib/client-workflow';
+import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalClientToken } from '@/lib/client-workflow';
+import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
+import { resolveAvailableTimesForDay } from '@/lib/practice/booking/availability';
+import { slotToken } from '@/lib/practice/booking/slot-token';
+import { createSelfPracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
+import { fetchExternalBusyBlocks } from '@/lib/practice/booking/external-busy';
+import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
+import { expandToConcreteSlotOptions } from '@/lib/booking/concrete-slot-options';
+import { observeConsentRecorded } from '@/lib/practice/attention-completion';
 
 /** Decodes the `?c=` booking-link param: signed token (current) or a legacy
- * raw clientId (accepted for a grace window — see resolvePersonalClientToken). */
+ * raw clientId (accepted for a grace window — see resolvePersonalClientToken).
+ * Non-sensitive UX use only (e.g. "is there a link worth trying at all") —
+ * never use this to gate a read that discloses client/session/document data. */
 export async function resolveClientLinkParam(token: string | null | undefined) {
     return resolvePersonalClientToken(token);
+}
+
+/** Strict variant for any client-facing flow that will look up a client's
+ * own PII/sessions by the resolved id (Task 3, addendum §6): never falls
+ * back to the legacy unsigned-raw-clientId path. */
+export async function resolveSignedClientLinkParam(token: string | null | undefined) {
+    return resolveSignedPersonalClientToken(token);
+}
+
+/**
+ * Task 3 (PRAKTIKA MVP addendum §6): verifies Telegram Mini App initData and
+ * returns the authenticated Telegram user id, or null.
+ *
+ * window.Telegram.WebApp.initDataUnsafe.user is client-controlled — a caller
+ * can set it to any id before this page's own script reads it. Every call
+ * site that resolves a client by Telegram id (getClientByTelegram,
+ * getClientUpcomingSessions, checkConsentRequired) must be given ONLY an id
+ * that passed through this verification, never initDataUnsafe.user.id
+ * directly — otherwise a booking page visitor could read another client's
+ * upcoming sessions/name/phone by supplying that client's Telegram id.
+ */
+export async function resolveVerifiedTelegramUserId(initData: string | null | undefined): Promise<string | null> {
+    const user = verifyTelegramWebAppInitData(initData, process.env.TELEGRAM_BOT_TOKEN);
+    return user ? String(user.id) : null;
 }
 
 /** Send to Telegram and/or MAX depending on which IDs are set. Runs both in
@@ -27,9 +61,6 @@ async function notifyUser(
         maxId ? sendMaxMessage(maxId, text).catch(e => console.error('[notify] MAX error:', e)) : null,
     ]);
 }
-import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
-import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
-import { pickSuggestedTimes, TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
 
 export async function getPsychologist(id: string) {
     const user = await db.user.findUnique({
@@ -66,180 +97,6 @@ function toDateStr(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
-// Helper: robust date parsing to specified timezone without relying on server's local time
-function getPartsInTz(date: Date, timeZone: string) {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false
-    });
-    const parts = formatter.formatToParts(date);
-    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
-    
-    // Some runtimes return "24" instead of "00" for midnight with hour12: false
-    let hour = get('hour');
-    if (hour === '24') hour = '00';
-
-    return {
-        year: Number(get('year')),
-        month: Number(get('month')),
-        day: Number(get('day')),
-        hour,
-        minute: get('minute')
-    };
-}
-
-function getAvailableTimesForDateStr(psychologistId: string, dateStr: string, slots: any[], blocks: any[], sessions: any[], settings: any, clientId: string | null = null, skipBuffer = false) {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(Date.UTC(year, month - 1, day));
-    // Use the practice timezone (default Europe/Moscow) for "now" — the server
-    // runs in UTC, but slot times like "17:00" are local wall-clock. Comparing
-    // against UTC hours wrongly offers past slots (e.g. 17:00 at 19:07 MSK).
-    const tz = settings?.timezone || 'Europe/Moscow';
-    const now = new Date();
-    const nowParts = getPartsInTz(now, tz);
-    const todayStr = `${nowParts.year}-${String(nowParts.month).padStart(2, '0')}-${String(nowParts.day).padStart(2, '0')}`;
-    const isToday = dateStr === todayStr;
-    const nowH = Number(nowParts.hour);
-    const nowM = Number(nowParts.minute);
-
-    // Global settings checks
-    const bufferHours = settings?.bookingBufferHours ?? 24;
-    const bufferDate = new Date(now.getTime() + bufferHours * 60 * 60 * 1000);
-    const bufferParts = getPartsInTz(bufferDate, tz);
-    const bufferDateStr = `${bufferParts.year}-${String(bufferParts.month).padStart(2, '0')}-${String(bufferParts.day).padStart(2, '0')}`;
-    // If the check date is historically earlier or earlier than buffer date
-    if (dateStr < todayStr) return [];
-    
-    // Horizon check — only for client-facing booking, not psychologist
-    if (!skipBuffer) {
-        const horizonDays = settings?.bookingHorizonDays ?? 14;
-        const horizonDate = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
-        const horizonDateStr = toDateStr(horizonDate);
-        if (dateStr > horizonDateStr) return [];
-    }
-
-    const maxSessionsPerDay = settings?.maxSessionsPerDay ?? null;
-    const defaultSessionBreak = settings?.sessionBreak ?? 15;
-
-    const dayOfWeek = (date.getUTCDay() + 6) % 7;
-
-    const daySlots = slots.filter(s => {
-        if (s.dayOfWeek !== dayOfWeek) return false;
-
-        const ruleStart = s.scheduleRule?.startDate || s.startDate;
-        if (ruleStart) {
-            const slotStartStr = toDateStr(new Date(ruleStart));
-            if (dateStr < slotStartStr) return false;
-        }
-        
-        const ruleEnd = s.scheduleRule?.endDate || s.endDate;
-        if (ruleEnd) {
-            const slotEndStr = toDateStr(new Date(ruleEnd));
-            if (dateStr > slotEndStr) return false;
-        }
-        return true;
-    });
-
-    const clientAudience = clientId ? 'regular' : 'new';
-    const daySessions = sessions.filter(s => toDateStr(new Date(s.date)) === dateStr);
-    const bookedCount = daySessions.length;
-
-    let timesObj: Record<string, { time: string, format: string, addressId: string | null, isOwnBooking?: boolean }> = {};
-
-    daySlots.forEach(slot => {
-        const audienceFilter = slot.scheduleRule?.audienceFilter || 'all';
-        if (audienceFilter !== 'all' && audienceFilter !== clientAudience) return;
-
-        const [startH, startM] = slot.startTime.split(':').map(Number);
-        const [endH, endM] = slot.endTime.split(':').map(Number);
-        const duration = slot.scheduleRule?.duration ?? slot.duration ?? 50;
-        const format = slot.scheduleRule?.format ?? slot.format ?? 'online';
-        const addressId = slot.scheduleRule?.addressId ?? slot.addressId ?? null;
-        const breakDuration = slot.scheduleRule?.breakDuration ?? defaultSessionBreak;
-
-        let currentTotalMins = startH * 60 + startM;
-        const endTotalMins = endH * 60 + endM;
-
-        while (currentTotalMins + duration <= endTotalMins) {
-            const h = Math.floor(currentTotalMins / 60);
-            const m = currentTotalMins % 60;
-            const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-            if (maxSessionsPerDay && (bookedCount + Object.keys(timesObj).filter(k => !timesObj[k].isOwnBooking).length) >= maxSessionsPerDay) {
-                break;
-            }
-
-            const slotEndTimeMins = currentTotalMins + duration;
-            
-            // Evaluated exact time buffer.
-            if (skipBuffer) {
-                // Psychologist manually creating — no buffer restriction, only skip past times for today
-                if (isToday) {
-                    if (h < nowH || (h === nowH && m <= nowM)) {
-                        currentTotalMins += duration + breakDuration;
-                        continue;
-                    }
-                }
-            } else if (isToday || dateStr === bufferDateStr) {
-                 // bufferDate comparison. If this exact slot starts before the buffer Date/Time, skip it.
-                 const [bH, bM] = [Number(bufferParts.hour), Number(bufferParts.minute)];
-                 if (dateStr === bufferDateStr && (h < bH || (h === bH && m < bM))) {
-                     currentTotalMins += duration + breakDuration;
-                     continue;
-                 } else if (dateStr < bufferDateStr) {
-                     currentTotalMins += duration + breakDuration;
-                     continue;
-                 }
-            }
-
-            const hasBlock = blocks.some(b => {
-                const blockStr = toDateStr(new Date(b.date));
-                if (blockStr !== dateStr && blockStr !== toDateStr(new Date(b.date.getTime() + 86400000))) return false; // Basic safeguard. Usually b.date is in UTC on same day.
-                if (toDateStr(new Date(b.date)) !== dateStr) return false;
-                const [bSH, bSM] = b.startTime.split(':').map(Number);
-                const [bEH, bEM] = b.endTime.split(':').map(Number);
-                const blockStartMins = bSH * 60 + bSM;
-                const blockEndMins = bEH * 60 + bEM;
-                return currentTotalMins < blockEndMins && slotEndTimeMins > blockStartMins;
-            });
-
-            let isOwnSession = false;
-            let hasClash = false;
-            const collidingSession = daySessions.find(sess => {
-                const [sessH, sessM] = sess.time.split(':').map(Number);
-                const sessStartMins = sessH * 60 + sessM;
-                const sessEndMins = sessStartMins + (sess.duration || 50);
-                return currentTotalMins < sessEndMins && slotEndTimeMins > sessStartMins;
-            });
-
-            if (collidingSession) {
-                if (clientId && collidingSession.clientId === clientId) {
-                    isOwnSession = true;
-                } else {
-                    hasClash = true;
-                }
-            }
-
-            if (!hasClash && !hasBlock) {
-                const key = `${timeStr}-${format}`;
-                if (!timesObj[key]) {
-                    timesObj[key] = {
-                        time: timeStr,
-                        format: format,
-                        addressId: addressId,
-                        isOwnBooking: isOwnSession
-                    };
-                }
-            }
-
-            currentTotalMins += duration + breakDuration;
-        }
-    });
-
-    return Object.values(timesObj).sort((a, b) => a.time.localeCompare(b.time));
-}
-
 export async function getAvailableDates(psychologistId: string, year: number, month: number, skipModeCheck = false, clientId: string | null = null, skipBuffer = false) {
     // Check schedule mode — if private, return empty (only for client-facing calls)
     if (!skipModeCheck) {
@@ -262,58 +119,15 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
 
     const blockConflicts = settings?.blockConflicts ?? true;
 
-    let externalBlocks: any[] = [];
-    if (blockConflicts) {
-        const integrations = await db.calendarIntegration.findMany({
-            where: { psychologistId, isActive: true, syncFrom: true }
-        });
-
-        for (const integration of integrations) {
-            let res;
-            if (integration.provider === 'google') {
-                res = await fetchGoogleCalendarEvents(integration.id, startDate, endDate);
-            } else if (integration.provider === 'yandex') {
-                res = await fetchYandexCalendarEvents(integration.id, startDate, endDate);
+    const [blocks, externalBlocks] = await Promise.all([
+        db.diaryBlock.findMany({
+            where: {
+                psychologistId,
+                date: { lte: endDate, gte: startDate }
             }
-
-            if (res && res.success && res.events) {
-                const tz = settings?.timezone || 'Europe/Moscow';
-                // Map external events into a structure similar to diaryBlocks.
-                // Yandex iCal events without 'Z' suffix are "floating" local time —
-                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
-                const mapped = res.events.map((ev: any) => {
-                    const getParts = (dateInput: Date, localStr?: string) => {
-                        if (localStr) {
-                            const [d, t] = localStr.split('T');
-                            const [y, m, day] = d.split('-');
-                            const [h, min] = t.split(':');
-                            return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
-                        }
-                        return getPartsInTz(dateInput, tz);
-                    };
-
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    const startParts = getParts(localStart, ev.startLocalStr);
-                    const endParts = getParts(localEnd, ev.endLocalStr);
-
-                    const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
-                    const startTime = `${startParts.hour}:${startParts.minute}`;
-                    const endTime = `${endParts.hour}:${endParts.minute}`;
-
-                    return { date, startTime, endTime, _external: true };
-                });
-                externalBlocks.push(...mapped);
-            }
-        }
-    }
-
-    const blocks = await db.diaryBlock.findMany({
-        where: {
-            psychologistId,
-            date: { lte: endDate, gte: startDate }
-        }
-    });
+        }),
+        fetchExternalBusyBlocks(psychologistId, startDate, endDate, { timezone: settings?.timezone, blockConflicts }),
+    ]);
 
     const allBlocks = [...blocks, ...externalBlocks];
 
@@ -332,7 +146,7 @@ export async function getAvailableDates(psychologistId: string, year: number, mo
         const dateStr = toDateStr(d);
         if (dateStr < todayStr) continue;
 
-        const availableTimes = getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
+        const availableTimes = resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
         if (availableTimes.length > 0) {
             availableDates.push(dateStr);
         }
@@ -362,57 +176,15 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
 
     const blockConflicts = settings?.blockConflicts ?? true;
 
-    let externalBlocks: any[] = [];
-    if (blockConflicts) {
-        const integrations = await db.calendarIntegration.findMany({
-            where: { psychologistId, isActive: true, syncFrom: true }
-        });
-
-        for (const integration of integrations) {
-            let res;
-            if (integration.provider === 'google') {
-                res = await fetchGoogleCalendarEvents(integration.id, dayStart, dayEnd);
-            } else if (integration.provider === 'yandex') {
-                res = await fetchYandexCalendarEvents(integration.id, dayStart, dayEnd);
+    const [blocks, externalBlocks] = await Promise.all([
+        db.diaryBlock.findMany({
+            where: {
+                psychologistId,
+                date: { gte: dayStart, lte: dayEnd }
             }
-
-            if (res && res.success && res.events) {
-                const tz = settings?.timezone || 'Europe/Moscow';
-                // Yandex iCal events without 'Z' suffix are "floating" local time —
-                // they come back with a startLocalStr/endLocalStr to avoid UTC mis-conversion.
-                const mapped = res.events.map((ev: any) => {
-                    const getParts = (dateInput: Date, localStr?: string) => {
-                        if (localStr) {
-                            const [d, t] = localStr.split('T');
-                            const [y, m, day] = d.split('-');
-                            const [h, min] = t.split(':');
-                            return { year: Number(y), month: Number(m), day: Number(day), hour: h, minute: min };
-                        }
-                        return getPartsInTz(dateInput, tz);
-                    };
-
-                    const localStart = new Date(ev.start);
-                    const localEnd = new Date(ev.end);
-                    const startParts = getParts(localStart, ev.startLocalStr);
-                    const endParts = getParts(localEnd, ev.endLocalStr);
-
-                    const date = new Date(Date.UTC(startParts.year, startParts.month - 1, startParts.day));
-                    const startTime = `${startParts.hour}:${startParts.minute}`;
-                    const endTime = `${endParts.hour}:${endParts.minute}`;
-
-                    return { date, startTime, endTime, _external: true };
-                });
-                externalBlocks.push(...mapped);
-            }
-        }
-    }
-
-    const blocks = await db.diaryBlock.findMany({
-        where: {
-            psychologistId,
-            date: { gte: dayStart, lte: dayEnd }
-        }
-    });
+        }),
+        fetchExternalBusyBlocks(psychologistId, dayStart, dayEnd, { timezone: settings?.timezone, blockConflicts }),
+    ]);
 
     const allBlocks = [...blocks, ...externalBlocks];
     const sessions = await db.diarySession.findMany({
@@ -425,7 +197,48 @@ export async function getAvailableTimes(psychologistId: string, dateStr: string,
         select: { date: true, time: true, duration: true, clientId: true }
     });
 
-    return getAvailableTimesForDateStr(psychologistId, dateStr, slots, allBlocks, sessions, settings, clientId, skipBuffer);
+    const resolved = resolveAvailableTimesForDay({ dateStr, slots, blocks: allBlocks, sessions, settings, clientId, skipBuffer });
+
+    // Task 14 point 4/5: the full calendar groups options by address
+    // ("ОНЛАЙН" / "ЯУЗСКАЯ" / ...) and a suggested-slot card names the
+    // cabinet ("Очно · Яузская") — neither is derivable from addressId
+    // alone, so look up the display name for every address actually
+    // referenced. One query, only when an offline option exists at all.
+    const addressIds = Array.from(new Set(resolved.map(o => o.addressId).filter((id): id is string => !!id)));
+    const addresses = addressIds.length
+        ? await db.psychologistAddress.findMany({ where: { id: { in: addressIds } }, select: { id: true, name: true } })
+        : [];
+    const addressNameById = new Map(addresses.map(a => [a.id, a.name]));
+
+    // Task 7: every option carries a signed slotToken — the ONLY thing a
+    // booking commit trusts for exact slot identity. Minted here, at read
+    // time, from the exact same resolved option the client sees; never
+    // reconstructed from date/time later.
+    //
+    // format:'both' means the RULE allows either format — there is no
+    // single concrete option to sign, so two tokens are minted, one per
+    // concrete choice (online / offline-at-this-address). Callers expand
+    // this into two separate bookable options via expandToConcreteSlotOptions
+    // (src/lib/booking/concrete-slot-options.ts) — never silently defaulted
+    // to online here or anywhere downstream.
+    return resolved.map(opt => {
+        const mint = (format: string, addressId: string | null) => slotToken({
+            psychologistId,
+            dateStr,
+            time: opt.time,
+            availabilitySlotId: opt.availabilitySlotId,
+            scheduleRuleId: opt.scheduleRuleId,
+            format,
+            addressId,
+            duration: opt.duration,
+        });
+        const addressName = opt.addressId ? (addressNameById.get(opt.addressId) ?? null) : null;
+
+        if (opt.format === 'both') {
+            return { ...opt, addressName, slotToken: null, slotTokenOnline: mint('online', null), slotTokenOffline: mint('offline', opt.addressId) };
+        }
+        return { ...opt, addressName, slotToken: mint(opt.format, opt.addressId), slotTokenOnline: null, slotTokenOffline: null };
+    });
 }
 
 /**
@@ -448,9 +261,26 @@ export async function getSuggestedTimes(
 
         for (const dateStr of dates) {
             const times = await getAvailableTimes(psychologistId, dateStr, false, undefined, clientId);
-            for (const slot of times) {
-                if (slot.isOwnBooking) continue;
-                candidates.push({ date: dateStr, time: slot.time, format: slot.format, addressId: slot.addressId });
+            // Task 14 point 2 (founder correction): a format:'both' rule used
+            // to collapse to a single online candidate here, silently
+            // discarding the offline choice — never choose a format for the
+            // client. expandToConcreteSlotOptions (the same primitive the
+            // reschedule UIs use — Task 8) turns it into two real candidates,
+            // each with its own exact-slot identity and slotToken.
+            const concreteOptions = expandToConcreteSlotOptions(times);
+            for (const opt of concreteOptions) {
+                if (opt.isOwnBooking) continue;
+                candidates.push({
+                    date: dateStr,
+                    time: opt.time,
+                    format: opt.format,
+                    addressId: opt.addressId,
+                    availabilitySlotId: opt.availabilitySlotId as string,
+                    scheduleRuleId: opt.scheduleRuleId ?? null,
+                    duration: opt.duration as number,
+                    slotToken: opt.slotToken,
+                    addressName: opt.addressName ?? null,
+                });
             }
         }
 
@@ -478,153 +308,44 @@ export async function submitWaitlistInterest(psychologistId: string, name: strin
     return { success: true };
 }
 
-export async function bookSession(psychologistId: string, userDetails: any, form: { name: string, phone: string, date: string, time: string, format?: string, addressId?: string | null }) {
-    let normalizedPhone = form.phone.replace(/[^\d+]/g, '');
-    const plainDigits = normalizedPhone.replace(/[^\d]/g, '');
-
-    if (plainDigits.length === 11 && (plainDigits.startsWith('8') || plainDigits.startsWith('7'))) {
-        normalizedPhone = '+7' + plainDigits.slice(1);
-    } else if (plainDigits.length === 10) {
-        normalizedPhone = '+7' + plainDigits;
-    } else if (!normalizedPhone.startsWith('+') && normalizedPhone.length > 0) {
-        normalizedPhone = '+' + plainDigits;
-    }
-
-    let client = await db.diaryClient.findFirst({
-        where: {
+export async function bookSession(psychologistId: string, telegramInitData: string | null, form: { name: string, phone: string, slotToken: string, clientLinkToken?: string | null }) {
+    // Task 7 (founder review): client find-or-create, Telegram binding, and
+    // consent sync now live INSIDE createSelfPracticeBooking's own
+    // transaction — together with the slot commit, under the same
+    // (psychologist, day) advisory lock — so a rejected booking (stale slot,
+    // day cap reached) rolls back the just-created DiaryClient too, instead
+    // of leaving an orphan. telegramInitData is the raw, signed
+    // window.Telegram.WebApp.initData string; createSelfPracticeBooking
+    // verifies it server-side and never trusts a client-supplied user id.
+    //
+    // Task 14 point 6: clientLinkToken is the SAME raw signed personal-link
+    // token BookingPageClient already resolved once at page load (the `?c=`
+    // param or a saved compas_clientToken) — re-verified again here, never
+    // trusted as-is. This is what lets a known client whose phone field is
+    // hidden in the UI still resolve to their EXISTING DiaryClient instead
+    // of the phone-string heuristic silently creating a duplicate.
+    let result;
+    try {
+        result = await createSelfPracticeBooking({
             psychologistId,
-            OR: [
-                { phone: normalizedPhone },
-                { phone: plainDigits },
-                { phone: '+' + plainDigits },
-                { phone: form.phone } // legacy formats
-            ]
-        },
-        orderBy: { createdAt: 'desc' }
-    });
-
-    const tgUserId = userDetails?.id ? String(userDetails.id) : null;
-
-    if (!client) {
-        client = await db.diaryClient.create({
-            data: {
-                psychologistId,
-                name: form.name,
-                phone: normalizedPhone,
-                telegramChatId: tgUserId,
-            }
+            name: form.name,
+            phone: form.phone,
+            slotToken: form.slotToken,
+            telegramInitData,
+            clientLinkToken: form.clientLinkToken ?? null,
         });
-    } else {
-        // Клиент найден по телефону — обновляем только telegramChatId, имя НЕ меняем
-        const updateData: any = {};
-        if (tgUserId && !client.telegramChatId) updateData.telegramChatId = tgUserId;
-        if (Object.keys(updateData).length > 0) {
-            client = await db.diaryClient.update({
-                where: { id: client.id },
-                data: updateData
-            });
+    } catch (e) {
+        if (e instanceof BookingConflictError) {
+            // Задача 25 §6: ниточка для поддержки. По ней в логах находится
+            // ровно этот отказ — и ничего о человеке.
+            return { success: false, error: e.message, errorCode: e.code, correlationId: e.correlationId ?? null };
         }
+        throw e;
     }
 
-    // Привязать TelegramClient → DiaryClient если есть
-    if (tgUserId) {
-        const tgClient = await db.telegramClient.findUnique({
-            where: { telegramUserId: tgUserId }
-        });
-        
-        if (tgClient) {
-            // Update the link if it doesn't exist yet
-            if (!tgClient.diaryClientId) {
-                await db.telegramClient.update({
-                    where: { id: tgClient.id },
-                    data: { diaryClientId: client.id, psychologistId }
-                });
-            }
-
-            // Sync consent from TelegramClient to DiaryClient if given
-            if (tgClient.consentGiven && tgClient.consentDate && !client.consentVersion) {
-                const activeConsentVer = await db.consentVersion.findFirst({
-                    where: { isActive: true },
-                    orderBy: { createdAt: 'desc' },
-                    select: { version: true }
-                });
-
-                if (activeConsentVer) {
-                    const hashInput = `${tgUserId}:${activeConsentVer.version}:${tgClient.consentDate.toISOString()}`;
-                    const hash = createHash('sha256').update(hashInput).digest('hex');
-                    await db.diaryClient.update({
-                        where: { id: client.id },
-                        data: {
-                            consentVersion: activeConsentVer.version,
-                            consentHash: hash,
-                            consentDate: tgClient.consentDate,
-                        }
-                    });
-                }
-            }
-        }
-    }
-
-    const [y, m, d] = form.date.split('-').map(Number);
-    const dateObj = new Date(Date.UTC(y, m - 1, d));
-
-    const dayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-    const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
-
-    // Get duration from the matching availability slot for this booking
-    const [h, min] = form.time.split(':').map(Number);
-    const bookingDayOfWeek = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
-    const matchingSlot = await db.availabilitySlot.findFirst({
-        where: {
-            psychologistId,
-            isActive: true,
-            dayOfWeek: bookingDayOfWeek,
-        },
-        orderBy: { createdAt: 'desc' },
-    });
-    const duration = matchingSlot?.duration || 50;
-    const newStartMins = h * 60 + min;
-    const newEndMins = newStartMins + duration;
-
-    const existingSessions = await db.diarySession.findMany({
-        where: {
-            psychologistId,
-            date: { gte: dayStart, lte: dayEnd },
-            status: { not: 'cancelled' },
-        },
-    });
-
-    for (const existing of existingSessions) {
-        const [eH, eM] = existing.time.split(':').map(Number);
-        const eStartMins = eH * 60 + eM;
-        const eEndMins = eStartMins + (existing.duration || 50);
-        if (newStartMins < eEndMins && newEndMins > eStartMins) {
-            return { success: false, error: 'Это время уже занято' };
-        }
-    }
-
-    // Валидация: один клиент не может записаться 2+ раз в один день
-    const clientSessionsToday = existingSessions.filter(s => s.clientId === client!.id);
-    if (clientSessionsToday.length > 0) {
-        return { success: false, error: 'Вы уже записаны на этот день' };
-    }
-
-    const endMinutes = h * 60 + min + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-
-    const session = await db.diarySession.create({
-        data: {
-            psychologistId,
-            clientId: client.id,
-            date: dateObj,
-            time: form.time,
-            endTime,
-            duration,
-            type: 'individual',
-            format: form.format || 'online',
-            status: 'confirmed'
-        }
-    });
+    const { session, client } = result;
+    const dateStr = toDateStr(session.date);
+    const format = session.format;
 
     const sessionsCount = await db.diarySession.count({ where: { clientId: client.id } });
     await db.diaryClient.update({
@@ -632,31 +353,31 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         data: { totalSessions: sessionsCount }
     });
 
-    const psy = await db.user.findUnique({ 
+    const psy = await db.user.findUnique({
         where: { id: psychologistId },
         include: { psychologistSettings: true }
     }) as any;
 
-    const onlineLink = form.format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
+    const onlineLink = format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
     const linkText = onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
 
     // Notify psychologist (Telegram + MAX)
     await notifyUser(
         psy?.telegramChatId,
         (psy as any)?.maxChatId,
-        `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
+        `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n📍 Формат: ${format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
     );
     await createNotification({
         psychologistId,
         type: 'new_booking',
         title: 'Новая самозапись',
-        subtitle: `${form.name} · ${form.date} в ${form.time}`,
+        subtitle: `${form.name} · ${dateStr} в ${session.time}`,
         sessionId: session.id,
         clientId: client.id,
     });
 
     // Notify client (Telegram + MAX)
-    const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${form.date}\n⏰ Время: ${form.time}\n📍 Формат: ${form.format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
+    const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n📍 Формат: ${format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
     await notifyUser(
         client.telegramChatId,
         (client as any).maxChatId,
@@ -677,7 +398,11 @@ export async function bookSession(psychologistId: string, userDetails: any, form
         console.error('Auto-sync after booking failed:', e);
     }
 
-    return { success: true, sessionId: session.id, clientId: client.id };
+    // clientToken (not the raw id) is what the browser is allowed to keep for
+    // "manage my bookings" / return-visit purposes — Task 3, addendum §6: a
+    // raw clientId is never proof of identity, only a signature this server
+    // issued is.
+    return { success: true, sessionId: session.id, clientId: client.id, clientToken: personalClientToken(client.id) };
 }
 
 // Direct client lookup by ID (for when MiniApp opens in browser without Telegram context)
@@ -796,59 +521,6 @@ export async function getClientByTelegram(psychologistId: string, telegramUserId
     }
 
     return null;
-}
-
-export async function getClientSessions(telegramChatId: string) {
-    if (!telegramChatId) return [];
-
-    const client = await db.diaryClient.findFirst({
-        where: { telegramChatId }
-    });
-
-    if (!client) return [];
-
-    return getClientSessionsById(client.id);
-}
-
-export async function getClientSessionsById(clientId: string) {
-    if (!clientId) return [];
-
-    const now = new Date();
-    // Reset time to start of day for comparison so we don't miss today's later sessions
-    now.setHours(0, 0, 0, 0);
-
-    const sessions = await db.diarySession.findMany({
-        where: {
-            clientId: clientId,
-            date: { gte: now },
-            status: { not: 'cancelled' }
-        },
-        include: {
-            psychologist: {
-                select: {
-                    name: true,
-                    psychologistSettings: {
-                        select: { fullName: true, onlineSessionLink: true }
-                    }
-                }
-            }
-        },
-        orderBy: [
-            { date: 'asc' },
-            { time: 'asc' }
-        ]
-    });
-
-    return sessions.map(s => ({
-        id: s.id,
-        date: s.date,
-        time: s.time,
-        status: s.status,
-        format: s.format,
-        psychologistId: s.psychologistId,
-        psychologistName: s.psychologist.psychologistSettings?.fullName || s.psychologist.name || 'Специалист',
-        onlineSessionLink: s.psychologist.psychologistSettings?.onlineSessionLink || null
-    }));
 }
 
 export async function getClientUpcomingSessions(psychologistId: string, telegramUserId: string) {
@@ -997,6 +669,10 @@ export async function saveConsent(
                 consentDate: new Date(),
             }
         });
+        // Задача 25 §8: «нет согласия» закрывается ровно здесь — записью
+        // consentDate там, где его не было. Открытый документ и показанный
+        // текст согласия не закрывают ничего.
+        await observeConsentRecorded(psychologistId, client.consentDate);
     }
 
     // Also update TelegramClient consent
@@ -1011,6 +687,13 @@ export async function saveConsent(
     });
 
     if (tgClient.diaryClientId && !client) {
+        // Тот же переход, но у клиента, найденного через связь Telegram:
+        // прежнее значение нужно прочитать, иначе «закрыто» не отличить от
+        // «и так было закрыто».
+        const linked = await db.diaryClient.findUnique({
+            where: { id: tgClient.diaryClientId },
+            select: { consentDate: true },
+        });
         await db.diaryClient.update({
             where: { id: tgClient.diaryClientId },
             data: {
@@ -1019,6 +702,7 @@ export async function saveConsent(
                 consentDate: new Date(),
             }
         });
+        await observeConsentRecorded(psychologistId, linked?.consentDate ?? null);
     }
 
     return { hash: consentHash, timestamp };

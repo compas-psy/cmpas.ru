@@ -2,12 +2,61 @@
 
 import { DAVClient } from 'tsdav';
 import { db } from '@/lib/db';
+import { resolveWallClockParts, type NormalizedCalendarEvent } from './normalized-event';
 
 // Yandex CalDAV server URL
 const YANDEX_CALDAV_URL = 'https://caldav.yandex.ru';
 
+// Task 10: the UID PRAKTIKA stamps on every event it pushes to Yandex — the
+// exact analogue of Google's extendedProperties.private.compasSessionId.
+// Reading it back (fetchYandexCalendarEvents below) is what makes loop-back
+// detection possible for Yandex at all: before this, a psychologist's own
+// already-booked session (or a stale event a reschedule left behind — see
+// the note on Yandex delete being a no-op, in src/lib/calendar/auto-sync.ts)
+// counted as "external busy" against their own future availability forever,
+// since nothing recognized it as one of ours.
+const OWN_SESSION_UID_RE = /^compas-session-(.+)@cmpas\.ru$/;
+
+function yandexOwnSessionUid(sessionId: string): string {
+    return `compas-session-${sessionId}@cmpas.ru`;
+}
+
+function parseYandexOwnSessionId(uid: string | undefined): string | null {
+    if (!uid) return null;
+    const match = uid.trim().match(OWN_SESSION_UID_RE);
+    return match ? match[1] : null;
+}
+
+// Task 10 (founder review correction): a bare UID is NOT a safe
+// externalEventId for a recurring occurrence — every occurrence of the same
+// series shares one UID, so using it directly would collide every instance
+// into "the same event" (breaking Task 12's planned
+// UNIQUE(integrationId, externalEventId) dedupe key). With `expand: true`
+// (see fetchYandexCalendarEvents below), the CalDAV server materializes
+// each occurrence as its own VEVENT carrying a RECURRENCE-ID identifying
+// which instance it is; a genuinely non-recurring event has none. Contract:
+//   single event:         externalEventId = UID,  externalSeriesId = null
+//   recurring occurrence: externalEventId = `${UID}::${recurrenceId}`,
+//                          externalSeriesId = UID
+// `recurrenceId` is used verbatim (the raw, trimmed iCal value straight
+// after the colon) rather than re-parsed into a Date — it's already a
+// unique, stable-per-occurrence string as Yandex writes it, and re-parsing
+// floating-vs-UTC values would risk losing exactly the precision that makes
+// it stable across repeated fetches of the same occurrence.
+function yandexEventIdentity(uid: string, recurrenceId: string | undefined): { externalEventId: string; externalSeriesId: string | null } {
+    if (!recurrenceId) return { externalEventId: uid, externalSeriesId: null };
+    return { externalEventId: `${uid}::${recurrenceId}`, externalSeriesId: uid };
+}
+
 /**
- * Create iCalendar event string from session data
+ * Create iCalendar event string from session data.
+ *
+ * `identity`: Task 12 (calendar sync adapter) — when UPDATING an existing
+ * linked event in place, the UID (and, for a recurring occurrence, its
+ * RECURRENCE-ID) must be preserved EXACTLY as the existing event already
+ * has it; changing UID on a PUT to the same object effectively creates a
+ * different event identity. Omitted only for a fresh sync-created event,
+ * where PRAKTIKA's own deterministic UID convention applies.
  */
 function createICalEvent(session: {
     id: string;
@@ -19,7 +68,7 @@ function createICalEvent(session: {
     format: string;
     notes: string | null;
     client?: { name: string } | null;
-}): string {
+}, identity?: { uid: string; recurrenceId?: string }): string {
     const dateStr = session.date.toISOString().split('T')[0].replace(/-/g, '');
     const startTime = session.time.replace(':', '') + '00';
     const endTime = session.endTime
@@ -34,6 +83,7 @@ function createICalEvent(session: {
     const clientName = session.client?.name || 'Клиент';
     const typeLabel = session.type === 'individual' ? 'Индивидуальная' : session.type === 'couple' ? 'Парная' : session.type;
     const formatLabel = session.format === 'online' ? 'онлайн' : 'очно';
+    const uid = identity?.uid ?? yandexOwnSessionUid(session.id);
 
     return [
         'BEGIN:VCALENDAR',
@@ -41,7 +91,8 @@ function createICalEvent(session: {
         'PRODID:-//Compas.ru//Diary//RU',
         'CALSCALE:GREGORIAN',
         'BEGIN:VEVENT',
-        `UID:compas-session-${session.id}@cmpas.ru`,
+        `UID:${uid}`,
+        ...(identity?.recurrenceId ? [`RECURRENCE-ID:${identity.recurrenceId}`] : []),
         `DTSTAMP:${now}`,
         `DTSTART:${dateStr}T${startTime}`,
         `DTEND:${dateStr}T${endTime}`,
@@ -56,6 +107,47 @@ function createICalEvent(session: {
         'END:VEVENT',
         'END:VCALENDAR',
     ].join('\r\n');
+}
+
+/**
+ * Task 12 (calendar sync adapter): locate the real CalDAV object (url/etag)
+ * for a known externalEventId (a bare UID, or `${uid}::${recurrenceId}` for
+ * a recurring occurrence — see yandexEventIdentity above), by fetching and
+ * matching identity rather than assuming any URL convention — correct for
+ * BOTH a foreign event the psychologist created directly (imported) and one
+ * PRAKTIKA created itself (synced).
+ */
+async function findYandexObjectByExternalEventId(
+    client: DAVClient,
+    calendar: Awaited<ReturnType<DAVClient['fetchCalendars']>>[number],
+    externalEventId: string
+): Promise<{ url: string; etag?: string; data: string } | null> {
+    const now = new Date();
+    const objects = await client.fetchCalendarObjects({
+        calendar,
+        timeRange: {
+            start: new Date(now.getTime() - 400 * 86400000).toISOString(),
+            end: new Date(now.getTime() + 400 * 86400000).toISOString(),
+        },
+        expand: true,
+    });
+
+    for (const obj of objects) {
+        if (!obj.data) continue;
+        const veventMatch = obj.data.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/);
+        if (!veventMatch) continue;
+        const eventData = veventMatch[0];
+        const uidMatch = eventData.match(/UID:(.*)/);
+        if (!uidMatch) continue;
+        const uid = uidMatch[1].trim();
+        const recurrenceIdMatch = eventData.match(/RECURRENCE-ID(?:;.*?)?:(.*)/);
+        const recurrenceId = recurrenceIdMatch ? recurrenceIdMatch[1].trim() : undefined;
+        const identity = yandexEventIdentity(uid, recurrenceId);
+        if (identity.externalEventId === externalEventId) {
+            return { url: obj.url, etag: obj.etag, data: obj.data };
+        }
+    }
+    return null;
 }
 
 /**
@@ -102,7 +194,7 @@ export async function testYandexConnection(login: string, password: string): Pro
 export async function pushSessionToYandex(
     integrationId: string,
     session: Parameters<typeof createICalEvent>[0]
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; eventId?: string; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
             where: { id: integrationId },
@@ -132,9 +224,83 @@ export async function pushSessionToYandex(
             data: { lastSynced: new Date() },
         });
 
-        return { success: true };
+        // Task 12: the deterministic UID this event was just created with —
+        // the identity a CalendarSessionLink needs to update/delete it later.
+        return { success: true, eventId: yandexOwnSessionUid(session.id) };
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Ошибка синхронизации';
+        return { success: false, error: message };
+    }
+}
+
+/**
+ * Task 12 (calendar sync adapter): update an existing Yandex event IN PLACE
+ * by its known externalEventId — preserves the event's own UID (and
+ * RECURRENCE-ID, if it's a recurring occurrence) so identity never changes
+ * on a reschedule, only its content.
+ */
+export async function updateYandexCalendarEvent(
+    integrationId: string,
+    externalEventId: string,
+    session: Parameters<typeof createICalEvent>[0]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.caldavLogin || !integration?.caldavPassword || !integration?.calendarId) {
+            return { success: false, error: 'Интеграция не настроена' };
+        }
+
+        const client = await createYandexClient(integration.caldavLogin, integration.caldavPassword);
+        const calendars = await client.fetchCalendars();
+        const calendar = calendars.find(c => c.url === integration.calendarId) || calendars[0];
+        if (!calendar) return { success: false, error: 'Календарь не найден' };
+
+        const existing = await findYandexObjectByExternalEventId(client, calendar, externalEventId);
+        if (!existing) return { success: false, error: 'Событие не найдено для обновления' };
+
+        const uidMatch = existing.data.match(/UID:(.*)/);
+        const recurrenceIdMatch = existing.data.match(/RECURRENCE-ID(?:;.*?)?:(.*)/);
+        const uid = uidMatch ? uidMatch[1].trim() : yandexOwnSessionUid(session.id);
+        const recurrenceId = recurrenceIdMatch ? recurrenceIdMatch[1].trim() : undefined;
+
+        const iCalString = createICalEvent(session, { uid, recurrenceId });
+        await client.updateCalendarObject({ calendarObject: { url: existing.url, etag: existing.etag, data: iCalString } });
+
+        await db.calendarIntegration.update({ where: { id: integrationId }, data: { lastSynced: new Date() } });
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка обновления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
+ * Task 12 (calendar sync adapter): delete a Yandex event by its known
+ * externalEventId. Closes the long-standing gap noted in
+ * src/lib/calendar/auto-sync.ts — Yandex delete used to be a no-op.
+ */
+export async function deleteYandexCalendarEventById(
+    integrationId: string,
+    externalEventId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.caldavLogin || !integration?.caldavPassword || !integration?.calendarId) {
+            return { success: false, error: 'Интеграция не настроена' };
+        }
+
+        const client = await createYandexClient(integration.caldavLogin, integration.caldavPassword);
+        const calendars = await client.fetchCalendars();
+        const calendar = calendars.find(c => c.url === integration.calendarId) || calendars[0];
+        if (!calendar) return { success: false, error: 'Календарь не найден' };
+
+        const existing = await findYandexObjectByExternalEventId(client, calendar, externalEventId);
+        if (!existing) return { success: true }; // already gone — a successful delete, not a failure
+
+        await client.deleteCalendarObject({ calendarObject: { url: existing.url, etag: existing.etag } });
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка удаления события';
         return { success: false, error: message };
     }
 }
@@ -204,8 +370,9 @@ export async function syncAllSessionsToYandex(
 export async function fetchYandexCalendarEvents(
     integrationId: string,
     startDate: Date,
-    endDate: Date
-): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
+    endDate: Date,
+    options?: { includeCompasEvents?: boolean; timezone?: string }
+): Promise<{ success: boolean; events?: NormalizedCalendarEvent[]; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
             where: { id: integrationId },
@@ -234,7 +401,8 @@ export async function fetchYandexCalendarEvents(
             expand: true
         });
 
-        const events: { start: Date; end: Date; summary: string }[] = [];
+        const timezone = options?.timezone || 'Europe/Moscow';
+        const rawEvents: NormalizedCalendarEvent[] = [];
 
         // Parse rudimentary iCal strings returned by tsdav
         // Parse iCal date string: returns UTC date + optional localStr for floating (no Z) times
@@ -295,13 +463,28 @@ export async function fetchYandexCalendarEvents(
                             endDate = ep.date;
                             endLocalStr = ep.localStr;
                         }
-                        events.push({
+                        // A VFREEBUSY period has no per-interval UID of its own
+                        // (it's an aggregate busy/free report, not a discrete
+                        // event) — synthesize a stable-per-fetch identity from
+                        // the interval itself, and never treat it as one of our
+                        // own sessions (that needs a real UID to detect).
+                        const startWc = resolveWallClockParts(startParsed.date, timezone, startParsed.localStr);
+                        const endWc = resolveWallClockParts(endDate, timezone, endLocalStr);
+                        rawEvents.push({
+                            provider: 'yandex',
+                            integrationId,
+                            externalEventId: `vfb:${startParsed.date.toISOString()}:${endDate.toISOString()}`,
+                            externalSeriesId: null,
+                            summary,
                             start: startParsed.date,
                             end: endDate,
-                            summary,
-                            ...(startParsed.localStr && { startLocalStr: startParsed.localStr }),
-                            ...(endLocalStr && { endLocalStr }),
-                        } as any);
+                            date: startWc.date,
+                            startTime: startWc.time,
+                            endTime: endWc.time,
+                            allDay: false,
+                            isOwnSession: false,
+                            ownSessionId: null,
+                        });
                     }
                 }
                 continue;
@@ -317,6 +500,11 @@ export async function fetchYandexCalendarEvents(
             const dtstartMatch = eventData.match(/DTSTART(?:;.*?)?:(.*)/);
             const dtendMatch = eventData.match(/DTEND(?:;.*?)?:(.*)/);
             const summaryMatch = eventData.match(/SUMMARY:(.*)/);
+            const uidMatch = eventData.match(/UID:(.*)/);
+            // Present only on an expanded occurrence of a recurring series
+            // (see yandexEventIdentity above) — absent on a genuinely
+            // single, non-recurring event.
+            const recurrenceIdMatch = eventData.match(/RECURRENCE-ID(?:;.*?)?:(.*)/);
 
             if (dtstartMatch) {
                 const startParsed = parseIcalDateStr(dtstartMatch[1]);
@@ -324,9 +512,10 @@ export async function fetchYandexCalendarEvents(
                     date: new Date(startParsed.date.getTime() + 60 * 60 * 1000),
                     localStr: undefined as string | undefined
                 };
+                const isAllDay = dtstartMatch[1].trim().length === 8;
 
                 // If the event is an all-day event (length 8) and no explicit end was given
-                if (dtstartMatch[1].trim().length === 8 && !dtendMatch) {
+                if (isAllDay && !dtendMatch) {
                     endParsed.date = new Date(startParsed.date.getTime() + 24 * 60 * 60 * 1000);
                     const ny = endParsed.date.getUTCFullYear();
                     const nm = String(endParsed.date.getUTCMonth() + 1).padStart(2, '0');
@@ -334,15 +523,43 @@ export async function fetchYandexCalendarEvents(
                     endParsed.localStr = `${ny}-${nm}-${nd}T00:00:00`;
                 }
 
-                events.push({
+                const uid = uidMatch ? uidMatch[1].trim() : undefined;
+                const recurrenceId = recurrenceIdMatch ? recurrenceIdMatch[1].trim() : undefined;
+                const ownSessionId = parseYandexOwnSessionId(uid);
+                const startWc = resolveWallClockParts(startParsed.date, timezone, startParsed.localStr);
+                const endWc = resolveWallClockParts(endParsed.date, timezone, endParsed.localStr);
+
+                // Fall back to a synthesized id only if this particular
+                // VEVENT genuinely lacks a UID (non-conformant producer) —
+                // Yandex itself always writes one.
+                const identity = uid
+                    ? yandexEventIdentity(uid, recurrenceId)
+                    : { externalEventId: `vevent:${startParsed.date.toISOString()}:${summaryMatch?.[1]?.trim() || ''}`, externalSeriesId: null };
+
+                rawEvents.push({
+                    provider: 'yandex',
+                    integrationId,
+                    externalEventId: identity.externalEventId,
+                    externalSeriesId: identity.externalSeriesId,
+                    summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
                     start: startParsed.date,
                     end: endParsed.date,
-                    summary: summaryMatch ? summaryMatch[1].trim() : 'Busy',
-                    ...(startParsed.localStr && { startLocalStr: startParsed.localStr }),
-                    ...(endParsed.localStr && { endLocalStr: endParsed.localStr }),
-                } as any);
+                    date: startWc.date,
+                    startTime: startWc.time,
+                    endTime: endWc.time,
+                    allDay: isAllDay,
+                    isOwnSession: Boolean(ownSessionId),
+                    ownSessionId,
+                });
             }
         }
+
+        // Same rule as Google (see fetchGoogleCalendarEvents): importing/
+        // scanning for clients wants to SEE our own synced events (they carry
+        // client names); checking for conflicts/busy times must exclude
+        // them, since a session's own mirrored external event must never
+        // count as busy against itself.
+        const events = rawEvents.filter((event) => options?.includeCompasEvents || !event.isOwnSession);
 
         return { success: true, events };
     } catch (error) {

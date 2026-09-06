@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.notifications
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,12 @@ fun NotificationCenterSheet(
     onClose: () -> Unit,
     onOpenSession: (String) -> Unit,
     onOpenClient: (String) -> Unit,
+    // Задача 23 §2: у «требует внимания» свои адресаты — не объект, а
+    // действие, которым проблему закрывают. История уведомлений ниже
+    // по-прежнему открывает объект: там это и есть ожидаемое поведение.
+    onWriteNote: (String) -> Unit = onOpenSession,
+    onMarkPayment: (String) -> Unit = onOpenSession,
+    onRequestConsent: (String) -> Unit = onOpenClient,
     viewModel: NotificationCenterViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -52,15 +59,39 @@ fun NotificationCenterSheet(
         }
         Spacer(Modifier.height(14.dp))
 
+        // Задача 17 §6: «Требует внимания» и «Уведомления» — две РАЗНЫЕ
+        // секции. Здесь вычисляемое состояние практики с конкретными
+        // объектами; ниже — история уведомлений со своим прочитано/непрочитано.
+        // Смешивать их нельзя.
         if (attentionItems.isNotEmpty()) {
             Eyebrow("Требует внимания")
             Spacer(Modifier.height(8.dp))
             GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                 attentionItems.forEachIndexed { index, attention ->
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.WarningAmber, null, Modifier.size(18.dp), tint = CompasAccent)
+                    val target = attentionTarget(attention)
+                    val rowModifier = if (target == null) Modifier.fillMaxWidth()
+                    else Modifier.fillMaxWidth().clickable {
+                        onClose()
+                        when (target) {
+                            is AttentionTarget.WriteNote -> onWriteNote(target.sessionId)
+                            is AttentionTarget.MarkPayment -> onMarkPayment(target.sessionId)
+                            is AttentionTarget.RequestConsent -> onRequestConsent(target.clientId)
+                        }
+                    }
+                    Row(rowModifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(attentionIcon(attention.type), null, Modifier.size(18.dp), tint = CompasAccent)
                         Spacer(Modifier.width(10.dp))
                         Text(attention.label, style = tBody2, color = CompasFg, modifier = Modifier.weight(1f))
+                        if (target != null) {
+                            // Кадр A13 подписывает у каждой строки её действие
+                            // («Добавить», «Отправить»), а не одну стрелку на
+                            // все: строка называет, что не сделано, а глагол —
+                            // что произойдёт по нажатию.
+                            Spacer(Modifier.width(8.dp))
+                            Text(attentionActionLabel(target), style = tMeta, color = Forest700)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
+                        }
                     }
                     if (index != attentionItems.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
                 }
@@ -117,6 +148,64 @@ fun NotificationCenterSheet(
         Spacer(Modifier.height(16.dp))
         GhostButton("Закрыть", ::closeAndMarkRead, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
     }
+}
+
+/**
+ * Куда ведёт строка «требует внимания» — не «к объекту», а К ДЕЙСТВИЮ,
+ * которым проблему закрывают (Задача 23 §2).
+ *
+ * Отдельная от Composable функция: так решение проверяется обычным
+ * JVM-тестом, без Compose UI-инфраструктуры (её в модуле нет, тот же приём
+ * уже применён в DashboardViewModelTest).
+ */
+internal sealed interface AttentionTarget {
+    /** Заметка по конкретной сессии — сразу форма, а не карточка сессии. */
+    data class WriteNote(val sessionId: String) : AttentionTarget
+    /** Оплата конкретной сессии — карточка сессии с раскрытым действием оплаты. */
+    data class MarkPayment(val sessionId: String) : AttentionTarget
+    /** Согласие конкретного клиента — карточка клиента с раскрытой отправкой документа. */
+    data class RequestConsent(val clientId: String) : AttentionTarget
+}
+
+/**
+ * Маршрут выбирается ПО ТИПУ пункта, а не по тому, какой идентификатор
+ * оказался заполнен.
+ *
+ * Раньше правило было «есть sessionId — открываем сессию, иначе клиента».
+ * У пункта про сессию заполнены оба, и человек попадал на верхушку
+ * карточки — оттуда до заметки или до оплаты ещё надо догадаться дойти.
+ * Пункт «требует внимания» называет действие, значит и вести обязан прямо в
+ * него; заодно тип и идентификатор больше не могут разойтись: у неоплаты
+ * есть clientId, но повести по нему она уже не может.
+ *
+ * import_review не получает цели: экрана разбора импорта в приложении нет, и
+ * переход «куда-нибудь похоже» хуже, чем честно некликабельная строка
+ * (Задача 17 §6). Неизвестный серверу тип — так же.
+ */
+internal fun attentionTarget(item: AttentionItem): AttentionTarget? {
+    val sessionId = item.sessionId?.takeIf { it.isNotBlank() }
+    val clientId = item.clientId?.takeIf { it.isNotBlank() }
+    return when (item.type) {
+        "session_without_notes" -> sessionId?.let(AttentionTarget::WriteNote)
+        "session_unpaid" -> sessionId?.let(AttentionTarget::MarkPayment)
+        "client_without_consent" -> clientId?.let(AttentionTarget::RequestConsent)
+        else -> null
+    }
+}
+
+/** Глагол действия строки «Требует внимания» — ровно то, что делает тап. */
+internal fun attentionActionLabel(target: AttentionTarget): String = when (target) {
+    is AttentionTarget.WriteNote -> "Добавить"
+    is AttentionTarget.MarkPayment -> "Отметить"
+    is AttentionTarget.RequestConsent -> "Отправить"
+}
+
+internal fun attentionIcon(type: String): ImageVector = when (type) {
+    "session_without_notes" -> Icons.Outlined.EditNote
+    "session_unpaid" -> Icons.Outlined.Payments
+    "client_without_consent" -> Icons.Outlined.Shield
+    "import_review" -> Icons.Outlined.UploadFile
+    else -> Icons.Outlined.WarningAmber
 }
 
 private fun openNotification(item: PracticeNotification, closeAndMarkRead: () -> Unit, onOpenSession: (String) -> Unit, onOpenClient: (String) -> Unit) {

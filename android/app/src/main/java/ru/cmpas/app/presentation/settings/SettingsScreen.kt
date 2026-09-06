@@ -1,7 +1,5 @@
 package ru.cmpas.app.presentation.settings
 
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,14 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import ru.cmpas.app.BuildConfig
 import ru.cmpas.app.domain.model.MobileLegalDoc
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -35,17 +31,11 @@ import ru.cmpas.app.presentation.theme.*
 fun SettingsScreen(
     onLogout: () -> Unit = {},
     onScheduleClick: () -> Unit = {},
+    onAddressesClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var dayBefore by rememberSaveable { mutableStateOf(true) }
-    var twoHoursBefore by rememberSaveable { mutableStateOf(true) }
-    var paymentReminder by rememberSaveable { mutableStateOf(true) }
-    var consentReminder by rememberSaveable { mutableStateOf(false) }
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
-    var copied by rememberSaveable { mutableStateOf(false) }
-    val clipboard = LocalClipboardManager.current
-    val paymentLink = "cmpas.ru/pay/ilya-martynov"
     val displayName = uiState.user?.name ?: "Профиль специалиста"
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
@@ -69,8 +59,13 @@ fun SettingsScreen(
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(displayName, style = tSection, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(3.dp))
-                            Text(uiState.user?.email ?: "Психолог · схема-терапия", style = tBody2, color = Color.White.copy(alpha = .76f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // Задача 20 §9: при отсутствии почты экран
+                            // подставлял выдуманную специализацию, которой у
+                            // человека может не быть. Нет данных — нет строки.
+                            uiState.user?.email?.takeIf { it.isNotBlank() }?.let { email ->
+                                Spacer(Modifier.height(3.dp))
+                                Text(email, style = tBody2, color = Color.White.copy(alpha = .76f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             Spacer(Modifier.height(8.dp))
                             ProfilePill(if (uiState.legalStatus?.requiresTermsAcceptance == true) "Нужно принять документы" else "Документы актуальны")
                         }
@@ -79,51 +74,44 @@ fun SettingsScreen(
                 }
             }
 
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Kpi(Icons.Outlined.Groups, "24", "клиента", Forest700, Modifier.weight(1f))
-                    Kpi(Icons.Outlined.EventAvailable, "312", "сессий", Blue, Modifier.weight(1f))
-                    Kpi(Icons.Outlined.StarOutline, "4,9", "оценка", CompasAccent, Modifier.weight(1f))
-                }
-            }
+            // Задача 20 §6: здесь стояли три придуманных показателя —
+            // клиенты, сессии и «оценка». Ни у одного не было источника:
+            // счётчиков практики за всё время в контракте нет, а системы
+            // оценок в продукте нет вовсе. Карточка убрана целиком —
+            // подменять одно выдуманное число другим смысла нет.
 
-            item { SectionTitle("Автонапоминания") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    ReminderSwitch("За 24 часа", "Подтвердить встречу и показать оплату", dayBefore) { dayBefore = it }
-                    ThinDivider()
-                    ReminderSwitch("За 2 часа", "Короткое напоминание перед сессией", twoHoursBefore) { twoHoursBefore = it }
-                    ThinDivider()
-                    ReminderSwitch("Об оплате", "Если сессия ещё не оплачена", paymentReminder) { paymentReminder = it }
-                    ThinDivider()
-                    ReminderSwitch("О документах", "Если согласие не получено", consentReminder) { consentReminder = it }
-                }
-            }
-
-            item { SectionTitle("Оплата") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), strong = true, padding = 16.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        QrBox()
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Ссылка на оплату", style = tBody, color = CompasFg)
-                            Spacer(Modifier.height(4.dp))
-                            Text(paymentLink, style = tBody2, color = Forest700, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(10.dp))
-                            GhostButton(
-                                text = if (copied) "Скопировано" else "Скопировать",
-                                icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
-                                onClick = {
-                                    clipboard.setText(AnnotatedString("https:" + "//$paymentLink"))
-                                    copied = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
+            // Задача 20 §11: остались только те два напоминания, за которыми
+            // стоит настоящая серверная рассылка — за сутки и за час до
+            // сессии. Три остальных тумблера жили в памяти экрана:
+            // переключались, ничего не меняли и забывались при
+            // переустановке. Пока серверное состояние не пришло, тумблеров
+            // нет вовсе — тумблер без известного состояния это выдумка.
+            uiState.reminders?.let { reminders ->
+                item { SectionTitle("Автонапоминания клиенту") }
+                item {
+                    GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                        ReminderSwitch(
+                            title = "За 24 часа",
+                            subtitle = "Напоминание клиенту накануне встречи",
+                            checked = reminders.clientReminder25hEnabled,
+                            saving = uiState.savingReminder == ReminderKind.DAY_BEFORE,
+                        ) { viewModel.setClientReminder(ReminderKind.DAY_BEFORE, it) }
+                        ThinDivider()
+                        ReminderSwitch(
+                            title = "За 1 час",
+                            subtitle = "Короткое напоминание перед началом",
+                            checked = reminders.clientReminder1hEnabled,
+                            saving = uiState.savingReminder == ReminderKind.HOUR_BEFORE,
+                        ) { viewModel.setClientReminder(ReminderKind.HOUR_BEFORE, it) }
                     }
                 }
             }
+
+            // Задача 20 §7: здесь была «ссылка на оплату» вида
+            // cmpas.ru/pay/<имя-из-профиля> и декоративный QR к ней. Такого
+            // ресурса не существует — ни на сервере, ни в контракте: ссылка
+            // собиралась из имени пользователя, а QR вёл в никуда. Блок
+            // убран целиком; появится настоящая ссылка — появится и блок.
 
             item { SectionTitle("Аналитика") }
             item {
@@ -139,14 +127,26 @@ fun SettingsScreen(
             item { SectionTitle("Мессенджеры и данные") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    ConnectionRow("Telegram", "Подключён · @CompasProBot", Tg, true) { activeSheet = ProfileSheet.TELEGRAM }
+                    // Задача 20 §8: состояние приходит с сервера. Раньше
+                    // Telegram был «подключён» всегда, MAX — «не подключён»
+                    // всегда, независимо от реальности, да ещё и с именем
+                    // бота, которого экран знать не мог.
+                    ConnectionRow("Telegram", connectionSubtitle(uiState.user?.telegramConnected), Tg, uiState.user?.telegramConnected == true) { activeSheet = ProfileSheet.TELEGRAM }
                     ThinDivider()
-                    ConnectionRow("MAX", "Не подключён", Max, false) { activeSheet = ProfileSheet.MAX }
+                    ConnectionRow("MAX", connectionSubtitle(uiState.user?.maxConnected), Max, uiState.user?.maxConnected == true) { activeSheet = ProfileSheet.MAX }
                 }
             }
+            // Задача 27, кадр A04: у этой карточки не было заголовка, хотя
+            // ровно ради названных групп кадр и заведён — «Практика /
+            // Мессенджеры / Аналитика», а не двадцать разделов подряд.
+            item { SectionTitle("Практика") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
                     SettingRow(Icons.Outlined.EventBusy, "Расписание", "Блокировки, выходные и режим записи") { onScheduleClick() }
+                    ThinDivider()
+                    // Задача 21: кабинеты заводятся и правятся с телефона, а
+                    // не только в веб-кабинете.
+                    SettingRow(Icons.Outlined.Place, "Кабинеты", "Места очного приёма") { onAddressesClick() }
                     ThinDivider()
                     SettingRow(Icons.Outlined.Link, "Ссылка для записи", uiState.bookingLink?.removePrefix("https://")?.removePrefix("http://") ?: "Загружаем…") { activeSheet = ProfileSheet.BOOKING }
                     ThinDivider()
@@ -154,7 +154,9 @@ fun SettingsScreen(
                     ThinDivider()
                     SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Экспорт, доступ и удаление") { activeSheet = ProfileSheet.DATA }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.HelpOutline, "Помощь и поддержка", "Версия 1.0.5") { activeSheet = ProfileSheet.HELP }
+                    // Задача 20 §10: версия та, что реально собрана, а не
+                    // вписанная руками в код когда-то давно.
+                    SettingRow(Icons.Outlined.HelpOutline, "Помощь и поддержка", "Версия ${BuildConfig.VERSION_NAME}") { activeSheet = ProfileSheet.HELP }
                 }
             }
 
@@ -189,8 +191,13 @@ private fun ProfilePill(text: String) {
     }
 }
 
+/**
+ * Тумблер показывает СЕРВЕРНОЕ состояние. Пока запись идёт, он заблокирован:
+ * мигать желаемым состоянием до подтверждения — то же самое обещание, что и
+ * прежние локальные тумблеры, только быстрее.
+ */
 @Composable
-private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, saving: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = tBody, color = CompasFg)
@@ -199,6 +206,7 @@ private fun ReminderSwitch(title: String, subtitle: String, checked: Boolean, on
         Spacer(Modifier.width(12.dp))
         Switch(
             checked = checked,
+            enabled = !saving,
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
@@ -269,6 +277,30 @@ private fun AnalyticsConsentRow(checked: Boolean, saving: Boolean, onChange: (Bo
     }
 }
 
+/**
+ * Пояснение к каналу в шторке подключения — тоже от сервера.
+ *
+ * Задача 20 (P0): в шторке было написано «Канал подключён» независимо от того,
+ * подключён он или нет. Подключение делается в веб-кабинете, раздел
+ * «Интеграции» — приложение его не умеет и обещать не должно; имени бота оно
+ * тоже не знает, поэтому здесь его нет.
+ */
+internal fun connectionSheetBody(channel: String, connected: Boolean?): String = when (connected) {
+    true -> "Канал подключён: уведомления о записях и напоминания приходят вам в $channel."
+    false -> "Канал не подключён — уведомления в $channel не приходят. Подключить его можно в веб-кабинете, раздел «Интеграции»."
+    null -> "Состояние канала пока не загрузилось — обновите экран."
+}
+
+/**
+ * Подпись состояния мессенджера. Пока профиль не загружен, состояние
+ * неизвестно — и так и говорим, а не показываем «не подключён» как факт.
+ */
+internal fun connectionSubtitle(connected: Boolean?): String = when (connected) {
+    true -> "Подключён"
+    false -> "Не подключён"
+    null -> "Проверяем подключение…"
+}
+
 @Composable
 private fun ConnectionRow(name: String, status: String, accent: Color, bound: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -311,22 +343,6 @@ private fun ThinDivider() {
 }
 
 @Composable
-private fun QrBox() {
-    val cells = remember { List(121) { i -> val x = i % 11; val y = i / 11; x < 3 && y < 3 || x > 7 && y < 3 || x < 3 && y > 7 || ((x * 5 + y * 3 + i) % 7 < 3) } }
-    Box(Modifier.size(104.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(9.dp)) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            repeat(11) { y ->
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                    repeat(11) { x ->
-                        Box(Modifier.weight(1f).fillMaxHeight().background(if (cells[y * 11 + x]) Forest900 else Color.Transparent))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ProfileInfoSheet(
     sheet: ProfileSheet,
     state: SettingsUiState,
@@ -346,10 +362,10 @@ private fun ProfileInfoSheet(
 
     val (title, subtitle, body) = when (sheet) {
         ProfileSheet.PROFILE -> Triple("Профессиональный профиль", "Данные, которые видит клиент", "Имя, специализация и описание практики будут редактироваться в следующем шаге настройки профиля.")
-        ProfileSheet.TELEGRAM -> Triple("Telegram", "Канал подключён", "Бот может отправлять клиентам сервисные сообщения после того, как клиент открыл его и подтвердил связь.")
-        ProfileSheet.MAX -> Triple("MAX", "Подключение канала", "После подключения клиенты смогут получать уведомления в MAX. До этого приложение подготовит текст для ручной отправки.")
+        ProfileSheet.TELEGRAM -> Triple("Telegram", connectionSubtitle(state.user?.telegramConnected), connectionSheetBody("Telegram", state.user?.telegramConnected))
+        ProfileSheet.MAX -> Triple("MAX", connectionSubtitle(state.user?.maxConnected), connectionSheetBody("MAX", state.user?.maxConnected))
         ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
-        ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android 1.0.5", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+        ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
         ProfileSheet.DOCUMENTS, ProfileSheet.BOOKING -> Triple("", "", "")
     }
     CompasBottomSheet(onClose = onClose) {
@@ -361,61 +377,9 @@ private fun ProfileInfoSheet(
     }
 }
 
-@Composable
-private fun BookingLinkSheet(bookingLink: String?, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
-
-    CompasBottomSheet(onClose = onClose) {
-        SheetHead("Ссылка для записи", "Самозапись клиентов")
-        Spacer(Modifier.height(16.dp))
-        if (bookingLink == null) {
-            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Forest700)
-            }
-        } else {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                QrCodeImage(content = bookingLink)
-            }
-            Spacer(Modifier.height(14.dp))
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                padding = 14.dp,
-                onClick = {
-                    clipboard.setText(AnnotatedString(bookingLink))
-                    copied = true
-                },
-            ) {
-                Eyebrow(if (copied) "Скопировано" else "Нажмите, чтобы скопировать")
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Link, null, Modifier.size(18.dp), tint = Forest700)
-                    Spacer(Modifier.width(8.dp))
-                    Text(bookingLink.removePrefix("https://").removePrefix("http://"), style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            PrimaryButton(
-                text = "Поделиться",
-                icon = Icons.Outlined.Share,
-                onClick = { shareBookingLink(context, bookingLink) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-        }
-        GhostButton("Закрыть", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
-    }
-}
-
-private fun shareBookingLink(context: Context, link: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "Ссылка для записи")
-        putExtra(Intent.EXTRA_TEXT, link)
-    }
-    runCatching { context.startActivity(Intent.createChooser(intent, "Отправить через")) }
-}
+// BookingLinkSheet и shareBookingLink вынесены в
+// presentation/components/BookingLinkSheet.kt — общий код для настроек и
+// главного экрана, см. import ru.cmpas.app.presentation.components.* выше.
 
 @Composable
 private fun DocumentsSheet(

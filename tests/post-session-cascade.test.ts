@@ -7,7 +7,7 @@
 // 4. слишком старые сессии (включая всю историю status='completed' до этой
 //    фичи) не разлетаются задним числом при первом проходе cron.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const diarySessionFindMany = vi.fn();
 const diarySessionFindFirst = vi.fn();
@@ -147,11 +147,40 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         const where = diarySessionFindMany.mock.calls[0][0].where;
         expect(where.nextBookingNudgeSent).toBe(false);
     });
+
+    it('Task 9 (founder review): запрос фильтрует clientNotificationsEnabled: true — a session with it false never reaches this job at all', async () => {
+        diarySessionFindMany.mockResolvedValue([]);
+
+        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
+        await processNextBookingNudge();
+
+        const where = diarySessionFindMany.mock.calls[0][0].where;
+        expect(where.clientNotificationsEnabled).toBe(true);
+    });
 });
 
 describe('processWeeklyFollowup (O-260829 §5.4)', () => {
+    const ORIGINAL_FLAG = process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        // PRAKTIKA MVP addendum §8: launch default — выключено; остальные
+        // тесты этого блока проверяют логику при явно включённом флаге.
+        process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = 'true';
+    });
+
+    afterEach(() => {
+        process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = ORIGINAL_FLAG;
+    });
+
+    it('addendum §8: по умолчанию (флаг не задан) cron не читает базу и не шлёт сообщений', async () => {
+        delete process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED;
+
+        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
+        await processWeeklyFollowup();
+
+        expect(diarySessionFindMany).not.toHaveBeenCalled();
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
     });
 
     it('неделя прошла, будущей записи нет — сообщение уходит', async () => {
@@ -222,5 +251,15 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
         expect(sendTelegramMessage).not.toHaveBeenCalled();
         expect(diarySessionFindFirst).not.toHaveBeenCalled(); // даже будущую запись не проверяем — сразу закрываем
         expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { weeklyFollowupSent: true } });
+    });
+
+    it('Task 9 (founder review): запрос фильтрует clientNotificationsEnabled: true — a session with it false never reaches this job at all', async () => {
+        diarySessionFindMany.mockResolvedValue([]);
+
+        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
+        await processWeeklyFollowup();
+
+        const where = diarySessionFindMany.mock.calls[0][0].where;
+        expect(where.clientNotificationsEnabled).toBe(true);
     });
 });

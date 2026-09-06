@@ -4,6 +4,17 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getAdsConsentStatus, toggleAdsConsent } from '@/app/legal/actions';
+import { requireOwnedCalendarIntegration } from '@/lib/practice/ownership';
+import {
+    activatePracticeAddress,
+    createPracticeAddress,
+    deactivatePracticeAddress,
+    findAddressBlockers,
+    listPracticeAddresses,
+    setPrimaryPracticeAddress,
+    updatePracticeAddress,
+} from '@/lib/practice/addresses';
+import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -29,19 +40,20 @@ export async function getSettings() {
     }
 }
 
-export async function getAddresses() {
+/**
+ * Кабинеты специалиста. Все операции делегируются общему ядру
+ * src/lib/practice/addresses.ts: те же правила действуют в приложении
+ * (Задача 21), и расходиться им нельзя.
+ *
+ * По умолчанию отдаются только действующие кабинеты: выведенный из работы не
+ * должен появляться там, где выбирают место встречи (Задача 18 §5). Экран
+ * настроек передаёт includeInactive, потому что он единственный, кому нужно
+ * показать выведенные и дать их вернуть.
+ */
+export async function getAddresses(options?: { includeInactive?: boolean }) {
     try {
         const psychologistId = await getPsychologistId();
-        const [addresses, settings] = await Promise.all([
-            db.psychologistAddress.findMany({ where: { psychologistId } }),
-            db.psychologistSettings.findUnique({ where: { psychologistId }, select: { officeAddress: true } }),
-        ]);
-        // officeAddress stores the primary address ID
-        const primaryId = settings?.officeAddress || null;
-        return {
-            success: true,
-            data: addresses.map(a => ({ ...a, isPrimary: a.id === primaryId })),
-        };
+        return { success: true, data: await listPracticeAddresses(psychologistId, options) };
     } catch (e: any) {
         console.error('getAddresses error:', e);
         return { success: false, error: e.message || 'Ошибка при получении адресов' };
@@ -50,48 +62,55 @@ export async function getAddresses() {
 
 export async function createAddress(data: { name: string; address: string }) {
     const psychologistId = await getPsychologistId();
-    let settings = await db.psychologistSettings.findUnique({ where: { psychologistId } });
-    if (!settings) settings = await db.psychologistSettings.create({ data: { psychologistId } });
-
-    const result = await db.psychologistAddress.create({
-        data: { psychologistId, name: data.name, address: data.address }
-    });
-    // If this is the first address, make it primary
-    const count = await db.psychologistAddress.count({ where: { psychologistId } });
-    if (count === 1) {
-        await db.psychologistSettings.update({
-            where: { psychologistId },
-            data: { officeAddress: result.id },
-        });
-    }
+    const created = await createPracticeAddress(psychologistId, data);
     revalidatePath('/diary/settings');
-    return result;
+    return created;
 }
 
-export async function deleteAddress(id: string) {
+export async function updateAddress(id: string, data: { name: string; address: string }) {
     const psychologistId = await getPsychologistId();
-    const address = await db.psychologistAddress.findFirst({ where: { id, psychologistId }, select: { id: true } });
-    if (!address) throw new Error('Кабинет не найден');
-
-    // If deleting primary, clear it
-    const settings = await db.psychologistSettings.findUnique({ where: { psychologistId }, select: { officeAddress: true } });
-    if (settings?.officeAddress === id) {
-        await db.psychologistSettings.update({ where: { psychologistId }, data: { officeAddress: null } });
-    }
-    await db.psychologistAddress.delete({ where: { id: address.id } });
+    await updatePracticeAddress(psychologistId, id, data);
     revalidatePath('/diary/settings');
+    revalidatePath('/diary/availability');
+    return { success: true as const };
+}
+
+/**
+ * Что держит кабинет в работе — будущие записи и действующие правила
+ * расписания. Прошедшие сессии сюда не входят: они история, их никто не
+ * трогает.
+ */
+export async function countActiveRulesUsingAddress(addressId: string) {
+    const psychologistId = await getPsychologistId();
+    const blockers = await findAddressBlockers(psychologistId, addressId);
+    return blockers.futureSessions + blockers.activeSchedule;
+}
+
+/**
+ * Пользовательское «удалить» для кабинета — это вывод из работы, а не
+ * удаление строки: у DiarySession.addressId стоит SetNull, и настоящее
+ * удаление стёрло бы место встречи у всех прошедших сессий (Задача 18 §5).
+ */
+export async function deactivateAddress(id: string) {
+    const psychologistId = await getPsychologistId();
+    await deactivatePracticeAddress(psychologistId, id);
+    revalidatePath('/diary/settings');
+    revalidatePath('/diary/availability');
+    return { success: true as const };
+}
+
+/** Вернуть кабинет в работу. Ничего не восстанавливает — просто снимает вывод. */
+export async function activateAddress(id: string) {
+    const psychologistId = await getPsychologistId();
+    await activatePracticeAddress(psychologistId, id);
+    revalidatePath('/diary/settings');
+    revalidatePath('/diary/availability');
+    return { success: true as const };
 }
 
 export async function setPrimaryAddress(addressId: string) {
     const psychologistId = await getPsychologistId();
-    const address = await db.psychologistAddress.findFirst({ where: { id: addressId, psychologistId }, select: { id: true } });
-    if (!address) throw new Error('Кабинет не найден');
-
-    await db.psychologistSettings.upsert({
-        where: { psychologistId },
-        create: { psychologistId, officeAddress: address.id },
-        update: { officeAddress: address.id },
-    });
+    await setPrimaryPracticeAddress(psychologistId, addressId);
     revalidatePath('/diary/settings');
 }
 
@@ -117,6 +136,12 @@ export async function updateSettings(data: {
     bookingBufferHours?: number;
 }) {
     const psychologistId = await getPsychologistId();
+    // Task 5: turning on public self-booking exposes a psychologist's slots
+    // to strangers who can create client records of themselves — same
+    // "gate the next client creation" rule as createClient/bulkCreateClients.
+    if (data.scheduleMode === 'booking') {
+        await requirePracticeOperatorAttestation(psychologistId);
+    }
     const safeData = {
         ...(typeof data.timezone === 'string' ? { timezone: data.timezone } : {}),
         ...(typeof data.defaultSessionDuration === 'number' ? { defaultSessionDuration: data.defaultSessionDuration } : {}),
@@ -157,7 +182,8 @@ export async function getIntegrations() {
 }
 
 export async function toggleIntegration(id: string, isActive: boolean) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedCalendarIntegration(psychologistId, id);
     const integration = await db.calendarIntegration.update({
         where: { id },
         data: { isActive },
@@ -167,7 +193,8 @@ export async function toggleIntegration(id: string, isActive: boolean) {
 }
 
 export async function toggleIntegrationSyncFrom(id: string, syncFrom: boolean) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedCalendarIntegration(psychologistId, id);
     // @ts-ignore: syncFrom is added to schema but prisma generate failed due to db connection
     const integration = await db.calendarIntegration.update({
         where: { id },
@@ -178,7 +205,8 @@ export async function toggleIntegrationSyncFrom(id: string, syncFrom: boolean) {
 }
 
 export async function disconnectIntegration(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedCalendarIntegration(psychologistId, id);
     await db.calendarIntegration.delete({
         where: { id },
     });
@@ -307,13 +335,13 @@ export async function updateProfile(data: {
 }
 
 export async function getAdsConsentForUser() {
-    const userId = await getPsychologistId();
-    return getAdsConsentStatus(userId);
+    await getPsychologistId(); // ensures caller is authenticated before delegating
+    return getAdsConsentStatus();
 }
 
 export async function toggleAdsConsentForUser(accept: boolean) {
-    const userId = await getPsychologistId();
-    return toggleAdsConsent(userId, accept);
+    await getPsychologistId();
+    return toggleAdsConsent(accept);
 }
 
 export async function getTrialStatus() {

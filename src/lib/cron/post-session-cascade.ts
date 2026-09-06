@@ -95,10 +95,16 @@ export async function processNextBookingNudge(): Promise<void> {
         // простой cron (деплой, инцидент), не трогая многолетнюю историю.
         const staleCutoff = new Date(now.getTime() - 50 * 60 * 60 * 1000);
 
+        // Task 9 (founder review): purely client-facing job, no
+        // psychologist-facing counterpart shares this query — a session
+        // with clientNotificationsEnabled=false never enters it, and never
+        // gets nextBookingNudgeSent set, so re-enabling the flag later
+        // picks it straight back up.
         const sessions = await db.diarySession.findMany({
             where: {
                 status: { notIn: ['cancelled', 'no_show'] },
                 nextBookingNudgeSent: false,
+                clientNotificationsEnabled: true,
                 date: { lte: now },
             } as any,
             include: {
@@ -161,6 +167,12 @@ export async function processNextBookingNudge(): Promise<void> {
  * повторной записи нет — одно сообщение со ссылкой на запись.
  */
 export async function processWeeklyFollowup(): Promise<void> {
+    // PRAKTIKA MVP addendum §8: утверждённый launch UX не должен незаметно
+    // начинать автоматическую дополнительную коммуникацию с клиентами.
+    // Механику не удаляем, но по умолчанию cron не отправляет.
+    if (process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED !== 'true') {
+        return;
+    }
     try {
         const now = new Date();
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -177,10 +189,13 @@ export async function processWeeklyFollowup(): Promise<void> {
         // недельного, а не двухчасового окна).
         const staleCutoff = new Date(now.getTime() - 37 * 24 * 60 * 60 * 1000);
 
+        // Task 9 (founder review): purely client-facing job — same
+        // query-level filter as processNextBookingNudge above.
         const sessions = await db.diarySession.findMany({
             where: {
                 status: 'completed',
                 weeklyFollowupSent: false,
+                clientNotificationsEnabled: true,
                 date: { lte: now },
             } as any,
             include: {

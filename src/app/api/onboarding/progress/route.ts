@@ -1,35 +1,20 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db } from '@/lib/db';
+import { getPracticeOnboarding } from '@/lib/practice/onboarding';
 
+/**
+ * Состояние онбординга для веб-кабинета (Задача 24).
+ *
+ * Считает не этот маршрут: и веб, и приложение берут состояние из общего ядра
+ * src/lib/practice/onboarding.ts. Раньше шаги вычислялись прямо здесь, и
+ * мобильный дашборд знал про онбординг совсем другое — один булев
+ * needsOnboarding. Две трактовки одного и того же расходились неизбежно.
+ */
 export async function GET() {
     const session = await auth();
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const psychologistId = session.user.id;
-
-    const [clientsCount, availabilityCount, botUser, calendarIntegration] = await Promise.all([
-        db.diaryClient.count({ where: { psychologistId } }),
-        db.availabilitySlot.count({ where: { psychologistId, isActive: true } }),
-        db.user.findUnique({
-            where: { id: psychologistId },
-            select: { telegramChatId: true, maxChatId: true },
-        }),
-        db.calendarIntegration.findFirst({
-            where: { psychologistId, isActive: true },
-        }).catch(() => null),
-    ]);
-
-    const botConnected = !!(botUser?.telegramChatId || botUser?.maxChatId);
-    const calendarConnected = !!calendarIntegration;
-
-    return NextResponse.json({
-        clientsCount,
-        availabilityCount,
-        botConnected,
-        calendarConnected,
-    });
+    return NextResponse.json(await getPracticeOnboarding(session.user.id));
 }
-

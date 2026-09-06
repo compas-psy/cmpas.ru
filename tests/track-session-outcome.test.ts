@@ -31,7 +31,12 @@ vi.mock('@/lib/client-workflow', () => ({
     createAutoDocumentDeliveries: vi.fn(),
     getPaymentInstruction: vi.fn(),
 }));
-vi.mock('@/lib/session-reschedule', () => ({ rescheduleSessionAtomic: vi.fn() }));
+vi.mock('@/lib/waitlist-notify', () => ({ notifyWaitlistOnFreedSlot: vi.fn() }));
+vi.mock('@/lib/practice/booking/booking', () => ({
+    createManualPracticeSession: vi.fn(),
+    reschedulePracticeBooking: vi.fn(),
+    BookingConflictError: class BookingConflictError extends Error {},
+}));
 
 const track = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/lib/analytics/track', () => ({ track: (...args: unknown[]) => track(...args) }));

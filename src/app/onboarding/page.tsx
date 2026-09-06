@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { parseClientLines, type ParsedClient } from "@/lib/clients/parse"
+import { useAttestationGate } from "@/components/legal/useAttestationGate"
 
 const METHODS = [
     "Схема-терапия",
@@ -32,6 +33,7 @@ export default function OnboardingPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [clientsText, setClientsText] = useState("")
     const [error, setError] = useState<string | null>(null)
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate()
     const [docDraft, setDocDraft] = useState({
         title: "Договор / информированное согласие",
         version: new Date().toISOString().slice(0, 10),
@@ -117,7 +119,7 @@ export default function OnboardingPage() {
     async function saveClientsIfNeeded() {
         if (validParsedClients.length === 0) return
         const { bulkCreateClients } = await import("@/app/diary/actions/clients")
-        await bulkCreateClients(validParsedClients.map(p => ({ name: p.name, phone: p.phone, email: p.email })))
+        await attestationGuard(() => bulkCreateClients(validParsedClients.map(p => ({ name: p.name, phone: p.phone, email: p.email }))))
     }
 
     async function submitProfile() {
@@ -298,6 +300,7 @@ export default function OnboardingPage() {
                 .choice { min-height: 4.5rem; border-radius: 1.25rem; border: 1px solid rgba(201,169,97,.35); background: rgba(201,169,97,.12); padding: 1rem; text-align: left; font-weight: 600; }
                 @media (min-width: 768px) { .input { border-color: #e6dfd1; background: #faf8f5; color: #16271d; } }
             `}</style>
+            {attestationModal}
         </main>
     )
 }

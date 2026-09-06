@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'crypto';
 
 // client-workflow.ts imports `db` at module scope for its document/consent
 // helpers, unused by the token functions under test here — mocked so
 // importing the module never touches Prisma.
 vi.mock('@/lib/db', () => ({ db: {} }));
 
-const { clientBookingLink, personalClientToken, resolvePersonalClientToken } = await import('./client-workflow');
+const {
+    clientBookingLink,
+    personalClientToken,
+    resolvePersonalClientToken,
+    resolveSignedPersonalClientToken,
+    sessionActionToken,
+    verifySessionActionToken,
+    sessionActionTokenExpiry,
+} = await import('./client-workflow');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -43,6 +52,124 @@ describe('personalClientToken / resolvePersonalClientToken', () => {
         expect(resolvePersonalClientToken('')).toBeNull();
         expect(resolvePersonalClientToken(null)).toBeNull();
         expect(resolvePersonalClientToken(undefined)).toBeNull();
+    });
+});
+
+// Task 3 (PRAKTIKA MVP, item A from founder review of 229d99e): before this,
+// any endpoint that resolved `?c=` via resolvePersonalClientToken() still
+// honored the legacy unsigned-raw-clientId path — an attacker could pass
+// another client's raw id as `?c=<id>` and it would resolve exactly as if it
+// were a real signed token, reopening the same IDOR the signed-token switch
+// was meant to close. resolveSignedPersonalClientToken() never falls back.
+describe('resolveSignedPersonalClientToken — strict, no legacy fallback ever', () => {
+    it('valid signed token — resolves', () => {
+        const token = personalClientToken('client-123');
+        expect(resolveSignedPersonalClientToken(token)).toEqual({ clientId: 'client-123' });
+    });
+
+    it('a raw DiaryClient id passed as the token — rejected, NOT treated as a legacy clientId', () => {
+        expect(resolveSignedPersonalClientToken('clzk8f2p90001qw3h5x9k2m4v')).toBeNull();
+    });
+
+    it('tampered signed token — rejected', () => {
+        const token = personalClientToken('client-123');
+        const tampered = token.slice(0, -1) + (token.at(-1) === 'a' ? 'b' : 'a');
+        expect(resolveSignedPersonalClientToken(tampered)).toBeNull();
+    });
+
+    it('expired signed token — rejected', () => {
+        const issuedAt = Date.now() - 31 * DAY_MS;
+        const token = personalClientToken('client-123', issuedAt);
+        expect(resolveSignedPersonalClientToken(token)).toBeNull();
+    });
+
+    it('empty/missing token — rejected', () => {
+        expect(resolveSignedPersonalClientToken('')).toBeNull();
+        expect(resolveSignedPersonalClientToken(null)).toBeNull();
+        expect(resolveSignedPersonalClientToken(undefined)).toBeNull();
+    });
+});
+
+// Task 3 (PRAKTIKA MVP, item D — founder review of 229d99e): the previous
+// clientActionToken(psychologistId, clientId) was static per client — one
+// token, reused across EVERY session and EVERY action (confirm/cancel/
+// reschedule), never expiring. A token sent in a reminder for session A
+// could cancel session B; a confirm-link could be replayed as a cancel-link.
+// sessionActionToken binds psychologistId + clientId + sessionId + action +
+// expiresAt, and verifySessionActionToken checks all five.
+describe('sessionActionToken / verifySessionActionToken', () => {
+    const future = Date.now() + 60 * 60 * 1000;
+
+    it('round-trips: correct psy/client/session/action, not expired — verifies', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', future);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', token)).toBe(true);
+    });
+
+    it('token issued for session A does not work on session B', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'cancel', future);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-B', 'cancel', token)).toBe(false);
+    });
+
+    it('a confirm-token does not work as a cancel-token (same session, same client)', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', future);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'cancel', token)).toBe(false);
+    });
+
+    it('a cancel-token does not work as a reschedule-token', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'cancel', future);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'reschedule', token)).toBe(false);
+    });
+
+    it('token issued for one client does not work for another client on the same session', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', future);
+        expect(verifySessionActionToken('psy-1', 'client-2', 'session-A', 'confirm', token)).toBe(false);
+    });
+
+    it('token issued under one psychologist does not work under another', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', future);
+        expect(verifySessionActionToken('psy-2', 'client-1', 'session-A', 'confirm', token)).toBe(false);
+    });
+
+    it('expired token is rejected even with every other field matching', () => {
+        const past = Date.now() - 1000;
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', past);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', token)).toBe(false);
+    });
+
+    it('tampered token is rejected', () => {
+        const token = sessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', future);
+        // Flip a character in the middle, not the last one: base64url's final
+        // group can carry unused padding bits, so mutating the very last
+        // character sometimes decodes back to the exact same bytes — a false
+        // negative unrelated to the actual tamper-detection logic.
+        const i = Math.floor(token.length / 2);
+        const tampered = token.slice(0, i) + (token[i] === 'a' ? 'b' : 'a') + token.slice(i + 1);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', tampered)).toBe(false);
+    });
+
+    it('the OLD (pre-fix) unbound token format fails closed — never accepted as a fallback', () => {
+        // The previous clientActionToken(psy, client) was a bare 64-char hex
+        // SHA-256 digest, no prefix, no session/action/expiry. It must not
+        // verify against anything now — no legacy-compatibility path exists
+        // for action tokens (unlike the personal-link token's dated grace
+        // window): these are short-lived by nature, so a clean cutover was
+        // chosen instead of accepting stale higher-privilege links.
+        const oldStyleToken = createHash('sha256').update('psy-1:client-1:whatever-secret').digest('hex');
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', oldStyleToken)).toBe(false);
+    });
+
+    it('empty/missing token is rejected', () => {
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', '')).toBe(false);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', null)).toBe(false);
+        expect(verifySessionActionToken('psy-1', 'client-1', 'session-A', 'confirm', undefined)).toBe(false);
+    });
+});
+
+describe('sessionActionTokenExpiry', () => {
+    it('expires 48h after the session date/time, not 48h from mint time', () => {
+        const sessionDate = new Date('2026-09-10T13:00:00.000Z');
+        const expiry = sessionActionTokenExpiry(sessionDate);
+        expect(expiry).toBe(sessionDate.getTime() + 48 * 60 * 60 * 1000);
     });
 });
 

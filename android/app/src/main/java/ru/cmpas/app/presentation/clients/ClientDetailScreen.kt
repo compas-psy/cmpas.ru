@@ -32,6 +32,7 @@ import ru.cmpas.app.presentation.comms.SendDocumentSheet
 import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.comms.asDocumentTemplate
 import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.navigation.ScreenFocus
 import ru.cmpas.app.presentation.theme.*
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -46,9 +47,12 @@ fun ClientDetailScreen(
     clientId: String,
     onBack: () -> Unit,
     onSessionClick: (String) -> Unit = {},
-    onScheduleClick: () -> Unit = {},
+    /** Запись создаётся для ЭТОГО клиента — id уходит в существующую форму. */
+    onScheduleClick: (String) -> Unit = {},
     onNoteClick: (String) -> Unit = {},
     onQuickAction: (String) -> Unit = {},
+    /** Задача 23: с чем пришли. CONSENT — сразу отправка документа-согласия. */
+    focus: ScreenFocus? = null,
     viewModel: ClientDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -57,6 +61,8 @@ fun ClientDetailScreen(
     var preferredDocumentId by remember { mutableStateOf<String?>(null) }
     var inviteChannel by remember { mutableStateOf("auto") }
     var showMenu by remember { mutableStateOf(false) }
+
+    var consentFocusHandled by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(clientId) { viewModel.loadClient(clientId) }
     LaunchedEffect(sheet, inviteChannel) {
@@ -73,6 +79,22 @@ fun ClientDetailScreen(
     val upcoming = sessions.filter { it.isFutureOrToday() }.minByOrNull { "${it.date}T${it.startTime}" }
     val history = sessions.filterNot { it.isFutureOrToday() }.take(12)
     val bound = detail?.hasMessenger == true
+
+    // Пришли из «требует внимания» по отсутствию согласия — открывается ровно
+    // то действие, которым его получают: та же отправка документа, что и по
+    // баннеру согласия ниже. Второго экрана документов не заводится.
+    //
+    // Документ не «снимается» один раз в момент открытия: список приходит с
+    // сервера чуть позже карточки, и снимок поймал бы пустоту. Выбор считается
+    // от текущего списка, а SendDocumentSheet пересчитывает его, когда список
+    // доезжает.
+    val consentPreselectionId = if (focus == ScreenFocus.CONSENT) consentDocumentId(uiState.documents) else null
+    LaunchedEffect(focus, client?.id) {
+        if ((focus == ScreenFocus.CONSENT || focus == ScreenFocus.DOCUMENT) && client != null && !consentFocusHandled) {
+            consentFocusHandled = true
+            sheet = ClientSheet.DOCUMENT
+        }
+    }
     val channel = detail?.messengerChannel ?: when {
         !detail?.telegramId.isNullOrBlank() -> "telegram"
         !detail?.maxId.isNullOrBlank() -> "max"
@@ -143,9 +165,7 @@ fun ClientDetailScreen(
                             if (detail?.consentDate.isNullOrBlank()) {
                                 item {
                                     ConsentBanner {
-                                        preferredDocumentId = uiState.documents.firstOrNull {
-                                            it.title.contains("соглас", ignoreCase = true)
-                                        }?.id
+                                        preferredDocumentId = consentDocumentId(uiState.documents)
                                         sheet = ClientSheet.DOCUMENT
                                     }
                                 }
@@ -174,11 +194,19 @@ fun ClientDetailScreen(
                             } else items(notes, key = { it.id }) { session ->
                                 NoteCard(session) { onNoteClick(session.id) }
                             }
-                            item {
+                            // Задача 27: заметка в ПРАКТИКЕ принадлежит
+                            // встрече. Когда встреч у клиента нет, писать
+                            // заметку не к чему — раньше кнопка всё равно
+                            // показывалась и уводила на экран заметки по
+                            // сессии «client-<id>», которой не существует.
+                            // Теперь кнопка есть ровно тогда, когда есть
+                            // встреча, к которой заметку можно прикрепить.
+                            val noteTarget = upcoming?.id ?: sessions.firstOrNull()?.id
+                            if (noteTarget != null) item {
                                 GhostButton(
                                     text = "Добавить заметку",
                                     icon = Icons.Outlined.Add,
-                                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
+                                    onClick = { onNoteClick(noteTarget) },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
@@ -236,17 +264,30 @@ fun ClientDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 PrimaryButton(
-                    text = "Добавить запись",
+                    text = "Записать сессию",
                     icon = Icons.Outlined.CalendarMonth,
-                    onClick = onScheduleClick,
+                    onClick = { onScheduleClick(clientId) },
                     modifier = Modifier.weight(1f),
                 )
-                GhostButton(
-                    text = null,
-                    icon = Icons.Outlined.EditNote,
-                    onClick = { onNoteClick(upcoming?.id ?: sessions.firstOrNull()?.id ?: "client-$clientId") },
-                    modifier = Modifier.width(54.dp),
-                )
+                // Второе действие зависит от того, есть ли с клиентом связь.
+                // Спрашиваем сервер (hasMessenger), а не гадаем по телефону
+                // или почте: «Написать» непривязанному клиенту — это кнопка,
+                // которой некуда писать.
+                if (bound) {
+                    GhostButton(
+                        text = "Написать",
+                        icon = Icons.Outlined.Send,
+                        onClick = { sheet = ClientSheet.MESSAGE },
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    GhostButton(
+                        text = "Пригласить",
+                        icon = Icons.Outlined.PersonAdd,
+                        onClick = { inviteChannel = "auto"; sheet = ClientSheet.INVITE },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 
@@ -288,7 +329,7 @@ fun ClientDetailScreen(
                 isLoading = uiState.isLoadingDocuments,
                 isSending = uiState.isSendingDocument,
                 error = uiState.documentsError,
-                initiallySelectedId = preferredDocumentId,
+                initiallySelectedId = preferredDocumentId ?: consentPreselectionId,
                 onClose = { sheet = null },
                 onRetry = { viewModel.loadDocuments(clientId) },
                 onSendWithResult = { document, callback ->
@@ -557,7 +598,17 @@ private fun StatusRow(detail: ClientDetail?, session: Session?) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         StatusMini(Icons.Outlined.VerifiedUser, "Согласие", if (!detail?.consentDate.isNullOrBlank()) "Получено" else "Нужно", if (!detail?.consentDate.isNullOrBlank()) Success else Orange, Modifier.weight(1f))
         StatusMini(Icons.Outlined.CurrencyRuble, "Оплата", if (session?.paymentStatus == PaymentStatus.UNPAID) "Ожидает" else "В порядке", if (session?.paymentStatus == PaymentStatus.UNPAID) Orange else Success, Modifier.weight(1f))
-        StatusMini(Icons.Outlined.Assignment, "Д/з", if (session?.homeworkStatus == HomeworkStatus.MISSING) "Нет" else "В порядке", if (session?.homeworkStatus == HomeworkStatus.MISSING) Orange else Forest600, Modifier.weight(1f))
+        // Задача 28: здесь стоял третий показатель — «Д/з». Он всегда говорил
+        // «В порядке», потому что homeworkStatus нигде не приходит с сервера:
+        // мобильный контракт такого поля не отдаёт, а во всех трёх местах,
+        // где модель сессии собирается, статус проставляется константой
+        // NOT_ASSIGNED. Домашних заданий в продукте нет вовсе — это Горизонт
+        // 2. Специалисту сообщалось, что с несуществующими заданиями клиента
+        // всё в порядке.
+        //
+        // Убрано целиком, тем же правилом, что и выдуманные «24 клиента /
+        // 312 сессий / рейтинг 4,9» в Задаче 20: появятся настоящие домашние
+        // задания — появится и показатель.
     }
 }
 
@@ -570,6 +621,17 @@ private fun StatusMini(icon: ImageVector, label: String, value: String, accent: 
         Text(value, style = tMeta, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+/**
+ * Какой документ предлагать, когда речь о согласии.
+ *
+ * Одна функция на баннер согласия и на приход из «требует внимания»: разойдись
+ * они — из уведомления открывалась бы отправка «какого-нибудь» документа.
+ * null означает «подставить нечего»: шторка откроется с обычным выбором, а не
+ * с выдуманным документом.
+ */
+internal fun consentDocumentId(documents: List<OnboardingDoc>): String? =
+    documents.firstOrNull { it.title.contains("соглас", ignoreCase = true) }?.id
 
 @Composable
 private fun ConsentBanner(onClick: () -> Unit) {

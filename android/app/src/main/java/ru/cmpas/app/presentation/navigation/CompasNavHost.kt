@@ -29,6 +29,7 @@ import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
 import ru.cmpas.app.presentation.schedule.ScheduleScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
+import ru.cmpas.app.presentation.settings.AddressesScreen
 import ru.cmpas.app.presentation.settings.SettingsScreen
 import ru.cmpas.app.presentation.theme.Ambient
 import ru.cmpas.app.presentation.theme.CompasBg
@@ -73,6 +74,17 @@ fun CompasNavHost(
                     onNoteClick = { navController.navigate(Screen.PostSessionNote.createRoute(it)) },
                     onCalendarClick = { navController.navigateTopLevel(Screen.Calendar) },
                     onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
+                    // Задача 20 §2: те же самые адреса создания, что у
+                    // календаря и списка клиентов, — не вторые формы.
+                    onCreateSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    onCreateClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
+                    onScheduleClick = { navController.navigate(Screen.Schedule.route) },
+                    // Задача 23: пункт «требует внимания» ведёт прямо в
+                    // действие — форму заметки, оплату сессии, отправку
+                    // документа-согласия. Новых экранов при этом нет.
+                    onWriteNote = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
+                    onMarkPayment = { id -> navController.navigate(Screen.SessionDetail.createRoute(id, ScreenFocus.PAYMENT)) },
+                    onRequestConsent = { id -> navController.navigate(Screen.ClientDetail.createRoute(id, ScreenFocus.CONSENT)) },
                 )
             }
             composable(Screen.Calendar.route) {
@@ -80,6 +92,10 @@ fun CompasNavHost(
                     onSessionClick = { navController.navigate(Screen.SessionDetail.createRoute(it)) },
                     onClientClick = { navController.navigate(Screen.ClientDetail.createRoute(it)) },
                     onAddSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    // Настройки календаря ведут в уже существующие экраны —
+                    // второго расписания и второго списка кабинетов нет.
+                    onWorkingHoursClick = { navController.navigate(Screen.Schedule.route) },
+                    onAddressesClick = { navController.navigate(Screen.Addresses.route) },
                 )
             }
             composable(Screen.Clients.route) {
@@ -97,19 +113,27 @@ fun CompasNavHost(
                         navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
                     },
                     onScheduleClick = { navController.navigate(Screen.Schedule.route) },
+                    onAddressesClick = { navController.navigate(Screen.Addresses.route) },
                 )
             }
             composable(Screen.Schedule.route) {
                 ScheduleScreen(onBack = { navController.popBackStack() })
             }
+            composable(Screen.Addresses.route) {
+                AddressesScreen(onBack = { navController.popBackStack() })
+            }
             composable(
                 Screen.QuickAction.route,
-                arguments = listOf(navArgument("type") { type = NavType.StringType }),
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType },
+                    navArgument("clientId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
             ) {
                 QuickActionScreen(
                     type = it.arguments?.getString("type") ?: "default",
                     onBack = { navController.popBackStack() },
                     onDone = { navController.popBackStack() },
+                    initialClientId = it.arguments?.getString("clientId"),
                 )
             }
             composable(
@@ -122,24 +146,39 @@ fun CompasNavHost(
                     onSaved = { navController.popBackStack() },
                 )
             }
-            composable(Screen.SessionDetail.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            composable(
+                Screen.SessionDetail.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) {
                 SessionDetailScreen(
                     sessionId = it.arguments?.getString("id") ?: "",
                     onBack = { navController.popBackStack() },
                     onClientClick = { id -> navController.navigate(Screen.ClientDetail.createRoute(id)) },
                     onNoteClick = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
+                    focus = ScreenFocus.from(it.arguments?.getString("focus")),
                 )
             }
-            composable(Screen.ClientDetail.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            composable(
+                Screen.ClientDetail.route,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { entry ->
                 val clientId = entry.arguments?.getString("id") ?: ""
                 ClientDetailScreen(
                     clientId = clientId,
                     onBack = { navController.popBackStack() },
                     onSessionClick = { id -> navController.navigate(Screen.SessionDetail.createRoute(id)) },
-                    onScheduleClick = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    // Та же форма записи, что и везде, но с уже выбранным клиентом.
+                    onScheduleClick = { id -> navController.navigate(Screen.QuickAction.createRoute("new-session", id)) },
                     onNoteClick = { sessionId -> navController.navigate(Screen.PostSessionNote.createRoute(sessionId)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
+                    focus = ScreenFocus.from(entry.arguments?.getString("focus")),
                 )
             }
         }
@@ -177,6 +216,10 @@ fun CompasNavHost(
                 onClient = { id ->
                     showActionSheet = false
                     navController.navigate(Screen.ClientDetail.createRoute(id))
+                },
+                onClientDocument = { id ->
+                    showActionSheet = false
+                    navController.navigate(Screen.ClientDetail.createRoute(id, ScreenFocus.DOCUMENT))
                 },
             )
         }

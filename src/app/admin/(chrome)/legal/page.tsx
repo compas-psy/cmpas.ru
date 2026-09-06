@@ -4,10 +4,11 @@ import { useState, useEffect } from "react"
 import { getAdminLegalDocs, setActiveLegalDoc, createLegalDoc, deleteLegalDoc, resetMyLegalAcceptance } from "./actions"
 import { Shield, FileText, Plus, Upload, Trash2, CheckCircle2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
+import type { LegalDocType } from "@/lib/legal-documents"
 
 type LegalDoc = {
     id: string
-    type: "TERMS" | "PRIVACY" | "ADS"
+    type: LegalDocType
     version: string
     url: string
     isActive: boolean
@@ -20,7 +21,7 @@ export default function AdminLegalPage() {
     const [isAdding, setIsAdding] = useState(false)
 
     // Form state
-    const [newDocType, setNewDocType] = useState<"TERMS" | "PRIVACY" | "ADS">("TERMS")
+    const [newDocType, setNewDocType] = useState<LegalDocType>("TERMS")
     const [newDocVersion, setNewDocVersion] = useState("v1.0")
     const [newDocFile, setNewDocFile] = useState<File | null>(null)
     const [newDocIsActive, setNewDocIsActive] = useState(false)
@@ -40,7 +41,7 @@ export default function AdminLegalPage() {
         setLoading(false)
     }
 
-    const handleSetActive = async (id: string, type: "TERMS" | "PRIVACY" | "ADS") => {
+    const handleSetActive = async (id: string, type: LegalDocType) => {
         const res = await setActiveLegalDoc(id, type)
         if (res.success) {
             toast.success("Активный документ обновлен")
@@ -128,8 +129,10 @@ export default function AdminLegalPage() {
     const termsDocs = docs.filter(d => d.type === "TERMS")
     const privacyDocs = docs.filter(d => d.type === "PRIVACY")
     const adsDocs = docs.filter(d => d.type === "ADS")
+    const professionalDocs = docs.filter(d => d.type === "PROFESSIONAL")
+    const practiceDocs = docs.filter(d => d.type === "PRACTICE")
 
-    const renderDocList = (title: string, list: LegalDoc[], type: "TERMS" | "PRIVACY" | "ADS") => (
+    const renderDocList = (title: string, list: LegalDoc[], type: LegalDocType) => (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -219,6 +222,8 @@ export default function AdminLegalPage() {
                                     <option value="TERMS">Пользовательское соглашение (TERMS)</option>
                                     <option value="PRIVACY">Политика конфиденциальности (PRIVACY)</option>
                                     <option value="ADS">Согласие на рекламу (ADS)</option>
+                                    <option value="PROFESSIONAL">Профессиональное соглашение (PROFESSIONAL)</option>
+                                    <option value="PRACTICE">Условия практики (PRACTICE)</option>
                                 </select>
                             </div>
                             <div>
@@ -260,6 +265,8 @@ export default function AdminLegalPage() {
             {renderDocList("Пользовательское соглашение", termsDocs, "TERMS")}
             {renderDocList("Политика конфиденциальности", privacyDocs, "PRIVACY")}
             {renderDocList("Согласие на рекламу", adsDocs, "ADS")}
+            {renderDocList("Профессиональное соглашение", professionalDocs, "PROFESSIONAL")}
+            {renderDocList("Условия практики", practiceDocs, "PRACTICE")}
         </div>
     )
 }

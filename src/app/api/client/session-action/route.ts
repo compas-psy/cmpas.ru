@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
-import { verifyClientActionToken } from '@/lib/client-workflow';
+import { verifySessionActionToken, type SessionAction } from '@/lib/client-workflow';
 import { createNotification } from '@/lib/notifications';
 import { canClientCancel, clientCancelBlockedMessage, isClientLinkExpired } from '@/lib/client-cancellation';
 import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
@@ -23,12 +23,14 @@ function resultPage(title: string, text: string, tone: 'success' | 'danger' = 's
     });
 }
 
+const VALID_ACTIONS: SessionAction[] = ['confirm', 'cancel', 'reschedule'];
+
 export async function GET(req: NextRequest) {
     const sessionId = req.nextUrl.searchParams.get('s');
     const action = req.nextUrl.searchParams.get('a');
     const token = req.nextUrl.searchParams.get('t');
 
-    if (!sessionId || !action || !token) {
+    if (!sessionId || !action || !token || !VALID_ACTIONS.includes(action as SessionAction)) {
         return resultPage('Ссылка недействительна', 'Попросите специалиста отправить новое уведомление.', 'danger');
     }
 
@@ -36,7 +38,10 @@ export async function GET(req: NextRequest) {
         where: { id: sessionId },
         include: { client: true },
     });
-    if (!session || !verifyClientActionToken(session.psychologistId, session.clientId, token)) {
+    // Task 3 (PRAKTIKA MVP, item D): the token must have been minted for
+    // THIS exact session and THIS exact action — a confirm-link for one
+    // session can no longer cancel it or act on a different one.
+    if (!session || !verifySessionActionToken(session.psychologistId, session.clientId, session.id, action as SessionAction, token)) {
         return resultPage('Ссылка недействительна', 'Сессия не найдена или ссылка устарела.', 'danger');
     }
 

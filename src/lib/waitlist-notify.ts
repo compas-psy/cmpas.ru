@@ -8,7 +8,7 @@
 // старой подходящей заявке, без гонки и без давления на клиента.
 
 import { db } from '@/lib/db';
-import { matchesPreference, type SuggestedTimeCandidate, type TimePreference } from '@/lib/booking/suggested-times';
+import { matchesPreference, type TimePreference } from '@/lib/booking/suggested-times';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max';
 import { publicBaseUrl } from '@/lib/client-workflow';
@@ -84,13 +84,21 @@ export async function notifyWaitlistOnFreedSlot(
     freedDate: Date,
     freedTime: string
 ): Promise<{ notified: boolean; entryId?: string }> {
+    // PRAKTIKA MVP addendum §7: утверждённый launch-дизайн не обещает клиенту
+    // автоматическое уведомление — заявка листа ожидания только сохраняется.
+    // Механику не удаляем (может понадобиться после отдельного решения
+    // владельца), но по умолчанию она выключена.
+    if (process.env.PRACTICE_WAITLIST_AUTO_NOTIFY_ENABLED !== 'true') {
+        return { notified: false };
+    }
+
     const entries = await db.waitlistEntry.findMany({
         where: { psychologistId, notifiedAt: null },
         orderBy: { createdAt: 'asc' },
     });
     if (entries.length === 0) return { notified: false };
 
-    const candidate: SuggestedTimeCandidate = { date: toDateStr(freedDate), time: freedTime, format: 'online', addressId: null };
+    const candidate = { date: toDateStr(freedDate), time: freedTime };
     const matching = entries.filter((e) => matchesPreference(candidate, (e.preference as TimePreference) || 'any'));
     if (matching.length === 0) return { notified: false };
 

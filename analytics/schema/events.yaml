@@ -349,3 +349,160 @@ events:
     optional: [target_product]
     props:
       target_product: string
+
+  # ── ПРАКТИКА MVP, Задача 25: наблюдаемость запуска ──────────────────────
+  #
+  # Десять событий, и ни одного сверх них. Правило по props жёстче общего:
+  # разрешены только счётчики, provider, source и машинный error_code, и все
+  # строковые props перечислены через `values` — произвольная строка не
+  # проходит ни в одном из них.
+  #
+  # Здесь НЕТ и не должно появиться: имени, телефона, почты, заметок,
+  # названия события календаря, адреса, имени файла, идентификатора клиента
+  # или сессии, токена записи или приглашения. Ни под своим именем, ни
+  # спрятанным внутрь source/error_code — оттого они и enum, а не string.
+  #
+  # correlation_id для разбора инцидентов живёт в логах и в теле ответа об
+  # ошибке, но не здесь: поведенческой аналитике он не нужен, а уникальный
+  # идентификатор запроса — это ниточка к конкретному человеку.
+
+  practice_migration_started:
+    product: practice
+    question: "Начинают ли перенос практики — и откуда?"
+    required: [source]
+    optional: [provider]
+    props:
+      source: string
+      provider: string
+    values:
+      source: [calendar, spreadsheet]
+      provider: [google, yandex, csv, xlsx, paste]
+
+  practice_migration_previewed:
+    product: practice
+    question: "Что показал разбор переносимого: сколько готово, сколько требует решения?"
+    required: [source, items_count]
+    optional: [provider, ready_count, review_count, personal_count, skipped_count, error_count]
+    props:
+      source: string
+      provider: string
+      items_count: number
+      ready_count: number
+      review_count: number
+      personal_count: number
+      skipped_count: number
+      error_count: number
+    values:
+      source: [calendar, spreadsheet]
+      provider: [google, yandex, csv, xlsx, paste]
+    range:
+      items_count: [0, 100000]
+      ready_count: [0, 100000]
+      review_count: [0, 100000]
+      personal_count: [0, 100000]
+      skipped_count: [0, 100000]
+      error_count: [0, 100000]
+
+  practice_migration_committed:
+    product: practice
+    question: "Сколько записей реально перенеслось, сколько пропущено и сколько не удалось?"
+    required: [source, imported_count, skipped_count, failed_count]
+    optional: [provider]
+    props:
+      source: string
+      provider: string
+      imported_count: number
+      skipped_count: number
+      failed_count: number
+    values:
+      source: [calendar, spreadsheet]
+      provider: [google, yandex, csv, xlsx, paste]
+    range:
+      imported_count: [0, 100000]
+      skipped_count: [0, 100000]
+      failed_count: [0, 100000]
+
+  practice_migration_failed:
+    product: practice
+    question: "На чём ломается перенос практики?"
+    required: [source, error_code]
+    optional: [provider]
+    props:
+      source: string
+      provider: string
+      error_code: string
+    values:
+      source: [calendar, spreadsheet]
+      provider: [google, yandex, csv, xlsx, paste]
+      # Машинные категории, а не текст ошибки: сообщение исключения и тем
+      # более строка импорта в аналитику не попадают никогда.
+      error_code: [unauthorized, attestation_required, no_integration, provider_unavailable, invalid_input, commit_in_progress, internal_error]
+
+  practice_booking_link_shared:
+    product: practice
+    question: "Делятся ли постоянной ссылкой записи — и с какой поверхности?"
+    required: [source]
+    optional: []
+    props:
+      source: string
+    values:
+      # Поверхность, а не адрес и не канал: сама ссылка сюда не попадает.
+      source: [web, android]
+
+  practice_booking_attempted:
+    product: practice
+    question: "Сколько попыток записи доходит до ядра бронирования?"
+    required: [source]
+    optional: []
+    props:
+      source: string
+    values:
+      source: [public_booking, known_client, reschedule]
+
+  practice_booking_succeeded:
+    product: practice
+    question: "Сколько попыток записи заканчивается состоявшейся бронью?"
+    required: [source]
+    optional: []
+    props:
+      source: string
+    values:
+      source: [public_booking, known_client, reschedule]
+
+  practice_booking_conflict:
+    product: practice
+    question: "На каких конфликтах разваливается запись?"
+    required: [source, error_code]
+    optional: []
+    props:
+      source: string
+      error_code: string
+    values:
+      source: [public_booking, known_client, reschedule]
+      # Те же коды, которыми уже живёт BookingConflictError — не дубль.
+      #
+      # INVALID_TOKEN здесь нет намеренно. Устаревшая ссылка отсекается ДО
+      # попытки записи: события practice_booking_attempted для неё не было,
+      # значит и конфликтом попытки она быть не может — иначе конфликтов
+      # оказалось бы больше, чем попыток. Мёртвому значению в перечислении
+      # не место; если проверка ссылки когда-нибудь переедет внутрь попытки,
+      # код вернётся сюда вместе с ней.
+      error_code: [SLOT_UNAVAILABLE, CLIENT_ALREADY_BOOKED, SESSION_NOT_FOUND]
+
+  practice_attention_action_completed:
+    product: practice
+    question: "Какие пункты «требует внимания» доводят до конца, а не просто открывают?"
+    required: [source]
+    optional: []
+    props:
+      source: string
+    values:
+      # Вид проблемы, которую закрыли. Идентификатора сессии или клиента
+      # здесь нет: событие о том, ЧТО закрыли, а не у кого.
+      source: [session_without_notes, session_unpaid, client_without_consent]
+
+  practice_onboarding_completed:
+    product: practice
+    question: "Доходят ли до пройденного чек-листа настройки практики?"
+    required: []
+    optional: []

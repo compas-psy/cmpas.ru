@@ -2,7 +2,7 @@
 // Цель: найти повторяющиеся имена в прошлых событиях, чтобы предложить их как клиентов.
 // Осознанно эвристический: точность > полнота. Лучше пропустить событие, чем создать "Планёрку" как клиента.
 
-const STOP_WORDS = new Set([
+export const STOP_WORDS = new Set([
     'планерка', 'планёрка', 'zoom', 'zoom-встреча', 'звонок', 'созвон',
     'обед', 'lunch', 'перерыв', 'break', 'отпуск', 'vacation',
     'встреча', 'meeting', 'супервизия', 'личная терапия', 'группа',
@@ -106,6 +106,26 @@ function extractNameFromPart(part: string): string | null {
     if (STOP_WORDS.has(normalizeForKey(final))) return null;
 
     return final;
+}
+
+/**
+ * Task 11 (founder review): extractClientNameFromSummary() returning null
+ * conflates two different situations — "this is obviously not a client
+ * session" (a recognized STOP_WORDS keyword) vs. "we genuinely don't know
+ * what this is" (no capitalized words, no recognizable pattern). The former
+ * should classify as 'personal'; the latter as 'uncertain' — surfaced for
+ * review, never silently dropped. This isolates the STOP_WORDS check so
+ * callers can tell the two apart.
+ */
+export function isObviousNonClientSummary(summary: string | null | undefined): boolean {
+    if (!summary) return false;
+    const lower = normalizeForKey(summary.trim());
+    if (!lower) return false;
+    if (STOP_WORDS.has(lower)) return true;
+    for (const stop of STOP_WORDS) {
+        if (lower === stop || lower.startsWith(stop + ' ')) return true;
+    }
+    return false;
 }
 
 export function extractClientNameFromSummary(summary: string | null | undefined): string | null {

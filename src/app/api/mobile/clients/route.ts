@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { normalizePhone, phoneLookupVariants } from '@/lib/clients/phone';
+import { requirePracticeOperatorAttestation, ATTESTATION_REQUIRED_CODE } from '@/lib/practice/attestation';
 
 export async function GET(req: NextRequest) {
     const auth = await authenticateMobileRequest(req);
@@ -127,6 +128,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        await requirePracticeOperatorAttestation(auth.userId);
+
         const normalizedPhone = normalizePhone(phone);
         const variants = phoneLookupVariants(normalizedPhone || phone);
         const existing = variants.length ? await db.diaryClient.findFirst({
@@ -188,6 +191,9 @@ export async function POST(req: NextRequest) {
             alreadyExists: !!existing,
         });
     } catch (error) {
+        if (error instanceof Error && error.message === ATTESTATION_REQUIRED_CODE) {
+            return NextResponse.json({ error: ATTESTATION_REQUIRED_CODE }, { status: 403 });
+        }
         console.error('[mobile/clients]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }

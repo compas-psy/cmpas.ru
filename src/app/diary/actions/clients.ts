@@ -3,11 +3,11 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
-import { fetchGoogleCalendarEvents } from '@/lib/calendar/google';
-import { fetchYandexCalendarEvents } from '@/lib/calendar/yandex';
-import { aggregateCandidates, type CandidateClient } from '@/lib/clients/extract-name';
 import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
+import { requireOwnedClient, requireOwnedSession } from '@/lib/practice/ownership';
+import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
+import { matchClientIdentity, type ClientIdentity } from '@/lib/clients/match';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -71,6 +71,7 @@ export async function createClient(data: {
     gender?: string;
 }) {
     const psychologistId = await getPsychologistId();
+    await requirePracticeOperatorAttestation(psychologistId);
     const client = await db.diaryClient.create({
         data: {
             psychologistId,
@@ -94,6 +95,7 @@ export async function createClient(data: {
 
 export async function updateClient(id: string, data: Record<string, unknown>) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
     const client = await db.diaryClient.update({
         where: { id },
         data: { ...data, psychologistId },
@@ -104,7 +106,8 @@ export async function updateClient(id: string, data: Record<string, unknown>) {
 }
 
 export async function archiveClient(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
     await db.diaryClient.update({
         where: { id },
         data: { status: 'archived' },
@@ -113,7 +116,8 @@ export async function archiveClient(id: string) {
 }
 
 export async function restoreClient(id: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
     await db.diaryClient.update({
         where: { id },
         data: { status: 'active' },
@@ -123,10 +127,16 @@ export async function restoreClient(id: string) {
 
 export async function deleteClient(id: string) {
     const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, id);
 
     // Standalone tables (ClientInviteToken, ScheduledClientMessage) reference
     // clientId without a Prisma relation/cascade, so they would otherwise be
-    // orphaned or block deletion. Clean them up explicitly first.
+    // orphaned or block deletion. Clean them up explicitly first — but only
+    // after ownership is confirmed above: these are raw deletes keyed by
+    // clientId alone, so running them before the check would let psychologist
+    // A wipe another psychologist's client's invite/message rows just by
+    // knowing their clientId, even though the DiaryClient row itself would
+    // survive (already correctly scoped below).
     try {
         await db.$executeRaw`DELETE FROM "ClientInviteToken" WHERE "clientId" = ${id}`;
         await db.$executeRaw`DELETE FROM "ScheduledClientMessage" WHERE "clientId" = ${id}`;
@@ -141,7 +151,8 @@ export async function deleteClient(id: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function saveQuestionnaire(clientId: string, data: any) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, clientId);
     const result = await db.diaryQuestionnaire.upsert({
         where: { clientId },
         create: { clientId, data },
@@ -152,7 +163,8 @@ export async function saveQuestionnaire(clientId: string, data: any) {
 }
 
 export async function updateSessionNotes(sessionId: string, notes: string) {
-    await getPsychologistId();
+    const psychologistId = await getPsychologistId();
+    await requireOwnedSession(psychologistId, sessionId);
     await db.diarySession.update({
         where: { id: sessionId },
         data: { notes },
@@ -160,34 +172,41 @@ export async function updateSessionNotes(sessionId: string, notes: string) {
     revalidatePath('/diary/clients');
 }
 
+export interface BulkCreateReviewItem {
+    name: string;
+    status: 'review';
+    reason: 'NAME_ONLY_COLLISION';
+    suggestedClientIds: string[];
+}
+
 // Массовое создание клиентов — из вставки списком или из сканирования календаря.
-// Пропускает дубликаты по имени (case-insensitive) в пределах существующих клиентов психолога.
+//
+// Task 11 (founder correction): this used to treat a case-insensitive name
+// match against an existing client as a duplicate and silently skip it —
+// exactly the name-only auto-match the correction banned (two different
+// people can share a name; a psychologist correcting a card would silently
+// re-merge future imports into the wrong one). Only a strong identifier
+// (exact phone or email match, via the same matchClientIdentity used by
+// calendar import) is a safe automatic duplicate. A name-only collision is
+// neither created as a duplicate person nor silently merged — it comes back
+// as a structured `review` entry for the caller UI to resolve explicitly.
 export async function bulkCreateClients(
     items: { name: string; phone?: string; email?: string }[]
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; review: BulkCreateReviewItem[] }> {
     const psychologistId = await getPsychologistId();
     if (!Array.isArray(items) || items.length === 0) {
-        return { created: 0, skipped: 0 };
+        return { created: 0, skipped: 0, review: [] };
     }
+    await requirePracticeOperatorAttestation(psychologistId);
 
-    // Берём существующих, чтобы не плодить дубликаты
-    const existing = await db.diaryClient.findMany({
+    const knownClients: ClientIdentity[] = await db.diaryClient.findMany({
         where: { psychologistId },
-        select: { name: true, phone: true, email: true },
+        select: { id: true, name: true, phone: true, email: true },
     });
-    const existingKeys = new Set(
-        existing.map(c => (c.name || '').trim().toLowerCase())
-    );
-    const existingPhones = new Set(
-        existing.map(c => (c.phone || '').replace(/\D/g, '')).filter(Boolean)
-    );
-    const existingEmails = new Set(
-        existing.map(c => (c.email || '').toLowerCase()).filter(Boolean)
-    );
 
     let created = 0;
     let skipped = 0;
-    const seenInBatch = new Set<string>();
+    const review: BulkCreateReviewItem[] = [];
 
     for (const raw of items) {
         const name = (raw.name || '').trim();
@@ -195,23 +214,33 @@ export async function bulkCreateClients(
             skipped++;
             continue;
         }
-        const key = name.toLowerCase();
-        if (seenInBatch.has(key) || existingKeys.has(key)) {
+
+        // Task 11 (founder correction, round 2): no batch-internal name
+        // dedupe either — "Иван Иванов" twice in one paste with two
+        // different phone numbers is two different people, not a repeat.
+        // knownClients grows as we create, so a genuine within-batch repeat
+        // (same name, same or no identifier) still resolves correctly
+        // through matchClientIdentity below: a real strong-identifier
+        // repeat skips as a duplicate, a bare name repeat goes to review
+        // against the row just created, exactly like any other name-only
+        // collision — never silently merged.
+        const match = matchClientIdentity({ name, phone: raw.phone, email: raw.email }, knownClients);
+        if (match.resolvedClientId) {
+            // Strong (phone/email) identity match — a real duplicate.
             skipped++;
             continue;
         }
-        const phoneDigits = (raw.phone || '').replace(/\D/g, '');
-        if (phoneDigits && existingPhones.has(phoneDigits)) {
-            skipped++;
-            continue;
-        }
-        const emailLower = (raw.email || '').toLowerCase();
-        if (emailLower && existingEmails.has(emailLower)) {
-            skipped++;
+        if (match.matchReason === 'name_only' || match.matchReason === 'conflict') {
+            review.push({
+                name,
+                status: 'review',
+                reason: 'NAME_ONLY_COLLISION',
+                suggestedClientIds: match.suggestedClientId ? [match.suggestedClientId] : [],
+            });
             continue;
         }
 
-        await db.diaryClient.create({
+        const client = await db.diaryClient.create({
             data: {
                 psychologistId,
                 name,
@@ -219,52 +248,13 @@ export async function bulkCreateClients(
                 email: raw.email || null,
             },
         });
-        seenInBatch.add(key);
-        if (phoneDigits) existingPhones.add(phoneDigits);
-        if (emailLower) existingEmails.add(emailLower);
+        knownClients.push({ id: client.id, name, phone: raw.phone || null, email: raw.email || null });
         created++;
     }
 
     revalidatePath('/diary');
     revalidatePath('/diary/clients');
-    return { created, skipped };
-}
-
-// Сканирование подключённого календаря за N последних дней.
-// Возвращает кандидатов-клиентов (повторяющиеся имена из заголовков событий).
-export async function scanCalendarForClients(
-    integrationId: string,
-    days: number = 90
-): Promise<{ success: boolean; candidates?: CandidateClient[]; error?: string }> {
-    const psychologistId = await getPsychologistId();
-
-    const integration = await db.calendarIntegration.findFirst({
-        where: { id: integrationId, psychologistId, isActive: true },
-    });
-    if (!integration) {
-        return { success: false, error: 'Календарь не подключён или отключён' };
-    }
-
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    let result: { success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string };
-
-    if (integration.provider === 'google') {
-        result = await fetchGoogleCalendarEvents(integrationId, startDate, endDate, { includeCompasEvents: true });
-    } else if (integration.provider === 'yandex') {
-        result = await fetchYandexCalendarEvents(integrationId, startDate, endDate);
-    } else {
-        return { success: false, error: 'Неподдерживаемый провайдер' };
-    }
-
-    if (!result.success || !result.events) {
-        return { success: false, error: result.error || 'Не удалось получить события' };
-    }
-
-    const candidates = aggregateCandidates(result.events);
-    return { success: true, candidates };
+    return { created, skipped, review };
 }
 
 // Список подключённых календарей — для UI импорта

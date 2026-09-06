@@ -1,6 +1,7 @@
 // Google Calendar OAuth2 + REST API service
 
 import { db } from '@/lib/db';
+import { resolveWallClockParts, type NormalizedCalendarEvent } from './normalized-event';
 
 // Google OAuth2 constants
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -250,6 +251,101 @@ export async function createGoogleCalendarEvent(
 }
 
 /**
+ * Task 12 (calendar sync adapter): update a Google Calendar event IN PLACE
+ * by its known externalEventId — used for a session that already has a
+ * CalendarSessionLink for this integration (imported or previously
+ * synced), so a reschedule moves the SAME event instead of deleting and
+ * recreating a duplicate.
+ */
+export async function updateGoogleCalendarEvent(
+    integrationId: string,
+    externalEventId: string,
+    session: Parameters<typeof createGoogleCalendarEvent>[1]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.calendarId) {
+            return { success: false, error: 'Календарь не выбран' };
+        }
+
+        const accessToken = await getValidToken(integrationId);
+
+        const dateStr = session.date.toISOString().split('T')[0];
+        const endTime = session.endTime || (() => {
+            const [h, m] = session.time.split(':').map(Number);
+            const endMin = h * 60 + m + session.duration;
+            return `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+        })();
+
+        const clientName = session.client?.name || 'Клиент';
+        const typeLabel = session.type === 'individual' ? 'Индивидуальная' : session.type === 'couple' ? 'Парная' : session.type;
+        const formatLabel = session.format === 'online' ? 'онлайн' : 'очно';
+
+        const event = {
+            summary: `${typeLabel} сессия — ${clientName}`,
+            description: `Формат: ${formatLabel}${session.notes ? '\n' + session.notes : ''}`,
+            start: { dateTime: `${dateStr}T${session.time}:00`, timeZone: 'Europe/Moscow' },
+            end: { dateTime: `${dateStr}T${endTime}:00`, timeZone: 'Europe/Moscow' },
+            extendedProperties: { private: { compasSessionId: session.id } },
+        };
+
+        const response = await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events/${encodeURIComponent(externalEventId)}`,
+            {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(event),
+            }
+        );
+
+        if (!response.ok) {
+            const err = await response.text();
+            return { success: false, error: `Google API error: ${err}` };
+        }
+
+        await db.calendarIntegration.update({ where: { id: integrationId }, data: { lastSynced: new Date() } });
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка обновления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
+ * Task 12 (calendar sync adapter): delete a Google Calendar event by its
+ * known externalEventId — the identity-based counterpart to
+ * deleteGoogleCalendarEvent below (which searches by session id and stays
+ * for callers with no CalendarSessionLink to read from).
+ */
+export async function deleteGoogleCalendarEventById(
+    integrationId: string,
+    externalEventId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const integration = await db.calendarIntegration.findUnique({ where: { id: integrationId } });
+        if (!integration?.calendarId) {
+            return { success: false, error: 'Календарь не выбран' };
+        }
+        const accessToken = await getValidToken(integrationId);
+
+        const response = await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(integration.calendarId)}/events/${encodeURIComponent(externalEventId)}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        // 404/410 means it's already gone — that's a successful delete, not a failure.
+        if (!response.ok && response.status !== 404 && response.status !== 410) {
+            const err = await response.text();
+            return { success: false, error: `Google API error: ${err}` };
+        }
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка удаления события';
+        return { success: false, error: message };
+    }
+}
+
+/**
  * Delete a calendar event from Google Calendar by session ID
  */
 export async function deleteGoogleCalendarEvent(
@@ -346,8 +442,8 @@ export async function fetchGoogleCalendarEvents(
     integrationId: string,
     startDate: Date,
     endDate: Date,
-    options?: { includeCompasEvents?: boolean }
-): Promise<{ success: boolean; events?: { start: Date; end: Date; summary: string }[]; error?: string }> {
+    options?: { includeCompasEvents?: boolean; timezone?: string }
+): Promise<{ success: boolean; events?: NormalizedCalendarEvent[]; error?: string }> {
     try {
         const integration = await db.calendarIntegration.findUnique({
             where: { id: integrationId },
@@ -381,35 +477,65 @@ export async function fetchGoogleCalendarEvents(
 
         const data = await response.json();
         const items = data.items || [];
+        const timezone = options?.timezone || 'Europe/Moscow';
 
-        const events = items
-            .filter((item: any) => {
-                if (item.status === 'cancelled') return false;
-                // When scanning for clients, include КОМПАС-synced events (they contain client names!)
-                // When checking for conflicts/busy times, exclude them
-                if (!options?.includeCompasEvents && item.extendedProperties?.private?.compasSessionId) return false;
-                return true;
-            })
-            .map((item: any) => {
-                let start, end;
+        const events: NormalizedCalendarEvent[] = items
+            .filter((item: any) => item.status !== 'cancelled')
+            .map((item: any): NormalizedCalendarEvent | null => {
+                let start: Date, end: Date, allDay: boolean, startParts: { date: string; time: string }, endParts: { date: string; time: string };
                 if (item.start.dateTime) {
                     start = new Date(item.start.dateTime);
                     end = new Date(item.end.dateTime);
+                    allDay = false;
+                    startParts = resolveWallClockParts(start, timezone);
+                    endParts = resolveWallClockParts(end, timezone);
                 } else if (item.start.date) {
-                    // All-day event
-                    start = new Date(item.start.date);
-                    end = new Date(item.end.date);
+                    // All-day event — Google gives a bare "YYYY-MM-DD", no
+                    // time-of-day or timezone meaning at all. Use the literal
+                    // digits directly: converting them via Intl/timezone (as
+                    // if they were a UTC instant) can shift the calendar date
+                    // itself for any timezone west of UTC.
+                    allDay = true;
+                    const [sy, sm, sd] = item.start.date.split('-').map(Number);
+                    const [ey, em, ed] = item.end.date.split('-').map(Number);
+                    start = new Date(Date.UTC(sy, sm - 1, sd));
+                    end = new Date(Date.UTC(ey, em - 1, ed));
+                    startParts = { date: item.start.date, time: '00:00' };
+                    endParts = { date: item.end.date, time: '00:00' };
                 } else {
                     return null;
                 }
 
+                const ownSessionId: string | null = item.extendedProperties?.private?.compasSessionId || null;
+
                 return {
+                    provider: 'google',
+                    integrationId,
+                    externalEventId: item.id,
+                    // Google: an expanded recurring instance carries
+                    // recurringEventId pointing at the series' master event
+                    // id; a non-recurring event has none.
+                    externalSeriesId: item.recurringEventId || null,
+                    summary: item.summary || 'Busy',
                     start,
                     end,
-                    summary: item.summary || 'Busy',
+                    date: startParts.date,
+                    startTime: startParts.time,
+                    endTime: endParts.time,
+                    allDay,
+                    isOwnSession: Boolean(ownSessionId),
+                    ownSessionId,
                 };
             })
-            .filter(Boolean);
+            .filter((event: NormalizedCalendarEvent | null): event is NormalizedCalendarEvent => {
+                if (!event) return false;
+                // When scanning for clients (import), include КОМПАС-synced events
+                // (they carry client names in their summary). When checking for
+                // conflicts/busy times, exclude them — a session's own mirrored
+                // external event must never count as busy against itself.
+                if (!options?.includeCompasEvents && event.isOwnSession) return false;
+                return true;
+            });
 
         return { success: true, events };
     } catch (error) {

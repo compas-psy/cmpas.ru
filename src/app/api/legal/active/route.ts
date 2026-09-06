@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server"
 import { getActiveDocuments } from "@/app/legal/actions"
-import { DocType } from "@/app/legal/types"
+import type { LegalDocType } from "@/lib/legal-documents"
 
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const typesParam = searchParams.get("types")
-        
-        // Parse types if provided (comma-separated: TERMS,PRIVACY,ADS)
-        let types: DocType[] | undefined = undefined
+
+        // Parse types if provided (comma-separated: TERMS,PRIVACY,ADS,PROFESSIONAL,PRACTICE)
+        let types: LegalDocType[] | undefined = undefined
         if (typesParam) {
-            types = typesParam.split(",").map(t => t.trim().toUpperCase()) as DocType[]
+            types = typesParam.split(",").map(t => t.trim().toUpperCase()) as LegalDocType[]
         }
 
         const result = await getActiveDocuments(types)

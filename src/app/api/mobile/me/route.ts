@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
                 image: true,
                 role: true,
                 analyticsConsentAt: true,
+                // Задача 20 §8: экран профиля показывал «Telegram · Подключён»
+                // жёстко, независимо от реальности. Состояние подключения —
+                // факт из БД, а не украшение.
+                telegramChatId: true,
+                maxChatId: true,
             },
         });
 
@@ -34,6 +39,8 @@ export async function GET(req: NextRequest) {
             role: (user.role || 'PSYCHOLOGIST').toUpperCase(),
             avatarUrl: user.image,
             analyticsConsentAt: user.analyticsConsentAt ? user.analyticsConsentAt.toISOString() : null,
+            telegramConnected: Boolean(user.telegramChatId),
+            maxConnected: Boolean(user.maxChatId),
         });
     } catch (error) {
         console.error('[mobile/me]', error);

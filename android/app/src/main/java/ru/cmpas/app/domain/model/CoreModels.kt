@@ -13,6 +13,64 @@ data class User(
     val avatarUrl: String? = null,
     val telegramId: String? = null,
     val onlineSessionLink: String? = null,
+    // Задача 20 §8: фактическое состояние подключения мессенджеров с сервера.
+    // Экран профиля раньше рисовал «Telegram · Подключён» жёстко, независимо
+    // от того, подключён ли он на самом деле.
+    val telegramConnected: Boolean = false,
+    val maxConnected: Boolean = false,
+)
+
+/**
+ * Настройки автонапоминаний клиенту (Задача 20 §11). Ровно два поля — те,
+ * за которыми стоит настоящая серверная рассылка: за сутки и за час.
+ * Никакого «за 2 часа» на сервере нет.
+ */
+@Serializable
+data class MobileNotificationSettings(
+    val clientReminder25hEnabled: Boolean = true,
+    val clientReminder1hEnabled: Boolean = true,
+)
+
+/** Меняется один тумблер за раз — второе поле остаётся нетронутым. */
+@Serializable
+data class MobileNotificationSettingsPatch(
+    val clientReminder25hEnabled: Boolean? = null,
+    val clientReminder1hEnabled: Boolean? = null,
+)
+
+/**
+ * Кабинет практики (Задача 21).
+ *
+ * «Основной» — свойство набора, а не строки: на сервере его держит
+ * PsychologistSettings.officeAddress, поэтому изменение одного кабинета
+ * меняет метку и у другого, и список всегда приходит целиком.
+ */
+@Serializable
+data class PracticeAddress(
+    val id: String,
+    val name: String,
+    val address: String,
+    val isPrimary: Boolean = false,
+    val isActive: Boolean = true,
+)
+
+@Serializable
+data class PracticeAddressList(
+    val addresses: List<PracticeAddress> = emptyList(),
+)
+
+@Serializable
+data class CreatePracticeAddressRequest(
+    val name: String,
+    val address: String,
+)
+
+/** Меняется только то, что передано: остальные поля кабинета не трогаются. */
+@Serializable
+data class UpdatePracticeAddressRequest(
+    val name: String? = null,
+    val address: String? = null,
+    val isPrimary: Boolean? = null,
 )
 
 @Serializable

@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { verifyClientActionToken } from '@/lib/client-workflow';
+import { verifySessionActionToken } from '@/lib/client-workflow';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { createNotification } from '@/lib/notifications';
 
@@ -26,7 +26,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        if (!verifyClientActionToken(session.psychologistId, clientId, actionToken)) {
+        // Task 3 (PRAKTIKA MVP, item D): bound to THIS session and the
+        // 'cancel' action specifically — a token minted for a different
+        // session, or for 'confirm'/'reschedule', is rejected here.
+        if (!verifySessionActionToken(session.psychologistId, clientId, sessionId, 'cancel', actionToken)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

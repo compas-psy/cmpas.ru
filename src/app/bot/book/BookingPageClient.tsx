@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle2, MapPin, Video, Calendar, Clock, X, Shield } from 'lucide-react';
-import { toast } from 'sonner';
+import { useEffect, useState, useMemo } from 'react';
+import { Loader2, CheckCircle2, MapPin, Video, Calendar, X, Shield } from 'lucide-react';
+import { toast, Toaster } from 'sonner';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ru } from 'date-fns/locale/ru';
 import { format } from 'date-fns';
@@ -17,14 +17,15 @@ import {
     submitWaitlistInterest,
     bookSession,
     getClientByTelegram,
-    getScheduleMode,
     getClientUpcomingSessions,
     getAddressById,
     checkConsentRequired,
     saveConsent,
-    resolveClientLinkParam
+    resolveSignedClientLinkParam,
+    resolveVerifiedTelegramUserId
 } from '../actions';
 import type { TimePreference, SuggestedTimeCandidate } from '@/lib/booking/suggested-times';
+import { expandToConcreteSlotOptions, type ConcreteSlotOption, type RawTimeSlot } from '@/lib/booking/concrete-slot-options';
 import { NotFoundSpecialist } from './NotFoundSpecialist';
 
 registerLocale('ru', ru);
@@ -66,22 +67,106 @@ function readSavedPreference(psychologistId: string): TimePreference | null {
     }
 }
 
+function capitalize(s: string): string {
+    return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+// Task 14 point 4: a suggested/concrete slot must say WHAT the client is
+// choosing — never three identical-looking "18:00" buttons.
+function formatSlotHeading(dateStr: string, time: string): string {
+    const d = new Date(`${dateStr}T00:00:00`);
+    return `${capitalize(format(d, 'EEEE, d MMMM', { locale: ru }))} · ${time}`;
+}
+
+function formatSlotMeta(duration: number | undefined, slotFormat: string, addressName: string | null | undefined): string {
+    const parts: string[] = [];
+    if (duration) parts.push(`${duration} минут`);
+    parts.push(slotFormat === 'offline' ? `Очно${addressName ? ` · ${addressName}` : ''}` : 'Онлайн');
+    return parts.join(' · ');
+}
+
+// Task 14 point 5: group concrete options by where they actually happen —
+// one section for online, one PER cabinet — instead of one flat grid that
+// hides which button means what. Order follows first appearance, which
+// already matches the server's time-then-format sort.
+interface OptionSection { key: string; label: string; options: ConcreteSlotOption[] }
+function buildSections(options: ConcreteSlotOption[]): OptionSection[] {
+    const sections: OptionSection[] = [];
+    const indexByKey = new Map<string, number>();
+    for (const opt of options) {
+        const sectionKey = opt.format === 'online' ? 'online' : `office:${opt.addressId ?? 'unknown'}`;
+        let idx = indexByKey.get(sectionKey);
+        if (idx === undefined) {
+            idx = sections.length;
+            indexByKey.set(sectionKey, idx);
+            sections.push({
+                key: sectionKey,
+                label: opt.format === 'online' ? 'ОНЛАЙН' : (opt.addressName?.toUpperCase() || 'ОЧНО'),
+                options: [],
+            });
+        }
+        sections[idx].options.push(opt);
+    }
+    return sections;
+}
+
 // Extracted from src/app/bot/book/[psychologistId]/page.tsx (§5.1, O-260829)
 // so that the human-readable slug routes (/u/<slug>, /у/<slug>) and the
 // legacy /bot/book/<id> route render the exact same booking flow without
 // duplicating ~900 lines of logic. The id route reads psychologistId via
 // useParams() and passes it in; the slug routes resolve the slug to an id
 // server-side first. Nothing about the booking flow itself changed here.
+/**
+ * Задача 27: сообщения об ошибках на клиентском экране записи было некуда
+ * показывать.
+ *
+ * Экран честно звал toast.error — и на конфликте часа, и на отказе сервера,
+ * и на неверном телефоне. Только <Toaster /> стоял единственный раз, в
+ * кабинете специалиста (src/app/diary/layout.tsx). Публичная страница записи
+ * его не наследует, поэтому все эти сообщения уходили в пустоту.
+ *
+ * Как это выглядело для человека: он выбрал час, подтвердил согласие, нажал
+ * «Подтвердить и записаться» — и НИЧЕГО. Список часов молча обновлялся
+ * (занятого в нём уже не было), а записан он или нет — понять было нельзя.
+ * Тишина на месте ответа хуже, чем текст ошибки: код можно хотя бы
+ * переспросить, а пустоту не о чем спрашивать.
+ */
+function BookingToaster() {
+    return <Toaster position="top-center" richColors closeButton duration={6000} />;
+}
+
 export default function BookingPageClient({ psychologistId }: { psychologistId: string }) {
     // Extract clientId manually inside the init function to avoid race conditions.
     const [clientId, setClientId] = useState<string | null>(null);
+    // The raw signed token itself (not the id it decodes to) — the only thing
+    // safe to persist in localStorage or hand back to the browser for
+    // "manage my bookings" links. Task 3 (addendum §6): a raw clientId is
+    // never proof of identity; only a signature this server issued is. Task
+    // 14 point 6: this SAME raw token is also sent (and re-verified
+    // server-side) with a booking, so a known client whose phone field is
+    // hidden still resolves to their real DiaryClient.
+    const [clientLinkToken, setClientLinkToken] = useState<string | null>(null);
 
-    const [tgUser, setTgUser] = useState<any>(null);
+    // Task 3 (PRAKTIKA MVP addendum §6): initDataUnsafe.user.id is
+    // client-controlled — fine only for a display-only greeting (read
+    // directly off tg.initDataUnsafe where needed), never for looking up or
+    // writing another client's record. saveConsent below matches solely by
+    // telegramChatId, so an unverified id here would let a visitor record
+    // 152-ФЗ consent onto someone else's client. This holds the
+    // HMAC-verified id (or null) instead.
+    const [verifiedTelegramUserId, setVerifiedTelegramUserId] = useState<string | null>(null);
     // O-260829 §4.2: канал доставки уведомления — по факту контекста, в
     // котором открыта ссылка, а не хардкод "Telegram" для всех. Второй
-    // мессенджер бота — Max (см. sendMaxMessage в src/lib/max*.ts); других
-    // каналов у ссылки специалиста сегодня нет, поэтому выбор бинарный.
-    const [notificationChannel, setNotificationChannel] = useState<'Telegram' | 'Max'>('Max');
+    // мессенджер бота — Max (см. sendMaxMessage в src/lib/max*.ts).
+    //
+    // Задача 27: третье состояние — null, и оно самое частое. Постоянную
+    // ссылку /у/<slug> открывают в обычном браузере, и тогда у человека нет
+    // ни привязанного Telegram, ни привязанного Max: он оставил только имя и
+    // телефон. Раньше в этом случае обещали «уведомление придёт в Max» —
+    // мессенджер, которого у него может не быть и в который система всё
+    // равно ничего не отправит, потому что отправлять некуда. Обещание, за
+    // которым ничего не следует, хуже молчания: человек ждёт и не приходит.
+    const [notificationChannel, setNotificationChannel] = useState<'Telegram' | 'Max' | null>(null);
     const [psy, setPsy] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -92,12 +177,19 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // Booking state
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
-    type TimeSlot = { time: string, format: string, addressId: string | null, isOwnBooking?: boolean };
-    const [availableTimes, setAvailableTimes] = useState<TimeSlot[]>([]);
-    const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
-    const [selectedFormat, setSelectedFormat] = useState<'online' | 'offline' | null>(null);
+    // Task 7: slotToken is the exact-slot identity the booking commit trusts —
+    // format/addressId/duration are never re-derived from raw date/time at
+    // booking time, only decoded from this signed token server-side. Task 14
+    // point 2/3: a format:'both' rule is expanded into TWO concrete options
+    // (via expandToConcreteSlotOptions) before this component ever sees it —
+    // it never has to special-case an ambiguous format itself.
+    const [availableTimes, setAvailableTimes] = useState<RawTimeSlot[]>([]);
+    const [selectedTimeSlot, setSelectedTimeSlot] = useState<ConcreteSlotOption | null>(null);
     const [form, setForm] = useState({ name: '', phone: '' });
     const [booking, setBooking] = useState(false);
+
+    const concreteOptions = useMemo(() => expandToConcreteSlotOptions(availableTimes), [availableTimes]);
+    const sections = useMemo(() => buildSections(concreteOptions), [concreteOptions]);
 
     // Consent state
     const [consentRequired, setConsentRequired] = useState(false);
@@ -111,6 +203,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [bookingSuccess, setBookingSuccess] = useState<{
         date: string;
         time: string;
+        duration?: number;
         format: string;
         psyName: string;
         addressName?: string | null;
@@ -131,11 +224,16 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     const [suggestLoading, setSuggestLoading] = useState(false);
     const [waitlistForm, setWaitlistForm] = useState({ name: '', contact: '' });
     const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+    /** Форма заявки раскрыта человеком по ссылке «Нет подходящего времени?». */
+    const [waitlistOpen, setWaitlistOpen] = useState(false);
 
     // O-260829 §5.3 "Возврат по ссылке без брони" (S1-R)
     const [returningPreference, setReturningPreference] = useState<TimePreference | null>(null);
     const [showReturnBanner, setShowReturnBanner] = useState(false);
-    const [returnFlowTriggered, setReturnFlowTriggered] = useState(false);
+    // Task 14 point 1: guards the ONE automatic suggestion load per visit —
+    // either the S1-R return flow (explicit remembered preference) or a
+    // plain 'any' load, whichever applies. Never both, never twice.
+    const [initialSuggestionsTriggered, setInitialSuggestionsTriggered] = useState(false);
 
     // Читаем сохранённое предпочтение сразу, независимо от загрузки психолога —
     // это чтение localStorage этого устройства, серверу ничего не нужно.
@@ -144,24 +242,30 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         setReturningPreference(readSavedPreference(psychologistId));
     }, [psychologistId]);
 
-    // Показываем баннер и сразу подбираем свежие (не кэшированные) варианты —
-    // только когда доступна фича подбора времени и клиент ещё не известен
-    // (уже есть подтверждённые встречи — значит, это не "смотрел и ушёл").
-    // Once-guard (returnFlowTriggered): без него баннер переигрывался бы
-    // заново при каждом решении isKnownClient/psy.
+    // Task 14 point 1 (founder correction): the first screen shows 2-3
+    // concrete nearest slots immediately — the psychologist chip question is
+    // for REFINING, not a gate the client must click through first. So the
+    // very first load calls loadSuggestions('any') unconditionally (never
+    // persisting a preference nobody chose); a fresh S1-R return visit
+    // (remembered preference, not already a known client with upcoming
+    // sessions) instead replays that explicit preference and shows the
+    // "с возвращением" banner, exactly as before.
     useEffect(() => {
-        if (returnFlowTriggered) return;
+        if (initialSuggestionsTriggered) return;
         if (loading) return;
         if (!psy?.timeSuggestEnabled) return;
-        if (!returningPreference) return;
-        if (isKnownClient) return;
         if (bookingSuccess) return;
 
-        setReturnFlowTriggered(true);
-        setShowReturnBanner(true);
-        handlePreferenceSelect(returningPreference);
+        setInitialSuggestionsTriggered(true);
+        const isFreshReturn = !!returningPreference && !isKnownClient;
+        if (isFreshReturn) {
+            setShowReturnBanner(true);
+            handlePreferenceSelect(returningPreference as TimePreference);
+        } else {
+            loadSuggestions('any');
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loading, psy, returningPreference, isKnownClient, bookingSuccess, returnFlowTriggered]);
+    }, [loading, psy, returningPreference, isKnownClient, bookingSuccess, initialSuggestionsTriggered]);
 
     const handleForgetMe = () => {
         try {
@@ -179,15 +283,16 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         if (tg) {
             tg.ready();
             tg.expand();
-            tg.setHeaderColor?.('#f5f5f5');
-            tg.setBackgroundColor?.('#f5f5f5');
+            // Telegram WebApp native chrome color: this API takes a literal
+            // hex string, not a CSS custom property, so it can't reference
+            // --booking-paper directly — kept in sync with it by value.
+            tg.setHeaderColor?.('#F7F5F1');
+            tg.setBackgroundColor?.('#F7F5F1');
 
-            if (tg.initDataUnsafe?.user) {
-                setTgUser(tg.initDataUnsafe.user);
-            }
             setNotificationChannel('Telegram');
         } else {
-            setNotificationChannel('Max');
+            // Вне мессенджера канала нет, пока человек сам его не привяжет.
+            setNotificationChannel(null);
         }
 
         const init = async () => {
@@ -208,23 +313,23 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     return;
                 }
 
-                // Extract c param synchronously or read from localStorage
+                // Task 3 (PRAKTIKA MVP addendum §6): the only two sources for
+                // currentClientId are the `?c=` URL param and a previously
+                // saved link TOKEN in localStorage — never a raw clientId.
+                // Both go through the STRICT resolver (no legacy fallback):
+                // a raw id here would let a visitor look up another client's
+                // name/phone/upcoming sessions below (getClientById /
+                // getClientUpcomingSessionsById), exactly the bug this closes.
                 let currentClientId: string | undefined = undefined;
                 if (typeof window !== 'undefined') {
                     const urlParams = new URLSearchParams(window.location.search);
-                    const c = urlParams.get('c');
+                    const c = urlParams.get('c') || localStorage.getItem('compas_clientToken');
                     if (c) {
-                        const resolved = await resolveClientLinkParam(c);
+                        const resolved = await resolveSignedClientLinkParam(c);
                         if (resolved) {
                             currentClientId = resolved.clientId;
                             setClientId(resolved.clientId);
-                        }
-                    }
-                    if (!currentClientId) {
-                        const savedClientId = localStorage.getItem('compas_clientId');
-                        if (savedClientId) {
-                            currentClientId = savedClientId;
-                            setClientId(savedClientId);
+                            setClientLinkToken(c);
                         }
                     }
                 }
@@ -246,12 +351,20 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     setStartDate(firstDate);
                 }
 
-                // Pre-fill client data if returning
-                const tgUserId = tg?.initDataUnsafe?.user?.id;
+                // Pre-fill client data if returning. Task 3 (PRAKTIKA MVP
+                // addendum §6): tg.initDataUnsafe.user.id is client-controlled
+                // — a page visitor could set it to any Telegram id and read
+                // that person's name/phone/upcoming sessions via the calls
+                // below. Only an id that passed HMAC verification of
+                // tg.initData may be used to look up a client.
+                const verifiedTgUserId = tg?.initData
+                    ? await resolveVerifiedTelegramUserId(tg.initData)
+                    : null;
+                setVerifiedTelegramUserId(verifiedTgUserId);
 
-                if (tgUserId && user) {
+                if (verifiedTgUserId && user) {
                     try {
-                        const client = await getClientByTelegram(psychologistId, String(tgUserId), currentClientId);
+                        const client = await getClientByTelegram(psychologistId, verifiedTgUserId, currentClientId);
                         if (client) {
                             setIsKnownClient(true);
                             setForm({
@@ -260,14 +373,14 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             });
 
                             // Load upcoming sessions for known client
-                            const sessions = await getClientUpcomingSessions(psychologistId, String(tgUserId));
+                            const sessions = await getClientUpcomingSessions(psychologistId, verifiedTgUserId);
                             setUpcomingSessions(sessions);
                         } else {
                             setForm(f => ({ ...f, name: tg?.initDataUnsafe?.user?.first_name || '' }));
                         }
 
                         // Check consent requirement
-                        const consent = await checkConsentRequired(String(tgUserId), psychologistId);
+                        const consent = await checkConsentRequired(verifiedTgUserId, psychologistId);
                         setConsentRequired(consent.required);
                         setConsentText(consent.text);
                         setConsentVersionState(consent.version);
@@ -328,7 +441,6 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
         setSelectedDate(date);
         setSelectedTimeSlot(null);
-        setSelectedFormat(null);
         setAvailableTimes([]);
 
         const dateStr = format(date, 'yyyy-MM-dd');
@@ -352,23 +464,18 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         }
     };
 
-    const handleTimeSlotSelect = (slot: TimeSlot) => {
+    // Task 14 point 5: a concrete option already IS a specific format/cabinet
+    // choice — clicking it is the decision, never a second question.
+    const handleTimeSlotSelect = (slot: ConcreteSlotOption) => {
         setSelectedTimeSlot(slot);
-        if (slot.format === 'both') {
-            setSelectedFormat(null);
-        } else {
-            setSelectedFormat(slot.format as 'online' | 'offline');
-        }
     };
 
-    const handlePreferenceSelect = async (pref: TimePreference) => {
-        setPreference(pref);
-        try {
-            localStorage.setItem(bookingPrefStorageKey(psychologistId), JSON.stringify({ preference: pref, savedAt: Date.now() }));
-        } catch {
-            // Приватный режим браузера и т.п. — S1-R просто не сработает при
-            // следующем визите, сама запись от этого не ломается.
-        }
+    // Task 14 point 1: separated from handlePreferenceSelect so the initial
+    // automatic 'any' load never persists a preference the client never
+    // chose (booking_pref_<id> in localStorage is S1-R state — writing it on
+    // page load, before any real signal, would fabricate a "return visit"
+    // that never happened).
+    const loadSuggestions = async (pref: TimePreference) => {
         setSuggestLoading(true);
         try {
             const times = await getSuggestedTimes(psychologistId, pref, clientId || null);
@@ -381,10 +488,29 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         }
     };
 
+    const handlePreferenceSelect = async (pref: TimePreference) => {
+        setPreference(pref);
+        try {
+            localStorage.setItem(bookingPrefStorageKey(psychologistId), JSON.stringify({ preference: pref, savedAt: Date.now() }));
+        } catch {
+            // Приватный режим браузера и т.п. — S1-R просто не сработает при
+            // следующем визите, сама запись от этого не ломается.
+        }
+        await loadSuggestions(pref);
+    };
+
     const handleSuggestedTimeSelect = (candidate: SuggestedTimeCandidate) => {
         const [y, m, d] = candidate.date.split('-').map(Number);
         setSelectedDate(new Date(y, m - 1, d));
-        handleTimeSlotSelect({ time: candidate.time, format: candidate.format, addressId: candidate.addressId });
+        handleTimeSlotSelect({
+            key: candidate.slotToken,
+            time: candidate.time,
+            format: candidate.format as 'online' | 'offline',
+            addressId: candidate.addressId,
+            slotToken: candidate.slotToken,
+            duration: candidate.duration,
+            addressName: candidate.addressName,
+        });
     };
 
     const handleWaitlistSubmit = async (e: React.FormEvent) => {
@@ -407,8 +533,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
     const handleBookingAttempt = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedDate || !selectedTimeSlot || !selectedFormat) {
-            toast.error('Выберите дату, время и формат встречи');
+        if (!selectedDate || !selectedTimeSlot) {
+            toast.error('Выберите дату и время встречи');
             return;
         }
         if (!form.phone || form.phone.length < 10) {
@@ -433,8 +559,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
         setConsentSaving(true);
         try {
-            const tgUserId = tgUser?.id ? String(tgUser.id) : '';
-            await saveConsent(psychologistId, tgUserId, consentVersion);
+            await saveConsent(psychologistId, verifiedTelegramUserId || '', consentVersion);
             setConsentRequired(false);
             setShowConsentModal(false);
             await performBooking();
@@ -446,18 +571,31 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     };
 
     const performBooking = async () => {
-        if (!selectedDate || !selectedTimeSlot || !selectedFormat) return;
+        if (!selectedDate || !selectedTimeSlot) return;
 
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
         setBooking(true);
 
+        // Task 7/14: the slotToken IS the booking — format/addressId/duration
+        // are never sent as separate fields the server would have to trust.
+        // Every concrete option already carries exactly one real token —
+        // there is no more format:'both' ambiguity to resolve here.
+        const tokenToUse = selectedTimeSlot.slotToken;
+        const format_ = selectedTimeSlot.format;
+
         try {
-            const res = await bookSession(psychologistId, tgUser, {
+            // Task 7 (founder review): the server must never trust a
+            // client-supplied user object (tgUser comes from
+            // initDataUnsafe.user, which a visitor fully controls) for a
+            // Telegram-chat-id binding. Pass the raw, signed initData string
+            // instead — bookSession verifies it server-side.
+            const tgInitData = (window as any).Telegram?.WebApp?.initData || null;
+            const res = await bookSession(psychologistId, tgInitData, {
                 ...form,
-                date: dateStr,
-                time: selectedTimeSlot.time,
-                format: selectedFormat,
-                addressId: selectedFormat === 'offline' ? selectedTimeSlot.addressId : null
+                slotToken: tokenToUse,
+                // Task 14 point 6: the same raw signed personal-link token
+                // already resolved at page load, re-verified server-side —
+                // never trusted as a pre-decoded id.
+                clientLinkToken,
             });
 
             if (res && !res.success) {
@@ -466,15 +604,18 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 return;
             }
 
-            // Save clientId to local storage for persistent identification
-            if (res && res.clientId && typeof window !== 'undefined') {
-                localStorage.setItem('compas_clientId', res.clientId);
+            // Save the signed link TOKEN (never the raw clientId — Task 3,
+            // addendum §6) for persistent identification on this device.
+            if (res && res.clientToken && typeof window !== 'undefined') {
+                localStorage.setItem('compas_clientToken', res.clientToken);
+                setClientLinkToken(res.clientToken);
+                if (res.clientId) setClientId(res.clientId);
             }
 
             // Get address details for success screen
             let addressName: string | null = null;
             let addressFull: string | null = null;
-            if (selectedFormat === 'offline' && selectedTimeSlot.addressId) {
+            if (format_ === 'offline' && selectedTimeSlot.addressId) {
                 const addr = await getAddressById(selectedTimeSlot.addressId);
                 if (addr) {
                     addressName = addr.name;
@@ -488,7 +629,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
             setBookingSuccess({
                 date: `${dayOfWeek}, ${formattedDate}`,
                 time: selectedTimeSlot.time,
-                format: selectedFormat,
+                duration: selectedTimeSlot.duration,
+                format: format_,
                 psyName: psy?.name || 'Специалист',
                 addressName,
                 addressFull,
@@ -507,8 +649,8 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen mobile-full-height bg-background safe-top safe-bottom">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <div className="practice-booking-theme flex items-center justify-center min-h-screen mobile-full-height bg-[var(--booking-paper)] safe-top safe-bottom">
+                <Loader2 className="w-8 h-8 text-[var(--booking-accent)] animate-spin" />
             </div>
         );
     }
@@ -520,17 +662,17 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // Private mode — booking closed
     if (scheduleMode === 'private') {
         return (
-            <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
-                    <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center">
-                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-5">
+                    <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] p-8 shadow-sm w-full text-center">
+                        <div className="w-16 h-16 bg-[var(--booking-accent-soft)] rounded-full flex items-center justify-center mx-auto mb-5">
                             <span className="text-3xl">🔒</span>
                         </div>
-                        <h2 className="text-xl font-bold mb-2 text-foreground">Запись закрыта</h2>
-                        <p className="text-muted-foreground text-sm">Специалист пока не принимает запись онлайн. Попробуйте позже или свяжитесь напрямую.</p>
+                        <h2 className="text-xl font-semibold mb-2 text-[var(--booking-ink)]">Запись закрыта</h2>
+                        <p className="text-[var(--booking-muted)] text-sm">Специалист пока не принимает запись онлайн. Попробуйте позже или свяжитесь напрямую.</p>
                         <button
                             onClick={() => { const tg = (window as any).Telegram?.WebApp; if (tg) tg.close(); else window.location.href = '/'; }}
-                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                            className="w-full mt-6 py-3.5 rounded-[var(--booking-radius-card)] border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-semibold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
                             Назад
                         </button>
@@ -543,48 +685,56 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // Success screen
     if (bookingSuccess) {
         return (
-            <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+                <BookingToaster />
                 <div className="p-4 max-w-md mx-auto flex flex-col items-center justify-center min-h-screen">
-                    <div className="bg-card border border-border rounded-3xl p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                            <CheckCircle2 className="w-8 h-8 text-green-600" />
+                    <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] p-8 shadow-sm w-full text-center animate-in fade-in zoom-in duration-300">
+                        <div className="rounded-full flex items-center justify-center mx-auto mb-4 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]" style={{ width: 52, height: 52 }}>
+                            <CheckCircle2 className="w-6 h-6" />
                         </div>
-                        <h2 className="text-2xl font-bold mb-2 text-foreground">Вы записаны!</h2>
-                        <p className="text-muted-foreground text-sm mb-6">Уведомление придёт в {notificationChannel}</p>
+                        <h2 className="text-2xl font-semibold mb-2 text-[var(--booking-ink)]">Вы записаны!</h2>
+                        <p className="text-[var(--booking-muted)] text-sm mb-6">
+                            {notificationChannel
+                                ? `Уведомление придёт в ${notificationChannel}`
+                                : 'Специалист получил вашу запись и свяжется с вами по телефону.'}
+                        </p>
 
-                        <div className="bg-muted/30 rounded-2xl p-5 text-left space-y-3 border border-border/50">
+                        <div className="bg-[var(--booking-paper)] rounded-[var(--booking-radius-card)] p-5 text-left space-y-3 border border-[var(--booking-line)]">
                             <div>
-                                <p className="text-xs font-medium text-muted-foreground">Специалист</p>
-                                <p className="font-bold text-foreground">{bookingSuccess.psyName}</p>
+                                <p className="text-xs font-medium text-[var(--booking-muted)]">Специалист</p>
+                                <p className="font-semibold text-[var(--booking-ink)]">{bookingSuccess.psyName}</p>
                             </div>
                             <div>
-                                <p className="text-xs font-medium text-muted-foreground">Дата и время</p>
-                                <p className="font-bold text-foreground">{bookingSuccess.time}, {bookingSuccess.date}</p>
+                                <p className="text-xs font-medium text-[var(--booking-muted)]">Дата и время</p>
+                                <p className="font-semibold text-[var(--booking-ink)]">
+                                    {bookingSuccess.time}, {bookingSuccess.date}
+                                    {bookingSuccess.duration ? ` · ${bookingSuccess.duration} минут` : ''}
+                                </p>
                             </div>
                             <div>
-                                <p className="text-xs font-medium text-muted-foreground">Формат</p>
-                                <p className="font-bold text-foreground flex items-center gap-1.5">
+                                <p className="text-xs font-medium text-[var(--booking-muted)]">Формат</p>
+                                <p className="font-semibold text-[var(--booking-ink)] flex items-center gap-1.5">
                                     {bookingSuccess.format === 'online' ? (
-                                        <><Video className="w-4 h-4 text-primary" /> Онлайн</>
+                                        <><Video className="w-4 h-4 text-[var(--booking-accent)]" /> Онлайн</>
                                     ) : (
-                                        <><MapPin className="w-4 h-4 text-primary" /> В кабинете</>
+                                        <><MapPin className="w-4 h-4 text-[var(--booking-accent)]" /> В кабинете</>
                                     )}
                                 </p>
                             </div>
                             {/* Issue #5: Show address if offline */}
                             {bookingSuccess.format === 'offline' && bookingSuccess.addressFull && (
                                 <div>
-                                    <p className="text-xs font-medium text-muted-foreground">Адрес</p>
-                                    <p className="font-bold text-foreground flex items-center gap-1.5">
-                                        <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                                    <p className="text-xs font-medium text-[var(--booking-muted)]">Адрес</p>
+                                    <p className="font-semibold text-[var(--booking-ink)] flex items-center gap-1.5">
+                                        <MapPin className="w-4 h-4 text-[var(--booking-accent)] flex-shrink-0" />
                                         {bookingSuccess.addressName ? `${bookingSuccess.addressName}: ` : ''}{bookingSuccess.addressFull}
                                     </p>
                                 </div>
                             )}
                             {bookingSuccess.format === 'online' && bookingSuccess.onlineLink && (
                                 <div className="mt-2">
-                                    <p className="text-xs font-medium text-muted-foreground">Ссылка на переговорку</p>
-                                    <a href={bookingSuccess.onlineLink} target="_blank" rel="noopener noreferrer" className="font-bold text-primary hover:underline flex items-center gap-1.5 break-all mt-0.5">
+                                    <p className="text-xs font-medium text-[var(--booking-muted)]">Ссылка на переговорку</p>
+                                    <a href={bookingSuccess.onlineLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--booking-accent)] hover:underline flex items-center gap-1.5 break-all mt-0.5">
                                         {bookingSuccess.onlineLink}
                                     </a>
                                 </div>
@@ -596,7 +746,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             onClick={() => {
                                 window.location.href = '/bot/client';
                             }}
-                            className="w-full mt-6 py-3.5 rounded-xl border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-bold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
+                            className="w-full mt-6 py-3.5 rounded-[var(--booking-radius-card)] border-2 border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] font-semibold text-base transition-all min-h-[44px] haptic-light hover:opacity-90 shadow-sm active:scale-[0.98]"
                         >
                             Готово
                         </button>
@@ -607,33 +757,39 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     }
 
     return (
-        <div className="practice-booking-theme min-h-screen mobile-full-height bg-background text-foreground pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+        <div className="practice-booking-theme min-h-screen mobile-full-height bg-[var(--booking-paper)] text-[var(--booking-ink)] pb-12 safe-top safe-bottom telegram-miniapp-scrollbar-hide">
+            <BookingToaster />
             <div className="p-4 max-w-md mx-auto">
-                <h1 className="text-3xl font-bold tracking-tight mb-1">Запись на сессию</h1>
-                <p className="text-primary font-semibold text-sm mb-1">Специалист — {psy.name}</p>
-                <p className="text-muted-foreground mb-6 text-sm">
-                    Выберите удобную дату и время.
+                {/* Макет C01: «начать человечнее, чем „Запись на сессию“».
+                    Человек открыл ссылку конкретного специалиста — первым он
+                    должен увидеть, к кому попал, а не название операции.
+                    Канцелярский заголовок сообщал ему то, что он и так знает,
+                    и занимал самое дорогое место на экране. */}
+                <p className="text-[var(--booking-accent)] font-semibold text-[15px] mb-1">{psy.name}</p>
+                <h1 className="text-2xl font-semibold tracking-tight mb-1">Когда вам удобнее?</h1>
+                <p className="text-[var(--booking-muted)] mb-6 text-sm">
+                    Подберу ближайшие варианты. Это ни к чему не обязывает.
                 </p>
 
                 {/* Issue #2: Upcoming sessions for known client */}
                 {isKnownClient && upcomingSessions.length > 0 && (
-                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-                        <h3 className="font-medium mb-3 text-foreground flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-primary" />
+                    <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <h3 className="font-medium mb-3 text-[var(--booking-ink)] flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-[var(--booking-accent)]" />
                             Ваши предстоящие записи
                         </h3>
                         <div className="space-y-2">
                             {upcomingSessions.map((s) => (
                                 <button
                                     key={s.id}
-                                    onClick={() => window.location.href = `/bot/client?c=${clientId || ''}`}
-                                    className="w-full text-left flex items-center gap-3 p-2.5 bg-muted/30 rounded-xl border border-border/50 hover:bg-muted/50 transition-colors active:scale-[0.98]"
+                                    onClick={() => window.location.href = `/bot/client?c=${encodeURIComponent(clientLinkToken || '')}`}
+                                    className="w-full text-left flex items-center gap-3 p-2.5 bg-[var(--booking-paper)] rounded-xl border border-[var(--booking-line)] hover:border-[var(--booking-accent)] transition-colors active:scale-[0.98]"
                                 >
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-sm text-foreground">
+                                        <p className="font-medium text-sm text-[var(--booking-ink)]">
                                             {format(new Date(s.date), 'd MMM', { locale: ru })} в {s.time}
                                         </p>
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <p className="text-xs text-[var(--booking-muted)] flex items-center gap-1">
                                             {s.format === 'offline' ? (
                                                 <><MapPin className="w-3 h-3" /> {s.addressName || 'В кабинете'}</>
                                             ) : (
@@ -641,7 +797,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                             )}
                                         </p>
                                     </div>
-                                    <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium flex-shrink-0">
+                                    <span className="text-xs px-2 py-1 rounded-lg bg-[var(--booking-accent-soft)] text-[var(--booking-accent)] font-medium flex-shrink-0">
                                         {s.status === 'confirmed' ? 'Подтв.' : 'Ожид.'}
                                     </span>
                                 </button>
@@ -652,22 +808,51 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
                 {/* Mechanic B "подбор времени" (CJM_booking_v1.md этап 2) */}
                 {psy?.timeSuggestEnabled && !showFullCalendar && (
-                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm">
+                    <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm">
                         {showReturnBanner && returningPreference && (
                             <div className="mb-3 px-3 py-2.5 rounded-xl bg-[var(--booking-accent-soft)] border border-[var(--booking-accent)]/30 space-y-1.5">
-                                <p className="text-sm text-foreground">
+                                <p className="text-sm text-[var(--booking-ink)]">
                                     С возвращением. Вы смотрели: <strong>{PREFERENCE_LABELS[returningPreference]}</strong>
                                 </p>
                                 <button
                                     type="button"
                                     onClick={handleForgetMe}
-                                    className="text-xs text-muted-foreground underline underline-offset-2 haptic-light"
+                                    className="text-xs text-[var(--booking-muted)] underline underline-offset-2 haptic-light"
                                 >
                                     Не запоминать меня на этом устройстве
                                 </button>
                             </div>
                         )}
-                        <h3 className="font-medium mb-3 text-foreground">Когда вам удобнее?</h3>
+                        {/* Кадр C01 задаёт этот вопрос один раз — заголовком
+                            страницы. Второй такой же над чипами спрашивал о том
+                            же самом на полэкрана ниже. */}
+
+                        {suggestLoading && <p className="text-[var(--booking-muted)] text-sm text-center py-2">Подбираем время…</p>}
+
+                        {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                                {suggestedTimes.map(candidate => {
+                                    const isPicked = selectedTimeSlot?.slotToken === candidate.slotToken;
+                                    return (
+                                        <button
+                                            key={candidate.slotToken}
+                                            type="button"
+                                            onClick={() => handleSuggestedTimeSelect(candidate)}
+                                            className={`w-full py-2.5 px-3 rounded-xl border-2 text-left transition-colors haptic-light ${isPicked
+                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
+                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10'
+                                                }`}
+                                        >
+                                            <span className="block font-medium text-sm">{formatSlotHeading(candidate.date, candidate.time)}</span>
+                                            <span className={`block text-xs mt-0.5 ${isPicked ? 'text-white/80' : 'opacity-80'}`}>
+                                                {formatSlotMeta(candidate.duration, candidate.format, candidate.addressName)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 gap-2 mb-3">
                             {([
                                 ['weekday_evening', 'Будни, после 18:00'],
@@ -680,7 +865,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                     onClick={() => handlePreferenceSelect(value)}
                                     className={`py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${preference === value
                                         ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
-                                        : 'border-border text-foreground hover:bg-muted/40'
+                                        : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'
                                         }`}
                                 >
                                     {label}
@@ -688,44 +873,37 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             ))}
                         </div>
 
-                        {suggestLoading && <p className="text-muted-foreground text-sm text-center py-2">Подбираем время…</p>}
-
-                        {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
-                            <div className="space-y-2">
-                                {suggestedTimes.map(candidate => {
-                                    const isPicked = selectedTimeSlot?.time === candidate.time
-                                        && selectedDate && format(selectedDate, 'yyyy-MM-dd') === candidate.date;
-                                    return (
-                                        <button
-                                            key={`${candidate.date}-${candidate.time}`}
-                                            type="button"
-                                            onClick={() => handleSuggestedTimeSelect(candidate)}
-                                            className={`w-full py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${isPicked
-                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
-                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10'
-                                                }`}
-                                        >
-                                            {format(new Date(candidate.date + 'T00:00:00'), 'd MMMM', { locale: ru })}, {candidate.time}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                        {/* Макет C01/C12: «Нет подходящего времени?» — постоянная
+                            дверь, а не аварийный выход. Раньше форма заявки
+                            появлялась ТОЛЬКО когда свободных часов не осталось
+                            вовсе. Но человеку может не подойти и то, что есть:
+                            предложено три утра, а он может только вечером. Ему
+                            оставалось закрыть страницу — и специалист никогда
+                            не узнавал, что клиент приходил. */}
+                        {!suggestLoading && !waitlistSubmitted && !waitlistOpen && (
+                            <button
+                                type="button"
+                                onClick={() => setWaitlistOpen(true)}
+                                className="w-full text-center text-xs text-[var(--booking-muted)] underline pt-1"
+                            >
+                                Нет подходящего времени?
+                            </button>
                         )}
 
-                        {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && !waitlistSubmitted && (
-                            <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-border/50">
-                                <p className="text-muted-foreground text-sm">Сейчас свободного времени нет. Оставьте контакт — предложим первое освободившееся.</p>
+                        {!suggestLoading && !waitlistSubmitted && (waitlistOpen || (suggestedTimes && suggestedTimes.length === 0)) && (
+                            <form onSubmit={handleWaitlistSubmit} className="space-y-2 pt-2 border-t border-[var(--booking-line)]">
+                                <p className="text-[var(--booking-muted)] text-sm">Оставьте контакт и пожелания по времени — специалист увидит вашу заявку.</p>
                                 <input
                                     type="text" placeholder="Как к вам обращаться"
                                     value={waitlistForm.name}
                                     onChange={e => setWaitlistForm(f => ({ ...f, name: e.target.value }))}
-                                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--booking-line)] bg-[var(--booking-card)] text-[var(--booking-ink)] text-sm"
                                 />
                                 <input
                                     type="text" placeholder="Телефон или Telegram"
                                     value={waitlistForm.contact}
                                     onChange={e => setWaitlistForm(f => ({ ...f, contact: e.target.value }))}
-                                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--booking-line)] bg-[var(--booking-card)] text-[var(--booking-ink)] text-sm"
                                 />
                                 <button type="submit" className="w-full py-2.5 rounded-xl border-2 border-[var(--booking-accent)] text-[var(--booking-accent)] font-medium text-sm haptic-light">
                                     Записать в лист ожидания
@@ -733,16 +911,19 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             </form>
                         )}
 
-                        {!suggestLoading && suggestedTimes && suggestedTimes.length === 0 && waitlistSubmitted && (
-                            <p className="text-sm text-center py-2 text-foreground">Спасибо! Мы свяжемся, как только время освободится.</p>
+                        {/* Макет C12: нейтрально, без обещания автоматического
+                            уведомления — автонотификация листа ожидания в этот
+                            запуск не входит. */}
+                        {!suggestLoading && waitlistSubmitted && (
+                            <p className="text-sm text-center py-2 text-[var(--booking-ink)]">Заявка отправлена. Специалист увидит ваши пожелания по времени.</p>
                         )}
 
                         <button
                             type="button"
                             onClick={() => setShowFullCalendar(true)}
-                            className="w-full text-center text-xs text-muted-foreground underline mt-3"
+                            className="w-full text-center text-xs text-[var(--booking-muted)] underline mt-3"
                         >
-                            Показать все времена
+                            Показать весь календарь
                         </button>
                     </div>
                 )}
@@ -750,7 +931,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 {/* Calendar */}
                 {(!psy?.timeSuggestEnabled || showFullCalendar) && (
                 <div className="mb-6">
-                    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm p-2 flex justify-center">
+                    <div className="bg-[var(--booking-card)] border border-[var(--booking-line)] rounded-[var(--booking-radius-card)] overflow-hidden shadow-sm p-2 flex justify-center">
                         <DatePicker
                             inline
                             locale="ru"
@@ -765,117 +946,106 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                 const isAvail = isDateAvailable(date);
                                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
                                 if (isSelected) return "!bg-transparent !border-2 !border-[var(--booking-accent)] !text-[var(--booking-accent)] !rounded-[12px] !font-medium";
-                                if (isAvail) return "!text-foreground !bg-transparent !border-2 !border-transparent hover:!border-[var(--booking-accent)]/50 !font-medium !rounded-[12px] transition-colors";
-                                return "!text-muted-foreground !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[12px]";
+                                if (isAvail) return "!text-[var(--booking-ink)] !bg-transparent !border-2 !border-transparent hover:!border-[var(--booking-accent)]/50 !font-medium !rounded-[12px] transition-colors";
+                                return "!text-[var(--booking-muted)] !opacity-40 !font-normal !bg-transparent !border-2 !border-transparent !rounded-[12px]";
                             }}
-                            monthClassName={() => "!text-foreground !font-medium"}
-                            weekDayClassName={() => "!text-muted-foreground !font-medium !text-xs"}
+                            monthClassName={() => "!text-[var(--booking-ink)] !font-medium"}
+                            weekDayClassName={() => "!text-[var(--booking-muted)] !font-medium !text-xs"}
                         />
                     </div>
                 </div>
                 )}
 
-                {/* Time selection */}
+                {/* Time selection — Task 14 point 5: online/offline/per-cabinet sections, never one flat grid */}
                 {selectedDate && (!psy?.timeSuggestEnabled || showFullCalendar) && (
-                    <div className="mb-6 bg-card p-4 rounded-2xl border border-border shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-                        <h3 className="font-medium mb-3 text-foreground">Свободное время:</h3>
-                        {availableTimes.length === 0 ? (
-                            <p className="text-muted-foreground text-sm text-center py-4">Нет свободного времени на эту дату</p>
+                    <div className="mb-6 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <h3 className="font-medium mb-3 text-[var(--booking-ink)]">Свободное время:</h3>
+                        {concreteOptions.length === 0 ? (
+                            <p className="text-[var(--booking-muted)] text-sm text-center py-4">Нет свободного времени на эту дату</p>
                         ) : (
-                            <div className="grid grid-cols-4 gap-2">
-                                {availableTimes.map(slot => {
-                                    if (slot.isOwnBooking) {
-                                        return (
-                                            <div
-                                                key={`${slot.time}-${slot.format}-own`}
-                                                className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-primary/40 bg-primary/10 text-primary"
-                                                onClick={() => toast.info('Это ваше забронированное время')}
-                                            >
-                                                <span>{slot.time}</span>
-                                                <span className="text-[9px] leading-tight opacity-80 uppercase tracking-wider mt-0.5">Ваше</span>
-                                            </div>
-                                        );
-                                    }
-                                    return (
-                                        <button
-                                            key={`${slot.time}-${slot.format}`}
-                                            type="button"
-                                            onClick={() => handleTimeSlotSelect(slot)}
-                                            className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.time === slot.time && selectedTimeSlot?.format === slot.format
-                                                ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm'
-                                                : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'
-                                                }`}
-                                        >
-                                            {slot.time}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {/* Format selection — only for hybrid slots */}
-                        {selectedTimeSlot?.format === 'both' && (
-                            <div className="mt-4 pt-4 border-t border-border/50 animate-in fade-in duration-200">
-                                <label className="block text-sm font-medium mb-3 text-foreground">Формат проведения <span className="text-destructive">*</span></label>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedFormat('online')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'online' ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm' : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'}`}
-                                    >💻 Онлайн</button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedFormat('offline')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-colors min-h-[44px] haptic-light ${selectedFormat === 'offline' ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm' : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'}`}
-                                    >🏠 В кабинете</button>
-                                </div>
+                            <div className="space-y-4">
+                                {sections.map(section => (
+                                    <div key={section.key}>
+                                        <p className="text-xs font-semibold tracking-wide text-[var(--booking-muted)] mb-2">{section.label}</p>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {section.options.map(opt => opt.isOwnBooking ? (
+                                                <div
+                                                    key={opt.key}
+                                                    className="py-2 px-1 text-center rounded-xl border-2 font-bold text-sm min-h-[44px] flex flex-col items-center justify-center border-[var(--booking-accent)]/40 bg-[var(--booking-accent-soft)] text-[var(--booking-accent)]"
+                                                    onClick={() => toast.info('Это ваше забронированное время')}
+                                                >
+                                                    <span>{opt.time}</span>
+                                                    <span className="text-[9px] leading-tight opacity-80 uppercase tracking-wider mt-0.5">Ваше</span>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    key={opt.key}
+                                                    type="button"
+                                                    onClick={() => handleTimeSlotSelect(opt)}
+                                                    className={`py-2 rounded-xl border-2 font-medium transition-colors text-sm min-h-[44px] haptic-light ${selectedTimeSlot?.slotToken === opt.slotToken
+                                                        ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] shadow-sm'
+                                                        : 'border-[var(--booking-accent)] text-[var(--booking-accent)] hover:bg-[var(--booking-accent)]/10 bg-transparent'
+                                                        }`}
+                                                >
+                                                    {opt.time}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
                 )}
 
-                <form onSubmit={handleBookingAttempt} className="space-y-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5 text-foreground">Имя</label>
-                        <input
-                            type="text"
-                            required
-                            value={form.name}
-                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                            className="w-full px-4 py-3 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/50 bg-background text-foreground transition-all"
-                            placeholder="Ваше имя"
-                            readOnly={isKnownClient}
-                        />
-                        {isKnownClient && (
-                            <p className="text-xs text-primary mt-1.5 flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> Данные заполнены автоматически
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5 text-foreground">Телефон</label>
-                        <PhoneInput
-                            country={'ru'}
-                            value={form.phone}
-                            onChange={phone => setForm(f => ({ ...f, phone }))}
-                            inputProps={{
-                                required: true,
-                            }}
-                            containerClass="!w-full"
-                            inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-border !rounded-xl focus:!ring-2 focus:!ring-ring/50 !bg-background !text-foreground !transition-all"
-                            buttonClass="!bg-background !border-border !rounded-l-xl focus:!ring-ring/50 hover:!bg-muted"
-                            dropdownClass="!bg-card !text-foreground !border !border-border !rounded-xl !shadow-lg"
-                            disabled={isKnownClient && !!form.phone}
-                        />
-                        <p className="text-xs text-muted-foreground mt-2">
-                            Телефон нужен для связи. Уведомление о сессии придёт в {notificationChannel}.
+                <form onSubmit={handleBookingAttempt} className="space-y-4 bg-[var(--booking-card)] p-4 rounded-[var(--booking-radius-card)] border border-[var(--booking-line)] shadow-sm">
+                    {/* Task 14 point 6: a known client's identity is already
+                        verified — never make them see or re-confirm name/phone. */}
+                    {isKnownClient ? (
+                        <p className="text-sm text-[var(--booking-ink)] flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-[var(--booking-accent)] flex-shrink-0" />
+                            {form.name ? `${form.name}, выберите` : 'Выберите'} удобное время — данные уже у нас.
                         </p>
-                    </div>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Имя</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={form.name}
+                                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-[var(--booking-line)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--booking-accent-soft)] focus:border-[var(--booking-accent)] bg-[var(--booking-card)] text-[var(--booking-ink)] transition-all"
+                                    placeholder="Ваше имя"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5 text-[var(--booking-ink)]">Телефон</label>
+                                <PhoneInput
+                                    country={'ru'}
+                                    value={form.phone}
+                                    onChange={phone => setForm(f => ({ ...f, phone }))}
+                                    inputProps={{
+                                        required: true,
+                                    }}
+                                    containerClass="!w-full"
+                                    inputClass="!w-full !px-4 !py-3 !pl-12 !h-auto !text-base !border-[var(--booking-line)] !rounded-xl focus:!ring-2 focus:!ring-[var(--booking-accent-soft)] !bg-[var(--booking-card)] !text-[var(--booking-ink)] !transition-all"
+                                    buttonClass="!bg-[var(--booking-card)] !border-[var(--booking-line)] !rounded-l-xl focus:!ring-[var(--booking-accent-soft)] hover:!bg-[var(--booking-accent-soft)]"
+                                    dropdownClass="!bg-[var(--booking-card)] !text-[var(--booking-ink)] !border !border-[var(--booking-line)] !rounded-xl !shadow-lg"
+                                />
+                                <p className="text-xs text-[var(--booking-muted)] mt-2">
+                                    {notificationChannel
+                                        ? `Телефон нужен для связи. Уведомление о сессии придёт в ${notificationChannel}.`
+                                        : 'Телефон нужен, чтобы специалист мог связаться с вами и напомнить о встрече.'}
+                                </p>
+                            </div>
+                        </>
+                    )}
 
                     <button
                         type="submit"
-                        disabled={!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'}
-                        className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || !selectedFormat || booking || scheduleMode === 'readonly'
+                        disabled={!selectedDate || !selectedTimeSlot || booking || scheduleMode === 'readonly'}
+                        className={`w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all min-h-[44px] haptic-light mt-4 ${!selectedDate || !selectedTimeSlot || booking || scheduleMode === 'readonly'
                             ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
                             : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                             }`}
@@ -884,19 +1054,19 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                         {scheduleMode === 'readonly' ? 'Только просмотр' : booking ? 'Оформление...' : 'Записаться'}
                     </button>
                     {scheduleMode === 'readonly' && (
-                        <p className="text-xs text-center text-muted-foreground mt-2">
+                        <p className="text-xs text-center text-[var(--booking-muted)] mt-2">
                             Специалист пока принимает запись только лично. Вы можете посмотреть свободные окна и связаться напрямую.
                         </p>
                     )}
 
                     {/* Issue #4: Consent notice for unknown clients */}
                     {consentRequired && (
-                        <p className="text-xs text-center text-muted-foreground mt-3 leading-relaxed">
+                        <p className="text-xs text-center text-[var(--booking-muted)] mt-3 leading-relaxed">
                             Нажимая кнопку «Записаться», вы принимаете условия{' '}
                             <button
                                 type="button"
                                 onClick={() => setShowConsentModal(true)}
-                                className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                                className="text-[var(--booking-accent)] underline underline-offset-2 hover:opacity-80 transition-colors"
                             >
                                 согласия на обработку персональных данных
                             </button>
@@ -907,30 +1077,30 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                 {/* Consent Modal */}
                 {showConsentModal && (
                     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
-                        <div className="bg-card rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col border border-border shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+                        <div className="bg-[var(--booking-card)] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col border border-[var(--booking-line)] shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
                             {/* Header */}
-                            <div className="px-6 pt-6 pb-4 border-b border-border/50 flex items-center justify-between flex-shrink-0">
+                            <div className="px-6 pt-6 pb-4 border-b border-[var(--booking-line)] flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-2">
-                                    <Shield className="w-5 h-5 text-primary" />
-                                    <h3 className="text-lg font-bold text-foreground">Согласие на обработку ПДн</h3>
+                                    <Shield className="w-5 h-5 text-[var(--booking-accent)]" />
+                                    <h3 className="text-lg font-semibold text-[var(--booking-ink)]">Согласие на обработку ПДн</h3>
                                 </div>
                                 <button
                                     onClick={() => setShowConsentModal(false)}
-                                    className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                                    className="p-1.5 rounded-lg hover:bg-[var(--booking-accent-soft)] transition-colors"
                                 >
-                                    <X className="w-5 h-5 text-muted-foreground" />
+                                    <X className="w-5 h-5 text-[var(--booking-muted)]" />
                                 </button>
                             </div>
 
                             {/* Consent text */}
                             <div className="px-6 py-4 overflow-y-auto flex-1 custom-scrollbar">
-                                <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                                <div className="text-sm text-[var(--booking-ink)] leading-relaxed whitespace-pre-wrap">
                                     {consentText}
                                 </div>
                             </div>
 
                             {/* Accept section */}
-                            <div className="px-6 py-4 border-t border-border/50 flex-shrink-0 space-y-4">
+                            <div className="px-6 py-4 border-t border-[var(--booking-line)] flex-shrink-0 space-y-4">
                                 <label className="flex items-start gap-3 cursor-pointer group">
                                     <input
                                         type="checkbox"
@@ -940,7 +1110,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                     />
                                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5 ${consentAccepted
                                         ? 'bg-[var(--booking-accent)] border-[var(--booking-accent)]'
-                                        : 'border-border group-hover:border-[var(--booking-accent)]/50'
+                                        : 'border-[var(--booking-line)] group-hover:border-[var(--booking-accent)]/50'
                                         }`}>
                                         {consentAccepted && (
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -948,15 +1118,15 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                             </svg>
                                         )}
                                     </div>
-                                    <span className="text-sm text-foreground leading-snug">
-                                        Я даю <a href="/legal/privacy" target="_blank" className="text-primary hover:underline" onClick={e => e.stopPropagation()}>согласие</a> на обработку моих персональных данных
+                                    <span className="text-sm text-[var(--booking-ink)] leading-snug">
+                                        Я даю <a href="/legal/privacy" target="_blank" className="text-[var(--booking-accent)] hover:underline" onClick={e => e.stopPropagation()}>согласие</a> на обработку моих персональных данных
                                     </span>
                                 </label>
 
                                 <button
                                     onClick={handleConsentAccept}
                                     disabled={!consentAccepted || consentSaving}
-                                    className={`w-full py-3.5 rounded-xl border-2 font-bold text-base transition-all min-h-[44px] haptic-light ${!consentAccepted || consentSaving
+                                    className={`w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-base transition-all min-h-[44px] haptic-light ${!consentAccepted || consentSaving
                                         ? 'border-[var(--booking-accent)] text-[var(--booking-accent)] bg-transparent cursor-not-allowed opacity-40'
                                         : 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)] hover:opacity-90 shadow-sm active:scale-[0.98]'
                                         }`}
@@ -983,7 +1153,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                     .react-datepicker__day--disabled { opacity: 0.3; }
                     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 4px; }
-                    .custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--booking-line); border-radius: 4px; }
                 `}} />
             </div >
         </div >

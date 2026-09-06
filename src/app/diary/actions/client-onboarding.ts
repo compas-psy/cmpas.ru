@@ -3,6 +3,7 @@
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
+import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
@@ -124,22 +125,9 @@ export async function sendClientOnboarding(
         htmlText = buildSessionClientMessage({ ...base, mode: 'html' });
         plainText = buildSessionClientMessage({ ...base, mode: 'plain' });
     } else {
-        const firstName = extractFirstName(client.name) || client.name;
-        const lines = [`${firstName}, здравствуйте!`, '', `На связи специалист ${psyName}.`];
-        if (documentLinks.length) {
-            lines.push('', 'Записываясь на консультацию, вы соглашаетесь с условиями договора:');
-            lines.push(...documentLinks.map(d => `<a href="${d.link}">${d.title}</a>`));
-        }
-        lines.push('', `Управлять записями можно <a href="${bookingLink}">здесь</a>.`);
-        htmlText = lines.join('\n');
-
-        const plainLines = [`${firstName}, здравствуйте!`, '', `На связи специалист ${psyName}.`];
-        if (documentLinks.length) {
-            plainLines.push('', 'Записываясь на консультацию, вы соглашаетесь с условиями договора:');
-            plainLines.push(...documentLinks.map(d => `${d.title}: ${d.link}`));
-        }
-        plainLines.push('', `Управлять записями можно здесь: ${bookingLink}`);
-        plainText = plainLines.join('\n');
+        const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink };
+        htmlText = buildClientOnboardingMessage({ ...base, mode: 'html' });
+        plainText = buildClientOnboardingMessage({ ...base, mode: 'plain' });
     }
 
     const chatId = opts.channel === 'telegram' ? client.telegramChatId : client.maxChatId;
@@ -160,7 +148,7 @@ export async function sendClientOnboarding(
             clientId,
             sessionId: session?.id ?? null,
             channel: opts.channel,
-            text: htmlText,
+            text: opts.channel === 'telegram' ? htmlText : plainText,
             sendAt: invite.expiresAt,
             status: 'pending',
         },

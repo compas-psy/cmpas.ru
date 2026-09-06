@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { toggleAdsConsent } from "@/app/legal/actions"
+import { toggleAdsConsentForUser } from "@/app/diary/actions/settings"
 import { ShieldAlert, X } from "lucide-react"
 
 export function AdsConsentModal({ userId }: { userId: string }) {
@@ -9,7 +9,9 @@ export function AdsConsentModal({ userId }: { userId: string }) {
     const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
-        // Only show if we haven't prompted this user on this device before
+        // `userId` here only namespaces a non-secret "already prompted on this
+        // device" flag — the mutation itself (toggleAdsConsentForUser) derives
+        // the real identity from the session, never from this prop.
         const hasPrompted = localStorage.getItem(`ads_prompt_${userId}`)
         if (!hasPrompted) {
             // Slight delay so it doesn't pop up instantly on page load
@@ -21,7 +23,7 @@ export function AdsConsentModal({ userId }: { userId: string }) {
     const handleAccept = async () => {
         setIsLoading(true)
         try {
-            await toggleAdsConsent(userId, true)
+            await toggleAdsConsentForUser(true)
             localStorage.setItem(`ads_prompt_${userId}`, "true")
             setIsOpen(false)
         } catch (error) {

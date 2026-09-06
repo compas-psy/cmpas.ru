@@ -1,14 +1,11 @@
-ALTER TABLE "PsychologistClientDocument"
-    ADD COLUMN IF NOT EXISTS "fileName" TEXT,
-    ADD COLUMN IF NOT EXISTS "fileMimeType" TEXT,
-    ADD COLUMN IF NOT EXISTS "fileSizeBytes" INTEGER,
-    ADD COLUMN IF NOT EXISTS "sendOnNewClient" BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN IF NOT EXISTS "sendOnFirstSession" BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN IF NOT EXISTS "requiresAcknowledgement" BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
-
-CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_sendOnNewClient_idx" ON "PsychologistClientDocument"("sendOnNewClient");
-CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_sendOnFirstSession_idx" ON "PsychologistClientDocument"("sendOnFirstSession");
+-- Задача 26. Здесь стояли семь колонок PsychologistClientDocument и два
+-- индекса по ним. На чистой базе миграция падала: по имени каталога она идёт
+-- ПЕРЕД 20260531_specialist_client_documents, который эту таблицу и создаёт.
+-- («ERROR: relation "PsychologistClientDocument" does not exist».) На проде
+-- это было незаметно — там таблица появилась раньше, вне цепочки.
+--
+-- Колонки переехали в 20260531_specialist_client_documents, к своей таблице.
+-- Смысл миграции не изменился: настраиваемые документы и настройки оплаты.
 
 CREATE TABLE IF NOT EXISTS "PsychologistPaymentSettings" (
     "id" TEXT NOT NULL,

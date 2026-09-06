@@ -15,6 +15,8 @@ import ru.cmpas.app.data.sync.OutboxSync
 import ru.cmpas.app.domain.model.AttentionItem
 import ru.cmpas.app.domain.model.PaymentStatus
 import ru.cmpas.app.domain.model.PracticeNotification
+import ru.cmpas.app.domain.model.PracticeOnboarding
+import ru.cmpas.app.domain.model.PracticeOnboardingAction
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionStatus
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
@@ -102,6 +104,7 @@ class DashboardViewModel @Inject constructor(
                                 notifications = data.notifications,
                                 userName = data.userName ?: it.userName,
                                 bookingLink = data.bookingLink,
+                                onboarding = data.onboarding,
                                 needsOnboarding = data.needsOnboarding,
                                 onboardingUrl = data.onboardingUrl,
                                 isDataLoaded = true,
@@ -114,6 +117,33 @@ class DashboardViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, isRefreshing = false, error = e.localizedMessage ?: "Ошибка подключения") }
             }
+        }
+    }
+
+    /**
+     * Ссылкой действительно поделились (Задача 24).
+     *
+     * Зовётся только с состоявшегося действия — из шторки постоянной ссылки
+     * записи, после успешного копирования или системного share. Открытие
+     * шторки сюда не приходит: иначе шаг закрывался бы тем, что человек
+     * передумал.
+     */
+    fun confirmBookingLinkShared() = sendOnboardingAction("shared")
+
+    /**
+     * «Скрыть» — решение уходит на сервер, а не в память телефона.
+     * Переустановка приложения не должна возвращать подсказку тому, кто её
+     * уже убрал, и в вебе она тоже останется скрытой.
+     */
+    fun dismissOnboarding() = sendOnboardingAction("dismiss")
+
+    private fun sendOnboardingAction(action: String) {
+        viewModelScope.launch {
+            val response = runCatching { api.postOnboardingAction(PracticeOnboardingAction(action)) }.getOrNull()
+            val body = response?.takeIf { it.isSuccessful }?.body()
+            // Состояние меняется только ответом сервера: не дошло — на экране
+            // всё осталось как было, и человек увидит это честно.
+            if (body != null) _uiState.update { it.copy(onboarding = body) }
         }
     }
 
@@ -194,6 +224,8 @@ data class DashboardUiState(
     val attentionItems: List<AttentionItem> = emptyList(),
     val notifications: List<PracticeNotification> = emptyList(),
     val bookingLink: String? = null,
+    /** Чек-лист настройки практики с сервера — тот же, что в вебе. */
+    val onboarding: PracticeOnboarding? = null,
     val needsOnboarding: Boolean = false,
     val onboardingUrl: String? = null,
     val error: String? = null,

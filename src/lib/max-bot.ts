@@ -1,11 +1,16 @@
 /**
- * MAX Messenger Bot (botapi.max.ru)
+ * MAX Messenger Bot (platform-api2.max.ru)
  *
  * MAX uses its own REST API (not Telegram-compatible):
  *   Auth: Authorization: TOKEN  (bare token in header — no Bearer/Token prefix)
  *   Webhook: POST /subscriptions
  *   Send: POST /messages/send?user_id=UID
  *   Incoming events: { update_type, message, callback, user, ... }
+ *
+ * Base URL: MAX migrated from platform-api.max.ru to platform-api2.max.ru
+ * (19.07.2026); current docs use it for every method (/me, /messages,
+ * /subscriptions, ...), not just subscription registration — a single base
+ * URL for all of maxApi(), not two parallel ones.
  */
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
@@ -13,9 +18,9 @@ import { createNotification } from '@/lib/notifications';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
-import { clientActionToken, personalClientToken } from '@/lib/client-workflow';
+import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
 
-const MAX_API = 'https://botapi.max.ru';
+const MAX_API = 'https://platform-api2.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 
@@ -90,7 +95,14 @@ export async function sendMaxMessage(
 
 export async function registerMaxWebhook() {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
-    const result = await maxApi('/subscriptions', { url: webhookUrl, update_types: ['bot_started', 'message_created', 'message_callback'] });
+    const secret = process.env.MAX_WEBHOOK_SECRET;
+    const result = await maxApi('/subscriptions', {
+        url: webhookUrl,
+        update_types: ['bot_started', 'message_created', 'message_callback'],
+        // Echoed back as X-Max-Bot-Api-Secret on every delivery — verified in
+        // src/app/api/max/webhook/route.ts.
+        ...(secret ? { secret } : {}),
+    });
     console.log('[MAX Bot] Webhook registration result:', JSON.stringify(result));
     return result;
 }
@@ -356,7 +368,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
             await maxApi(`/answers/${callbackId}`, {});
             return sendMaxMessage(userId, 'Сессия не найдена или у вас нет доступа.');
         }
-        const token = clientActionToken(session.psychologistId, session.clientId);
+        const token = sessionActionToken(session.psychologistId, session.clientId, session.id, 'reschedule', sessionActionTokenExpiry(session.date));
         const rescheduleUrl = `${APP_URL}/client/reschedule/${session.id}?t=${token}`;
         await sendMaxMessage(userId, '🔄 Чтобы перенести сессию, выберите новое время:', [[{ text: '📅 Выбрать новое время', url: rescheduleUrl }]]);
     }

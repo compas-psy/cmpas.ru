@@ -21,9 +21,9 @@
 | A4 | **High** | `client-workflow` секрет `'cmpas-local-secret'` (публичен в репо) — форж action/document токенов | ✅ ephemeral random + timing-safe |
 | A5 | **High** | Telegram webhook логировал текст сообщений клиентов (ПДн) | ✅ только update_id + тип |
 | A6 | **High** | Секреты захардкожены в `deploy-docker.yml` (fallback-токены) | 🔧 см. S1 |
-| A7 | **High** | MAX webhook без проверки подлинности | 🔧 см. S2 |
+| A7 | **High** | MAX webhook без проверки подлинности | ✅ secret header |
 | A8 | **High** | Согласие 152-ФЗ фиксируется открытием ссылки (GET), не действием | 🔧 DOC-1 в tz-cjm-audit-beta2.md |
-| A9 | **Medium** | Telegram/MAX MiniApp доверяет `initDataUnsafe` без HMAC-валидации | 🔧 см. S3 |
+| A9 | **High** (переоценено: не Medium — confirmed live IDOR) | Telegram MiniApp доверяет `initDataUnsafe` без HMAC-валидации | ✅ `/bot/client`, `/bot/book` — см. ниже |
 | A10 | **Medium** | Нет rate-limiting на magic-link/booking/webhook | 🔧 см. S4 |
 | A11 | **Medium** | Нет security-заголовков (HSTS/nosniff/frame) | ✅ next.config |
 | A12 | **Medium** | `clientActionToken` статичен на клиента (не на сессию) — утёкшая ссылка действует на все будущие сессии | 🔧 см. S5 |
@@ -54,6 +54,103 @@
 ### A5 — Логи ПДн
 Убрано логирование текста сообщений/`callback_data` из Telegram webhook.
 
+### A7 — Подлинность MAX webhook (`src/app/api/max/webhook/route.ts`)
+Ранняя версия этого документа (см. старый текст S2 ниже) исходила из того, что
+MAX Bot API не поддерживает secret-заголовок — на момент повторной проверки
+(03.09.2026) это оказалось неверно: `POST /subscriptions` принимает
+необязательное поле `secret` (5–256 символов, `[A-Za-z0-9-]`) и присылает его
+назад в заголовке `X-Max-Bot-Api-Secret` на каждой доставке апдейта — тот же
+контракт, что и у Telegram (A2). Добавлена проверка этого заголовка
+(timing-safe) против `MAX_WEBHOOK_SECRET`, который `scripts/deploy-production-remote.sh`
+самозаводит тем же приёмом, что `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`,
+никогда не в репозитории), и передаёт в теле `POST /subscriptions` при
+(пере)регистрации вебхука на каждой выкладке. Ручная переregистрация через
+`/api/max/admin` (POST) тоже теперь передаёт `secret`, если он задан в
+окружении.
+
+**Fail CLOSED, не fail-open** (правка по итогам ревью учредителя,
+03.09.2026): отсутствие `MAX_WEBHOOK_SECRET` не должно само по себе снова
+превращать публичный вебхук в неавторизованный эндпоинт. Если секрет не
+задан, апдейты не обрабатываются вовсе (лог `console.error`, ответ `200
+{ok:true}`, чтобы не подсказывать пробующему атакующему разницу между
+«неверный секрет» и «эндпоинт выключен» — сам MAX ретраев не делает). Раз
+`scripts/deploy-production-remote.sh` самозаводит секрет ДО каждого запуска
+контейнера, при обычной выкладке это состояние не должно возникать вовсе;
+`/api/max/admin` (GET) теперь отдельно показывает `MAX_WEBHOOK_SECRET_set` —
+preflight-диагностика на случай, если секрет всё же потерян вручную.
+
+**Домен MAX API** перенесён на `platform-api2.max.ru` (миграция MAX с
+`platform-api.max.ru`, 19.07.2026) — **везде**, не только для
+`/subscriptions`: `sendMaxMessage`/`getMaxBotInfo`/`registerMaxWebhook`
+(`src/lib/max-bot.ts`), `/api/max/admin` (GET/POST), диагностика
+(`src/app/api/telegram/diagnostic/route.ts`,
+`src/app/admin/actions/features.ts`) и, важнее всего, автоматическая
+(пере)регистрация вебхука при каждом старте приложения
+(`src/instrumentation.ts`, через 10с после старта) — единый base URL, без
+двух параллельных доменов. Первая версия этой правки (03.09.2026) ошибочно
+ограничила перенос только `/subscriptions` в трёх местах; учредитель открыл
+актуальную документацию MAX и подтвердил, что она использует
+`platform-api2.max.ru` для всех методов.
+
+**Найдено при этой доправке:** `src/instrumentation.ts` — САМ РЕАЛЬНЫЙ путь
+регистрации в проде (срабатывает при каждом рестарте) — вообще не передавал
+`secret` в `POST /subscriptions`. Это означало, что каждый рестарт
+контейнера тихо перерегистрировал подписку БЕЗ секрета, отменяя защиту из
+`/api/max/admin` или деплой-скрипта, даже после их корректной регистрации.
+Исправлено вместе с доменом.
+
+**DELETE `/subscriptions`** по актуальному контракту MAX требует параметр
+`?url=<адрес подписки>`, идентифицирующий, какую подписку снимать — голый
+`DELETE` без параметра ничего не делает. Исправлено во всех трёх местах
+регистрации (деплой-скрипт, `/api/max/admin`, `instrumentation.ts`).
+
+### A9 — Telegram MiniApp identity: confirmed live IDOR (Task 3, addendum §6)
+Founder-reported and confirmed: `GET /api/user/diary/bot/client/sessions`
+accepted a raw `clientId`/`telegramChatId` query param with **zero**
+verification — any caller who knew (or guessed) another client's `clientId`
+(which the route's own response leaks back to every legitimate caller) could
+read that client's full session history (dates, times, address, psychologist
+identity). `src/app/bot/book/BookingPageClient.tsx` had the same trust gap
+one level up: it read `window.Telegram.WebApp.initDataUnsafe.user.id` —
+entirely client-controlled — and passed it straight into
+`getClientByTelegram`/`getClientUpcomingSessions`/`saveConsent`, so a page
+visitor could look up another client's name/phone/upcoming sessions, or
+record 152-ФЗ consent onto someone else's client record, by supplying that
+person's real Telegram id.
+
+Added `src/lib/telegram-webapp.ts` (`verifyTelegramWebAppInitData`) —
+verifies `initData` per Telegram's documented WebApp algorithm (`secret_key
+= HMAC-SHA256("WebAppData", botToken)`, distinct from the Login Widget's
+plain-SHA256 secret already used in `src/lib/telegram-login.ts`), timing-safe,
+with `auth_date` freshness. Both routes now derive identity ONLY from this:
+- `/api/user/diary/bot/client/sessions`: identity comes from the
+  `X-Telegram-Init-Data` header (HMAC-verified) or a server-verified
+  personal-link token (`?c=`, via `resolvePersonalClientToken` — the same
+  function `resolveClientLinkParam` already used, just now invoked
+  server-side on every request instead of trusting a client-resolved id).
+  `src/app/bot/client/page.tsx` no longer reads `initDataUnsafe` or
+  `localStorage.compas_clientId` for authorization — localStorage was
+  explicitly forbidden as an identity source (addendum §6: "treating
+  localStorage as proof of identity").
+- `BookingPageClient.tsx`: added `resolveVerifiedTelegramUserId(initData)`
+  (`src/app/bot/actions.ts`); the prefill/consent lookups and `saveConsent`
+  now use only its result, never `initDataUnsafe.user.id` directly.
+
+Deliberately left alone (documented residual scope, not silently dropped):
+- `resolvePersonalClientToken`'s pre-existing legacy tolerance for
+  **unsigned** `?c=<raw clientId>` links, time-boxed until 2026-11-15 for
+  links sent before the personal-link signing rollout (2026-08-17) — a
+  pre-existing, dated migration window, not something this fix introduces.
+- `bookSession`'s use of the Telegram user id to opportunistically attach
+  `telegramChatId` to a client matched by phone number: identity there is
+  the phone the visitor typed in, the same trust model as web booking
+  without Telegram at all — a different question from the read-disclosure
+  bugs above.
+- `getClientSessions`/`getClientSessionsById` (`src/app/bot/actions.ts`)
+  remain unused by any current UI (grep confirms zero call sites) — same
+  vulnerable shape (raw `telegramChatId`/`clientId`) but not currently wired
+  to anything reachable. Flagged for removal or the same fix if ever wired up.
+
 ### A11 — Security-заголовки (`next.config.ts`)
 HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
 `Permissions-Policy`; `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'`
@@ -76,30 +173,6 @@ HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
 (BotFather, Yandex OAuth, Google Cloud, Тинькофф).
 **Приёмка:** `grep -E '(secret|password|token).*=.*[A-Za-z0-9]{16}'
 deploy-docker.yml` не находит литералов.
-
-### S2 (High) — Подлинность MAX webhook
-**Файл:** `src/app/api/max/webhook/route.ts`, регистрация в `deploy-docker.yml`.
-**Сейчас:** `POST` обрабатывает любой вход без проверки источника.
-**Надо:** т.к. MAX Bot API не шлёт secret-header, регистрировать webhook с
-URL-параметром-секретом (`.../api/max/webhook?s=<MAX_WEBHOOK_SECRET>`) и
-проверять `request.nextUrl.searchParams.get('s')` timing-safe. Fail-open если
-секрет не задан.
-**Приёмка:** POST без правильного `?s=` → 200/no-op; легитимные апдейты MAX
-проходят.
-
-### S3 (Medium) — Валидация Telegram `initData` в MiniApp
-**Файлы:** `src/app/bot/client/page.tsx` (:28-33 использует
-`initDataUnsafe.user`), `src/app/bot/book/[psychologistId]/page.tsx`,
-серверные actions `getClientSessions`/`getClientSessionsById`.
-**Сейчас:** личность клиента берётся из `initDataUnsafe` (клиент-контролируемо)
-или `localStorage.compas_clientId` — подделываемо, можно листать чужие записи.
-**Надо:** передавать `initData` (подписанную строку) на сервер, валидировать
-HMAC по `TELEGRAM_BOT_TOKEN` (`src/lib/telegram-login.ts` уже умеет похожее для
-login-widget — переиспользовать), и только по валидированному `user.id`
-резолвить клиента. Для не-Telegram доступа — токен из ссылки, не сырой
-`clientId` из localStorage.
-**Приёмка:** запрос с подделанным `initData`/чужим `clientId` не возвращает
-чужие сессии.
 
 ### S4 (Medium) — Rate limiting
 **Файлы:** `src/app/api/mobile/auth/login` (magic link), `/api/auth/*`,

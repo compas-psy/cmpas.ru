@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Только отладочная сборка. Приёмочный стенд Задачи 28 поднимается на самой
+  машине прогона и доступен эмулятору как http://10.0.2.2 — без шифрования,
+  потому что это петля внутри одного хоста, а не сеть.
+
+  В релиз это не попадает: манифест лежит в src/debug и склеивается только с
+  debug-вариантом. Релизная сборка остаётся с запретом открытого HTTP по
+  умолчанию Android 9+.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:usesCleartextTraffic="true"
+        tools:ignore="UnusedAttribute" />
+
+</manifest>

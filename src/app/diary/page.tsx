@@ -5,13 +5,14 @@ import {
     Calendar as CalendarIcon, Plus, User, Video, MapPin,
     AlertTriangle, FileText, Sparkles, CheckCircle2,
     ChevronRight, Coffee, Users, TrendingUp, LayoutList,
-    Filter, MoreVertical, X, BookOpen, Shield, Clock, Share2
+    Filter, X, BookOpen, Shield, Clock, Share2, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
-import { ShareButton } from '@/components/psidairy/ShareSheet';
+import { ShareButton, notifyBookingLinkShared } from '@/components/psidairy/ShareSheet';
+import type { PracticeAttentionItem, PracticeAttentionType } from '@/lib/practice/attention';
 
 type Session = {
     id: string;
@@ -73,6 +74,53 @@ const formatLabels: Record<string, { label: string; icon: typeof Video }> = {
     hybrid: { label: 'Гибрид', icon: Users },
 };
 
+/**
+ * Задача 17 §4: куда ведёт пункт «требует внимания». Идентификаторы пришли
+ * с сервера под текущим специалистом, здесь только маршрут — каждый ведёт к
+ * конкретному объекту, а не к общему списку.
+ */
+export function attentionHref(item: PracticeAttentionItem): string {
+    switch (item.type) {
+        case 'session_without_notes':
+            return `/diary/session/${item.sessionId}/notes`;
+        case 'session_unpaid':
+            return `/diary/session/${item.sessionId}`;
+        case 'client_without_consent':
+            return `/diary/clients?clientId=${item.clientId}`;
+        case 'import_review':
+            // Своего экрана у конкретного batch пока нет: разбор идёт на
+            // экране импорта того же источника (Задача 17 не строит новый).
+            return item.importSource === 'spreadsheet'
+                ? '/diary/clients/import-spreadsheet'
+                : '/diary/clients/import-calendar';
+    }
+}
+
+/**
+ * Как обратиться к человеку на его же дашборде (Задача 27).
+ *
+ * Здесь было одно предположение на два разных источника, и из-за него
+ * специалиста встречали фамилией: «Добрый день, Соколова-Преображенская».
+ *
+ * Источников действительно два, и порядок слов у них ПРОТИВОПОЛОЖНЫЙ:
+ *
+ *  • PsychologistSettings.fullName — поле профиля, подписанное «Фамилия и
+ *    Имя», с подсказкой «Иванова Анна». Имя там последнее;
+ *  • User.name — то, что отдал провайдер входа. Яндекс присылает обычный
+ *    человеческий порядок, «Мария Соколова», и имя там первое.
+ *
+ * Раньше брали последнее слово всегда — то есть угадывали только у тех, кто
+ * заполнил профиль, а всем вошедшим через Яндекс говорили «здравствуйте,
+ * фамилия». Теперь у каждого источника своё правило, а профиль важнее: его
+ * человек заполнял сам.
+ */
+export function greetingName(fullName?: string | null, authName?: string | null): string {
+    const fromProfile = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (fromProfile.length) return fromProfile[fromProfile.length - 1];
+    const fromAuth = (authName || '').trim().split(/\s+/).filter(Boolean);
+    return fromAuth[0] || '';
+}
+
 function getGreeting(): string {
     const hour = new Date().getHours();
     if (hour < 6) return 'Доброй ночи';
@@ -93,12 +141,12 @@ export default function DiaryCalendarPage() {
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
     const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
     const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
-    const [userName, setUserName] = useState('');
+    const [authName, setAuthName] = useState('');
     const [scheduleFilter, setScheduleFilter] = useState<'all' | 'confirmed' | 'completed' | 'pending'>('all');
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [prevWeek, setPrevWeek] = useState({ sessions: 0, clients: 0 });
-    const [userId, setUserId] = useState('');
+    const [attention, setAttention] = useState<PracticeAttentionItem[]>([]);
     const filterRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = useCallback(async () => {
@@ -126,6 +174,16 @@ export default function DiaryCalendarPage() {
         } catch { /* empty */ }
     }, []);
 
+    // Задача 17: единственный источник «требует внимания» — общий бэкенд.
+    // Состояние вычисляемое, поэтому список просто перечитывается после
+    // каждого действия, которое могло закрыть проблему.
+    const fetchAttention = useCallback(async () => {
+        try {
+            const { getDashboardAttention } = await import('./actions/attention');
+            setAttention(await getDashboardAttention());
+        } catch { /* empty */ }
+    }, []);
+
     const fetchSettings = useCallback(async () => {
         try {
             const { getSettings } = await import('./actions/settings');
@@ -142,12 +200,7 @@ export default function DiaryCalendarPage() {
         fetch('/api/auth/session')
             .then(r => r.json())
             .then(d => {
-                if (d?.user?.name) {
-                    // Russian name format: "LastName FirstName" — take last token as first name
-                    const parts = d.user.name.trim().split(/\s+/);
-                    setUserName(parts.length > 1 ? parts[parts.length - 1] : parts[0]);
-                }
-                if (d?.user?.id) setUserId(d.user.id);
+                if (d?.user?.name) setAuthName(String(d.user.name));
             })
             .catch(() => { });
 
@@ -161,6 +214,7 @@ export default function DiaryCalendarPage() {
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => { fetchClients(); }, [fetchClients]);
     useEffect(() => { fetchSettings(); }, [fetchSettings]);
+    useEffect(() => { fetchAttention(); }, [fetchAttention]);
 
     // Close filter dropdown on outside click
     useEffect(() => {
@@ -177,7 +231,19 @@ export default function DiaryCalendarPage() {
 
     const handleSessionSave = () => {
         fetchSessions();
+        // Состояние вычисляемое: сохранили заметку или отметили оплату —
+        // пункт «требует внимания» уходит на этом же перечитывании.
+        fetchAttention();
         setShowNewSession(false);
+    };
+
+    // SessionModal рендерится только при isOpen — одного setEditingSession
+    // мало, клик оставался немым. Задача 16 §5 требует, чтобы пункт «требует
+    // внимания» действительно открывал конкретную запись, поэтому открытие
+    // записи идёт через одну точку.
+    const openSession = (s: Session) => {
+        setEditingSession(s);
+        setShowNewSession(true);
     };
 
     const handleStatusChange = async (id: string, status: string) => {
@@ -203,6 +269,7 @@ export default function DiaryCalendarPage() {
             const { markSessionOutcome } = await import('./actions/sessions');
             await markSessionOutcome(id, outcome);
             fetchSessions();
+            fetchAttention();
         } catch {
             toast.error('Не удалось отметить сессию');
         }
@@ -237,14 +304,24 @@ export default function DiaryCalendarPage() {
     const completedToday = todaySessions.filter(s => s.status === 'completed' || s.status === 'no_show').length;
     const totalToday = todaySessions.length;
 
-    const pendingSessions = sessions.filter(s => s.status === 'pending');
-    const missingSessions = sessions.filter(s => {
-        if (s.status !== 'completed') return false;
-        const d = new Date(s.date); if (d > now) return false;
-        return Math.floor((now.getTime() - d.getTime()) / 86400000) <= 14 && !s.notes && !s.structuredNotes;
-    });
-    const noConsentClients = clients.filter(c => !c.consentDate).slice(0, 5);
-    const attentionCount = pendingSessions.length + missingSessions.length + noConsentClients.length;
+    // Задача 17 §4: сигналы «требует внимания» больше НЕ вычисляются здесь —
+    // и веб, и мобайл берут их из общего getPracticeAttention. Осталось
+    // только представление: тип пункта решает вид и то, что открывается.
+    // Макет W03: «мини-инбокс задач, не warning-виджет; amber/sage, не
+    // красный». Отсутствие согласия было красным — на дашборде это читалось
+    // как авария, хотя это просто хвост, который надо закрыть. Красный на
+    // экране, который человек видит каждое утро, обесценивает сам себя:
+    // если тревожно всегда, то не тревожно никогда.
+    const attentionStyles: Record<PracticeAttentionType, { icon: typeof AlertTriangle; rowClass: string; iconClass: string }> = {
+        client_without_consent: { icon: Shield, rowClass: 'bg-sage-50 hover:bg-sage-100/50', iconClass: 'bg-sage-100 text-forest-700' },
+        session_without_notes: { icon: FileText, rowClass: 'bg-amber-50 hover:bg-amber-100/50', iconClass: 'bg-amber-100 text-amber-600' },
+        session_unpaid: { icon: AlertTriangle, rowClass: 'bg-amber-50 hover:bg-amber-100/50', iconClass: 'bg-amber-100 text-amber-600' },
+        import_review: { icon: Upload, rowClass: 'bg-sage-50 hover:bg-sage-100/50', iconClass: 'bg-sage-100 text-forest-700' },
+    };
+
+    const attentionCount = attention.length;
+    const visibleAttention = attention.slice(0, 6);
+    const hiddenAttentionCount = attentionCount - visibleAttention.length;
 
     const weekSessions = sessions.filter(s => {
         const d = new Date(s.date);
@@ -334,51 +411,62 @@ export default function DiaryCalendarPage() {
     return (
         <>
         <div className="space-y-6 pb-12 w-full min-w-0">
-            {/* Welcome strip for new psychologists */}
-            <WelcomeStrip />
-
-
-            {/* ── HEADER with WEEK STRIP ── */}
+            {/* ── ШАПКА ──
+                Макет W01, «судьба существующих элементов главной»: дата —
+                строка НАД приветствием; недельная полоска сохраняется, но
+                уезжает ниже героя, потому что она менее приоритетна, чем
+                ближайшая сессия. Раньше полоска стояла вровень с
+                приветствием и спорила с героем за первые три секунды. */}
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 min-w-0">
                 <div className="min-w-0">
-                    <h1 className="text-[26px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1]">
-                        {getGreeting()}{userName ? `, ${userName}` : ''} 👋
-                    </h1>
-                    <p className="text-muted-foreground text-[13px] mt-0.5 font-medium capitalize">
+                    <p className="text-muted-foreground text-[13px] font-medium capitalize">
                         {now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
-                    {userId && (
-                        <ShareButton
-                            url={async () => {
-                                const { getMyBookingUrl } = await import('./actions/booking-link');
-                                return getMyBookingUrl();
-                            }}
-                            text="Запишитесь на сессию:"
-                            label="Отправить ссылку клиенту"
-                            icon={<Share2 className="w-3.5 h-3.5" />}
-                            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-sage-100 hover:bg-sage-200 text-forest-700 text-[12px] font-semibold transition-colors active:scale-95"
-                        />
-                    )}
+                    <h1 className="text-[26px] md:text-[36px] font-bold tracking-tight text-foreground leading-[1.1] mt-0.5">
+                        {getGreeting()}{greetingName(settings?.fullName, authName) ? `, ${greetingName(settings?.fullName, authName)}` : ''} 👋
+                    </h1>
                 </div>
 
-                {/* Week strip */}
-                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0">
-                    <div className="grid grid-cols-7">
-                        {weekDays.map((wd, i) => (
-                            <div key={i} className={`flex flex-col items-center py-2.5 px-3 sm:px-4 ${wd.isToday ? 'bg-primary rounded-2xl -m-px z-10 shadow-sm' : ''}`}>
-                                <span className={`text-[10px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                                    {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', '')}
-                                </span>
-                                <span className={`text-[15px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
-                                    {wd.date.getDate()}
-                                </span>
-                                {wd.count > 0 && (
-                                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${wd.isToday ? 'bg-primary-foreground/60' : 'bg-forest-500'}`} />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
+            </div>
+
+            {/* ── QUICK ACTIONS ──
+                Задача 16 §2: четыре действия, которыми практика живёт каждый
+                день, — сразу под приветствием и над героем. Каждое ведёт в уже
+                существующий рабочий поток, ни одной декоративной кнопки. */}
+            <div className="flex flex-wrap items-center gap-2">
+                <button
+                    onClick={() => { setShowNewSession(true); setNewSessionDefaults({ date: selectedDate }); }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-bold hover:bg-forest-700 transition-all active:scale-[0.97]"
+                >
+                    <Plus className="w-4 h-4" /> Запись
+                </button>
+                <button
+                    onClick={() => { window.location.href = '/diary/clients?new=1'; }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97]"
+                >
+                    <Plus className="w-4 h-4" /> Клиент
+                </button>
+                <ShareButton
+                    url={async () => {
+                        const { getMyBookingUrl } = await import('./actions/booking-link');
+                        return getMyBookingUrl();
+                    }}
+                    text="Запишитесь на сессию:"
+                    label="Поделиться"
+                    title="Ссылка для записи"
+                    icon={<Share2 className="w-4 h-4" />}
+                    // Задача 24: шаг «Поделиться» закрывается состоявшимся
+                    // действием с ПОСТОЯННОЙ ссылкой записи — открытие шторки
+                    // не считается.
+                    onShared={notifyBookingLinkShared}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97] disabled:opacity-60"
+                />
+                <a
+                    href="/diary/availability"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-sage-50 transition-all active:scale-[0.97]"
+                >
+                    <CalendarIcon className="w-4 h-4" /> Расписание
+                </a>
             </div>
 
             {/* ── MAIN CONTENT GRID ── */}
@@ -544,6 +632,32 @@ export default function DiaryCalendarPage() {
                         );
                     })()}
 
+                    {/* Недельная полоска (макет W01): сохранена целиком, но
+                        стоит ниже героя — ближайшая сессия важнее обзора недели. */}
+                <div className="flex items-stretch bg-card rounded-2xl border border-border shadow-card overflow-hidden shrink-0">
+                    <div className="grid grid-cols-7">
+                        {weekDays.map((wd, i) => (
+                            <div key={i} className={`flex flex-col items-center py-2.5 px-3 sm:px-4 ${wd.isToday ? 'bg-primary rounded-2xl -m-px z-10 shadow-sm' : ''}`}>
+                                <span className={`text-[10px] font-semibold uppercase leading-tight ${wd.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                    {wd.date.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', '')}
+                                </span>
+                                <span className={`text-[15px] font-bold leading-tight mt-0.5 ${wd.isToday ? 'text-primary-foreground' : 'text-foreground'}`}>
+                                    {wd.date.getDate()}
+                                </span>
+                                {wd.count > 0 && (
+                                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${wd.isToday ? 'bg-primary-foreground/60' : 'bg-forest-500'}`} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                    {/* Задача 16 §1/§4: онбординг — контекстный блок ПОД героем,
+                        а не первый экран. Дашборд остаётся дашбордом; у нового
+                        специалиста, у которого ещё нет ближайшей сессии, этот
+                        блок естественно оказывается первым содержательным. */}
+                    <WelcomeStrip />
+
                     {/* РАСПИСАНИЕ НА СЕГОДНЯ */}
                     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-card">
                         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
@@ -616,7 +730,7 @@ export default function DiaryCalendarPage() {
                                     const awaitingOutcome = sessionEndStr <= currentTimeStr && s.status !== 'cancelled' && s.status !== 'no_show';
 
                                     return (
-                                        <div key={s.id} onClick={() => setEditingSession(s)}
+                                        <div key={s.id} onClick={() => openSession(s)}
                                             className={`flex gap-3 px-5 py-3 hover:bg-sage-50/50 transition-colors cursor-pointer ${isN ? 'bg-sage-50/80' : ''} ${done ? 'opacity-50' : ''}`}>
                                             {/* Time column */}
                                             <div className="shrink-0 w-[44px] pt-0.5 text-right">
@@ -699,40 +813,38 @@ export default function DiaryCalendarPage() {
                                 <AlertTriangle className={`w-4 h-4 ${attentionCount > 0 ? 'text-orange-500' : 'text-muted-foreground/30'}`} />
                                 <span className="text-[14px] font-bold text-foreground">Требует внимания</span>
                             </div>
-                            <button className="p-1 rounded-lg hover:bg-sage-50 transition-colors text-muted-foreground/40"><MoreVertical className="w-4 h-4" /></button>
+                            {attentionCount > 0 && (
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full tabular-nums">{attentionCount}</span>
+                            )}
                         </div>
                         <div className="p-3 space-y-1.5">
                             {attentionCount === 0 ? (
                                 <div className="text-center py-6 text-[13px] text-muted-foreground/50 font-medium">Всё в порядке ✓</div>
                             ) : (<>
-                                {noConsentClients.length > 0 && (
-                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-red-50 hover:bg-red-100/50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-red-100 text-red-500 flex items-center justify-center shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Нет согласия на обработку данных</div>
-                                            <div className="text-[11px] text-muted-foreground">{noConsentClients.length} клиентов</div>
-                                        </div>
-                                        <button onClick={() => window.location.href = '/diary/clients'} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Открыть <ChevronRight className="w-3 h-3" /></button>
-                                    </div>
-                                )}
-                                {missingSessions.length > 0 && (
-                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100/50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><FileText className="w-3.5 h-3.5" /></div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Домашние задания не заполнены</div>
-                                            <div className="text-[11px] text-muted-foreground">{missingSessions.length} записи</div>
-                                        </div>
-                                        <button onClick={() => missingSessions[0] && setEditingSession(missingSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>
-                                    </div>
-                                )}
-                                {pendingSessions.length > 0 && (
-                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-orange-50 hover:bg-orange-100/50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-500 flex items-center justify-center shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[12px] font-bold text-foreground">Оплата сессий не отмечена</div>
-                                            <div className="text-[11px] text-muted-foreground">{pendingSessions.length} сессий</div>
-                                        </div>
-                                        <button onClick={() => pendingSessions[0] && setEditingSession(pendingSessions[0])} className="text-[11px] font-bold text-primary flex items-center gap-0.5 shrink-0">Проверить <ChevronRight className="w-3 h-3" /></button>
+                                {visibleAttention.map(item => {
+                                    const style = attentionStyles[item.type];
+                                    const ItemIcon = style.icon;
+                                    return (
+                                        <a
+                                            key={item.id}
+                                            data-testid="attention-item"
+                                            href={attentionHref(item)}
+                                            className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-colors ${style.rowClass}`}
+                                        >
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${style.iconClass}`}>
+                                                <ItemIcon className="w-3.5 h-3.5" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-[12px] font-bold text-foreground truncate">{item.title}</div>
+                                                <div className="text-[11px] text-muted-foreground truncate">{item.detail}</div>
+                                            </div>
+                                            <ChevronRight className="w-3.5 h-3.5 text-primary shrink-0" />
+                                        </a>
+                                    );
+                                })}
+                                {hiddenAttentionCount > 0 && (
+                                    <div className="px-2.5 pt-1 text-[11px] text-muted-foreground">
+                                        и ещё {hiddenAttentionCount}
                                     </div>
                                 )}
                             </>)}

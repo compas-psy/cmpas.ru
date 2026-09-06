@@ -3,7 +3,7 @@
 // exactly when a message was actually sent to a known client — not when
 // there was no channel to reach them.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const diarySessionFindMany = vi.fn();
 const diarySessionFindFirst = vi.fn();
@@ -91,6 +91,18 @@ describe('processNextBookingNudge пишет rebooking_nudge_sent (O-260829 §7)
 });
 
 describe('processWeeklyFollowup пишет weekly_followup_sent (O-260829 §7)', () => {
+    const ORIGINAL_FLAG = process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED;
+
+    beforeEach(() => {
+        // PRAKTIKA MVP addendum §8: launch default — выключено; этот блок
+        // проверяет трекинг события при явно включённом флаге.
+        process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = 'true';
+    });
+
+    afterEach(() => {
+        process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = ORIGINAL_FLAG;
+    });
+
     it('сообщение реально ушло (нет будущей записи) — событие пишется', async () => {
         const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
         diarySessionFindMany.mockResolvedValue([

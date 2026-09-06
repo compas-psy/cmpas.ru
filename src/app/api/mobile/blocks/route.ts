@@ -2,16 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 
+// Границы календарного дня берутся в UTC, а не через setHours.
+//
+// DiaryBlock.date — это календарный день, привязанный к полуночи UTC, и
+// именно так его читает резолвер доступности (toDateStr → toISOString), см.
+// src/lib/practice/booking/availability.ts и src/lib/practice/migration/
+// date-utils.ts. `new Date('YYYY-MM-DD')` даёт полночь UTC, но setHours
+// пишет через часовой пояс ОС сервера: стоит контейнеру подняться не в UTC —
+// и блокировка сохранится на соседний день, то есть перестанет закрывать то
+// время, ради которого её поставили. Сегодня сервер в UTC и поведение то же;
+// это снятая мина, а не смена поведения.
 function dayStart(value: string) {
-    const date = new Date(value);
-    date.setHours(0, 0, 0, 0);
-    return date;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return parsed;
+    return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
 }
 
 function dayEnd(value: string) {
-    const date = new Date(value);
-    date.setHours(23, 59, 59, 999);
-    return date;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return parsed;
+    return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate(), 23, 59, 59, 999));
 }
 
 function normalizeTime(value: unknown, fallback: string) {

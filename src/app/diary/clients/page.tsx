@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send } from 'lucide-react';
+import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { ClientTimeline } from '@/components/psidairy/ClientTimeline';
 import { ShareButton } from '@/components/psidairy/ShareSheet';
+import { useAttestationGate } from '@/components/legal/useAttestationGate';
 
 type QuestionnaireData = {
     fullName?: string; dateOfBirth?: string; age?: number; gender?: string;
@@ -63,6 +64,7 @@ export default function ClientsPage() {
     const notesTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
     const suppressAutoSelect = useRef(false);
     const [isMobile, setIsMobile] = useState(false);
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
 
     // Onboarding state: after psychologist adds a new client + first session
     const [pendingOnboardingClientId, setPendingOnboardingClientId] = useState<string | null>(null);
@@ -80,8 +82,15 @@ export default function ClientsPage() {
             const { getClients } = await import('../actions/clients');
             const data = await getClients(search || undefined, statusFilter);
             setClients(data as unknown as Client[]);
-            // Auto-select client with most recent session (desktop only, first load)
-            if (!suppressAutoSelect.current && !selectedClient && !search && data.length > 0 && !isMobile) {
+            // Auto-select client with most recent session (desktop only, first load).
+            //
+            // Ширина берётся здесь и сейчас, а не из состояния isMobile: оно
+            // выставляется эффектом ПОСЛЕ монтирования, а этот колбэк создан
+            // раньше и держит его первое значение — false. На телефоне из-за
+            // этого срабатывал «десктопный» автовыбор, и переход «Клиенты»
+            // открывал карточку случайного клиента вместо списка.
+            const wideEnoughForMasterDetail = typeof window !== 'undefined' && window.innerWidth >= 1024;
+            if (!suppressAutoSelect.current && !selectedClient && !search && data.length > 0 && wideEnoughForMasterDetail) {
                 const withDates = (data as any[]).filter(c => c.nextSessionDate);
                 const sorted = withDates.sort((a, b) => new Date(b.nextSessionDate).getTime() - new Date(a.nextSessionDate).getTime());
                 const autoId = sorted.length > 0 ? sorted[0].id : data[0].id;
@@ -105,8 +114,12 @@ export default function ClientsPage() {
     useEffect(() => { fetchClients(); }, [fetchClients]);
 
     useEffect(() => {
-        const clientId = new URLSearchParams(window.location.search).get('clientId');
+        const params = new URLSearchParams(window.location.search);
+        const clientId = params.get('clientId');
         if (clientId) fetchClientDetail(clientId);
+        // Задача 16 §2: «+ Клиент» с дашборда открывает ту же самую форму
+        // создания, что и кнопка на этой странице, — без второго потока.
+        if (params.get('new') === '1') setShowNewClient(true);
     }, [fetchClientDetail]);
 
     useEffect(() => {
@@ -123,7 +136,7 @@ export default function ClientsPage() {
         if (!newClient.name.trim()) { toast.error('Введите имя клиента'); return; }
         try {
             const { createClient } = await import('../actions/clients');
-            const created = await createClient(newClient);
+            const created = await attestationGuard(() => createClient(newClient));
             toast.success('Клиент добавлен. Добавьте первую сессию.');
             // Track this client for onboarding — triggers after first session is saved
             setPendingOnboardingClientId(created.id);
@@ -135,7 +148,9 @@ export default function ClientsPage() {
             // Auto-select the new client so the user can add a session immediately
             await fetchClientDetail(created.id);
             suppressAutoSelect.current = false;
-        } catch { toast.error('Ошибка при создании клиента'); }
+        } catch (err) {
+            if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при создании клиента');
+        }
     };
 
     const handleSaveQuestionnaire = async () => {
@@ -241,7 +256,12 @@ export default function ClientsPage() {
                         { key: 'manage' as const, icon: Settings2, label: 'Управление' },
                     ]).map(t => (
                         <button key={t.key} onClick={() => setMobileTab(t.key)}
-                            className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 text-xs font-semibold transition-colors border-b-2 min-w-[70px] ${mobileTab === t.key ? 'text-primary border-primary' : 'text-muted-foreground border-transparent'}`}>
+                            // min-w-fit вместо фиксированных 70px: «Документы» и
+                            // «Управление» длиннее и на кадре 390 налезали друг
+                            // на друга. Ряд и так прокручивается по горизонтали,
+                            // так что вкладке достаточно не сжиматься уже своего
+                            // текста.
+                            className={`flex-1 shrink-0 min-w-fit whitespace-nowrap flex flex-col items-center gap-1 py-3 px-3 text-xs font-semibold transition-colors border-b-2 ${mobileTab === t.key ? 'text-primary border-primary' : 'text-muted-foreground border-transparent'}`}>
                             <t.icon className="w-4 h-4" /> {t.label}
                         </button>
                     ))}
@@ -365,7 +385,7 @@ export default function ClientsPage() {
                         Начните с быстрого наполнения — три способа на выбор.
                     </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <button
                         onClick={() => setShowNewClient(true)}
                         className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all text-left flex flex-col items-start gap-3 active:scale-[0.98]"
@@ -408,6 +428,20 @@ export default function ClientsPage() {
                             </p>
                         </div>
                     </Link>
+                    <Link
+                        href="/diary/clients/import-spreadsheet"
+                        className="group bg-card rounded-2xl border border-border p-6 shadow-card hover:shadow-md transition-all flex flex-col items-start gap-3 active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent-foreground group-hover:bg-accent group-hover:text-accent-foreground transition-all">
+                            <FileSpreadsheet className="w-6 h-6" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base mb-1">Из файла CSV/XLSX</h3>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                Нет календаря? Загрузите таблицу с клиентами и сессиями.
+                            </p>
+                        </div>
+                    </Link>
                 </div>
                 <div className="text-center">
                     <Link
@@ -419,6 +453,7 @@ export default function ClientsPage() {
                 </div>
 
                 {showNewClient && <NewClientModal newClient={newClient} setNewClient={setNewClient} onCreate={handleCreateClient} onClose={() => setShowNewClient(false)} />}
+                {attestationModal}
                 {showOnboarding && onboardingClientId && (
                     <ClientOnboardingModal clientId={onboardingClientId} onClose={() => { setShowOnboarding(false); setOnboardingClientId(null); }} />
                 )}
@@ -434,8 +469,14 @@ export default function ClientsPage() {
                     <p className="text-muted-foreground text-sm mt-1">{clients.filter(c => c.status === 'active').length} активных клиентов</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
+                    <Link href="/diary/clients/import-calendar" className="hidden sm:flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
+                        <CalendarClock className="w-4 h-4" /> Из календаря
+                    </Link>
                     <Link href="/diary/clients/import" className="hidden sm:flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
                         <ClipboardPaste className="w-4 h-4" /> Импорт
+                    </Link>
+                    <Link href="/diary/clients/import-spreadsheet" className="hidden sm:flex items-center gap-2 px-5 py-2.5 border border-border rounded-xl hover:bg-sage-50 transition-all font-semibold text-sm">
+                        <FileSpreadsheet className="w-4 h-4" /> Из файла
                     </Link>
                     <button onClick={() => setShowNewClient(true)}
                         className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-all font-bold shadow-card active:scale-[0.98] text-sm">

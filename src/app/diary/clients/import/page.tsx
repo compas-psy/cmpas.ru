@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ClipboardPaste, Check, AlertCircle, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseClientLines, type ParsedClient } from '@/lib/clients/parse';
+import { useAttestationGate } from '@/components/legal/useAttestationGate';
 
 const EXAMPLE = `Анна Иванова, +79161234567, anna@example.com
 Михаил Петров; +79031112233
@@ -16,6 +17,7 @@ export default function ImportClientsPage() {
     const router = useRouter();
     const [text, setText] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
 
     const parsed = useMemo<ParsedClient[]>(() => parseClientLines(text), [text]);
     const validItems = parsed.filter(p => p.valid);
@@ -28,22 +30,64 @@ export default function ImportClientsPage() {
         }
         setSubmitting(true);
         try {
-            const { bulkCreateClients } = await import('../../actions/clients');
-            const result = await bulkCreateClients(
-                validItems.map(p => ({ name: p.name, phone: p.phone, email: p.email }))
-            );
-            if (result.created > 0) {
+            // Task 13: this flow no longer mutates DiaryClient directly via
+            // bulkCreateClients — it goes through the SAME preview (real
+            // matchClientIdentity against the db) -> PracticeImportBatch ->
+            // commitPracticeImport core the CSV/XLSX import uses. A name is
+            // never an identity: only a genuinely new name (bucket 'ready')
+            // is submitted; a strong-identity match is already a no-op
+            // (bucket 'skipped'), and a name-only/conflicting match goes to
+            // 'review' and is never auto-created or auto-merged here either.
+            const previewRes = await fetch('/api/diary/clients/import-spreadsheet/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'client_only', source: 'paste', text }),
+            });
+            const previewBody = await previewRes.json();
+            if (!previewRes.ok) throw new Error(previewBody.error || 'Ошибка при разборе списка');
+
+            type PreviewRow = { name: string | null; phone: string | null; email: string | null; bucket: 'ready' | 'review' | 'skipped' | 'error' };
+            const rows: PreviewRow[] = previewBody.rows || [];
+            const ready = rows.filter(r => r.bucket === 'ready');
+            const review = rows.filter(r => r.bucket === 'review');
+            const alreadyExists = rows.filter(r => r.bucket === 'skipped');
+
+            if (review.length > 0) {
+                toast.info(
+                    `Похожи на уже существующих клиентов (не добавлены — проверьте вручную): ${review.map(r => r.name).join(', ')}`
+                );
+            }
+
+            if (ready.length === 0) {
+                if (alreadyExists.length > 0) toast.info('Все клиенты уже существуют — пропущено');
+                else if (review.length === 0) toast.error('Не удалось добавить клиентов');
+                return;
+            }
+
+            const result = await attestationGuard(async () => {
+                const res = await fetch('/api/diary/clients/import-spreadsheet/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: 'client_only',
+                        items: ready.map(r => ({ clientMode: 'new', name: r.name, phone: r.phone, email: r.email })),
+                    }),
+                });
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || 'Ошибка при добавлении');
+                return body as { imported: number; skipped: number };
+            });
+
+            if (result.imported > 0) {
                 toast.success(
-                    `Добавлено ${result.created}${result.skipped > 0 ? `, пропущено дубликатов: ${result.skipped}` : ''}`
+                    `Добавлено ${result.imported}${(result.skipped + alreadyExists.length) > 0 ? `, пропущено дубликатов: ${result.skipped + alreadyExists.length}` : ''}`
                 );
                 router.push('/diary/clients');
-            } else if (result.skipped > 0) {
-                toast.info('Все клиенты уже существуют — пропущено');
             } else {
                 toast.error('Не удалось добавить клиентов');
             }
-        } catch {
-            toast.error('Ошибка при добавлении');
+        } catch (err) {
+            if (!(err instanceof Error && err.message === 'Отменено')) toast.error('Ошибка при добавлении');
         } finally {
             setSubmitting(false);
         }
@@ -185,6 +229,7 @@ export default function ImportClientsPage() {
                             : 'Вставьте список выше'}
                 </button>
             </div>
+            {attestationModal}
         </div>
     );
 }

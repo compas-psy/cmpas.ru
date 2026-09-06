@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 //
-// ПРАКТИКА · CJM записи, ТЗ 29.08.2026 §4.3, экран 7 «Мои встречи»:
-// /bot/client узнавал клиента только внутри Telegram WebApp
-// (window.Telegram.WebApp.initDataUnsafe) или по localStorage на этом же
-// устройстве — открытие по личной ссылке из Max (или любого другого браузера
-// без localStorage) не читало `?c=<token>` вовсе и упиралось в тупиковое
-// сообщение (в проде — фактически в бесконечный спиннер, см. комментарий в
-// page.tsx). Эти тесты проверяют: (1) валидный токен сам по себе, без
-// Telegram и localStorage, доводит до списка встреч конкретного клиента;
-// (2) отсутствие всех трёх источников — до тупикового сообщения, а не до
-// вечного спиннера; (3) вкладки «Предстоящие»/«Прошедшие» показывают разные
-// списки сессий одного и того же ответа API.
+// ПРАКТИКА · CJM записи, ТЗ 29.08.2026 §4.3, экран 7 «Мои встречи».
+// PRAKTIKA MVP addendum §6 (Task 3) впоследствии убрал localStorage как
+// источник идентичности вовсе: раньше сырой compas_clientId из localStorage
+// отправлялся напрямую как параметр авторизованного запроса — значение,
+// которое кто угодно мог выставить себе через devtools. Единственные
+// легитимные источники теперь — Telegram initData (HMAC-проверяемый) и
+// подписанный токен `?c=`, каждый раз заново проверяемый СЕРВЕРОМ, а не
+// клиентом. Эти тесты проверяют: (1) валидный токен сам по себе, без
+// Telegram, доводит до списка встреч конкретного клиента, и страница
+// пересылает сам токен (не резолвленный id) на сервер; (2) отсутствие
+// валидного токена и Telegram — до тупикового сообщения, а не до вечного
+// спиннера; (3) вкладки «Предстоящие»/«Прошедшие» показывают разные списки
+// сессий одного и того же ответа API.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
@@ -64,7 +66,11 @@ describe('открытие /bot/client?c=<token> без Telegram и без local
         await waitFor(() => expect(actions.resolveClientLinkParam).toHaveBeenCalledWith('st1_validtoken'));
         await waitFor(() => expect((global as any).fetch).toHaveBeenCalled());
         const fetchedUrl = ((global as any).fetch as any).mock.calls[0][0] as string;
-        expect(fetchedUrl).toContain('clientId=client-42');
+        // Task 3 (addendum §6): the page forwards the raw token, never a
+        // client-resolved clientId — the API route re-verifies the token
+        // itself server-side on every request.
+        expect(fetchedUrl).toContain('c=st1_validtoken');
+        expect(fetchedUrl).not.toContain('clientId=');
 
         expect(await screen.findByText(/Анна Волкова/)).toBeInTheDocument();
         expect(screen.queryByText(/откройте приложение через бота/)).not.toBeInTheDocument();

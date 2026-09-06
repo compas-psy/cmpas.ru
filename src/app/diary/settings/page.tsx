@@ -5,6 +5,7 @@ import { Save, Clock, Video, MapPin, AlertCircle, Eye, CreditCard, ChevronRight 
 import Link from 'next/link';
 import { toast } from 'sonner';
 import AddressAutocomplete from '@/components/ui/address-autocomplete';
+import { CabinetCard } from './CabinetCard';
 
 type Settings = {
     timezone: string;
@@ -24,6 +25,8 @@ type Address = {
     id: string;
     name: string;
     address: string;
+    isPrimary?: boolean;
+    isActive?: boolean;
 };
 
 const timezones = [
@@ -92,7 +95,9 @@ export default function SettingsPage() {
             const { getSettings, getAddresses } = await import('../actions/settings');
             const [settingsRes, addrsRes, trialRes] = await Promise.all([
                 getSettings(),
-                getAddresses(),
+                // Настройки — единственное место, где выведенные кабинеты
+                // тоже видны: их нужно показать и дать вернуть в работу.
+                getAddresses({ includeInactive: true }),
                 fetch('/api/billing/status').then(r => r.json()).catch(() => null),
             ]);
             if (trialRes?.daysLeft !== undefined) setTrialDaysLeft(trialRes.daysLeft);
@@ -163,14 +168,50 @@ export default function SettingsPage() {
         setAddingAddress(false);
     };
 
-    const handleDeleteAddress = async (id: string) => {
+    // Задача 18 §5/§6: «убрать» кабинет — это вывод из работы, а не удаление
+    // строки, и он не проходит, пока на кабинет ссылаются активные правила.
+    // Причину отказа показываем как есть — она объясняет, что делать.
+    const handleDeactivateAddress = async (id: string) => {
         try {
-            const { deleteAddress } = await import('../actions/settings');
-            await deleteAddress(id);
-            toast.success('Кабинет удален');
+            const { deactivateAddress } = await import('../actions/settings');
+            await deactivateAddress(id);
+            toast.success('Кабинет выведен из работы');
             fetchSettings();
-        } catch {
-            toast.error('Ошибка удаления');
+        } catch (e: any) {
+            toast.error(e?.message || 'Не удалось вывести кабинет из работы');
+        }
+    };
+
+    const handleActivateAddress = async (id: string) => {
+        try {
+            const { activateAddress } = await import('../actions/settings');
+            await activateAddress(id);
+            toast.success('Кабинет снова в работе');
+            fetchSettings();
+        } catch (e: any) {
+            toast.error(e?.message || 'Ошибка');
+        }
+    };
+
+    const handleUpdateAddress = async (id: string, data: { name: string; address: string }) => {
+        try {
+            const { updateAddress } = await import('../actions/settings');
+            await updateAddress(id, data);
+            toast.success('Кабинет обновлён');
+            fetchSettings();
+        } catch (e: any) {
+            toast.error(e?.message || 'Ошибка сохранения');
+        }
+    };
+
+    const handleSetPrimaryAddress = async (id: string) => {
+        try {
+            const { setPrimaryAddress } = await import('../actions/settings');
+            await setPrimaryAddress(id);
+            toast.success('Основной кабинет');
+            fetchSettings();
+        } catch (e: any) {
+            toast.error(e?.message || 'Ошибка');
         }
     };
 
@@ -351,19 +392,14 @@ export default function SettingsPage() {
                                 ) : (
                                     <div className="space-y-3">
                                         {addresses.map(a => (
-                                            <div key={a.id} className={`flex justify-between items-center p-4 bg-background border rounded-2xl group ${(a as any).isPrimary ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30'}`}>
-                                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                    <button onClick={async () => { try { const { setPrimaryAddress } = await import('../actions/settings'); await setPrimaryAddress(a.id); toast.success('Основной кабинет'); fetchSettings(); } catch { toast.error('Ошибка'); } }}
-                                                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${(a as any).isPrimary ? 'border-primary bg-primary' : 'border-muted-foreground/40 hover:border-primary'}`}>
-                                                        {(a as any).isPrimary && <div className="w-2 h-2 rounded-full bg-white" />}
-                                                    </button>
-                                                    <div className="min-w-0">
-                                                        <p className="font-bold text-sm text-foreground flex items-center gap-2">{a.name}{(a as any).isPrimary && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Основной</span>}</p>
-                                                        <p className="text-sm text-muted-foreground truncate">{a.address}</p>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => handleDeleteAddress(a.id)} className="text-destructive text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 rounded-lg hover:bg-red-50 ml-2">⋮</button>
-                                            </div>
+                                            <CabinetCard
+                                                key={a.id}
+                                                cabinet={a}
+                                                onSetPrimary={handleSetPrimaryAddress}
+                                                onSave={handleUpdateAddress}
+                                                onDeactivate={handleDeactivateAddress}
+                                                onActivate={handleActivateAddress}
+                                            />
                                         ))}
                                     </div>
                                 )}
@@ -385,14 +421,15 @@ export default function SettingsPage() {
                                     <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Без штрафа до (часов)</label>
                                         <input type="number" value={settings.cancellationHours} onChange={e => setSettings(s => ({ ...s, cancellationHours: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} /></div>
                                     <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Удержание при поздней отмене (%)</label>
-                                        <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} max={100} /></div>
+                                        <input type="number" value={settings.cancellationFee} onChange={e => setSettings(s => ({ ...s, cancellationFee: Number(e.target.value) }))} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" min={0} max={100} />
+                                        <p className="mt-2 text-[12px] text-muted-foreground leading-relaxed">ПРАКТИКА не принимает оплату и ничего не удерживает — это ваша договорённость с клиентом. Число хранится как памятка и в текст правил само не подставляется.</p></div>
                                 </div>
                                 <div><label className="block text-[13px] font-semibold text-muted-foreground mb-2">Текст правил для клиента</label>
                                     <textarea value={settings.cancellationText || ''} onChange={e => setSettings(s => ({ ...s, cancellationText: e.target.value }))} rows={4}
                                         className="w-full px-4 py-3 bg-background border border-border rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-sm resize-none" placeholder="Опишите ваши условия отмены..." /></div>
                                 <button onClick={() => setShowPreview(!showPreview)} className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-forest-800"><Eye className="w-4 h-4" />{showPreview ? 'Скрыть' : 'Предпросмотр'}</button>
                                 {showPreview && (
-                                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5"><h4 className="font-bold text-sm mb-2">Отмена сеанса</h4><p className="text-sm text-foreground/80 leading-relaxed">{settings.cancellationText || `Бесплатная отмена за ${settings.cancellationHours}ч. При поздней отмене удержание ${settings.cancellationFee}%.`}</p></div>
+                                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5"><h4 className="font-bold text-sm mb-2">Отмена сеанса</h4><p className="text-sm text-foreground/80 leading-relaxed">{settings.cancellationText || `Отмена без вопросов за ${settings.cancellationHours}ч до начала. Позже — напишите мне, договоримся.`}</p></div>
                                 )}
                             </div>
                         </div>

@@ -1,4 +1,4 @@
-import { getAdsConsentStatus } from "@/app/legal/actions"
+import { getAdsConsentForUser } from "@/app/diary/actions/settings"
 import { AdsConsentModal } from "./AdsConsentModal"
 
 /**
@@ -7,8 +7,8 @@ import { AdsConsentModal } from "./AdsConsentModal"
  * If not, it renders the modal, which will handle its own "only show once" logic.
  */
 export async function AdsConsentWrapper({ userId }: { userId: string }) {
-    const status = await getAdsConsentStatus(userId)
-    
+    const status = await getAdsConsentForUser()
+
     // If they already accepted or fetching failed, don't show the modal
     if (!status.success || status.isAccepted) {
         return null

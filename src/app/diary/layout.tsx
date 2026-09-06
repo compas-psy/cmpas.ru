@@ -8,6 +8,7 @@ import { Toaster } from 'sonner';
 import { SidebarNav } from './sidebar-nav';
 import { MobileSidebar } from './mobile-sidebar';
 import { checkUserAcceptance } from '@/app/legal/actions';
+import { ACCOUNT_REQUIRED_TYPES } from '@/lib/legal-documents';
 import { AdsConsentWrapper } from '@/components/legal/AdsConsentWrapper';
 import { TrialBanner } from '@/components/psidairy/TrialBanner';
 import { BottomTabBar } from './bottom-tab-bar';
@@ -90,15 +91,11 @@ function SidebarContent({
 
 export default async function DiaryLayout({
     children,
-    searchParams,
 }: {
     children: React.ReactNode;
     params?: Promise<any>;
     searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-    const resolvedSearch = searchParams ? await searchParams : {};
-    const fromOnboarding = resolvedSearch?.from === 'onboarding';
-
     const session = await auth();
 
     if (!session?.user?.email) {
@@ -124,16 +121,25 @@ export default async function DiaryLayout({
         redirect('/auth');
     }
 
-    // Legal gate goes before onboarding: a new psychologist must explicitly accept
-    // TERMS + PRIVACY first; onboarding must not become an implicit acceptance path.
-    const acceptanceCheck = await checkUserAcceptance(dbUser.id, ["TERMS", "PRIVACY"]);
+    // Legal gate goes before onboarding: a new psychologist must explicitly
+    // accept TERMS first; onboarding must not become an implicit acceptance
+    // path. PRIVACY is informational only — it is never in this list.
+    const acceptanceCheck = await checkUserAcceptance(ACCOUNT_REQUIRED_TYPES);
     if (acceptanceCheck.success && acceptanceCheck.needsAcceptance && acceptanceCheck.needsAcceptance.length > 0) {
         redirect('/legal-acceptance');
     }
 
-    if (!dbUser.psychologistSettings?.onboardingCompleted && !fromOnboarding) {
-        redirect('/onboarding');
-    }
+    // Задача 24: обязательный барьер после legal остался ровно один —
+    // сами документы. Раньше следом стоял второй: пока
+    // onboardingCompleted=false, /diary целиком подменялся визардом
+    // /onboarding, и человек не мог даже посмотреть кабинет, не пройдя его.
+    //
+    // Настройка практики — помощь, а не пропуск: она живёт чек-листом на
+    // дашборде, который можно закрыть. Подменять этот барьер новым, по
+    // completed из чек-листа, тем более нельзя — чек-лист не барьер вовсе.
+    //
+    // Страница /onboarding остаётся доступной сама по себе: на неё ведут
+    // письма и старые ссылки, и её проходят по желанию.
 
     const trialEndsAt = dbUser.trialEndsAt;
     const now = new Date();
@@ -166,7 +172,16 @@ export default async function DiaryLayout({
                 <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
             </MobileSidebar>
 
-            <main className="flex-1 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
+            {/*
+              * Задача 27: min-w-0 — не косметика, а причина, по которой кабинет
+              * вообще помещался в телефон. flex-элемент по умолчанию не
+              * сжимается уже своего содержимого (min-width: auto), поэтому
+              * одна широкая строка внутри страницы растягивала <main> шире
+              * экрана — и вместе с ним уезжали вправо и шапка, и нижняя
+              * панель, и кнопка «Сохранить». Внутренний overflow-x-hidden от
+              * этого не спасал: переполнение случалось этажом выше.
+              */}
+            <main className="flex-1 min-w-0 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
                 {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
                 <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto overflow-x-hidden">
                     {children}

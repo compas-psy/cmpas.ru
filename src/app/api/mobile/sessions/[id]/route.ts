@@ -6,6 +6,8 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
 import { formatSession, notesPlainFromStructured, toDatabasePaymentStatus } from '@/lib/mobile-sessions';
+import { rescheduleManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
+import { observeNotesFilled, observePaymentSettled } from '@/lib/practice/attention-completion';
 
 function buildPreviousNotesSummary(session: { structuredNotes?: unknown; clientSummary?: string | null; notes?: string | null } | null) {
     if (!session) return null;
@@ -24,6 +26,17 @@ async function readPaymentStatus(sessionId: string) {
         SELECT "paymentStatus" FROM "DiarySession" WHERE id = ${sessionId} LIMIT 1
     `.catch(() => []);
     return rows[0]?.paymentStatus || 'not_required';
+}
+
+/**
+ * Задача 25 §8: одна точка отметки оплаты на оба ветвления PATCH. Событие
+ * «проблема закрыта» рождается здесь и только здесь, из настоящего перехода
+ * прежнего значения в новое — а не из факта, что кто-то открыл шторку оплаты.
+ */
+async function applyPaymentStatus(psychologistId: string, sessionId: string, value: string) {
+    const before = await readPaymentStatus(sessionId);
+    await writePaymentStatus(sessionId, value);
+    await observePaymentSettled(psychologistId, before, value);
 }
 
 async function writePaymentStatus(sessionId: string, value: string) {
@@ -97,50 +110,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (isReschedule) {
             const newDate = body.date || session.date.toISOString().split('T')[0];
             const newTime = body.startTime || session.time;
-            const duration = session.duration || 50;
-            const [h, m] = newTime.split(':').map(Number);
-            const endMinutes = h * 60 + m + duration;
-            const newEndTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
-            const dateObj = new Date(newDate);
-            const dayStart = new Date(dateObj); dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(dateObj); dayEnd.setHours(23, 59, 59, 999);
-
-            const conflicts = await db.diarySession.findMany({
-                where: {
+            // Task 8: same shared advisory lock (session lock + both days'
+            // day locks) and real maxSessionsPerDay re-check the web/client
+            // reschedule paths get — the mobile app can still move a session
+            // to any time on or off the psychologist's configured schedule,
+            // same as before, just no longer via an unlocked read-then-write.
+            let result;
+            try {
+                result = await rescheduleManualPracticeSession({
                     psychologistId: auth.userId,
-                    id: { not: id },
-                    date: { gte: dayStart, lte: dayEnd },
-                    status: { not: 'cancelled' },
-                },
-            });
-            const newStart = h * 60 + m;
-            const newEnd = newStart + duration;
-            for (const conflict of conflicts) {
-                const [sH, sM] = conflict.time.split(':').map(Number);
-                const sStart = sH * 60 + sM;
-                const sEnd = sStart + (conflict.duration || 50);
-                if (newStart < sEnd && newEnd > sStart) {
-                    return NextResponse.json({ error: 'Это время уже занято другой сессией' }, { status: 409 });
-                }
-            }
-
-            autoDeleteSessionFromCalendars(auth.userId, id).catch(console.error);
-
-            const updated = await db.diarySession.update({
-                where: { id },
-                data: {
-                    date: dateObj,
+                    sessionId: id,
+                    dateStr: newDate,
                     time: newTime,
-                    endTime: newEndTime,
                     status: body.status ? body.status.toLowerCase() : 'pending',
-                    notified24h: false,
-                    notified1h: false,
-                    ...notePatch(body),
-                },
-                include: { client: { select: { id: true, name: true } } },
-            });
-            if (paymentStatus) await writePaymentStatus(id, paymentStatus);
+                    extraUpdateData: notePatch(body),
+                });
+            } catch (e) {
+                if (e instanceof BookingConflictError) {
+                    return NextResponse.json({ error: e.message }, { status: 409 });
+                }
+                throw e;
+            }
+            const updated = result.session;
+
+            // Task 12: autoSyncSessionToCalendars is link-aware — updates
+            // the already-linked event in place, so no delete-then-recreate.
+            if (paymentStatus) await applyPaymentStatus(auth.userId, id, paymentStatus);
+            // Перенос может нести с собой заметку: extraUpdateData — это тот
+            // же notePatch. Состояние «после» складывается из прежней сессии и
+            // применённой правки; отдельного чтения ради этого не делаем.
+            await observeNotesFilled(auth.userId, session, { ...session, ...notePatch(body) });
 
             const fullUpdated = await db.diarySession.findUnique({ where: { id }, include: { client: { select: { name: true } } } });
             if (fullUpdated) autoSyncSessionToCalendars(auth.userId, fullUpdated as any).catch(console.error);
@@ -173,7 +173,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const updated = Object.keys(updateData).length > 0
             ? await db.diarySession.update({ where: { id }, data: updateData, include: { client: { select: { id: true, name: true } } } })
             : await db.diarySession.findFirstOrThrow({ where: { id, psychologistId: auth.userId }, include: { client: { select: { id: true, name: true } } } });
-        if (paymentStatus) await writePaymentStatus(id, paymentStatus);
+        if (paymentStatus) await applyPaymentStatus(auth.userId, id, paymentStatus);
+        await observeNotesFilled(auth.userId, session, updated);
         return NextResponse.json(formatSession({ ...updated, paymentStatus: paymentStatus || await readPaymentStatus(id) }));
     } catch (error) {
         console.error('[mobile/sessions/id PATCH]', error);

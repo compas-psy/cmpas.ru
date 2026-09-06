@@ -48,7 +48,8 @@ const actions = vi.hoisted(() => ({
     getAddressById: vi.fn(),
     checkConsentRequired: vi.fn(),
     saveConsent: vi.fn(),
-    resolveClientLinkParam: vi.fn(),
+    resolveSignedClientLinkParam: vi.fn(),
+    resolveVerifiedTelegramUserId: vi.fn(),
 }));
 
 vi.mock('@/app/bot/actions', () => actions);
@@ -70,9 +71,9 @@ beforeEach(() => {
     });
     actions.getAvailableDates.mockResolvedValue(['2026-09-15']);
     actions.getAvailableTimes.mockResolvedValue([
-        { time: '19:00', format: 'online', addressId: null },
+        { time: '19:00', format: 'online', addressId: null, slotToken: 'slt1_test-token' },
     ]);
-    actions.resolveClientLinkParam.mockResolvedValue(null);
+    actions.resolveSignedClientLinkParam.mockResolvedValue(null);
     // Неизвестный клиент без Telegram и без client id из URL — page.tsx
     // безусловно требует согласие в этой ветке (см. "Unknown client without
     // TG and without client ID"), независимо от checkConsentRequired.required.
@@ -102,7 +103,7 @@ async function fillAndSubmitBookingForm() {
 }
 
 describe('экран подтверждения называет настоящий канал доставки (§4.2)', () => {
-    it('без window.Telegram — канал Max, текст не содержит "Telegram"', async () => {
+    it('вне мессенджера мессенджер не называется вовсе', async () => {
         render(<ClientBookingPage />);
         await waitFor(() => expect(actions.getPsychologist).toHaveBeenCalled());
 
@@ -111,8 +112,16 @@ describe('экран подтверждения называет настоящ�
         await waitFor(() => expect(screen.getByText(/Вы записаны/i)).toBeInTheDocument());
 
         const screenText = document.body.textContent ?? '';
+        // Задача 27 уточнила правило O-260829 §4.2. Тогда чинили обратное:
+        // экран называл Telegram всем подряд, и его научили смотреть на
+        // контекст. Но «не Telegram» превратилось в «значит Max», а Max —
+        // это не любой человек с телефоном. Постоянную ссылку открывают в
+        // обычном браузере, привязанного канала там нет, и система в него
+        // ничего не отправит. Поэтому вне мессенджера не называется НИКАКОЙ
+        // канал: обещание, за которым ничего не следует, хуже молчания.
         expect(screenText).not.toContain('Telegram');
-        expect(screenText).toContain('Уведомление придёт в Max');
+        expect(screenText).not.toContain('Уведомление придёт в Max');
+        expect(screenText).toContain('свяжется с вами по телефону');
     });
 
     it('с window.Telegram.WebApp — канал Telegram', async () => {

@@ -215,6 +215,18 @@ fun InviteSheet(
                         Spacer(Modifier.width(8.dp))
                         Text(invite.inviteLink, style = tBody, color = CompasFg, modifier = Modifier.weight(1f))
                     }
+                    Spacer(Modifier.height(8.dp))
+                    // Кадр A15 требует, чтобы приглашение нельзя было спутать с
+                    // постоянной ссылкой записи: обе выглядят как адрес, но
+                    // одну отправляют одному человеку и она сгорает, а вторую
+                    // кладут в шапку профиля навсегда. Срок в кадре — 7 дней,
+                    // здесь 72 часа: это настоящий TTL сервера
+                    // (channel-binding.ts), а не срок из прототипа.
+                    Text(
+                        "Это приглашение для одного клиента — не постоянная ссылка для записи.",
+                        style = tBody2,
+                        color = CompasMutedFg,
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 // MAX first — works in RU without a VPN; Telegram may require one.

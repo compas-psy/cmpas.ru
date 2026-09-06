@@ -45,11 +45,17 @@ export async function processPostSessionNudge() {
         const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
         const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-        // Ищем сессии, которые завершились 30 мин - 3 часа назад и ещё не nudged
+        // Ищем сессии, которые завершились 30 мин - 3 часа назад и ещё не nudged.
+        // Task 9 (founder review): purely client-facing job, no
+        // psychologist-facing counterpart shares this query — a session
+        // with clientNotificationsEnabled=false never enters it at all, and
+        // never gets postSessionNudged set, so re-enabling the flag later
+        // picks it straight back up instead of it being closed out forever.
         const sessions = await db.diarySession.findMany({
             where: {
                 status: { in: ['confirmed', 'completed'] },
                 postSessionNudged: false,
+                clientNotificationsEnabled: true,
                 date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
             } as any,
             include: {

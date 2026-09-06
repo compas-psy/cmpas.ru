@@ -1,0 +1,5 @@
+===== ИТОГ (narrow) =====
+устройство: Physical size: 1080x1920 / Physical density: 480
+снимков: 17
+замечаний: 0
+ИТОГ: PASS

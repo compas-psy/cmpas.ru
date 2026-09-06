@@ -64,3 +64,20 @@ ALTER TABLE "ClientDocumentDelivery"
 ALTER TABLE "ClientDocumentDelivery"
     ADD CONSTRAINT "ClientDocumentDelivery_documentId_fkey"
     FOREIGN KEY ("documentId") REFERENCES "PsychologistClientDocument"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Задача 26. Семь колонок и два индекса переехали сюда из
+-- 20260531_configurable_documents_payments: там они стояли до создания самой
+-- таблицы, и на чистой базе цепочка обрывалась. IF NOT EXISTS оставлен на
+-- случай базы, где таблица появилась раньше цепочки — именно так и вышло на
+-- проде.
+ALTER TABLE "PsychologistClientDocument"
+    ADD COLUMN IF NOT EXISTS "fileName" TEXT,
+    ADD COLUMN IF NOT EXISTS "fileMimeType" TEXT,
+    ADD COLUMN IF NOT EXISTS "fileSizeBytes" INTEGER,
+    ADD COLUMN IF NOT EXISTS "sendOnNewClient" BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS "sendOnFirstSession" BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS "requiresAcknowledgement" BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_sendOnNewClient_idx" ON "PsychologistClientDocument"("sendOnNewClient");
+CREATE INDEX IF NOT EXISTS "PsychologistClientDocument_sendOnFirstSession_idx" ON "PsychologistClientDocument"("sendOnFirstSession");

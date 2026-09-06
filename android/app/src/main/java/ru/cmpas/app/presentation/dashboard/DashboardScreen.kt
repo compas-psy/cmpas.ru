@@ -16,8 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +30,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ru.cmpas.app.domain.model.PaymentStatus
+import ru.cmpas.app.domain.model.PracticeOnboarding
+import ru.cmpas.app.domain.model.PracticeOnboardingSteps
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionStatus
@@ -39,17 +43,36 @@ import ru.cmpas.app.presentation.util.canRecordSessionOutcome
 import java.time.Duration
 import java.time.LocalTime
 
+/**
+ * Перенос практики (Задача 24 §9): существующий веб-поток импорта календаря.
+ * Нативного импорта в приложении нет, и рисовать его заглушкой нельзя.
+ * Что адрес существует, сторожит tests/android-web-links.test.ts.
+ */
+internal const val PRACTICE_MIGRATION_URL = "https://cmpas.ru/diary/clients/import-calendar"
+
 @Composable
 fun DashboardScreen(
     onSessionClick: (String) -> Unit = {},
     onNoteClick: (String) -> Unit = {},
     onCalendarClick: () -> Unit = {},
     onClientClick: (String) -> Unit = {},
+    // Задача 20 §2: тонкие колбэки к УЖЕ существующим экранам создания —
+    // второго редактора записи и второй формы клиента не заводится.
+    onCreateSession: () -> Unit = {},
+    onCreateClient: () -> Unit = {},
+    // Задача 24: шаг «Расписание» ведёт в уже существующий экран расписания.
+    onScheduleClick: () -> Unit = {},
+    // Задача 23 §2: «требует внимания» ведёт к действию, а не к объекту.
+    // Колбэки тонкие — существующие экраны открываются на нужном шаге.
+    onWriteNote: (String) -> Unit = onNoteClick,
+    onMarkPayment: (String) -> Unit = onSessionClick,
+    onRequestConsent: (String) -> Unit = onClientClick,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = LocalUriHandler.current
     var showNotifications by rememberSaveable { mutableStateOf(false) }
+    var showBookingSheet by rememberSaveable { mutableStateOf(false) }
 
     // Возвращение в приложение — момент, когда связь чаще всего появляется.
     // До этого refresh() не вызывался НИОТКУДА: очередь досылки пробовала
@@ -96,6 +119,21 @@ fun DashboardScreen(
                 }
             }
 
+            // Задача 20 §2/§3: три ежедневных действия компактным рядом сразу
+            // под приветствием. Раньше здесь стояла большая постоянная
+            // карточка «поделиться ссылкой» — витрина в самом дорогом месте
+            // экрана под действие, которое нужно раз в неделю. Само действие
+            // никуда не делось: оно здесь, третьей кнопкой, и открывает ту же
+            // единственную шторку с QR, копированием и системным шерингом.
+            item {
+                QuickActionsRow(
+                    shareEnabled = uiState.bookingLink != null,
+                    onCreateSession = onCreateSession,
+                    onCreateClient = onCreateClient,
+                    onShare = { showBookingSheet = true },
+                )
+            }
+
             // Недоставленное названо вслух. Без счётчика молчаливая потеря просто
             // превращается в молчаливое ожидание: специалист не узнает ни того,
             // что запись не уехала, ни того, что она уехала потом.
@@ -126,10 +164,25 @@ fun DashboardScreen(
                 }
             }
 
-            if (uiState.needsOnboarding) {
+            // Задача 24: чек-лист — ДОПОЛНЕНИЕ дашборда, а не экран вместо
+            // него. Ядро дашборда (приветствие, следующая сессия, расписание
+            // дня) остаётся на месте при любом состоянии онбординга.
+            uiState.onboarding?.takeIf { !it.dismissed && !it.completed }?.let { onboarding ->
                 item {
-                    OnboardingBridgeCard(
-                        onOpen = { uriHandler.openUri("https://cmpas.ru${uiState.onboardingUrl ?: "/onboarding"}") },
+                    OnboardingChecklistCard(
+                        onboarding = onboarding,
+                        onStep = { step ->
+                            when (step) {
+                                OnboardingStep.CLIENT -> onCreateClient()
+                                OnboardingStep.SCHEDULE -> onScheduleClick()
+                                OnboardingStep.SESSION -> onCreateSession()
+                                // Шаг закроется не открытием шторки, а
+                                // состоявшимся действием внутри неё.
+                                OnboardingStep.SHARE -> showBookingSheet = true
+                            }
+                        },
+                        onMigrate = { uriHandler.openUri(PRACTICE_MIGRATION_URL) },
+                        onDismiss = viewModel::dismissOnboarding,
                     )
                 }
             }
@@ -189,45 +242,155 @@ fun DashboardScreen(
             NotificationCenterSheet(
                 attentionItems = uiState.attentionItems,
                 onClose = { showNotifications = false },
+                // История уведомлений открывает объект — там это и ожидается.
                 onOpenSession = { id -> onSessionClick(id) },
                 onOpenClient = { id -> onClientClick(id) },
+                // «Требует внимания» открывает действие.
+                onWriteNote = { id -> onWriteNote(id) },
+                onMarkPayment = { id -> onMarkPayment(id) },
+                onRequestConsent = { id -> onRequestConsent(id) },
+            )
+        }
+
+        if (showBookingSheet) {
+            BookingLinkSheet(
+                uiState.bookingLink,
+                onClose = { showBookingSheet = false },
+                // Шаг «Поделиться» закрывает не открытие шторки, а
+                // состоявшееся действие внутри неё.
+                onShared = viewModel::confirmBookingLinkShared,
             )
         }
     }
 }
 
+/**
+ * Компактный ряд быстрых действий (Задача 20 §2). Все три ведут в уже
+ * существующие потоки: создание записи, создание клиента и общая шторка
+ * ссылки для записи. Пока постоянная ссылка не пришла с сервера, «Поделиться»
+ * честно недоступна — выдуманного адреса вместо неё не показывается.
+ */
 @Composable
-private fun OnboardingBridgeCard(onOpen: () -> Unit) {
-    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Tune, null, Modifier.size(22.dp), tint = Forest700)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Начните с настройки", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
-                Text("Клиенты · расписание · мессенджер. Полный визард открыт в веб-кабинете.", style = tMeta, color = CompasMutedFg)
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TinySetupStep("1", "Клиент", Modifier.weight(1f))
-            TinySetupStep("2", "Расписание", Modifier.weight(1f))
-            TinySetupStep("3", "Мессенджер", Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(12.dp))
-        PrimaryButton(
-            text = "Полная настройка в веб-кабинете",
-            icon = Icons.Outlined.OpenInNew,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onOpen,
-        )
+private fun QuickActionsRow(
+    shareEnabled: Boolean,
+    onCreateSession: () -> Unit,
+    onCreateClient: () -> Unit,
+    onShare: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        QuickAction(Icons.Outlined.EventAvailable, "Запись", Modifier.weight(1f), onClick = onCreateSession)
+        QuickAction(Icons.Outlined.PersonAdd, "Клиент", Modifier.weight(1f), onClick = onCreateClient)
+        QuickAction(Icons.Outlined.Share, "Поделиться", Modifier.weight(1f), enabled = shareEnabled, onClick = onShare)
     }
 }
 
 @Composable
-private fun TinySetupStep(number: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Sage100).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(number, style = tBody, color = Forest700, fontWeight = FontWeight.Bold)
-        Text(label, style = tMeta, color = CompasMutedFg, maxLines = 1)
+private fun QuickAction(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    GlassCard(
+        modifier = modifier.alpha(if (enabled) 1f else 0.5f),
+        padding = 12.dp,
+        onClick = if (enabled) onClick else null,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Icon(icon, null, Modifier.size(20.dp), tint = Forest700)
+            Spacer(Modifier.height(6.dp))
+            Text(label, style = tMeta, color = CompasFg, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun OnboardingChecklistCard(
+    onboarding: PracticeOnboarding,
+    onStep: (OnboardingStep) -> Unit,
+    onMigrate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val left = OnboardingStep.entries.count { !it.isDone(onboarding.steps) }
+
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Настройка практики", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text("Осталось шагов: $left", style = tMeta, color = CompasMutedFg)
+            }
+            GhostButton(text = null, icon = Icons.Outlined.Close, onClick = onDismiss, modifier = Modifier.width(44.dp))
+        }
+
+        // Совсем пустой практике сначала предлагается перенести уже
+        // сложившуюся. «Начать с нуля» — это и есть чек-лист ниже: он никуда
+        // не девается и ничего не отмечает выполненным сам.
+        if (onboarding.empty) {
+            Spacer(Modifier.height(12.dp))
+            PrimaryButton(
+                text = "Перенести практику",
+                icon = Icons.Outlined.OpenInNew,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onMigrate,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text("Или начните с нуля — по шагам ниже.", style = tMeta, color = CompasMutedFg)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        OnboardingStep.entries.forEachIndexed { index, step ->
+            if (index > 0) Spacer(Modifier.height(8.dp))
+            OnboardingStepRow(step, step.isDone(onboarding.steps)) { onStep(step) }
+        }
+    }
+}
+
+/**
+ * Четыре шага настройки практики (Задача 24).
+ *
+ * Ровно те же, что в вебе, и приходят они с сервера — раньше здесь были три
+ * нарисованные плашки «Клиент · Расписание · Мессенджер», которые не зависели
+ * ни от чего и не нажимались. «Мессенджер» среди шагов MVP нет вовсе.
+ */
+internal enum class OnboardingStep(val title: String, val subtitle: String, val icon: ImageVector) {
+    CLIENT("Клиенты", "Карточки людей, с которыми работаете", Icons.Outlined.Groups),
+    SCHEDULE("Расписание", "Часы, когда вы принимаете", Icons.Outlined.Schedule),
+    SESSION("Запись", "Первая встреча в календаре", Icons.Outlined.EventAvailable),
+    SHARE("Поделиться", "Отдать ссылку для записи клиенту", Icons.Outlined.Share);
+
+    fun isDone(steps: PracticeOnboardingSteps): Boolean = when (this) {
+        CLIENT -> steps.client
+        SCHEDULE -> steps.schedule
+        SESSION -> steps.session
+        SHARE -> steps.share
+    }
+}
+
+@Composable
+private fun OnboardingStepRow(step: OnboardingStep, done: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (done) Sage100 else Color.White.copy(alpha = .55f))
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (done) Icons.Outlined.CheckCircle else step.icon,
+            null,
+            Modifier.size(19.dp),
+            tint = if (done) Forest700 else CompasMutedFg,
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(step.title, style = tBody, color = if (done) CompasMutedFg else CompasFg)
+            Text(step.subtitle, style = tMeta, color = CompasMutedFg, maxLines = 1)
+        }
+        if (!done) Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
     }
 }
 

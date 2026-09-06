@@ -12,9 +12,9 @@ export default async function LegalAcceptancePage({ searchParams }: { searchPara
     if (!session?.user?.id) return redirect("/auth")
 
     const [{ needsAcceptance }, adsDoc, adsStatusRaw, query] = await Promise.all([
-        checkUserAcceptance(session.user.id),
+        checkUserAcceptance(),
         getActiveLegalDocument("ADS"),
-        getAdsConsentStatus(session.user.id),
+        getAdsConsentStatus(),
         searchParams,
     ])
 
@@ -34,13 +34,10 @@ export default async function LegalAcceptancePage({ searchParams }: { searchPara
             redirect("/legal-acceptance?error=required")
         }
 
-        await acceptDocumentsByIds(
-            session.user.id,
-            requiredDocs.map((doc) => doc.id),
-        )
+        await acceptDocumentsByIds(requiredDocs.map((doc) => doc.id))
 
         if (adsDoc && formData.get("accept_ads") === "yes") {
-            await toggleAdsConsent(session.user.id, true)
+            await toggleAdsConsent(true)
         }
 
         redirect("/diary")
