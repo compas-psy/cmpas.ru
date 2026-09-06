@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.theme.*
@@ -78,7 +79,18 @@ fun GhostButton(
         if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = foreground)
         if (text != null) {
             if (icon != null) Spacer(Modifier.width(8.dp))
-            Text(text, color = foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            // Многоточие, а не обрез посреди слова: если подпись всё же не
+            // помещается, человек должен это видеть. Задача 28 нашла на
+            // экране кабинетов «Сделать» вместо «Сделать основным» — обрез
+            // молчал, и кнопка выглядела осмысленной, не будучи ею.
+            Text(
+                text,
+                color = foreground,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

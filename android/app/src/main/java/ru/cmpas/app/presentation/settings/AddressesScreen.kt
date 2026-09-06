@@ -171,23 +171,31 @@ private fun AddressCard(
 
         Spacer(Modifier.height(12.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Задача 28: кнопки стояли парой в ряд, каждая в половину ширины, и
+        // подписи обрезались посреди слова — «Редактиров» на 393dp и
+        // «Редактир» на 360dp. Хуже того, «Сделать основным» превращалось в
+        // «Сделать», то есть кнопка переставала называть своё действие.
+        // Найдено отрисовкой на устройстве, снимки 16-cabinets-A08.
+        //
+        // Теперь каждая во всю ширину, как «Убрать из работы» ниже: подпись
+        // помещается на любой ширине и при любом системном размере шрифта, а
+        // экран и без того наполовину пустой.
+        GhostButton(
+            text = "Редактировать",
+            onClick = onEdit,
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.Edit,
+            enabled = !busy,
+        )
+        if (!address.isPrimary) {
+            Spacer(Modifier.height(8.dp))
             GhostButton(
-                text = "Редактировать",
-                onClick = onEdit,
-                modifier = Modifier.weight(1f),
-                icon = Icons.Outlined.Edit,
+                text = "Сделать основным",
+                onClick = onMakePrimary,
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Outlined.Star,
                 enabled = !busy,
             )
-            if (!address.isPrimary) {
-                GhostButton(
-                    text = "Сделать основным",
-                    onClick = onMakePrimary,
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Star,
-                    enabled = !busy,
-                )
-            }
         }
 
         Spacer(Modifier.height(8.dp))

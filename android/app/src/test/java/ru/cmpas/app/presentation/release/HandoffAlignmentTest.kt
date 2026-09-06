@@ -1,5 +1,6 @@
 package ru.cmpas.app.presentation.release
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -68,5 +69,30 @@ class HandoffAlignmentTest {
         // Срок берётся у сервера (channel-binding.ts, 72 часа), а не из
         // прототипа, где нарисовано «7 дней».
         assertTrue(sheets.contains("Ссылка действует 72 часа"))
+    }
+
+    @Test
+    fun `A08 — подписи кнопок кабинета не обрезаются половиной ширины`() {
+        val addresses = source("presentation/settings/AddressesScreen.kt")
+        // Обе подписи длинные. Пока каждая кнопка занимала половину ряда,
+        // «Редактировать» показывалось как «Редактиров», а «Сделать
+        // основным» — как «Сделать», то есть переставало называть действие.
+        assertFalse(
+            "кнопка правки во всю ширину, а не в половину ряда",
+            addresses.contains(Regex("""text = "Редактировать",\s*onClick = onEdit,\s*modifier = Modifier\.weight""")),
+        )
+        assertFalse(
+            "кнопка «сделать основным» во всю ширину",
+            addresses.contains(Regex("""text = "Сделать основным",\s*onClick = onMakePrimary,\s*modifier = Modifier\.weight""")),
+        )
+        assertTrue(addresses.contains(Regex("""text = "Редактировать",\s*onClick = onEdit,\s*modifier = Modifier\.fillMaxWidth\(\)""")))
+        assertTrue(addresses.contains(Regex("""text = "Сделать основным",\s*onClick = onMakePrimary,\s*modifier = Modifier\.fillMaxWidth\(\)""")))
+        // И если подпись всё же не поместится — многоточие, а не молчаливый
+        // обрез посреди слова.
+        val controls = source("presentation/components/CompasControls.kt")
+        assertTrue(
+            "GhostButton показывает многоточие при нехватке места",
+            controls.contains("overflow = TextOverflow.Ellipsis"),
+        )
     }
 }
