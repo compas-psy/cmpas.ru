@@ -425,3 +425,24 @@ q "SELECT count(*) FROM \"Session\" WHERE expires > now();"
 
 echo "### Контрольная сумма набора сессий"
 q "SELECT md5(string_agg(\"sessionToken\", ',' ORDER BY \"sessionToken\")) FROM \"Session\";"
+
+# ── Единый вход: доехали ли переменные до сервера ─────────────────────────
+#
+# Значения НЕ печатаем — ключ клиента равносилен выданному доступу.
+# Печатаем только факт: задано или нет. Без этого «кнопки нет» читается
+# двумя способами сразу — ключ не доехал или код не спросил, — и отличить
+# их можно только гаданием.
+echo "### Единый вход СИМПАС: переменные на сервере (значения не печатаем)"
+for key in SIMPASID_ISSUER SIMPASID_CLIENT_ID SIMPASID_CLIENT_SECRET; do
+  value="$(grep -E "^${key}=" /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+  if [ -n "$value" ]; then
+    # Для issuer и client_id значение не секретно и полезно глазами.
+    case "$key" in
+      SIMPASID_CLIENT_SECRET) echo "$key: задан (длина ${#value})" ;;
+      *) echo "$key: $value" ;;
+    esac
+  else
+    echo "$key: НЕ ЗАДАН"
+  fi
+done
+echo "--- все три заданы = кнопка на /auth обязана быть"
