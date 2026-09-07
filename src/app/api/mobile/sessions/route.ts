@@ -9,7 +9,7 @@ import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliver
 import { createNotification } from '@/lib/notifications';
 import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 import { formatSession, toDatabaseType } from '@/lib/mobile-sessions';
-import { requireOwnedClient } from '@/lib/practice/ownership';
+import { OwnershipError, requireOwnedActiveAddress, requireOwnedClient } from '@/lib/practice/ownership';
 import { createManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
 
 async function withPaymentStatuses<T extends { id: string }>(sessions: T[]) {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     if (!auth) return unauthorizedResponse();
 
     try {
-        const { clientId, date, startTime, format, type, duration: durationReq, clientRequestId, notes } = await req.json();
+        const { clientId, date, startTime, format, type, duration: durationReq, clientRequestId, notes, addressId } = await req.json();
         if (!clientId || !date || !startTime) return NextResponse.json({ error: 'clientId, date, startTime required' }, { status: 400 });
 
         try {
@@ -70,6 +70,26 @@ export async function POST(req: NextRequest) {
         }
 
         const duration = durationReq || 50;
+
+        // Кабинет очной встречи. Приложение берёт его из выбранного слота, но
+        // доверять присланному нельзя: чужой или выведенный из работы кабинет
+        // не должен попасть в запись. Проверка та же, что у расписания.
+        //
+        // Онлайновая встреча кабинета не имеет по определению — присланный
+        // молча отбрасывается, а не сохраняется «на всякий случай».
+        const isInPerson = format === 'IN_PERSON' || format === 'in_person' || format === 'offline';
+        let resolvedAddressId: string | null = null;
+        if (isInPerson && typeof addressId === 'string' && addressId.trim()) {
+            try {
+                await requireOwnedActiveAddress(auth.userId, addressId.trim());
+                resolvedAddressId = addressId.trim();
+            } catch (error) {
+                return NextResponse.json(
+                    { error: error instanceof OwnershipError ? error.message : 'Кабинет не найден' },
+                    { status: 400 },
+                );
+            }
+        }
 
         // Task 7: shared atomic core with web manual creation — a per-
         // (psychologist,day) advisory lock re-checks the clientRequestId
@@ -89,6 +109,7 @@ export async function POST(req: NextRequest) {
                 duration,
                 type: toDatabaseType(type),
                 format: format === 'IN_PERSON' ? 'in_person' : 'online',
+                addressId: resolvedAddressId,
                 status: 'pending',
                 notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null,
                 clientRequestId: typeof clientRequestId === 'string' && clientRequestId ? clientRequestId : null,

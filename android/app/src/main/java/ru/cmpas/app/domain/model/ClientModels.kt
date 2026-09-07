@@ -148,6 +148,11 @@ data class TimeSlot(
     val startTime: String,
     val endTime: String,
     val available: Boolean,
+    /** "online" | "offline" | "both" — из правила расписания. */
+    val format: String = "online",
+    /** Кабинет очного слота. У онлайнового пуст всегда. */
+    val addressId: String? = null,
+    val addressName: String? = null,
 )
 
 @Serializable

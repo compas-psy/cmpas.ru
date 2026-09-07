@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import ru.cmpas.app.domain.model.*
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
+import ru.cmpas.app.presentation.util.SlotFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -82,8 +83,19 @@ fun QuickActionScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var clientMenuOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(selectedDateText, type, customTime) {
-        if (type == "new-session" && !customTime) viewModel.loadAvailableSlots(selectedDateText)
+    // Выбранный слот помнится целиком, а не одним временем: у очного слота
+    // есть кабинет, и он должен уехать в запись. Иначе очная встреча
+    // сохраняется без места.
+    var selectedSlot by remember { mutableStateOf<TimeSlot?>(null) }
+    val chosenFormat = if (formatIndex == 0) SlotFormat.ONLINE else SlotFormat.OFFLINE
+
+    // formatIndex в ключе обязателен: без него переключение «Онлайн» ↔ «В
+    // кабинете» не перезапрашивало список, и на экране оставались слоты
+    // прежнего формата.
+    LaunchedEffect(selectedDateText, type, customTime, chosenFormat) {
+        selectedSlot = null
+        selectedTimeText = null
+        if (type == "new-session" && !customTime) viewModel.loadAvailableSlots(selectedDateText, chosenFormat)
     }
 
     fun showMessage(message: String) {
@@ -204,7 +216,12 @@ fun QuickActionScreen(
                                     when {
                                         uiState.isLoadingSlots -> Text("Проверяем расписание…", style = tBody2)
                                         uiState.availableSlots.isEmpty() -> {
-                                            Text("Свободных слотов нет. Выберите другое время.", style = tBody2)
+                                            // Отказ сервера назывался так же, как честное «нет
+                                            // свободных», — и подменялся выдуманными часами.
+                                            val reason = uiState.slotsError
+                                                ?: if (chosenFormat == SlotFormat.OFFLINE) "Свободных очных слотов нет. Выберите другое время."
+                                                else "Свободных онлайн-слотов нет. Выберите другое время."
+                                            Text(reason, style = tBody2)
                                             Spacer(Modifier.height(10.dp))
                                             GhostButton(
                                                 text = "Выбрать другое время",
@@ -220,8 +237,11 @@ fun QuickActionScreen(
                                             uiState.availableSlots.forEach { slot ->
                                                 TimeChoice(
                                                     text = slot.startTime,
-                                                    selected = selectedTimeText == slot.startTime,
-                                                    onClick = { selectedTimeText = slot.startTime },
+                                                    selected = selectedSlot?.startTime == slot.startTime,
+                                                    onClick = {
+                                                        selectedSlot = slot
+                                                        selectedTimeText = slot.startTime
+                                                    },
                                                 )
                                             }
                                         }
@@ -366,6 +386,11 @@ fun QuickActionScreen(
                             time = selectedTimeText,
                             type = SessionType.entries[sessionTypeIndex],
                             format = if (formatIndex == 0) SessionFormat.ONLINE else SessionFormat.IN_PERSON,
+                            // Кабинет берётся из выбранного слота. При «другом
+                            // времени» слота нет, и очная встреча по-прежнему
+                            // сохраняется без места — это отдельная дыра, она
+                            // названа в PR, а не закрыта тихо.
+                            addressId = selectedSlot?.addressId,
                             comment = comment,
                         ) { success, message, hasOnboarding ->
                             if (!success) showMessage(message)

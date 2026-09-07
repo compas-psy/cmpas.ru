@@ -39,6 +39,7 @@ import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.notifications.NotificationCenterSheet
 import ru.cmpas.app.presentation.theme.*
 import ru.cmpas.app.presentation.util.PersonName
+import ru.cmpas.app.presentation.util.SessionMoment
 import ru.cmpas.app.presentation.util.canRecordSessionOutcome
 import java.time.Duration
 import java.time.LocalTime
@@ -396,8 +397,10 @@ private fun OnboardingStepRow(step: OnboardingStep, done: Boolean, onClick: () -
 
 @Composable
 private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () -> Unit, onNote: () -> Unit) {
-    val dur = durationMin(session.startTime, session.endTime)
-    val until = untilLabel(session.startTime)
+    val dur = durationMin(session)
+    // Дата обязана участвовать: подпись «через N» без неё считает только
+    // время суток и у сессии через два дня показывает «через 1 ч».
+    val until = SessionMoment.untilLabel(session.date, session.startTime)
     val isOnline = session.format == SessionFormat.ONLINE
 
     GlassTintCard(padding = 18.dp, onClick = onOpen) {
@@ -421,7 +424,9 @@ private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (isOnline) Icons.Outlined.Videocam else Icons.Outlined.LocationOn, null, Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.78f))
                     Spacer(Modifier.width(5.dp))
-                    Text("${session.startTime} · $dur мин · ${if (isOnline) "Видео" else "Очно"}", color = Color.White.copy(alpha = 0.78f), fontSize = 13.5.sp)
+                    val place = if (isOnline) "Видео" else "Очно"
+                    val line = if (dur != null) "${session.startTime} · $dur мин · $place" else "${session.startTime} · $place"
+                    Text(line, color = Color.White.copy(alpha = 0.78f), fontSize = 13.5.sp)
                 }
             }
         }
@@ -452,7 +457,7 @@ private fun ScheduleRow(
     onComplete: () -> Unit,
     onNoShow: () -> Unit,
 ) {
-    val dur = durationMin(s.startTime, s.endTime)
+    val dur = durationMin(s)
     val passed = s.status == SessionStatus.COMPLETED
     // Тот же вечерний список, тот же критерий, что и на экране деталей
     // сессии (canRecordSessionOutcome) — специалист должен суметь пройти
@@ -461,7 +466,7 @@ private fun ScheduleRow(
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Column(Modifier.width(46.dp), horizontalAlignment = Alignment.End) {
             Text(s.startTime, style = tBody.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = CompasFg)
-            Text("$dur мин", style = tMeta, color = CompasMutedFg)
+            if (dur != null) Text("$dur мин", style = tMeta, color = CompasMutedFg)
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.fillMaxHeight().width(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -554,15 +559,20 @@ private fun statusDotColor(status: SessionStatus): Color = when (status) {
     SessionStatus.COMPLETED -> CompasMutedFg
 }
 
-private fun durationMin(start: String, end: String): Int = try {
-    Duration.between(LocalTime.parse(start), LocalTime.parse(end)).toMinutes().toInt().coerceAtLeast(0)
-} catch (_: Exception) { 50 }
-
-private fun untilLabel(start: String): String? = try {
-    val m = Duration.between(LocalTime.now(), LocalTime.parse(start)).toMinutes()
-    when {
-        m <= 0 -> null
-        m >= 60 -> "через ${m / 60} ч"
-        else -> "через $m мин"
-    }
-} catch (_: Exception) { null }
+/**
+ * Длительность сессии в минутах. null — если её неоткуда взять.
+ *
+ * Раньше при нечитаемом endTime возвращалось 50 — и «50 мин» на карточке
+ * было не фактом, а константой. endTime в схеме необязателен, сервер
+ * отдаёт его как `s.endTime || ''`, так что заглушка показывалась
+ * буднично. Теперь длительность приходит полем duration, а вычисление по
+ * концу остаётся запасным путём для старых ответов; не вышло ни то ни
+ * другое — строку не показываем совсем.
+ */
+private fun durationMin(session: Session): Int? {
+    session.duration?.takeIf { it > 0 }?.let { return it }
+    return try {
+        Duration.between(LocalTime.parse(session.startTime), LocalTime.parse(session.endTime))
+            .toMinutes().toInt().takeIf { it > 0 }
+    } catch (_: Exception) { null }
+}
