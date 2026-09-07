@@ -58,6 +58,22 @@ vi.mock('@/app/bot/actions', () => ({
 const track = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/lib/analytics/track', () => ({ track: (...args: unknown[]) => track(...args) }));
 
+// Модуль поднимается один раз здесь, а не внутри каждого it.
+//
+// vi.mock поднимается компилятором выше этой строки, поэтому моки уже
+// на месте; vi.resetModules() в файле нет, так что раньше все тринадцать
+// динамических импортов и так возвращали один и тот же экземпляр —
+// поведение не меняется.
+//
+// Меняется, кто платит за компиляцию графа модулей. Она шла в бюджет того
+// it, который случайно оказался первым, и он упирался в таймаут 5000 мс
+// под нагрузкой (видели 5107 и 7300 мс при мгновенных ассертах). Тест
+// падал не на своём предмете, а на очереди — то есть врал. Здесь цена
+// уходит в загрузку файла, а пятисекундный бюджет остаётся тому, ради
+// чего он и заведён: настоящему замедлению проверяемого кода.
+const { processNextBookingNudge, processWeeklyFollowup } =
+    await import('../src/lib/cron/post-session-cascade');
+
 function baseSession(overrides: Record<string, unknown> = {}) {
     return {
         id: 'session_1',
@@ -90,7 +106,6 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
         diarySessionFindMany.mockResolvedValue([baseSession({ date: threeHoursAgo, time: '00:00', endTime: timeStrOf(threeHoursAgo) })]);
 
-        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
 
         expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
@@ -107,7 +122,6 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
             baseSession({ date: threeHoursAgo, time: '00:00', endTime: timeStrOf(threeHoursAgo), status: 'completed' }),
         ]);
 
-        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
 
         expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
@@ -116,7 +130,6 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
     it('сессия отмечена no_show — сообщение НЕ уходит, но флаг всё равно закрывается', async () => {
         diarySessionFindMany.mockResolvedValue([]); // status: {notIn: [...,'no_show']} в запросе — Prisma сам не вернёт эту сессию
 
-        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -129,7 +142,6 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         const veryOld = new Date(Date.now() - 90 * 60 * 60 * 1000); // 90 часов назад
         diarySessionFindMany.mockResolvedValue([baseSession({ date: veryOld, time: '00:00', endTime: timeStrOf(veryOld) })]);
 
-        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -140,7 +152,6 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         // Запрос фильтрует nextBookingNudgeSent: false — вторая сессия уже не придёт.
         diarySessionFindMany.mockResolvedValue([]);
 
-        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -151,7 +162,6 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
     it('Task 9 (founder review): запрос фильтрует clientNotificationsEnabled: true — a session with it false never reaches this job at all', async () => {
         diarySessionFindMany.mockResolvedValue([]);
 
-        const { processNextBookingNudge } = await import('../src/lib/cron/post-session-cascade');
         await processNextBookingNudge();
 
         const where = diarySessionFindMany.mock.calls[0][0].where;
@@ -176,7 +186,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
     it('addendum §8: по умолчанию (флаг не задан) cron не читает базу и не шлёт сообщений', async () => {
         delete process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED;
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         expect(diarySessionFindMany).not.toHaveBeenCalled();
@@ -191,7 +200,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
         diarySessionFindFirst.mockResolvedValue(null); // нет будущей записи
         sendTelegramMessage.mockResolvedValue(true);
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
@@ -206,7 +214,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
         ]);
         diarySessionFindFirst.mockResolvedValue({ id: 'future_session' }); // уже записался
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -216,7 +223,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
     it('повторный проход после отправки не шлёт второе сообщение (weeklyFollowupSent уже true)', async () => {
         diarySessionFindMany.mockResolvedValue([]); // запрос фильтрует weeklyFollowupSent: false
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -227,7 +233,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
     it('сессия без отметки специалиста (status не completed) не попадает под еженедельное сообщение', async () => {
         diarySessionFindMany.mockResolvedValue([]); // запрос фильтрует status: 'completed'
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         const where = diarySessionFindMany.mock.calls[0][0].where;
@@ -245,7 +250,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
             baseSession({ date: veryOld, time: '00:00', endTime: timeStrOf(veryOld), status: 'completed' }),
         ]);
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -256,7 +260,6 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
     it('Task 9 (founder review): запрос фильтрует clientNotificationsEnabled: true — a session with it false never reaches this job at all', async () => {
         diarySessionFindMany.mockResolvedValue([]);
 
-        const { processWeeklyFollowup } = await import('../src/lib/cron/post-session-cascade');
         await processWeeklyFollowup();
 
         const where = diarySessionFindMany.mock.calls[0][0].where;
