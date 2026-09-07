@@ -446,3 +446,31 @@ for key in SIMPASID_ISSUER SIMPASID_CLIENT_ID SIMPASID_CLIENT_SECRET; do
   fi
 done
 echo "--- все три заданы = кнопка на /auth обязана быть"
+
+# ── Подсказки адресов: почему они молчат ──────────────────────────────────
+#
+# «Подсказки временно недоступны. Введите адрес вручную.» на экране кабинетов
+# — это ЧЕТЫРЕ разные причины под одной надписью: нет ключа, DaData ответила
+# ошибкой, DaData не уложилась в таймаут, слишком часто спрашивали.
+# Маршрут /api/dadata их различает и пишет в журнал полями (без запроса и
+# без адреса — человек набирает туда что угодно, вплоть до адреса клиента),
+# но заглянуть в этот журнал было неоткуда.
+echo "### Подсказки адресов: ключ DaData (значение не печатаем)"
+dadata="$(grep -E '^DADATA_API_KEY=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+if [ -n "$dadata" ]; then
+  echo "DADATA_API_KEY: задан (длина ${#dadata})"
+else
+  echo "DADATA_API_KEY: НЕ ЗАДАН — маршрут отвечает 503 NOT_CONFIGURED"
+fi
+
+echo "### Подсказки адресов: на что жаловался маршрут за 24 часа"
+docker logs cmpas-app --since 24h 2>&1 | grep -F '[dadata]' | tail -10
+echo "--- NO_TOKEN = ключа нет; UPSTREAM_ERROR = DaData ответила ошибкой;"
+echo "--- TIMEOUT = не уложилась в срок; пусто = маршрут не жаловался"
+
+echo "### Достижима ли DaData с сервера (без ключа, ждём 401/403)"
+# Отдельно от ключа: сервер в РФ, но сеть могла закрыться. Ключ НЕ шлём —
+# проверяем только, что до неё вообще есть ход.
+curl -sS -o /dev/null -w 'POST suggestions.dadata.ru -> %{http_code} за %{time_total}s\n' \
+  --max-time 15 -X POST -H 'Content-Type: application/json' -d '{"query":"Москва"}' \
+  https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address 2>&1 | head -2
