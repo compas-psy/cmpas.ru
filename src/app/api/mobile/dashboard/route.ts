@@ -32,6 +32,10 @@ function formatSession(s: any, paymentById: Map<string, string>, onlineLink: str
         date: s.date.toISOString().split('T')[0],
         startTime: s.time || '00:00',
         endTime: s.endTime || '',
+        // Длительность из базы. Без неё приложение выводило её из endTime,
+        // а при пустом endTime подставляло 50 — и «50 мин» на карточке
+        // было не фактом, а константой.
+        duration: typeof s.duration === 'number' ? s.duration : null,
         status: (s.status || 'PENDING').toUpperCase(),
         paymentStatus: normalizePaymentStatus(paymentById.get(s.id)),
         format: s.format === 'in_person' || s.format === 'offline' ? 'IN_PERSON' : 'ONLINE',

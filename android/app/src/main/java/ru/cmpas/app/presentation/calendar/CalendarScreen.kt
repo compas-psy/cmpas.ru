@@ -62,6 +62,30 @@ fun CalendarScreen(
         uiState.sessions.filter { it.date == sel.toString() }.sortedBy { it.startTime }
     }
 
+    // Что экран показывает в каждом режиме.
+    //
+    // Раньше здесь было одно условие на весь экран: список — все загруженные
+    // записи, всё остальное — выбранный день. Из-за этого «Неделя»
+    // отрисовывалась ровно как «День»: недельный диапазон загружался
+    // (CalendarViewModel), но на экран попадали только записи выбранной
+    // даты — сессия в среду при выбранном понедельнике исчезала.
+    //
+    // Даты сравниваются строками: сервер отдаёт их как «ГГГГ-ММ-ДД», и
+    // лексикографический порядок у такого формата совпадает с
+    // хронологическим. Парсить незачем.
+    val visible = remember(uiState.sessions, sel, uiState.viewMode) {
+        when (uiState.viewMode) {
+            CalendarViewMode.WEEK -> {
+                val start = sel.minusDays(sel.dayOfWeek.value.toLong() - 1)
+                val end = start.plusDays(6)
+                uiState.sessions.filter { it.date >= start.toString() && it.date <= end.toString() }
+            }
+            CalendarViewMode.LIST -> uiState.sessions
+            else -> daySessions
+        }.sortedWith(compareBy({ it.date }, { it.startTime }))
+    }
+    val grouped = uiState.viewMode == CalendarViewMode.WEEK || uiState.viewMode == CalendarViewMode.LIST
+
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
         LazyColumn(
@@ -103,24 +127,36 @@ fun CalendarScreen(
             }
 
             item {
-                val title = if (sel == LocalDate.now()) "Сегодня"
-                else sel.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru")))
-                SectionTitle("$title · ${daySessions.size} ${sessionsWord(daySessions.size)}", actionLabel = "Записать", onAction = onAddSession)
+                // Заголовок считает ровно то, что показано ниже. Раньше он
+                // всегда считал выбранный день, а список в режиме «Список»
+                // показывал две недели — и над строкой с сессией в среду
+                // стояло «Сегодня · 0 сессий».
+                val title = when (uiState.viewMode) {
+                    CalendarViewMode.WEEK -> weekTitle(sel)
+                    CalendarViewMode.LIST -> "Ближайшие две недели"
+                    else -> if (sel == LocalDate.now()) "Сегодня"
+                    else sel.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru")))
+                }
+                SectionTitle("$title · ${visible.size} ${sessionsWord(visible.size)}", actionLabel = "Записать", onAction = onAddSession)
             }
 
-            val agenda = if (uiState.viewMode == CalendarViewMode.LIST) uiState.sessions.sortedWith(compareBy({ it.date }, { it.startTime })) else daySessions
-            if (agenda.isEmpty()) {
-                item { GlassCard(padding = 18.dp) { Text("Нет записей на этот день", style = tBody2) } }
-            } else {
-                items(agenda, key = { it.id }) { s ->
-                    // Задача 27: тап по блоку вёл в карточку сессии
-                    // «block-<id>», которой не существует, — человек получал
-                    // пустой сломанный экран. Блок и не должен открываться:
-                    // это занятое время, а не встреча. Строка блока больше не
-                    // предлагает нажатие — ни шевроном, ни откликом.
-                    val isBlock = s.id.startsWith(CalendarViewModel.BLOCK_ID_PREFIX)
-                    AgendaRow(s, onClick = if (isBlock) null else ({ onSessionClick(s.id) }))
+            if (visible.isEmpty()) {
+                // «Этот день» в недельном и в списочном виде смысла не имеет.
+                val empty = when (uiState.viewMode) {
+                    CalendarViewMode.WEEK -> "Нет записей на этой неделе"
+                    CalendarViewMode.LIST -> "Нет записей на ближайшие две недели"
+                    else -> "Нет записей на этот день"
                 }
+                item { GlassCard(padding = 18.dp) { Text(empty, style = tBody2) } }
+            } else if (grouped) {
+                // Строки из разных дней различаются только датой, а в самой
+                // строке её нет — поэтому день выносится подзаголовком.
+                visible.groupBy { it.date }.forEach { (date, rows) ->
+                    item(key = "day-$date") { Eyebrow(dayHeading(date)) }
+                    items(rows, key = { it.id }) { s -> AgendaEntry(s, onSessionClick) }
+                }
+            } else {
+                items(visible, key = { it.id }) { s -> AgendaEntry(s, onSessionClick) }
             }
         }
 
@@ -276,6 +312,43 @@ private fun statusColor(status: String): Color = when (status.lowercase()) {
     "pending" -> CompasAccent
     "cancelled", "no_show" -> Red
     else -> CompasMutedFg
+}
+
+/**
+ * Строка расписания. Вынесена отдельно, потому что рисуется из трёх мест —
+ * дневного, недельного и списочного вида — и правило про блоки должно быть
+ * одним на все три.
+ */
+@Composable
+private fun AgendaEntry(s: Session, onSessionClick: (String) -> Unit) {
+    // Задача 27: тап по блоку вёл в карточку сессии «block-<id>», которой не
+    // существует, — человек получал пустой сломанный экран. Блок и не должен
+    // открываться: это занятое время, а не встреча. Строка блока не
+    // предлагает нажатие — ни шевроном, ни откликом.
+    val isBlock = s.id.startsWith(CalendarViewModel.BLOCK_ID_PREFIX)
+    AgendaRow(s, onClick = if (isBlock) null else ({ onSessionClick(s.id) }))
+}
+
+/** «Неделя 7–13 сентября», а через границу месяца — с обоими месяцами. */
+private fun weekTitle(selected: LocalDate): String {
+    val start = selected.minusDays(selected.dayOfWeek.value.toLong() - 1)
+    val end = start.plusDays(6)
+    val month = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
+    val head = if (start.month == end.month) start.dayOfMonth.toString() else start.format(month)
+    return "Неделя $head–${end.format(month)}"
+}
+
+/** День над группой строк: «Сегодня», «Завтра» или «среда, 9 сентября». */
+private fun dayHeading(date: String): String = try {
+    val day = LocalDate.parse(date)
+    val today = LocalDate.now()
+    when (day) {
+        today -> "Сегодня"
+        today.plusDays(1) -> "Завтра"
+        else -> day.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")))
+    }
+} catch (_: Exception) {
+    date
 }
 
 private fun sessionsWord(n: Int): String = when {

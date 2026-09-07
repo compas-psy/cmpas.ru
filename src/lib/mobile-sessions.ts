@@ -63,6 +63,10 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         date: s.date instanceof Date ? s.date.toISOString().split('T')[0] : s.date,
         startTime: s.time || '00:00',
         endTime: s.endTime || '',
+        // Длительность из базы, а не вывод из endTime. endTime необязателен
+        // (prisma/schema.prisma), и при пустом значении приложение
+        // подставляло константу 50 — «50 мин» на карточке было не фактом.
+        duration: typeof s.duration === 'number' ? s.duration : null,
         status: (s.status || 'PENDING').toUpperCase(),
         paymentStatus: normalizePaymentStatus(s.paymentStatus),
         format: online ? 'ONLINE' : 'IN_PERSON',

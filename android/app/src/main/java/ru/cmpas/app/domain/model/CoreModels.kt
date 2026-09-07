@@ -94,6 +94,8 @@ data class Session(
     @JsonNames("time")
     val startTime: String = "00:00",
     val endTime: String = "",
+    /** Длительность в минутах из базы. null у старых ответов сервера. */
+    val duration: Int? = null,
     val status: SessionStatus = SessionStatus.PENDING,
     val format: SessionFormat = SessionFormat.ONLINE,
     val type: SessionType = SessionType.INDIVIDUAL,
