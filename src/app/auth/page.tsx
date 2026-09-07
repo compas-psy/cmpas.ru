@@ -5,8 +5,10 @@
 // ключом провайдера живут только на сервере и в браузер не отдаются.
 // Пока ключ не выдан, кнопки СИМПАС на экране просто нет — вместо кнопки,
 // которая при нажатии падает.
-import { isSimpasIdConfigured } from "@/lib/auth/simpasid"
+import { EMAIL_DOOR, isSimpasIdConfigured, shouldSendToSimpasId } from "@/lib/auth/simpasid"
+import { safeReturnPath } from "@/lib/auth/return-path"
 import AuthForm from "./AuthForm"
+import SimpasIdDoor from "./SimpasIdDoor"
 
 /**
  * Страница считается заново на каждый запрос, а не собирается заранее.
@@ -24,6 +26,31 @@ import AuthForm from "./AuthForm"
  */
 export const dynamic = "force-dynamic"
 
-export default function AuthPage() {
-    return <AuthForm simpasIdEnabled={isSimpasIdConfigured()} />
+export default async function AuthPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ door?: string; next?: string }>
+}) {
+    const { door, next } = await searchParams
+    const configured = isSimpasIdConfigured()
+
+    // Дверь по умолчанию — единый вход; правило и его цена расписаны в
+    // shouldSendToSimpasId. Форма с кнопками остаётся запасной дверью и
+    // единственной, пока ключ единого входа не выдан.
+    if (shouldSendToSimpasId({ configured, door })) {
+        // Возврат разбирается здесь, на сервере: тот же строгий разбор
+        // против открытой переадресации, что у ручных кнопок. Бот на
+        // пересланный контакт отвечает ссылкой /diary/clients?attest=1, и
+        // потерять её значит увести человека на «Сегодня» ровно тогда,
+        // когда он шёл подписывать аттестацию.
+        const returnPath = safeReturnPath(next)
+        // Запасная дверь помнит тот же возврат — иначе вход по почте
+        // приводил бы человека не туда, куда привёл бы единый вход.
+        const emailDoor = new URLSearchParams({ door: EMAIL_DOOR })
+        if (next) emailDoor.set('next', next)
+
+        return <SimpasIdDoor returnPath={returnPath} emailDoorHref={`/auth?${emailDoor.toString()}`} />
+    }
+
+    return <AuthForm simpasIdEnabled={configured} />
 }

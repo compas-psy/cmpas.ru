@@ -78,8 +78,12 @@ function AuthErrorContent() {
 
                         {/* Кнопки действий */}
                         <div className="space-y-3">
+                            {/* Запасная дверь, а не та же самая. Человек попал
+                                сюда потому, что вход только что не сработал;
+                                отправить его тем же путём — предложить
+                                повторить неудачу. */}
                             <Link
-                                href="/auth"
+                                href="/auth?door=email"
                                 className="block w-full bg-[#c9a961] hover:bg-[#d4b56d] text-[#1a4d3a] rounded-2xl px-6 py-4 font-medium transition-colors text-center"
                             >
                                 Попробовать снова
