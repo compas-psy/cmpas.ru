@@ -120,6 +120,23 @@ async function showClientMenu(ctx: Context, psychologistId: string, clientName: 
 export function setupBot() {
     if (!bot) return;
 
+    // Собственный разбор отказов. Стоит первым: без него Telegraf при
+    // любом падении обработчика печатает в журнал ВЕСЬ апдейт целиком —
+    // «Unhandled error while processing { ... }». 07.09.2026 это уже
+    // случилось: вместе с ошибкой про устаревшее нажатие в журнал
+    // приложения, а оттуда в журнал прогона диагностики, ушли имя и
+    // телефон живого человека из текста сообщения.
+    //
+    // Остальной код бота этого не допускает намеренно (см. маршрут
+    // вебхука: «Do NOT log message text / callback data»), но библиотека
+    // об этом уговоре не знает. Пишем вид обновления и текст ошибки —
+    // этого хватает, чтобы понять, что сломалось, и не хватает, чтобы
+    // узнать, о ком речь.
+    bot.catch((error, ctx) => {
+        console.error(`[TG Bot] обработчик упал на обновлении вида «${ctx.updateType}»:`,
+            error instanceof Error ? error.message : error);
+    });
+
     bot.command('connect', async (ctx: Context) => {
         const tgId = ctx.from?.id.toString();
         if (!tgId) return;

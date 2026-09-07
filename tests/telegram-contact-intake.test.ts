@@ -37,6 +37,7 @@ vi.mock('@/lib/telegram-proxy', () => ({ telegramSendAgent: () => undefined }));
 type Handler = (ctx: unknown) => Promise<unknown>;
 const onHandlers: { filter: unknown; handler: Handler }[] = [];
 const actionHandlers: { pattern: RegExp; handler: Handler }[] = [];
+const errorHandlers: ((e: unknown, ctx: unknown) => void)[] = [];
 
 vi.mock('telegraf', () => {
     class FakeTelegraf {
@@ -44,6 +45,7 @@ vi.mock('telegraf', () => {
         command() {}
         start() {}
         hears() {}
+        catch(handler: (e: unknown, ctx: unknown) => void) { errorHandlers.push(handler); }
         on(filter: unknown, handler: Handler) { onHandlers.push({ filter, handler }); }
         action(pattern: RegExp, handler: Handler) { actionHandlers.push({ pattern, handler }); }
     }
@@ -67,6 +69,7 @@ beforeEach(async () => {
     vi.clearAllMocks();
     onHandlers.length = 0;
     actionHandlers.length = 0;
+    errorHandlers.length = 0;
     vi.resetModules();
     process.env.TELEGRAM_BOT_TOKEN = 'test-token';
     await import('../src/lib/telegram-bot');
@@ -208,6 +211,33 @@ describe('Telegram — пересланный контакт', () => {
         });
 
         expect(order[0]).toBe('ack');
+    });
+
+    // Утечка, найденная 07.09.2026 в журнале прогона диагностики: вместе
+    // с ошибкой про устаревшее нажатие туда ушли имя и телефон живого
+    // человека. Печатал их не наш код, а Telegraf — он при падении
+    // обработчика выводит ВЕСЬ апдейт. Библиотека про 152-ФЗ не знает,
+    // поэтому разбор отказов у бота должен быть свой.
+    it('падение обработчика не печатает содержимое обновления', () => {
+        expect(errorHandlers).toHaveLength(1);
+
+        const printed: unknown[] = [];
+        const original = console.error;
+        console.error = (...args: unknown[]) => { printed.push(...args); };
+        try {
+            errorHandlers[0](new Error('что-то сломалось'), {
+                updateType: 'callback_query',
+                update: { callback_query: { message: { text: 'Новый клиент:\nАндрей Сапронов\n+79162964946' } } },
+            });
+        } finally {
+            console.error = original;
+        }
+
+        const line = printed.map(String).join(' ');
+        expect(line).toContain('callback_query');
+        expect(line).toContain('что-то сломалось');
+        expect(line).not.toContain('Андрей');
+        expect(line).not.toContain('79162964946');
     });
 
     it('кнопку чужого человека не обслуживаем', async () => {
