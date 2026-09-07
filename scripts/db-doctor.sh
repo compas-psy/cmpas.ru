@@ -463,8 +463,24 @@ else
   echo "DADATA_API_KEY: НЕ ЗАДАН — маршрут отвечает 503 NOT_CONFIGURED"
 fi
 
+# Файл .env — это то, что положил ДЕПЛОЙ, а не то, с чем работает процесс.
+# Разойтись они могут запросто: секрет добавили после выкладки, контейнер
+# пересоздали раньше, compose подставил пустое значение. Маршрут отвечает
+# NO_TOKEN по process.env, поэтому спрашивать надо у самого контейнера.
+echo "### Подсказки адресов: видит ли ключ САМ работающий контейнер"
+runtime_len="$(docker exec cmpas-app printenv DADATA_API_KEY 2>/dev/null | head -1 | tr -d '\r\n' | wc -c)"
+if [ "${runtime_len:-0}" -gt 0 ]; then
+  echo "DADATA_API_KEY внутри cmpas-app: задан (длина $runtime_len)"
+else
+  echo "DADATA_API_KEY внутри cmpas-app: ПУСТ — именно это и есть NO_TOKEN"
+fi
+echo "cmpas-app запущен: $(docker inspect -f '{{.State.StartedAt}}' cmpas-app 2>/dev/null)"
+echo "--- жалобы ниже старше этого времени быть не могут: журнал живёт с контейнером"
+
 echo "### Подсказки адресов: на что жаловался маршрут за 24 часа"
-docker logs cmpas-app --since 24h 2>&1 | grep -F '[dadata]' | tail -10
+# С отметками времени: без них нельзя отличить «жалуется до сих пор» от
+# «жаловался до того, как ключ приехал», и мы уже один раз на этом гадали.
+docker logs -t cmpas-app --since 24h 2>&1 | grep -F '[dadata]' | tail -10
 echo "--- NO_TOKEN = ключа нет; UPSTREAM_ERROR = DaData ответила ошибкой;"
 echo "--- TIMEOUT = не уложилась в срок; пусто = маршрут не жаловался"
 
@@ -474,3 +490,15 @@ echo "### Достижима ли DaData с сервера (без ключа, �
 curl -sS -o /dev/null -w 'POST suggestions.dadata.ru -> %{http_code} за %{time_total}s\n' \
   --max-time 15 -X POST -H 'Content-Type: application/json' -d '{"query":"Москва"}' \
   https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address 2>&1 | head -2
+
+# Достижимость и годность ключа — разные вопросы. 403 значит, что ключ есть,
+# но DaData его не признаёт: подсказки молчали бы и с ним.
+if [ -n "$dadata" ]; then
+  echo "### Признаёт ли DaData наш ключ (ждём 200; 401/403 = ключ негоден)"
+  # Ключ уходит через stdin, а не в аргументах: аргументы видны в списке
+  # процессов всем, кто есть на сервере.
+  printf 'header = "Authorization: Token %s"\n' "$dadata" | curl -sS -o /dev/null \
+    -w 'POST с ключом -> %{http_code} за %{time_total}s\n' -K - \
+    --max-time 15 -X POST -H 'Content-Type: application/json' -d '{"query":"Москва"}' \
+    https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address 2>&1 | head -2
+fi
