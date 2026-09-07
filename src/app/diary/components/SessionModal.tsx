@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, User, Calendar as CalendarIcon, Clock, Video, MapPin, FileText, ChevronLeft, ChevronRight, Loader2, CreditCard, CheckCircle2 } from 'lucide-react';
+import { slotMatchesFormat } from '@/lib/booking/slot-format';
 import { toast } from 'sonner';
 import { SmartNotesData } from '@/components/psidairy/SmartNotesEditor';
 import { TimePicker } from '@/components/ui/date-picker';
@@ -119,6 +120,9 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
         if (isOpen) fetchAvailableDates();
     }, [isOpen, fetchAvailableDates]);
 
+    // Слоты отбираются по выбранному формату, и формат обязан быть в
+    // зависимостях: без него переключение «Онлайн» ↔ «Офлайн» не
+    // перезапрашивало список, и на экране оставались слоты прежнего формата.
     useEffect(() => {
         if (!formData.date || editSession) return;
         const fetchTimes = async () => {
@@ -126,13 +130,13 @@ export function SessionModal({ isOpen, onClose, onSave, initialDate, initialClie
             try {
                 const { getAvailableTimesForReschedule } = await import('../actions/sessions');
                 const times = await getAvailableTimesForReschedule(formData.date, undefined, formData.clientId || undefined);
-                setAvailableSlots(times);
+                setAvailableSlots(times.filter(slot => slotMatchesFormat(slot.format, formData.format)));
                 setFormData(s => ({ ...s, time: '' }));
             } catch { setAvailableSlots([]); }
             setLoadingSlots(false);
         };
         fetchTimes();
-    }, [formData.date, formData.clientId, editSession]);
+    }, [formData.date, formData.clientId, formData.format, editSession]);
 
     const updatePayment = async (value: PaymentStatus) => {
         if (!editSession?.id) return;

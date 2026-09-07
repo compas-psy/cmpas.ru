@@ -106,28 +106,59 @@ data class CreateBlockResponse(
 )
 
 /**
- * Production has returned both `times: ["15:30"]` and
- * `times: [{"time":"15:30","format":"both"}]` during the API transition.
- * Decode both shapes into one stable list used by the Android UI.
+ * Свободное время: час ПЛЮС то, чем этот час является.
+ *
+ * Раньше здесь оставалось одно время: разбор брал из объекта поле "time" и
+ * выбрасывал остальное, а `.distinct()` схлопывал онлайновый и очный час в
+ * один. Из-за этого экран «Добавить запись» показывал утренние онлайновые
+ * слоты при выбранном «В кабинете» — отличить их было нечем, хотя сервер
+ * формат присылал.
+ *
+ * `format`: "online" | "offline" | "both". "both" — гибридное правило
+ * расписания, оно годится и туда и туда.
  */
-object FlexibleTimeListSerializer : KSerializer<List<String>> {
-    private val delegate = ListSerializer(String.serializer())
+@Serializable
+data class FreeSlot(
+    val time: String,
+    val format: String = "online",
+    val addressId: String? = null,
+    val addressName: String? = null,
+    /** Длительность правила расписания в минутах. */
+    val duration: Int? = null,
+)
+
+/**
+ * Сервер за время перехода отдавал и `times: ["15:30"]`, и
+ * `times: [{"time":"15:30","format":"both"}]`. Обе формы приводятся к одной,
+ * но теперь БЕЗ потери: у короткой формы формат неизвестен, и она
+ * объявляется гибридом — иначе старый ответ молча спрятал бы половину
+ * слотов.
+ */
+object FlexibleSlotListSerializer : KSerializer<List<FreeSlot>> {
+    private val delegate = ListSerializer(FreeSlot.serializer())
     override val descriptor = delegate.descriptor
 
-    override fun deserialize(decoder: Decoder): List<String> {
+    override fun deserialize(decoder: Decoder): List<FreeSlot> {
         val jsonDecoder = decoder as? JsonDecoder
             ?: return decoder.decodeSerializableValue(delegate)
         return jsonDecoder.decodeJsonElement().jsonArray.mapNotNull { item ->
             when (item) {
-                is JsonPrimitive -> item.contentOrNull
-                is JsonObject -> item["time"]?.jsonPrimitive?.contentOrNull
+                is JsonPrimitive -> item.contentOrNull?.let { FreeSlot(time = it, format = "both") }
+                is JsonObject -> item["time"]?.jsonPrimitive?.contentOrNull?.let { time ->
+                    FreeSlot(
+                        time = time,
+                        format = item["format"]?.jsonPrimitive?.contentOrNull ?: "online",
+                        addressId = item["addressId"]?.jsonPrimitive?.contentOrNull,
+                        addressName = item["addressName"]?.jsonPrimitive?.contentOrNull,
+                        duration = item["duration"]?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+                    )
+                }
                 else -> null
             }
-        }.filter { it.matches(Regex("\\d{2}:\\d{2}")) }
-            .distinct()
+        }.filter { it.time.matches(Regex("\\d{2}:\\d{2}")) }
     }
 
-    override fun serialize(encoder: Encoder, value: List<String>) {
+    override fun serialize(encoder: Encoder, value: List<FreeSlot>) {
         encoder.encodeSerializableValue(delegate, value)
     }
 }
@@ -135,8 +166,8 @@ object FlexibleTimeListSerializer : KSerializer<List<String>> {
 @Serializable
 data class FreeTimesResponse(
     val date: String,
-    @Serializable(with = FlexibleTimeListSerializer::class)
-    val times: List<String> = emptyList(),
+    @Serializable(with = FlexibleSlotListSerializer::class)
+    val times: List<FreeSlot> = emptyList(),
 )
 
 @Serializable

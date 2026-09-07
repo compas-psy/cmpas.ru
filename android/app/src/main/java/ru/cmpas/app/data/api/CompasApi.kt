@@ -213,6 +213,8 @@ data class CreateSessionRequest(
     val format: SessionFormat = SessionFormat.ONLINE,
     val type: SessionType = SessionType.INDIVIDUAL,
     val duration: Int? = null,
+    /** Кабинет очной встречи. У онлайновой пуст. */
+    val addressId: String? = null,
     // Ключ идемпотентности, рождённый в момент постановки записи, а не в
     // момент отправки: повтор после потерянного ответа возвращает уже
     // созданную сессию, а не создаёт вторую.

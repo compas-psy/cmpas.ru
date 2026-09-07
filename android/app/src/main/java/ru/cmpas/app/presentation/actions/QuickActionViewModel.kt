@@ -21,6 +21,7 @@ import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionType
 import ru.cmpas.app.domain.model.TimeSlot
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
+import ru.cmpas.app.presentation.util.SlotFormat
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -54,20 +55,42 @@ class QuickActionViewModel @Inject constructor(
         }
     }
 
-    fun loadAvailableSlots(date: String?) {
+    /**
+     * Свободное время на день — только то, что годится выбранному формату.
+     *
+     * Формат обязателен параметром, а не подразумевается: без него экран
+     * показывал все свободные часы дня подряд, и специалист, выбравший «В
+     * кабинете», видел среди них утренние онлайновые.
+     */
+    fun loadAvailableSlots(date: String?, chosenFormat: String) {
         if (date.isNullOrBlank()) {
-            _uiState.update { it.copy(availableSlots = emptyList(), isLoadingSlots = false) }
+            _uiState.update { it.copy(availableSlots = emptyList(), isLoadingSlots = false, slotsError = null) }
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingSlots = true) }
-            val fallback = buildLocalSlots(date)
+            _uiState.update { it.copy(isLoadingSlots = true, slotsError = null) }
             try {
                 val response = api.getFreeTimes(date = date)
-                val slots = if (response.isSuccessful) response.body()?.times.orEmpty().map { TimeSlot(date, it, addMinutes(it, 50), available = true) } else emptyList()
-                _uiState.update { it.copy(isLoadingSlots = false, availableSlots = if (slots.isNotEmpty()) slots else fallback) }
+                if (response.isSuccessful) {
+                    val slots = response.body()?.times.orEmpty()
+                        .filter { SlotFormat.matches(it.format, chosenFormat) }
+                        .map {
+                            TimeSlot(
+                                date = date,
+                                startTime = it.time,
+                                endTime = addMinutes(it.time, (it.duration ?: 50).toLong()),
+                                available = true,
+                                format = it.format,
+                                addressId = it.addressId,
+                                addressName = it.addressName,
+                            )
+                        }
+                    _uiState.update { it.copy(isLoadingSlots = false, availableSlots = slots, slotsError = null) }
+                } else {
+                    _uiState.update { it.copy(isLoadingSlots = false, availableSlots = emptyList(), slotsError = "Не удалось получить расписание (код ${response.code()})") }
+                }
             } catch (_: Exception) {
-                _uiState.update { it.copy(isLoadingSlots = false, availableSlots = fallback) }
+                _uiState.update { it.copy(isLoadingSlots = false, availableSlots = emptyList(), slotsError = "Нет связи с сервером — свободное время не проверено") }
             }
         }
     }
@@ -89,10 +112,10 @@ class QuickActionViewModel @Inject constructor(
         }
     }
 
-    fun createSession(client: Client?, date: String?, time: String?, type: SessionType, format: SessionFormat, comment: String, onFinished: (Boolean, String, Boolean) -> Unit) {
+    fun createSession(client: Client?, date: String?, time: String?, type: SessionType, format: SessionFormat, addressId: String?, comment: String, onFinished: (Boolean, String, Boolean) -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
-            runCatching { saveSession(client, date, time, type, format, comment) }
+            runCatching { saveSession(client, date, time, type, format, addressId, comment) }
                 .onSuccess { message ->
                     _uiState.update { it.copy(isSaving = false) }
                     PracticeRefreshBus.notifyChanged()
@@ -214,7 +237,7 @@ class QuickActionViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveSession(client: Client?, date: String?, time: String?, type: SessionType, format: SessionFormat, comment: String): String {
+    private suspend fun saveSession(client: Client?, date: String?, time: String?, type: SessionType, format: SessionFormat, addressId: String?, comment: String): String {
         require(client != null) { "Выберите клиента" }
         require(!date.isNullOrBlank()) { "Выберите дату" }
         require(!time.isNullOrBlank()) { "Выберите время" }
@@ -231,6 +254,9 @@ class QuickActionViewModel @Inject constructor(
                     startTime = time!!,
                     format = format,
                     type = type,
+                    // Кабинет выбранного слота. Без него очная встреча
+                    // сохранялась с пустым местом.
+                    addressId = addressId,
                     clientRequestId = java.util.UUID.randomUUID().toString(),
                     notes = comment.ifBlank { null },
                 ),
@@ -310,7 +336,6 @@ class QuickActionViewModel @Inject constructor(
         }
     }
 
-    private fun buildLocalSlots(date: String): List<TimeSlot> = listOf("10:00", "12:00", "15:00", "17:00").map { TimeSlot(date, it, addMinutes(it, 50), true) }
     private fun addMinutes(value: String, minutes: Long): String = LocalTime.parse(value).plusMinutes(minutes).format(DateTimeFormatter.ofPattern("HH:mm"))
 }
 
@@ -318,6 +343,15 @@ data class QuickActionUiState(
     val isSaving: Boolean = false,
     val isLoadingClients: Boolean = false,
     val isLoadingSlots: Boolean = false,
+    /**
+     * Почему свободного времени не показано. null — список настоящий.
+     *
+     * Раньше при отказе сервера или обрыве связи подставлялись четыре
+     * выдуманных часа (10:00, 12:00, 15:00, 17:00) и выдавались за
+     * «Доступное время». Тем же способом подменялся и честный пустой ответ:
+     * в полностью занятый день приложение предлагало записать человека.
+     */
+    val slotsError: String? = null,
     val clients: List<Client> = emptyList(),
     val availableSlots: List<TimeSlot> = emptyList(),
     val onboardingInfo: OnboardingInfo? = null,
