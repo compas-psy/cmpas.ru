@@ -12,6 +12,49 @@ import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } fro
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 
+/**
+ * Подтвердить нажатие кнопки. Никогда не роняет обработчик.
+ *
+ * У Telegram callback_query живёт недолго, и ответить на него можно
+ * только внутри этого окна. С российского адреса обновления регулярно
+ * лежат у Telegram в очереди по несколько минут — к моменту, когда мы
+ * добираемся до кнопки, окно закрыто, и answerCbQuery отвечает
+ * «400: query is too old». 07.09.2026 это выглядело так: специалист
+ * нажал «Завести», карточка в базе появилась, а он не увидел НИЧЕГО —
+ * ошибка прервала обработчик на строке после создания.
+ *
+ * Подтверждение — косметика: оно гасит кружок на кнопке. Работа, ради
+ * которой кнопку нажали, от него зависеть не должна.
+ */
+async function ack(ctx: Context, text?: string, extra?: { show_alert?: boolean }): Promise<void> {
+    try {
+        await ctx.answerCbQuery(text, extra);
+    } catch (e) {
+        console.warn('[TG Bot] подтвердить нажатие не удалось (окно закрыто):',
+            e instanceof Error ? e.message : e);
+    }
+}
+
+/**
+ * Заменить текст сообщения с кнопками; если не вышло — прислать новым.
+ *
+ * editMessageText отказывает по тем же причинам, что и подтверждение, и
+ * ещё по своим («message is not modified», сообщение слишком старое). Без
+ * запасного пути человек остаётся без ответа при выполненной работе —
+ * худшее из состояний: непонятно, нажалось ли.
+ */
+async function editOrReply(ctx: Context, text: string, extra?: Parameters<Context['editMessageText']>[1]): Promise<void> {
+    try {
+        await ctx.editMessageText(text, extra);
+        return;
+    } catch (e) {
+        console.warn('[TG Bot] заменить сообщение не удалось, шлём новым:',
+            e instanceof Error ? e.message : e);
+    }
+    await ctx.reply(text, extra as Parameters<Context['reply']>[1]).catch((e) =>
+        console.error('[TG Bot] и новым сообщением не вышло:', e instanceof Error ? e.message : e));
+}
+
 const TELEGRAM_APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
@@ -124,8 +167,12 @@ export function setupBot() {
         const tgId = ctx.from?.id.toString();
         if (!tgId) return;
 
+        // Подтверждаем ПЕРЕД работой, а не после: окно ответа у Telegram
+        // короткое, и обращение к базе может его исчерпать.
+        await ack(ctx);
+
         const psy = await db.user.findUnique({ where: { telegramChatId: tgId }, select: { id: true } });
-        if (!psy) return ctx.answerCbQuery();
+        if (!psy) return;
 
         const action = ctx.match[1] === 'ok' ? 'create' : ctx.match[1] === 'fill' ? 'fill' : 'cancel';
         const result = await commitContactIntake({
@@ -134,9 +181,10 @@ export function setupBot() {
             action,
         });
 
-        await ctx.answerCbQuery();
         // Кнопки убираем: черновик погашен, второй раз нажимать нечего.
         await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+        // Итог — отдельным сообщением, а не заменой: новое сообщение
+        // уходит независимо от возраста нажатия.
         await ctx.reply(commitMessage(result, TELEGRAM_APP_URL));
     });
 
@@ -299,7 +347,7 @@ export function setupBot() {
         });
 
         if (!session || session.client.telegramChatId !== tgId) {
-            return ctx.answerCbQuery('Сессия не найдена или у вас нет доступа.', { show_alert: true });
+            return ack(ctx, 'Сессия не найдена или у вас нет доступа.', { show_alert: true });
         }
 
         const policy = canClientCancel(session, session.psychologist.psychologistSettings);
@@ -313,15 +361,15 @@ export function setupBot() {
                 sessionId: session.id,
                 clientId: session.clientId,
             });
-            await ctx.answerCbQuery('Отмена уже недоступна', { show_alert: true });
+            await ack(ctx, 'Отмена уже недоступна', { show_alert: true });
             return ctx.reply(message);
         }
 
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
         autoDeleteSessionFromCalendars(session.psychologistId, session.id).catch(console.error);
 
-        await ctx.editMessageText(`❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
-        await ctx.answerCbQuery('Вы успешно отменили запись');
+        await ack(ctx, 'Вы успешно отменили запись');
+        await editOrReply(ctx, `❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
         if (session.psychologist.telegramChatId) {
             try {
@@ -342,13 +390,13 @@ export function setupBot() {
         const sessionId = ctx.match[1];
         const tgId = ctx.from?.id.toString();
         const session = await db.diarySession.findUnique({ where: { id: sessionId }, include: { client: true, psychologist: true } });
-        if (!session || session.client.telegramChatId !== tgId) return ctx.answerCbQuery('Сессия не найдена.', { show_alert: true });
+        if (!session || session.client.telegramChatId !== tgId) return ack(ctx, 'Сессия не найдена.', { show_alert: true });
 
         if (session.status !== 'cancelled') {
             await db.diarySession.update({ where: { id: session.id }, data: { status: 'confirmed' } });
         }
-        await ctx.editMessageText(`✅ Отлично, ждём вас!\n\n📅 ${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n📍 ${session.format === 'offline' ? 'Очно' : 'Онлайн'}`);
-        await ctx.answerCbQuery('Спасибо за подтверждение!');
+        await ack(ctx, 'Спасибо за подтверждение!');
+        await editOrReply(ctx, `✅ Отлично, ждём вас!\n\n📅 ${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n📍 ${session.format === 'offline' ? 'Очно' : 'Онлайн'}`);
 
         if (session.psychologist.telegramChatId) {
             try {
@@ -369,13 +417,13 @@ export function setupBot() {
         const sessionId = ctx.match[1];
         const tgId = ctx.from?.id.toString();
         const session = await db.diarySession.findUnique({ where: { id: sessionId }, include: { client: true } });
-        if (!session || session.client.telegramChatId !== tgId) return ctx.answerCbQuery('Сессия не найдена.', { show_alert: true });
+        if (!session || session.client.telegramChatId !== tgId) return ack(ctx, 'Сессия не найдена.', { show_alert: true });
         const token = sessionActionToken(session.psychologistId, session.clientId, session.id, 'reschedule', sessionActionTokenExpiry(session.date));
         const rescheduleUrl = `${TELEGRAM_APP_URL}/client/reschedule/${session.id}?t=${token}`;
-        await ctx.editMessageText('🔄 Чтобы перенести сессию, выберите новое время:', {
+        await ack(ctx);
+        await editOrReply(ctx, '🔄 Чтобы перенести сессию, выберите новое время:', {
             reply_markup: { inline_keyboard: [[{ text: '📅 Выбрать новое время', web_app: { url: rescheduleUrl } }]] }
         });
-        await ctx.answerCbQuery();
     });
 
     bot.action(/mood_(\d+)_(.+)/, async (ctx) => {
@@ -385,8 +433,8 @@ export function setupBot() {
             await db.diarySession.update({ where: { id: sessionId }, data: { clientMoodRating: rating } as any });
         } catch (e) { console.error('[mood callback]', e); }
         const emojis = ['', '😊', '🙂', '😐', '😔', '😢'];
-        await ctx.editMessageText(`${emojis[rating] || '✅'} Спасибо за обратную связь! Ваша оценка сохранена.`);
-        await ctx.answerCbQuery();
+        await ack(ctx);
+        await editOrReply(ctx, `${emojis[rating] || '✅'} Спасибо за обратную связь! Ваша оценка сохранена.`);
     });
 
     bot.on('inline_query', async (ctx) => {

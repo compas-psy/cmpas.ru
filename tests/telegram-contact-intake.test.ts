@@ -164,6 +164,52 @@ describe('Telegram — пересланный контакт', () => {
         expect(commitContactIntake).toHaveBeenCalledWith(expect.objectContaining({ action: 'fill' }));
     });
 
+    // Так это сломалось на бою 07.09.2026. Специалист нажал «Завести»,
+    // карточка появилась, а он не увидел НИЧЕГО: обновление пролежало у
+    // Telegram в очереди, окно ответа на нажатие закрылось, answerCbQuery
+    // отдал «400: query is too old» и оборвал обработчик на строке ПОСЛЕ
+    // создания. Со стороны — «кнопка не реагирует», в базе — клиент есть.
+    //
+    // На российском адресе задержка доставки — не исключение, а обычное
+    // дело, поэтому подтверждение нажатия обязано быть косметикой.
+    it('окно ответа закрылось — работа всё равно делается и итог приходит', async () => {
+        userFindUnique.mockResolvedValue({ id: 'psy-1' });
+        commitContactIntake.mockResolvedValue({ kind: 'created', clientName: 'Анна Волкова' });
+
+        const ctx = {
+            from: { id: 111 },
+            match: ['intake_ok_draft-1', 'ok', 'draft-1'],
+            answerCbQuery: vi.fn().mockRejectedValue(
+                new Error('400: Bad Request: query is too old and response timeout expired or query ID is invalid')),
+            editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+            reply: vi.fn(),
+        };
+
+        await expect(intakeActionHandler()(ctx)).resolves.not.toThrow();
+        expect(commitContactIntake).toHaveBeenCalledWith(expect.objectContaining({ action: 'create' }));
+        // Итог приходит НОВЫМ сообщением: оно уходит независимо от
+        // возраста нажатия, в отличие от ответа на кнопку.
+        expect(ctx.reply).toHaveBeenCalled();
+    });
+
+    // Порядок важен сам по себе: обращение к базе может съесть остаток
+    // окна, поэтому подтверждаем до работы, а не после.
+    it('нажатие подтверждается ДО обращения к базе', async () => {
+        const order: string[] = [];
+        userFindUnique.mockImplementation(async () => { order.push('db'); return { id: 'psy-1' }; });
+        commitContactIntake.mockResolvedValue({ kind: 'created', clientName: 'Анна' });
+
+        await intakeActionHandler()({
+            from: { id: 111 },
+            match: ['intake_ok_draft-1', 'ok', 'draft-1'],
+            answerCbQuery: vi.fn(async () => { order.push('ack'); }),
+            editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+            reply: vi.fn(),
+        });
+
+        expect(order[0]).toBe('ack');
+    });
+
     it('кнопку чужого человека не обслуживаем', async () => {
         userFindUnique.mockResolvedValue(null);
         const ctx = {
