@@ -25,8 +25,18 @@ android {
         applicationId = "ru.cmpas.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.1.0"
+        // 1.1.1 — починка обновления списка клиентов (#137).
+        //
+        // versionCode обязан вырасти, иначе правка не доедет: телефон с
+        // установленной 1.1.0 не примет пакет с тем же кодом версии как
+        // обновление, и постоянная ссылка отдавала бы файл, который
+        // некуда поставить.
+        //
+        // Правило CLAUDE.md «versionCode не растёт от правок сборки,
+        // подписи, разрешений или имён» здесь не применимо: изменилось
+        // поведение продукта, а не способ его доставки.
+        versionCode = 9
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
