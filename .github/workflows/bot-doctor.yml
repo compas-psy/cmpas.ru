@@ -70,6 +70,25 @@ jobs:
             echo "--- если пусто, обновления от Telegram до приложения не доходят"
 
             echo
+            echo "### Что Telegram думает о нашем вебхуке"
+            # Спрашиваем через тоннель — с хоста напрямую хода нет.
+            # Токен только в адресе запроса, в ответе его нет; адрес
+            # вебхука на всякий случай прячем.
+            TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2-)
+            curl -sS --max-time 20 --proxy http://127.0.0.1:1080 \
+              "https://api.telegram.org/bot${TOKEN}/getWebhookInfo" 2>&1 \
+              | sed 's/"url":"[^"]*"/"url":"<адрес вебхука>"/' | head -5
+            echo "--- смотрим pending_update_count, last_error_message, allowed_updates"
+
+            echo
+            echo "### Полнота журнала приложения"
+            # Если контейнер поднят недавно, «обновления не было» читать
+            # нельзя — журнал просто не застал момент.
+            docker logs cmpas-app 2>&1 | wc -l
+            docker inspect -f '{{.State.StartedAt}}' cmpas-app 2>&1 | head -1
+            echo "--- строк в журнале и когда контейнер поднят"
+
+            echo
             echo "### Ошибки приложения за 12 часов"
             docker logs cmpas-app --since 12h 2>&1 \
               | grep -iE 'error|exception|prisma|does not exist|denied' \
