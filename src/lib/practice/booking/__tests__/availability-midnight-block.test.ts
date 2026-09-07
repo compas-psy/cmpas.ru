@@ -12,9 +12,17 @@ import { resolveAvailableTimesForDay } from '../availability';
 import { normalizedEventToBusyBlocks } from '@/lib/practice/migration/busy-blocks';
 import type { PracticeSourceEvent } from '@/lib/practice/migration/types';
 import type { AvailabilitySlotInput, ScheduleRuleInput } from '../types';
+import { futureMonday } from './future-monday';
 
-const MONDAY = '2026-09-07';
-const TUESDAY = '2026-09-08';
+const MONDAY = futureMonday();
+// Вторник — следующий день после MONDAY, а не отдельная зашитая дата:
+// иначе стоит понедельнику съехать, и «ночь с понедельника на вторник»
+// перестаёт быть ночью.
+const TUESDAY = (() => {
+    const d = new Date(`${MONDAY}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+})();
 
 function rule(): ScheduleRuleInput {
     return {
@@ -33,7 +41,7 @@ function slot(startTime: string, endTime: string, dayOfWeek: number): Availabili
 function crossMidnightEvent(): PracticeSourceEvent {
     return {
         provider: 'google', integrationId: 'integration-1', externalEventId: 'evt-1', externalSeriesId: null,
-        start: new Date('2026-09-07T20:00:00Z'), end: new Date('2026-09-07T22:00:00Z'),
+        start: new Date(`${MONDAY}T20:00:00Z`), end: new Date(`${MONDAY}T22:00:00Z`),
         summary: 'Busy', allDay: false,
         date: MONDAY, startTime: '23:00', endTime: '01:00',
         isOwnSession: false, ownSessionId: null,

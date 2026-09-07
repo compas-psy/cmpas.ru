@@ -42,7 +42,14 @@ vi.mock('../slot-token', async (importOriginal) => {
         verifySlotToken: vi.fn((psychologistId: string, token: string) => (
             token === 'stale' ? null : {
                 psychologistId,
-                dateStr: '2026-09-10',
+                // Фабрика vi.mock поднимается выше импортов, поэтому дату
+                // считаем здесь, а не берём из future-monday: зашитая
+                // «2026-09-10» протухла бы через три дня.
+                dateStr: (() => {
+                    const d = new Date();
+                    d.setUTCDate(d.getUTCDate() + 60);
+                    return d.toISOString().slice(0, 10);
+                })(),
                 time: '10:00',
                 availabilitySlotId: 'slot-1',
                 scheduleRuleId: 'rule-1',
