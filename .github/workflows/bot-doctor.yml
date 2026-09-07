@@ -54,42 +54,6 @@ jobs:
               --max-time 25 "https://cmpas.ru$p" || echo "НЕ ОТВЕТИЛ"
           done
 
-      # Чистый посетитель: свежий запрос без единого кеша. Отделяет «сайт
-      # сломан» от «в браузере лежит страница от прошлой сборки» — второе
-      # даёт в журнале «Failed to find Server Action» и белый экран с
-      # Application error, и по симптому неотличимо от первого.
-      - name: Открывается ли страница у чистого посетителя
-        run: |
-          set -o pipefail
-          URL='https://cmpas.ru/diary/clients?attest=1'
-          echo "### Ответ страницы"
-          curl -sS -o /tmp/page.html -w 'код %{http_code}, %{size_download} байт, %{time_total}s\n' \
-            --max-time 30 -L "$URL"
-
-          echo
-          echo "### Заголовок страницы"
-          grep -o '<title>[^<]*</title>' /tmp/page.html | head -1 || echo "нет title"
-
-          echo
-          echo "### Есть ли в разметке след аварии"
-          if grep -qF 'Application error' /tmp/page.html; then
-            echo "ЕСТЬ: страница отдаёт аварию сразу, это не кеш браузера"
-          else
-            echo "нет — разметка нормальная"
-          fi
-
-          echo
-          echo "### Отдаются ли скрипты, на которые она ссылается"
-          # Пропавший chunk — вторая причина белого экрана: разметка
-          # нормальная, а код к ней не загружается.
-          grep -o '/_next/static/[^"]*\.js' /tmp/page.html | sort -u | head -12 > /tmp/assets.txt
-          if [ ! -s /tmp/assets.txt ]; then echo "скриптов в разметке не найдено"; fi
-          while read -r a; do
-            printf '%-64s -> ' "$a"
-            curl -sS -o /dev/null -w '%{http_code}\n' --max-time 20 "https://cmpas.ru$a" || echo "НЕ ОТВЕТИЛ"
-          done < /tmp/assets.txt
-          echo "--- все 200 = чистому посетителю страница отдаётся целиком"
-
       - name: Спросить сервер
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -195,3 +159,39 @@ jobs:
               | grep -iE 'error|exception|prisma|does not exist|denied' \
               | grep -viF 'no error' | tail -30
             echo "--- если пусто, приложение не жаловалось"
+
+      # Чистый посетитель: свежий запрос без единого кеша. Отделяет «сайт
+      # сломан» от «в браузере лежит страница от прошлой сборки» — второе
+      # даёт в журнале «Failed to find Server Action» и белый экран с
+      # Application error, и по симптому неотличимо от первого.
+      - name: Открывается ли страница у чистого посетителя
+        run: |
+          set -o pipefail
+          URL='https://cmpas.ru/diary/clients?attest=1'
+          echo "### Ответ страницы"
+          curl -sS -o /tmp/page.html -w 'код %{http_code}, %{size_download} байт, %{time_total}s\n' \
+            --max-time 30 -L "$URL"
+
+          echo
+          echo "### Заголовок страницы"
+          grep -o '<title>[^<]*</title>' /tmp/page.html | head -1 || echo "нет title"
+
+          echo
+          echo "### Есть ли в разметке след аварии"
+          if grep -qF 'Application error' /tmp/page.html; then
+            echo "ЕСТЬ: страница отдаёт аварию сразу, это не кеш браузера"
+          else
+            echo "нет — разметка нормальная"
+          fi
+
+          echo
+          echo "### Отдаются ли скрипты, на которые она ссылается"
+          # Пропавший chunk — вторая причина белого экрана: разметка
+          # нормальная, а код к ней не загружается.
+          grep -o '/_next/static/[^"]*\.js' /tmp/page.html | sort -u | head -12 > /tmp/assets.txt
+          if [ ! -s /tmp/assets.txt ]; then echo "скриптов в разметке не найдено"; fi
+          while read -r a; do
+            printf '%-64s -> ' "$a"
+            curl -sS -o /dev/null -w '%{http_code}\n' --max-time 20 "https://cmpas.ru$a" || echo "НЕ ОТВЕТИЛ"
+          done < /tmp/assets.txt
+          echo "--- все 200 = чистому посетителю страница отдаётся целиком"
