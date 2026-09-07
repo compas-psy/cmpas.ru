@@ -8,6 +8,7 @@ import { html, text } from "@/lib/email-template"
 import { linkVisitorAndTrackIdentity } from "@/lib/analytics/link-visitor"
 import { track } from "@/lib/analytics/track"
 import { VISITOR_ID_COOKIE } from "@/lib/analytics/visitor-cookie"
+import { isSimpasIdConfigured, isSimpasIdEmailTrustworthy, SIMPASID_PROVIDER_ID } from "@/lib/auth/simpasid"
 // @ts-expect-error - nodemailer types not installed due to peer dep conflict
 import { createTransport } from "nodemailer"
 
@@ -103,9 +104,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 }
             },
         }),
+        // Единый вход СИМПАС. ДОБАВЛЯЕТСЯ третьим — Яндекс и почта на
+        // месте и в прежнем порядке.
+        //
+        // `wellKnown` не задаётся намеренно: при заданном `issuer`
+        // next-auth сам выводит {issuer}/.well-known/openid-configuration
+        // (packages/core/src/lib/utils/providers.ts). Лишняя строка здесь
+        // была бы вторым источником правды об одном и том же адресе.
+        //
+        // allowDangerousEmailAccountLinking — ТОЛЬКО этому провайдеру и
+        // только потому, что issuer наш: без флага живой психолог при
+        // первом входе через СИМПАС получил бы OAuthAccountNotLinked
+        // вместо входа. Цена флага — доверие к почте провайдера, поэтому
+        // ниже, в signIn, почта проверяется на подтверждённость.
+        ...(isSimpasIdConfigured() ? [{
+            id: SIMPASID_PROVIDER_ID,
+            name: "СИМПАС",
+            type: "oidc" as const,
+            issuer: process.env.SIMPASID_ISSUER,
+            clientId: process.env.SIMPASID_CLIENT_ID,
+            clientSecret: process.env.SIMPASID_CLIENT_SECRET,
+            allowDangerousEmailAccountLinking: true,
+        }] : []),
     ],
     callbacks: {
-        async signIn({ user }) {
+        async signIn({ user, account, profile }) {
+            // Вход через СИМПАС — только с подтверждённой почтой.
+            //
+            // Проверка стоит ПЕРВОЙ и до всего остального намеренно:
+            // @auth/core зовёт этот колбэк ДО handleLoginOrRegister
+            // (packages/core/src/lib/actions/callback/index.ts:250 против
+            // :257), то есть отказ здесь не оставляет ни созданного
+            // пользователя, ни привязанного Account. Проверять после было
+            // бы поздно.
+            if (account?.provider === SIMPASID_PROVIDER_ID && !isSimpasIdEmailTrustworthy(profile)) {
+                // Почту в журнал не пишем: это персональные данные.
+                console.warn("[auth] СИМПАС: вход отклонён — почта не подтверждена или не пришла")
+                return false
+            }
+
             if (user?.id) {
                 // Legal documents must never be accepted implicitly on sign-in.
                 // The beta legal gate records TERMS/PRIVACY/ADS only after an explicit

@@ -119,6 +119,14 @@ ensure_env TELEGRAM_API_URL 'https://api.telegram.org'
 ensure_env TELEGRAM_PROXY ''
 ensure_env MAX_BOT_USERNAME ''
 
+# Единый вход СИМПАС. Адрес сервиса и идентификатор клиента не секретны и
+# заданы здесь, чтобы не заводить два секрета ради двух публичных строк;
+# секретами их можно переопределить. Ключ значения по умолчанию НЕ имеет и
+# приходит только из секретов репозитория: без него провайдер не
+# объявляется вовсе (src/lib/auth/simpasid.ts).
+ensure_env SIMPASID_ISSUER 'https://auth.cmpas.ru'
+ensure_env SIMPASID_CLIENT_ID 'practice-web'
+
 current_secret=$(grep '^AUTH_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
 if [ -z "$current_secret" ] || printf '%s' "$current_secret" | grep -qi 'changeme\|placeholder\|secret-to-be-changed'; then
   upsert_env AUTH_SECRET "$(openssl rand -base64 32)"
@@ -144,6 +152,9 @@ for key in \
   SMTP_FROM \
   ANALYTICS_INGEST_SECRET \
   ANALYTICS_INGEST_SECRET_MOMENTS \
+  SIMPASID_ISSUER \
+  SIMPASID_CLIENT_ID \
+  SIMPASID_CLIENT_SECRET \
   INFRA_PULSE_GITHUB_TOKEN \
   INFRA_PULSE_GITHUB_ORG; do
   value="${!key:-}"
