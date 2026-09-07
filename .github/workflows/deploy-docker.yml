@@ -16,6 +16,9 @@ on:
       - '.backup/**'
       - '.github/workflows/db-doctor.yml'
       - '.github/workflows/db-baseline.yml'
+      # Диагностика бота: только чтение, запускается вручную. Её появление
+      # и правки не должны катить прод.
+      - '.github/workflows/bot-doctor.yml'
       - 'scripts/db-doctor.sh'
       - 'scripts/db-baseline.sh'
       - 'docs/ops/**'
@@ -34,6 +37,9 @@ on:
       - '.backup/**'
       - '.github/workflows/db-doctor.yml'
       - '.github/workflows/db-baseline.yml'
+      # Диагностика бота: только чтение, запускается вручную. Её появление
+      # и правки не должны катить прод.
+      - '.github/workflows/bot-doctor.yml'
       - 'scripts/db-doctor.sh'
       - 'scripts/db-baseline.sh'
       - 'docs/ops/**'

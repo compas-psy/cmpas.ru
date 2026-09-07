@@ -1,0 +1,77 @@
+# Разовая диагностика: почему бот молчит на пересланный контакт.
+#
+# Запускается ТОЛЬКО руками (workflow_dispatch). Ни push, ни расписания —
+# выкладку не задевает и сама по себе не запускается.
+#
+# ТОЛЬКО ЧТЕНИЕ: ни одной команды, которая что-либо создаёт, меняет,
+# перезапускает или удаляет. Персональные данные не печатаются — из базы
+# берутся только имена таблиц и количество строк, из журнала только строки
+# про вебхук и ошибки.
+name: Bot doctor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Почему бот молчит
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Спросить сервер
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 8m
+          script: |
+            cd /var/www/cmpas.ru
+
+            echo "### Какой коммит развёрнут"
+            git log --oneline -1 2>&1 | head -1
+
+            echo
+            echo "### Есть ли таблица ClientIntakeDraft"
+            # Главная гипотеза: обработчик доходит до записи черновика,
+            # таблицы нет, Prisma бросает, вебхук отвечает 200 и человек
+            # не видит ничего.
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+              "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ClientIntakeDraft'" 2>&1 | head -3
+            echo "--- 1 = таблица есть, 0 = таблицы нет"
+
+            echo
+            echo "### Записана ли миграция как применённая"
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+              "SELECT migration_name, finished_at IS NOT NULL FROM _prisma_migrations WHERE migration_name LIKE '%client_intake%'" 2>&1 | head -3
+            echo "--- пусто = миграция не применялась"
+
+            echo
+            echo "### Сколько всего миграций записано в базе против репозитория"
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+              "SELECT COUNT(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL" 2>&1 | head -2
+            ls -1 prisma/migrations | grep -c '^2' 2>&1 | head -1
+            echo "--- первое число: в базе, второе: папок в репозитории"
+
+            echo
+            echo "### Черновиков заведено (только количество, без данных)"
+            docker exec cmpas-postgres psql -U postgres -d cmpas_db -tAc \
+              'SELECT COUNT(*) FROM "ClientIntakeDraft"' 2>&1 | head -3
+
+            echo
+            echo "### Вебхук: доходят ли обновления"
+            # В этих строках по построению нет ни текста, ни callback_data —
+            # только номер обновления и его вид (src/app/api/telegram/webhook).
+            docker logs cmpas-app --since 12h 2>&1 | grep -F '[TG Webhook]' | tail -25
+            echo "--- если пусто, обновления от Telegram до приложения не доходят"
+
+            echo
+            echo "### Ошибки приложения за 12 часов"
+            docker logs cmpas-app --since 12h 2>&1 \
+              | grep -iE 'error|exception|prisma|does not exist|denied' \
+              | grep -viF 'no error' | tail -30
+            echo "--- если пусто, приложение не жаловалось"
