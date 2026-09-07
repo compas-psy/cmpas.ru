@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { isAccountProvider, providerDisplayName } from "@/lib/auth/simpasid"
 
 export async function POST(request: NextRequest) {
     try {
@@ -39,11 +40,15 @@ export async function POST(request: NextRequest) {
         // Check if user has OAuth account
         const oauthProviders = existingUser.accounts
             ?.map(acc => acc.provider)
-            .filter(p => p !== "nodemailer") || []
+            .filter(isAccountProvider) || []
 
         if (oauthProviders.length > 0) {
-            // User registered via OAuth - suggest using that method
-            const providerName = oauthProviders.includes("yandex") ? "Яндекс" : oauthProviders[0]
+            // User registered via OAuth - suggest using that method.
+            // Имя берётся из общего справочника: раньше всё, что не
+            // «yandex», показывалось человеку идентификатором из
+            // конфигурации — латиницей и без объяснений.
+            const providerName = providerDisplayName(
+                oauthProviders.includes("yandex") ? "yandex" : oauthProviders[0])
             return NextResponse.json({
                 exists: true,
                 canUseEmail: false,
