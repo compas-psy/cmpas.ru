@@ -39,30 +39,41 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
     const [decided, setDecided] = useState(false);
 
     useEffect(() => {
-        if (!looksLikeStaleBuild(error)) {
-            setDecided(true);
+        let shouldReload = false;
+
+        if (looksLikeStaleBuild(error)) {
+            try {
+                if (sessionStorage.getItem(RELOAD_MARK) === '1') {
+                    // Один заход уже был и не помог — гасим пометку, чтобы
+                    // следующая авария снова получила право на перезагрузку.
+                    sessionStorage.removeItem(RELOAD_MARK);
+                } else {
+                    sessionStorage.setItem(RELOAD_MARK, '1');
+                    shouldReload = true;
+                }
+            } catch {
+                // Приватный режим и запрет на хранилище: пометку негде
+                // держать, а без неё перезагрузка рискует зациклиться.
+                // Тогда лучше честный экран с кнопкой.
+            }
+        }
+
+        if (shouldReload) {
+            window.location.reload();
             return;
         }
-        let alreadyTried = true;
-        try {
-            alreadyTried = sessionStorage.getItem(RELOAD_MARK) === '1';
-            if (!alreadyTried) sessionStorage.setItem(RELOAD_MARK, '1');
-        } catch {
-            // Приватный режим и запрет на хранилище: пометку негде держать,
-            // а без неё перезагрузка рискует зациклиться. Тогда лучше
-            // честный экран с кнопкой.
-            alreadyTried = true;
-        }
-        if (alreadyTried) setDecided(true);
-        else window.location.reload();
-    }, [error]);
 
-    // Удачная загрузка гасит пометку — следующая авария снова получит
-    // право на одну перезагрузку.
-    useEffect(() => {
-        if (!decided) return;
-        try { sessionStorage.removeItem(RELOAD_MARK); } catch { /* не страшно */ }
-    }, [decided]);
+        // Правило советует не звать setState из эффекта, и обычно оно
+        // право. Здесь решение зависит от браузерного хранилища и от самой
+        // аварии — от внешнего состояния, которого при отрисовке ещё нет.
+        // Прочитать его в теле компонента нельзя: на сервере sessionStorage
+        // не существует, и разметка разошлась бы с клиентской. Оставшаяся
+        // альтернатива — показать экран ошибки и через мгновение
+        // перезагрузить страницу; мелькнувшее «страница не открылась»
+        // пугает сильнее, чем задержка.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setDecided(true);
+    }, [error]);
 
     if (!decided) return null;
 
