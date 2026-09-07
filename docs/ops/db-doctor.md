@@ -1,6 +1,6 @@
 # Состояние базы на боевом сервере
 
-Снято прогоном 34142344825. Файл перезаписывается каждой диагностикой.
+Снято прогоном 34146054836. Файл перезаписывается каждой диагностикой.
 
 ```
 Warning: Permanently added '45.144.30.190' (ED25519) to the list of known hosts.
@@ -50,15 +50,15 @@ cmtl7k6pw008gxppuhxzz5pj8  psy=cml2q6tfe0001kioc5j6tpyxu  2026-09-09 20:00
 59
 ### Строк в главных таблицах
 User=16
-DiaryClient=25
-DiarySession=44
+DiaryClient=24
+DiarySession=43
 ### Сессии по статусам (панель считает NSM только по completed)
-completed=34
+completed=33
 pending=6
 confirmed=4
 ### Сессии по свежести
 за 7 дней=1
-за 30 дней=3
+за 30 дней=2
 специалистов с сессией за 30 дней=1
 самая свежая сессия=2026-09-09 00:00:00
 ### Специалисты по свежести регистрации
@@ -86,8 +86,8 @@ VisitorAnalytics всего=303
 из них с accountId=6
 из них с utmSource=11
 ### Последнее показание InfraPulse: какие поля заполнены
-collectedAt=2026-09-07 16:12:17.117
-certDaysLeft=85 | backupAgeHours=0.7980596648491753 | backupReadable=true | responseP95Ms=NULL | remindersDue=9 | remindersSent=6 | migrationsApplied=52 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=33.33333333333334 | containers=[{"name": "cmpas-app", "running": true, 
+collectedAt=2026-09-07 17:01:39.384
+certDaysLeft=85 | backupAgeHours=0.5479525507269966 | backupReadable=true | responseP95Ms=NULL | remindersDue=9 | remindersSent=6 | migrationsApplied=52 | migrationsDrift={"onlyInDb": [], "onlyInRepo": []} | cpuPercent=34.40860215053764 | containers=[{"name": "cmpas-app", "running": true, 
 ### События по имени (панель ищет узкие срезы)
 note_saved=832
 sync_completed=798
@@ -106,27 +106,27 @@ weekly_followup_sent=1
 practice_onboarding_completed=1
 client_invite_created=1
 ### Таблицы, из которых панель читает: пустые или нет
-InfraPulse=4341
-DeployLog=27
+InfraPulse=4351
+DeployLog=28
 ReminderOutbox=9
 events=1789
-events_rejected=16
+events_rejected=18
 Subscription=1
 Payment=10
 ### Место на диске
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   36G   49G  42% /
-/dev/vda2        89G   36G   49G  42% /
+/dev/vda2        89G   36G   49G  43% /
+/dev/vda2        89G   36G   49G  43% /
 ### Память
                total        used        free      shared  buff/cache   available
-Mem:            7941        1886        1041          92        5432        6054
-Swap:            511         495          16
+Mem:            7941        1891         985          91        5485        6049
+Swap:            511         501          10
 ### Что занимает docker
 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          8         8         21.44GB   21.44GB (100%)
-Containers      9         9         28.74MB   0B (0%)
-Local Volumes   157       9         327.2MB   4.07MB (1%)
-Build Cache     376       0         21.36GB   20.68GB
+Images          8         8         22.17GB   22.17GB (100%)
+Containers      9         9         28.8MB    0B (0%)
+Local Volumes   157       9         327.4MB   4.07MB (1%)
+Build Cache     391       0         22.37GB   21.69GB
 ### Убитые по нехватке памяти за сутки
 0
 0
@@ -140,8 +140,8 @@ psql:/tmp/beta-mvp-schema-fixes.sql:6: NOTICE:  column "maxChatId" of relation "
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:7: NOTICE:  column "fcmToken" of relation "User" already exists, skipping
 ALTER TABLE
-ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:8: NOTICE:  column "maxChatId" of relation "DiaryClient" already exists, skipping
+ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:11: NOTICE:  column "source" of relation "LegalDocumentAcceptance" already exists, skipping
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:12: NOTICE:  column "documentType" of relation "LegalDocumentAcceptance" already exists, skipping
@@ -151,8 +151,8 @@ ALTER TABLE
 UPDATE 26
 CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:21: NOTICE:  relation "LegalDocumentAcceptance_userId_source_idx" already exists, skipping
-CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:22: NOTICE:  relation "LegalDocumentAcceptance_documentType_idx" already exists, skipping
+CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:25: NOTICE:  column "postSessionNudged" of relation "DiarySession" already exists, skipping
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:26: NOTICE:  column "clientMoodRating" of relation "DiarySession" already exists, skipping
@@ -161,14 +161,14 @@ psql:/tmp/beta-mvp-schema-fixes.sql:27: NOTICE:  column "paymentStatus" of relat
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:28: NOTICE:  relation "DiarySession_paymentStatus_idx" already exists, skipping
 CREATE INDEX
-psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
 CREATE TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:38: NOTICE:  relation "FeatureInterest" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:40: NOTICE:  relation "FeatureInterest_userId_feature_key" already exists, skipping
 CREATE INDEX
-CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:41: NOTICE:  relation "FeatureInterest_feature_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
 CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:42: NOTICE:  relation "FeatureInterest_createdAt_idx" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:56: NOTICE:  relation "PracticeNotification" already exists, skipping
 CREATE TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:58: NOTICE:  column "subtitle" of relation "PracticeNotification" already exists, skipping
@@ -181,45 +181,45 @@ psql:/tmp/beta-mvp-schema-fixes.sql:61: NOTICE:  column "readAt" of relation "Pr
 ALTER TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:62: NOTICE:  column "createdAt" of relation "PracticeNotification" already exists, skipping
 ALTER TABLE
-psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
 CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:65: NOTICE:  relation "PracticeNotification_psychologistId_createdAt_idx" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:67: NOTICE:  relation "PracticeNotification_psychologistId_readAt_idx" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:92: NOTICE:  relation "CalendarSessionLink" already exists, skipping
 CREATE INDEX
 CREATE TABLE
-CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:92: NOTICE:  relation "CalendarSessionLink" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:99: NOTICE:  relation "CalendarSessionLink_integrationId_externalEventId_key" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:101: NOTICE:  relation "CalendarSessionLink_integrationId_sessionId_key" already exists, skipping
 CREATE INDEX
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:101: NOTICE:  relation "CalendarSessionLink_integrationId_sessionId_key" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:102: NOTICE:  relation "CalendarSessionLink_psychologistId_idx" already exists, skipping
 CREATE INDEX
-psql:CREATE INDEX
-/tmp/beta-mvp-schema-fixes.sql:103: NOTICE:  relation "CalendarSessionLink_sessionId_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/beta-mvp-schema-fixes.sql:103: NOTICE:  relation "CalendarSessionLink_sessionId_idx" already exists, skipping
 CREATE TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:122: NOTICE:  relation "PracticeImportBatch" already exists, skipping
 psql:/tmp/beta-mvp-schema-fixes.sql:124: NOTICE:  relation "PracticeImportBatch_psychologistId_idx" already exists, skipping
 CREATE INDEX
-CREATE TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:146: NOTICE:  relation "PracticeImportItem" already exists, skipping
+CREATE TABLE
 psql:/tmp/beta-mvp-schema-fixes.sql:153: NOTICE:  column "sourceFingerprint" of relation "PracticeImportItem" already exists, skipping
-psql:/tmp/beta-mvp-schema-fixes.sql:155: NOTICE:  relation "PracticeImportItem_batchId_idx" already exists, skipping
 ALTER TABLE
+psql:/tmp/beta-mvp-schema-fixes.sql:155: NOTICE:  relation "PracticeImportItem_batchId_idx" already exists, skipping
 CREATE INDEX
 CREATE INDEX
 psql:/tmp/beta-mvp-schema-fixes.sql:156: NOTICE:  relation "PracticeImportItem_sourceFingerprint_idx" already exists, skipping
 DO
 [deploy] Running strict schema verification against the new image.
-time="2026-09-07T18:26:53+03:00" level=warning msg="No services to build"
-time="2026-09-07T18:26:53+03:00" level=warning msg="No services to build"
- Container cmpasru-app-run-69a3471f5bed Creating 
- Container cmpasru-app-run-69a3471f5bed Created 
+time="2026-09-07T19:31:18+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:18+03:00" level=warning msg="No services to build"
+ Container cmpasru-app-run-0f11079cc4ae Creating 
+ Container cmpasru-app-run-0f11079cc4ae Created 
 [schema] Все 58 таблиц и их колонки на месте.
 [schema] Чтение User через клиент Prisma прошло.
 [schema] Чтение DiaryClient через клиент Prisma прошло.
 [schema] Чтение DiarySession через клиент Prisma прошло.
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Starting the infra-pulse collector.
-time="2026-09-07T18:26:56+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:21+03:00" level=warning msg="No services to build"
  Container cmpas-postgres Running 
  Container cmpas-infra-pulse Recreate 
  Container cmpas-infra-pulse Recreated 
@@ -228,7 +228,7 @@ time="2026-09-07T18:26:56+03:00" level=warning msg="No services to build"
  Container cmpas-infra-pulse Starting 
  Container cmpas-infra-pulse Started 
 [deploy] Recreating only the application container.
-time="2026-09-07T18:27:01+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:25+03:00" level=warning msg="No services to build"
  Container cmpas-app Recreate 
  Container cmpas-app Recreated 
  Container cmpas-app Starting 
@@ -241,10 +241,10 @@ time="2026-09-07T18:27:01+03:00" level=warning msg="No services to build"
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Auth endpoint status: 200
 [deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-09-07T18:27:09+03:00" level=warning msg="No services to build"
-time="2026-09-07T18:27:09+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-17821f6c541d Creating 
- Container cmpasru-infra-pulse-run-17821f6c541d Created 
+time="2026-09-07T19:31:33+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:33+03:00" level=warning msg="No services to build"
+ Container cmpasru-infra-pulse-run-63df167419c6 Creating 
+ Container cmpasru-infra-pulse-run-63df167419c6 Created 
 npm warn exec The following package was not found and will be installed: tsx@4.23.13
 [backfill-subscriptions] план: create=0 update=0 skip=1
 [backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
@@ -253,11 +253,11 @@ npm warn exec The following package was not found and will be installed: tsx@4.2
 [deploy] Cleanup: free disk 49G -> 49G.
 [deploy] Deployment completed successfully.
 ### Состояние контейнеров
-cmpas-app | Up 48 minutes
-cmpas-infra-pulse | Up 48 minutes
-simpasid-app | Up 57 minutes (healthy)
-simpasid-postgres | Up 6 hours (healthy)
-cmpas-singbox | Up 11 hours
+cmpas-app | Up 33 minutes
+cmpas-infra-pulse | Up 33 minutes
+simpasid-app | Up 2 hours (healthy)
+simpasid-postgres | Up 7 hours (healthy)
+cmpas-singbox | Up 12 hours
 zapiski-api | Up 2 days (healthy)
 zapiski-postgres | Up 2 weeks (healthy)
 cmpas-mailer | Up 2 weeks (healthy)
@@ -266,7 +266,7 @@ cmpas-postgres | Up 2 weeks (healthy)
 -- имя разрешается в:
 178.130.128.34  securepay.tinkoff.ru
 -- curl с хоста:
-код 405, время 1.665051s
+код 405, время 1.500730s
 -- curl из контейнера приложения:
 sh: 1: curl: not found
 -- версия node на хосте:
@@ -287,23 +287,25 @@ cmpas_cml3mp4xd0006hgrnbw9v9jnl_3f86dcb647887e91 | pending | 99000 | site | 2026
 cmpas_cml2q6tfe0001kioc5j6tpyxu_1c2fea9fbc778f8d | pending | 99000 | site | 2026-04-06 07:38:00.896
 всего платежей=10
 ### Платежи: возраст и полнота записи (без секретов)
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=6
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=481
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=7
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=482
 pending | tinkoffPaymentId=true | terminal=site | возраст_ч=2938
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3214
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3534
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3215
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3535
 pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3705
-pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3717
-paid | tinkoffPaymentId=true | terminal=site | возраст_ч=3718
-failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3718
-failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3718
+pending | tinkoffPaymentId=true | terminal=site | возраст_ч=3718
+paid | tinkoffPaymentId=true | terminal=site | возраст_ч=3719
+failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3719
+failed | tinkoffPaymentId=false | terminal=site | возраст_ч=3719
 ### Демонстрационный терминал: не подменяет ли он боевой (по журналу приложения)
 упоминаний в журнале контейнера: 0
 ### Журнал колбэков Т-Кассы за 7 суток (RebillId и Token вычищены построчно)
+[Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"<скрыто>"}
+[Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
 ### Куда Т-Касса должна слать колбэк (URL, не секрет)
 AUTH_URL=https://cmpas.ru
 ### Живёт ли контейнер дольше, чем застрявшие платежи (иначе журнал ничего не покажет)
-запущен=2026-09-07T15:27:02.96713862Z
+запущен=2026-09-07T16:31:27.471601202Z
 ### Достижим ли маршрут колбэка снаружи (безвредный запрос, без валидного токена)
 POST /api/payments/callback (снаружи, через cmpas.ru) -> 400
 ### Заданы ли ключи терминалов в окружении сервера (значения не печатаем)
@@ -318,143 +320,143 @@ http://localhost:3000/ -> 200
 http://localhost:3000/diary -> 307
 http://localhost:3000/api/admin/health -> 403
 ### Отвечает ли сайт снаружи (с самого сервера, через полный путь)
-https://cmpas.ru/ -> 200 за 0.121713s
-https://cmpas.ru/diary -> 307 за 0.200299s
-https://cmpas.ru/admin -> 307 за 0.643318s
+https://cmpas.ru/ -> 200 за 0.094212s
+https://cmpas.ru/diary -> 307 за 0.179529s
+https://cmpas.ru/admin -> 307 за 0.386650s
 ### Сертификат cmpas.ru
 notBefore=Sep  2 23:59:38 2026 GMT
 notAfter=Dec  1 23:59:37 2026 GMT
 subject=CN = cmpas.ru
 issuer=C = US, O = Let's Encrypt, CN = YE2
 ### Кто слушает 80 и 443
-LISTEN 0      4096                                       0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=364810,fd=7))                                                                                                                                             
+LISTEN 0      4096                                       0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=414450,fd=7))                                                                                                                                             
 LISTEN 0      511                                        0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=523662,fd=11),("nginx",pid=131257,fd=11),("nginx",pid=131256,fd=11),("nginx",pid=131255,fd=11),("nginx",pid=131254,fd=11))                                       
 LISTEN 0      511                                        0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=523662,fd=12),("nginx",pid=131257,fd=12),("nginx",pid=131256,fd=12),("nginx",pid=131255,fd=12),("nginx",pid=131254,fd=12))                                       
-LISTEN 0      4096                                          [::]:3000          [::]:*    users:(("docker-proxy",pid=364818,fd=7))                                                                                                                                             
+LISTEN 0      4096                                          [::]:3000          [::]:*    users:(("docker-proxy",pid=414457,fd=7))                                                                                                                                             
 LISTEN 0      511                                           [::]:443           [::]:*    users:(("nginx",pid=523662,fd=13),("nginx",pid=131257,fd=13),("nginx",pid=131256,fd=13),("nginx",pid=131255,fd=13),("nginx",pid=131254,fd=13))                                       
 LISTEN 0      511                                           [::]:80            [::]:*    users:(("nginx",pid=523662,fd=14),("nginx",pid=131257,fd=14),("nginx",pid=131256,fd=14),("nginx",pid=131255,fd=14),("nginx",pid=131254,fd=14))                                       
 ### Журнал приложения, последние 60 строк
+[schema] Чтение User через клиент Prisma прошло.
+[schema] Чтение DiaryClient через клиент Prisma прошло.
+[schema] Чтение DiarySession через клиент Prisma прошло.
+[schema] Prisma migration history has no unfinished entries.
+[startup] Schema is ready. Starting Next.js...
+▲ Next.js 16.1.1
+- Local:         http://3a2636e66e66:3000
+- Network:       http://3a2636e66e66:3000
+
+✓ Starting...
+✓ Ready in 270ms
 [AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[mobile/auth/refresh] SyntaxError: Unexpected token '', "�     �"... is not valid JSON
-    at JSON.parse (<anonymous>)
-    at async w (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:3146)
-    at async u (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:6744)
-    at async l (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:7785)
-    at async Module.A (.next/server/chunks/[root-of-the-server]__53dd8077._.js:1:8863)
-[TG Bot] VPN proxy bypassed (direct)
+[CRON] Инструментация: cron-задачи зарегистрированы
+[AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
+[TG Bot] API root: https://api.telegram.org
 [TG Bot] VPN proxy active
-[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[MAX] Webhook registration on startup: {"success":true}
+[AUTH] AUTH_SECRET fingerprint: IKXOHxDD... (stable = sessions preserved)
+[dadata] provider=dadata error_code=NO_TOKEN
+[dadata] provider=dadata error_code=NO_TOKEN
+[dadata] provider=dadata error_code=NO_TOKEN
+[dadata] provider=dadata error_code=NO_TOKEN
 [Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"0000000000000000000000000000000000000000000000000000000000"}
 [Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
+[Availability] Fetching slots for psychologist: cml2q6tfe0001kioc5j6tpyxu
+[Availability] fixMissingIsActive warning: Error [PrismaClientValidationError]: 
+Invalid `prisma.availabilitySlot.updateMany()` invocation:
+
+{
+  where: {
+    psychologistId: "cml2q6tfe0001kioc5j6tpyxu",
+    OR: [
+      {
+        isActive: {
+          equals: null
+        }
+      },
+      {
+        isActive: false
+      }
+    ]
+  },
+  data: {
+    isActive: true
+  }
+}
+
+Argument `equals` is missing.
+    at async k (.next/server/chunks/ssr/_next-internal_server_app_diary_availability_page_actions_f2540b35.js:1:200)
+    at async m (.next/server/chunks/ssr/_next-internal_server_app_diary_availability_page_actions_f2540b35.js:1:703)
+    at async m (.next/server/chunks/ssr/_6d281703._.js:1:7006)
+    at async o (.next/server/chunks/ssr/_6d281703._.js:2:2712)
+    at async Module.I (.next/server/chunks/ssr/_6d281703._.js:2:7927) {
+  clientVersion: '5.22.0'
+}
+[Availability] Found 65 active slots
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[CRON] Запуск рассылки уведомлений (каждые 15 минут)
+[Tinkoff callback] Invalid token, OrderId: doctor-probe-nonexistent
+[Tinkoff callback] {"OrderId":"doctor-probe-nonexistent","TerminalKey":"doctor-probe","Status":"REJECTED","PaymentId":1,"Amount":1,"Token":"0000000000000000000000000000000000000000000000000000000000"}
 ### Журнал контейнера в цикле перезапуска
-[36mINFO[0m[39671] [[38;5;229m406525657[0m 1ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39671] [[38;5;229m406525657[0m 2ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39671] [[38;5;229m406525657[0m 153ms] connection: connection upload closed: stream 1224 canceled by remote with error code 0
-[36mINFO[0m[39711] [[38;5;211m3246328515[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:58260
-[36mINFO[0m[39711] [[38;5;211m3246328515[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39711] [[38;5;211m3246328515[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39711] [[38;5;211m3246328515[0m 148ms] connection: connection upload closed: stream 1228 canceled by remote with error code 0
-[36mINFO[0m[39751] [[38;5;228m3966443476[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:49016
-[36mINFO[0m[39751] [[38;5;228m3966443476[0m 5ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39751] [[38;5;228m3966443476[0m 5ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39751] [[38;5;228m3966443476[0m 173ms] connection: connection upload closed: stream 1232 canceled by remote with error code 0
-[36mINFO[0m[39791] [[38;5;194m943291429[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:38664
-[36mINFO[0m[39791] [[38;5;194m943291429[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39791] [[38;5;194m943291429[0m 1ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[36mINFO[0m[39831] [[38;5;84m3062725444[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:59906
-[36mINFO[0m[39831] [[38;5;84m3062725444[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39831] [[38;5;84m3062725444[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39831] [[38;5;84m3062725444[0m 209ms] connection: connection upload closed: stream 4 canceled by remote with error code 0
-[36mINFO[0m[39863] [[38;5;70m1821849910[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:56078
-[36mINFO[0m[39863] [[38;5;70m1821849910[0m 1ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39863] [[38;5;70m1821849910[0m 1ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39863] [[38;5;70m1821849910[0m 148ms] connection: connection upload closed: stream 8 canceled by remote with error code 0
-[36mINFO[0m[39863] [[38;5;227m1162378203[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:56090
-[36mINFO[0m[39863] [[38;5;227m1162378203[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39863] [[38;5;227m1162378203[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39863] [[38;5;227m1162378203[0m 149ms] connection: connection upload closed: stream 12 canceled by remote with error code 0
-[36mINFO[0m[39871] [[38;5;159m4268596296[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:56106
-[36mINFO[0m[39871] [[38;5;159m4268596296[0m 1ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
-[36mINFO[0m[39871] [[38;5;159m4268596296[0m 1ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
-[31mERROR[0m[39871] [[38;5;159m4268596296[0m 146ms] connection: connection upload closed: stream 16 canceled by remote with error code 0
+[36mINFO[0m[42655] [[38;5;42m981040922[0m 2ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42655] [[38;5;42m981040922[0m 152ms] connection: connection upload closed: stream 376 canceled by remote with error code 0
+[36mINFO[0m[42695] [[38;5;67m2467031347[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:34302
+[36mINFO[0m[42695] [[38;5;67m2467031347[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42695] [[38;5;67m2467031347[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42695] [[38;5;67m2467031347[0m 251ms] connection: connection upload closed: stream 380 canceled by remote with error code 0
+[36mINFO[0m[42735] [[38;5;224m1109997319[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:37778
+[36mINFO[0m[42735] [[38;5;224m1109997319[0m 1ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42735] [[38;5;224m1109997319[0m 1ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42735] [[38;5;224m1109997319[0m 146ms] connection: connection upload closed: stream 384 canceled by remote with error code 0
+[36mINFO[0m[42775] [[38;5;200m1094424248[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:58190
+[36mINFO[0m[42775] [[38;5;200m1094424248[0m 1ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42775] [[38;5;200m1094424248[0m 1ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42775] [[38;5;200m1094424248[0m 149ms] connection: connection upload closed: stream 388 canceled by remote with error code 0
+[36mINFO[0m[42815] [[38;5;191m864453119[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:55002
+[36mINFO[0m[42815] [[38;5;191m864453119[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42815] [[38;5;191m864453119[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42815] [[38;5;191m864453119[0m 153ms] connection: connection upload closed: stream 392 canceled by remote with error code 0
+[36mINFO[0m[42855] [[38;5;82m1308772674[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:52914
+[36mINFO[0m[42855] [[38;5;82m1308772674[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42855] [[38;5;82m1308772674[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42855] [[38;5;82m1308772674[0m 141ms] connection: connection upload closed: stream 396 canceled by remote with error code 0
+[36mINFO[0m[42863] [[38;5;181m1895588773[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:36458
+[36mINFO[0m[42863] [[38;5;181m1895588773[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42863] [[38;5;181m1895588773[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42863] [[38;5;181m1895588773[0m 147ms] connection: connection upload closed: stream 400 canceled by remote with error code 0
+[36mINFO[0m[42863] [[38;5;38m154827286[0m 0ms] inbound/mixed[proxy-in]: inbound connection from 172.18.0.2:36472
+[36mINFO[0m[42863] [[38;5;38m154827286[0m 0ms] inbound/mixed[proxy-in]: inbound connection to api.telegram.org:443
+[36mINFO[0m[42863] [[38;5;38m154827286[0m 0ms] outbound/hysteria2[hysteria2-out]: outbound connection to api.telegram.org:443
+[31mERROR[0m[42863] [[38;5;38m154827286[0m 154ms] connection: connection upload closed: stream 404 canceled by remote with error code 0
 ### Почему перезапускался app (последний выход)
-запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-09-07T15:27:02.96713862Z
+запусков=0 статус=running код выхода=0 убит по памяти=false стартовал=2026-09-07T16:31:27.471601202Z
 ### Свободное место подробно
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/vda2        89G   36G   49G  42% /
-/dev/vda2        89G   36G   49G  42% /
+/dev/vda2        89G   36G   49G  43% /
+/dev/vda2        89G   36G   49G  43% /
 ### Какой образ реально запущен
-образ=cmpasru-app создан=2026-09-07T15:27:01.629268163Z запущен=2026-09-07T15:27:02.96713862Z
-cmpasru-infra-pulse:latest ff87d270408f 49 minutes ago
-cmpasru-app:latest 430bb1314b39 49 minutes ago
-simpasid-app:latest 0cdf2ba798e1 3 hours ago
+образ=cmpasru-app создан=2026-09-07T16:31:26.053511148Z запущен=2026-09-07T16:31:27.471601202Z
+cmpasru-infra-pulse:latest 666d545ef70d 34 minutes ago
+cmpasru-app:latest e13fac536203 34 minutes ago
+simpasid-app:latest 0cdf2ba798e1 4 hours ago
 zapiski-api:latest b8bbb277dc53 2 days ago
 postgres:16-alpine 57c72fd2a128 2 months ago
 ghcr.io/sagernet/sing-box:latest c8b67944345d 2 months ago
 boky/postfix:latest aafc77238423 8 months ago
 postgres:15-alpine b3968e348b48 8 months ago
 ### Метка сборки внутри контейнера
--rw-r--r-- 1 nextjs nodejs 21 Sep  7 15:25 /app/.next/BUILD_ID
-vDhIv0pFMc-sO7TwMGh_B### Есть ли панель в запущенной сборке
+-rw-r--r-- 1 nextjs nodejs 21 Sep  7 16:30 /app/.next/BUILD_ID
+IrCtLGF0-COXyzZZwb8D7### Есть ли панель в запущенной сборке
 (chrome)
 panel
 ### Хвост журнала последней выкладки
- Container cmpasru-app-run-69a3471f5bed Created 
+ Container cmpasru-app-run-0f11079cc4ae Created 
 [schema] Все 58 таблиц и их колонки на месте.
 [schema] Чтение User через клиент Prisma прошло.
 [schema] Чтение DiaryClient через клиент Prisma прошло.
 [schema] Чтение DiarySession через клиент Prisma прошло.
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Starting the infra-pulse collector.
-time="2026-09-07T18:26:56+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:21+03:00" level=warning msg="No services to build"
  Container cmpas-postgres Running 
  Container cmpas-infra-pulse Recreate 
  Container cmpas-infra-pulse Recreated 
@@ -463,7 +465,7 @@ time="2026-09-07T18:26:56+03:00" level=warning msg="No services to build"
  Container cmpas-infra-pulse Starting 
  Container cmpas-infra-pulse Started 
 [deploy] Recreating only the application container.
-time="2026-09-07T18:27:01+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:25+03:00" level=warning msg="No services to build"
  Container cmpas-app Recreate 
  Container cmpas-app Recreated 
  Container cmpas-app Starting 
@@ -476,10 +478,10 @@ time="2026-09-07T18:27:01+03:00" level=warning msg="No services to build"
 [schema] Prisma migration history has no unfinished entries.
 [deploy] Auth endpoint status: 200
 [deploy] Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).
-time="2026-09-07T18:27:09+03:00" level=warning msg="No services to build"
-time="2026-09-07T18:27:09+03:00" level=warning msg="No services to build"
- Container cmpasru-infra-pulse-run-17821f6c541d Creating 
- Container cmpasru-infra-pulse-run-17821f6c541d Created 
+time="2026-09-07T19:31:33+03:00" level=warning msg="No services to build"
+time="2026-09-07T19:31:33+03:00" level=warning msg="No services to build"
+ Container cmpasru-infra-pulse-run-63df167419c6 Creating 
+ Container cmpasru-infra-pulse-run-63df167419c6 Created 
 npm warn exec The following package was not found and will be installed: tsx@4.23.13
 [backfill-subscriptions] план: create=0 update=0 skip=1
 [backfill-subscriptions] выполнено: { created: 0, updated: 0, skipped: 1 }
@@ -495,10 +497,10 @@ ANALYTICS_INGEST_SECRET: задан (длина 64)
 /etc/simpas/ingest-secret: есть, 65 байт, права 600, владелец root
 /var/www/zapiski/.ingest-secret: есть, 65 байт, права 600, владелец root
 ### Контейнер infra-pulse
-cmpas-infra-pulse | Up 48 minutes | cmpasru-infra-pulse
+cmpas-infra-pulse | Up 33 minutes | cmpasru-infra-pulse
 ### Свежесть строк InfraPulse
-строк всего=4341
-последняя=2026-09-07 16:12:17.117 возраст_мин=3
+строк всего=4351
+последняя=2026-09-07 17:01:39.384 возраст_мин=3
 ### Таблицы аналитического контура
 ReminderOutbox
 Subscription
@@ -509,7 +511,7 @@ events_rejected
 events=1789
 подписок=1
 ### Куда на самом деле слушает приложение
-HOSTNAME внутри контейнера: babd757d8d27
+HOSTNAME внутри контейнера: 3a2636e66e66
 IP контейнера: 172.18.0.2 
 ### Приёмник без ключа (ждём 401)
 POST /api/ingest без Authorization -> 401
@@ -534,6 +536,17 @@ SIMPASID_ISSUER: https://auth.cmpas.ru
 SIMPASID_CLIENT_ID: practice-web
 SIMPASID_CLIENT_SECRET: задан (длина 43)
 --- все три заданы = кнопка на /auth обязана быть
+### Подсказки адресов: ключ DaData (значение не печатаем)
+DADATA_API_KEY: задан (длина 40)
+### Подсказки адресов: на что жаловался маршрут за 24 часа
+[dadata] provider=dadata error_code=NO_TOKEN
+[dadata] provider=dadata error_code=NO_TOKEN
+[dadata] provider=dadata error_code=NO_TOKEN
+[dadata] provider=dadata error_code=NO_TOKEN
+--- NO_TOKEN = ключа нет; UPSTREAM_ERROR = DaData ответила ошибкой;
+--- TIMEOUT = не уложилась в срок; пусто = маршрут не жаловался
+### Достижима ли DaData с сервера (без ключа, ждём 401/403)
+POST suggestions.dadata.ru -> 401 за 0.201132s
 ```
 
 ## Миграции, лежащие в репозитории
