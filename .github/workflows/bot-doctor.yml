@@ -21,6 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Независимая точка: раннер GitHub снаружи и сервера, и песочницы
+      # агента. Если отсюда сайт открывается, а Telegram получает
+      # «Connection timed out» — значит недоступны мы именно для Telegram,
+      # а не для интернета вообще.
+      - name: Доступен ли сайт снаружи
+        run: |
+          for p in / /api/telegram/webhook; do
+            printf '%-26s -> ' "$p"
+            curl -sS -o /dev/null -w '%{http_code} за %{time_total}s\n' \
+              --max-time 25 "https://cmpas.ru$p" || echo "НЕ ОТВЕТИЛ"
+          done
+
       - name: Спросить сервер
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -87,6 +99,35 @@ jobs:
             docker logs cmpas-app 2>&1 | wc -l
             docker inspect -f '{{.State.StartedAt}}' cmpas-app 2>&1 | head -1
             echo "--- строк в журнале и когда контейнер поднят"
+
+            echo
+            echo "### Доходят ли запросы Telegram до nginx"
+            # Решающая проверка. Telegram шлёт вебхук со своих сетей
+            # (149.154.160.0/20 и 91.108.4.0/22). Если этих запросов нет в
+            # журнале nginx — пакеты не доходят, дело в сети. Если есть с
+            # кодом 499 или 504 — доходят, но мы слишком медленные.
+            # Печатаем только время, код и размер: адрес вебхука без
+            # параметров, персональных данных в этих строках нет.
+            for f in /var/log/nginx/access.log /var/log/nginx/access.log.1; do
+              [ -f "$f" ] && grep -F '/api/telegram/webhook' "$f" \
+                | awk '{print $4, $9, $10}' | tail -15
+            done
+            echo "--- пусто = запросы Telegram до nginx не доходят"
+
+            echo
+            echo "### Дверь: nginx и порты"
+            systemctl is-active nginx 2>&1 | head -1
+            (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -E ':(80|443)\b' | head -4
+
+            echo
+            echo "### Межсетевой экран"
+            (ufw status 2>/dev/null | head -8) || echo "ufw не установлен"
+            (iptables -S 2>/dev/null | grep -cE 'DROP|REJECT') || true
+            echo "--- число правил DROP/REJECT"
+
+            echo
+            echo "### Последние ошибки nginx"
+            tail -15 /var/log/nginx/error.log 2>&1 | head -15
 
             echo
             echo "### Ошибки приложения за 12 часов"
