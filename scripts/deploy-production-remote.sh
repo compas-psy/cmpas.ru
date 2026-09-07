@@ -556,6 +556,28 @@ if [ -n "$max_token" ]; then
     >/dev/null || log 'WARNING: MAX webhook registration failed.'
 fi
 
-docker image prune -f >/dev/null || true
+# Уборка за выкладками. Собираем образ на самом сервере, и от каждой
+# сборки остаётся два следа: старый образ, который больше никем не занят,
+# и кэш сборщика buildkit. Ни то ни другое docker сам не удаляет, и диск
+# кончается тихо — сборка падает на «no space left on device» посреди
+# выкладки, то есть ровно тогда, когда чинить некогда.
+#
+# Что удаляется:
+#   * кэш сборщика старше трёх суток — свежий оставляем, иначе следующая
+#     сборка пойдёт с нуля и выкладка станет вдвое дольше;
+#   * образы старше недели, которые не заняты ни одним контейнером.
+#     Занятые docker не тронет при всём желании — это его правило, а не
+#     наша осторожность.
+#
+# Ничего из этого не трогает данные: тома (база, загруженные файлы)
+# сюда не входят, `docker volume prune` мы НЕ зовём и звать не будем.
+# Место печатаем до и после: уборка, о которой нельзя сказать, сколько
+# она освободила, — это не уборка, а надежда.
+free_before=$(df -BG --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')
+docker builder prune -f --filter 'until=72h' >/dev/null 2>&1 || true
+docker image prune -af --filter 'until=168h' >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1 || true
+free_after=$(df -BG --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')
+log "Cleanup: free disk ${free_before:-?}G -> ${free_after:-?}G."
 log_deploy success "$([ "$migrations_failed" = '1' ] && echo 'migrate deploy had failed but schema verification passed' || echo '')"
 log 'Deployment completed successfully.'
