@@ -17,6 +17,10 @@ vi.mock('next/server', async (importOriginal) => {
     return { ...actual, after: (cb: () => void) => afterMock(cb) };
 });
 
+// NextRequest, а не голый Request: у Request нет nextUrl, а прод всегда
+// получает именно NextRequest — подменять его беднее значит проверять не
+// то, что работает.
+import { NextRequest } from 'next/server';
 import { proxy, config } from '@/proxy';
 import { defaultDurationStore } from '@/lib/infra-pulse/response-time';
 
@@ -27,7 +31,7 @@ describe('proxy — измерение времени ответа (ТЗ §5)', 
     });
 
     it('пишет неотрицательную длительность в общий буфер после ответа', () => {
-        const request = new Request('https://cmpas.ru/diary') as any;
+        const request = new NextRequest('https://cmpas.ru/diary');
 
         proxy(request);
 
@@ -37,7 +41,7 @@ describe('proxy — измерение времени ответа (ТЗ §5)', 
     });
 
     it('возвращает ответ, позволяющий запросу продолжиться, а не блокирует его на замер', () => {
-        const request = new Request('https://cmpas.ru/diary') as any;
+        const request = new NextRequest('https://cmpas.ru/diary');
 
         const response = proxy(request);
 

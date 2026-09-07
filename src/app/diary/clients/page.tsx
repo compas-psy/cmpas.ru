@@ -716,6 +716,13 @@ export default function ClientsPage() {
 
             {renderDeleteModal()}
             {renderQuestionnaireModal()}
+            {/* Окно подтверждения оператора ПДн отрисовано и здесь тоже.
+                Раньше оно было только в ветке пустого списка — и у того, у
+                кого клиенты уже есть, гейт поднимался, а показать его было
+                негде: состояние менялось, экран нет. Заметили на ссылке из
+                бота («открывается раздел клиенты и всё»), но сломано было
+                и обычное добавление клиента. */}
+            {attestationModal}
             {showOnboarding && onboardingClientId && (
                 <ClientOnboardingModal clientId={onboardingClientId} onClose={() => { setShowOnboarding(false); setOnboardingClientId(null); }} />
             )}
