@@ -28,8 +28,14 @@ services:
       - EMAIL_FROM=noreply@cmpas.ru
       - AUTH_TRUST_HOST=true
       - AUTH_URL=https://cmpas.ru
-      - DADATA_API_KEY=${DADATA_API_KEY:-}
       - TELEGRAM_PROXY=${TELEGRAM_PROXY:-}
+      # DADATA_API_KEY здесь НЕ повторяется намеренно. Строка вида
+      # KEY=${KEY:-} перебивает env_file: если выкладка пришла с пустой
+      # переменной в оболочке (секрет ещё не заведён в репозитории), контейнер
+      # получал пустое значение ПОВЕРХ живого ключа из .env — и подсказки
+      # адресов молчали с NO_TOKEN при том, что ключ на сервере лежал.
+      # Ключ приходит из .env через env_file ниже. Проверено
+      # tests/compose-env-precedence.test.ts.
     env_file:
       - .env
     volumes:
