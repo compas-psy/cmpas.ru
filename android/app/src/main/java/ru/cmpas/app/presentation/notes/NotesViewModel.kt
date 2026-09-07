@@ -24,9 +24,18 @@ class NotesViewModel @Inject constructor(
         loadRecentSessions()
     }
 
-    private fun loadRecentSessions() {
+    /**
+     * Перечитать список при возвращении на экран.
+     *
+     * Без загрузчика: список уже показан, и подменять его крутящимся кругом
+     * при каждом возврате значило бы мигать экраном там, где чаще всего
+     * ничего не изменилось.
+     */
+    fun refresh() = loadRecentSessions(showLoader = false)
+
+    private fun loadRecentSessions(showLoader: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = showLoader) }
             try {
                 val today = LocalDate.now()
                 val from = today.minusDays(14).toString()

@@ -41,6 +41,10 @@ class ClientsViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     val remoteClients = response.body().orEmpty()
                     remoteClients.forEach(localStore::upsertClient)
+                    // Список пришёл целиком (поиск на сервер не передаётся),
+                    // значит удалённого в вебе клиента в нём нет — и держать
+                    // его карточку дальше не на чем.
+                    localStore.reconcileClients(remoteClients.map { it.id }.toSet())
                     _uiState.update {
                         it.copy(
                             isLoading = false,
