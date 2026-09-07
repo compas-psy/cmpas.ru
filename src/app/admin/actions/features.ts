@@ -17,6 +17,29 @@ const DEFAULT_FLAGS: Record<string, { label: string; category: string }> = {
   },
 };
 
+// Значение флага, когда строки в SystemConfig ещё нет.
+//
+// У всех флагов это «выключено»: новая функция не включается сама. У
+// telegram_vpn_proxy — наоборот, и вот почему. Тоннель настраивается не
+// в интерфейсе, а секретами выкладки: заводя HYSTERIA_*, человек уже
+// сказал «ходи через тоннель». Если после этого флаг молчаливо остаётся
+// выключенным, тоннель поднят, проверен, работает — и не используется, а
+// узнать об этом можно только зайдя на /admin/features. Ровно так мы и
+// потеряли Telegram: с российского VPS прямого хода до api.telegram.org
+// нет, бот молчал, и ни одна строка журнала не называла причину.
+//
+// Включать по умолчанию безопасно: маршрут всё равно решает живая проба
+// (src/lib/telegram-proxy.ts) — мёртвый тоннель сам откатывается на
+// прямое соединение. Флаг остаётся выключателем: явная строка в базе,
+// в любую сторону, главнее этого значения.
+const FLAG_DEFAULTS: Record<string, () => boolean> = {
+  telegram_vpn_proxy: () => Boolean(process.env.TELEGRAM_PROXY),
+};
+
+function defaultFor(key: string): boolean {
+  return FLAG_DEFAULTS[key]?.() ?? false;
+}
+
 async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.id) throw new Error('Unauthorized');
@@ -35,7 +58,7 @@ export async function getFeatureFlags() {
   for (const [key, info] of Object.entries(DEFAULT_FLAGS)) {
     const row = rows.find(r => r.key === key);
     flags[key] = {
-      enabled: row ? row.value === 'true' : false,
+      enabled: row ? row.value === 'true' : defaultFor(key),
       label: info.label,
       category: info.category,
     };
@@ -59,7 +82,10 @@ export async function setFeatureFlag(key: string, enabled: boolean) {
 // Quick check for a single flag (used by feature components)
 export async function isFeatureEnabled(key: string): Promise<boolean> {
   const row = await db.systemConfig.findUnique({ where: { key } });
-  return row?.value === 'true';
+  // Именно row, а не row?.value: «строки нет» и «строка со значением false»
+  // — разные вещи. Первое означает «никто не решал», второе — «выключили
+  // руками», и путать их нельзя, иначе выключатель перестанет выключать.
+  return row ? row.value === 'true' : defaultFor(key);
 }
 
 // Not exported: a 'use server' file may only export async functions. The
