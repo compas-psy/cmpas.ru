@@ -47,7 +47,7 @@ export function previewMessage(preview: PreviewResult, appUrl: string): IntakeMe
             return {
                 text:
                     'Чтобы заводить карточки клиентов, нужно один раз подтвердить, что вы оператор их персональных данных.\n\n'
-                    + `Это делается в кабинете: ${appUrl}/diary/clients`,
+                    + `Это делается в кабинете: ${appUrl}/diary/clients?attest=1`,
                 buttons: [],
             };
 
@@ -121,7 +121,7 @@ export function commitMessage(result: CommitResult, appUrl: string): string {
         case 'expired':
             return 'Контакт был прислан больше часа назад. Перешлите его ещё раз.';
         case 'attestation_required':
-            return `Сначала подтвердите в кабинете, что вы оператор персональных данных клиентов: ${appUrl}/diary/clients`;
+            return `Сначала подтвердите в кабинете, что вы оператор персональных данных клиентов: ${appUrl}/diary/clients?attest=1`;
         case 'not_found':
             return 'Не нахожу, к чему относится эта кнопка.';
     }
