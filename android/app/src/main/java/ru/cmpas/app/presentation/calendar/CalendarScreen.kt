@@ -26,6 +26,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.presentation.components.*
@@ -49,6 +52,21 @@ fun CalendarScreen(
     val uriHandler = LocalUriHandler.current
     var tuneOpen by remember { mutableStateOf(false) }
     var blockOpen by remember { mutableStateOf(false) }
+
+    // Расписание грузилось один раз в init ViewModel. Вкладки в CompasNavHost
+    // сохраняют состояние (saveState/restoreState), поэтому возврат на экран
+    // ViewModel не пересоздаёт и init второй раз не выполняется: запись,
+    // сделанная клиентом самозаписью, ботом или в вебе, до перезапуска
+    // приложения на календаре не появлялась. Тот же приём, что на дашборде и
+    // в списке клиентов.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Форма закрывается только по подтверждению сервера — не по нажатию
     // кнопки. Пока блокировки нет в базе, её нет вообще.

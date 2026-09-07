@@ -78,6 +78,32 @@ class LocalPracticeStore @Inject constructor(
         prefs.edit().putString(KEY_CLIENTS, json.encodeToString(getClients().filterNot { it.id == client.id } + client)).apply()
     }
 
+    /**
+     * Свести локальный список клиентов к тому, что есть на сервере.
+     *
+     * Хранилище умело только добавлять и обновлять: клиент, удалённый в вебе,
+     * оставался в приложении навсегда — карточка человека, которого в практике
+     * больше нет, продолжала показываться и предлагаться при записи. Обновление
+     * списка этого не исправляло: склейка remote + local по определению не
+     * может убрать то, чего в remote нет.
+     *
+     * Что НЕ удаляется: карточки с префиксом local-. Сервер о них не знает по
+     * определению — они как раз ждут отправки в очереди досылки, и удаление
+     * стёрло бы работу специалиста вместо чужого удаления.
+     *
+     * @param remoteIds идентификаторы ВСЕХ клиентов, которых вернул сервер.
+     *   Ответ на поиск сюда передавать нельзя: он подмножество, и сведение к
+     *   нему стёрло бы всех остальных.
+     * @return сколько карточек убрано
+     */
+    fun reconcileClients(remoteIds: Set<String>): Int {
+        val current = getClients()
+        val kept = current.filter { it.id.startsWith("local-") || it.id in remoteIds }
+        if (kept.size == current.size) return 0
+        prefs.edit().putString(KEY_CLIENTS, json.encodeToString(kept)).apply()
+        return current.size - kept.size
+    }
+
     fun getClients(): List<Client> {
         val raw = prefs.getString(KEY_CLIENTS, null) ?: return emptyList()
         return runCatching { json.decodeFromString<List<Client>>(raw) }.getOrDefault(emptyList())

@@ -17,6 +17,7 @@ import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.OnboardingOptions
 import ru.cmpas.app.domain.model.OnboardingResult
 import ru.cmpas.app.domain.model.OnboardingSendRequest
+import ru.cmpas.app.domain.model.PracticeAddress
 import ru.cmpas.app.domain.model.SessionFormat
 import ru.cmpas.app.domain.model.SessionType
 import ru.cmpas.app.domain.model.TimeSlot
@@ -38,7 +39,30 @@ class QuickActionViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(QuickActionUiState())
     val uiState = _uiState.asStateFlow()
 
-    init { loadClients() }
+    init {
+        loadClients()
+        loadAddresses()
+    }
+
+    /**
+     * Кабинеты грузятся один раз при открытии формы, а не по нажатию на
+     * «В кабинете»: список короткий, а ожидание в момент выбора выглядело бы
+     * как заминка приложения.
+     *
+     * Отказ здесь не показывается ошибкой: кабинеты нужны только очной
+     * встрече, и молчать о них при онлайновой правильнее, чем ронять экран.
+     * Пустой список экран называет вслух — «кабинеты не заведены».
+     */
+    fun loadAddresses() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingAddresses = true) }
+            val loaded = runCatching {
+                val response = api.getAddresses()
+                if (response.isSuccessful) response.body()?.addresses.orEmpty() else emptyList()
+            }.getOrDefault(emptyList())
+            _uiState.update { it.copy(isLoadingAddresses = false, addresses = loaded) }
+        }
+    }
 
     fun loadClients() {
         viewModelScope.launch {
@@ -48,6 +72,10 @@ class QuickActionViewModel @Inject constructor(
                 val response = api.getClients()
                 val remoteClients = if (response.isSuccessful) response.body().orEmpty() else emptyList()
                 remoteClients.forEach(localStore::upsertClient)
+                // Тот же довод, что и в списке клиентов: удалённого в вебе не
+                // предлагаем при записи. Только на успешном ответе — отказ
+                // сервера ничего не говорит о составе практики.
+                if (response.isSuccessful) localStore.reconcileClients(remoteClients.map { it.id }.toSet())
                 _uiState.update { it.copy(isLoadingClients = false, clients = mergeClients(remoteClients, localStore.getClients())) }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isLoadingClients = false, clients = localClients) }
@@ -353,6 +381,15 @@ data class QuickActionUiState(
      */
     val slotsError: String? = null,
     val clients: List<Client> = emptyList(),
+    /**
+     * Кабинеты практики — только действующие, их отдаёт сервер.
+     *
+     * Нужны на пути «Другое время»: слота там нет, а значит нет и кабинета,
+     * который слот нёс с собой. Без этого списка очная встреча сохранялась
+     * без места.
+     */
+    val addresses: List<PracticeAddress> = emptyList(),
+    val isLoadingAddresses: Boolean = false,
     val availableSlots: List<TimeSlot> = emptyList(),
     val onboardingInfo: OnboardingInfo? = null,
     val onboardingOptions: OnboardingOptions? = null,

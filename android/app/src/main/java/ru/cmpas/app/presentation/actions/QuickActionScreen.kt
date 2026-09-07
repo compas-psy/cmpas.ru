@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import ru.cmpas.app.domain.model.*
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
+import ru.cmpas.app.presentation.util.SessionCabinet
 import ru.cmpas.app.presentation.util.SlotFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -89,6 +90,26 @@ fun QuickActionScreen(
     var selectedSlot by remember { mutableStateOf<TimeSlot?>(null) }
     val chosenFormat = if (formatIndex == 0) SlotFormat.ONLINE else SlotFormat.OFFLINE
 
+    // Кабинет, выбранный вручную. Нужен там, где слота нет: «Другое время»
+    // или свободный слот, за которым кабинет не закреплён.
+    var selectedAddressId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addressMenuOpen by remember { mutableStateOf(false) }
+    val slotAddressId = if (customTime) null else selectedSlot?.addressId
+    val slotAddressName = if (customTime) null else selectedSlot?.addressName
+    /** Кабинет, который в самом деле уедет в запись. Правило — в SessionCabinet. */
+    val effectiveAddressId = SessionCabinet.effectiveAddressId(chosenFormat, slotAddressId, selectedAddressId)
+    val needsCabinet = type == "new-session" && SessionCabinet.isRequired(chosenFormat)
+    val selectedAddress = uiState.addresses.firstOrNull { it.id == selectedAddressId }
+
+    // Основной кабинет подставляется сам: у практика он чаще всего один, и
+    // заставлять выбирать единственное — лишний шаг. Выбор человека при этом
+    // не перетирается: подстановка срабатывает только на пустом месте.
+    LaunchedEffect(uiState.addresses) {
+        if (selectedAddressId == null && uiState.addresses.isNotEmpty()) {
+            selectedAddressId = (uiState.addresses.firstOrNull { it.isPrimary } ?: uiState.addresses.first()).id
+        }
+    }
+
     // formatIndex в ключе обязателен: без него переключение «Онлайн» ↔ «В
     // кабинете» не перезапрашивало список, и на экране оставались слоты
     // прежнего формата.
@@ -115,7 +136,12 @@ fun QuickActionScreen(
 
     val canSave = when (type) {
         "new-client" -> clientName.isNotBlank()
-        "new-session" -> selectedClient != null && selectedDate != null && selectedTime != null
+        // Очная встреча без кабинета — запись без места: человек приедет
+        // неизвестно куда. Поэтому кабинет обязателен, но только если он
+        // вообще есть: практика без заведённых кабинетов не должна упереться
+        // в кнопку, которая не нажимается и не объясняет почему.
+        "new-session" -> selectedClient != null && selectedDate != null && selectedTime != null &&
+            SessionCabinet.isReady(chosenFormat, effectiveAddressId, uiState.addresses.isNotEmpty())
         else -> genericPrimary.isNotBlank()
     }
 
@@ -259,6 +285,50 @@ fun QuickActionScreen(
                                 )
                             }
                         }
+                        // Кабинет спрашивается только у очной встречи и только
+                        // тогда, когда его неоткуда взять. У свободного слота
+                        // кабинет уже закреплён расписанием — переспрашивать
+                        // значит предлагать разойтись с ним.
+                        if (needsCabinet) {
+                            item { Eyebrow("Кабинет") }
+                            item {
+                                when {
+                                    slotAddressId != null -> GlassCard(Modifier.fillMaxWidth(), padding = 15.dp) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Outlined.LocationOn, null, Modifier.size(20.dp), tint = Forest700)
+                                            Spacer(Modifier.width(10.dp))
+                                            Column {
+                                                Text(slotAddressName ?: "Кабинет из расписания", style = tBody, color = CompasFg)
+                                                Text("Закреплён за выбранным слотом", style = tMeta, color = CompasMutedFg)
+                                            }
+                                        }
+                                    }
+                                    uiState.isLoadingAddresses -> GlassCard(Modifier.fillMaxWidth(), padding = 15.dp) {
+                                        Text("Загружаем кабинеты…", style = tBody2)
+                                    }
+                                    uiState.addresses.isEmpty() -> GlassCard(Modifier.fillMaxWidth(), padding = 15.dp) {
+                                        // Записать всё равно можно: иначе практика без
+                                        // заведённых кабинетов упёрлась бы в неработающую
+                                        // кнопку. Но встреча сохранится без места, и об
+                                        // этом сказано до сохранения, а не после.
+                                        Text(
+                                            "Кабинеты не заведены — встреча сохранится без места. Кабинет добавляется в настройках практики.",
+                                            style = tBody2,
+                                        )
+                                    }
+                                    else -> AddressPicker(
+                                        addresses = uiState.addresses,
+                                        selected = selectedAddress,
+                                        expanded = addressMenuOpen,
+                                        onExpandedChange = { addressMenuOpen = it },
+                                        onSelect = {
+                                            selectedAddressId = it.id
+                                            addressMenuOpen = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
                         item {
                             GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
                                 OutlinedTextField(
@@ -386,11 +456,11 @@ fun QuickActionScreen(
                             time = selectedTimeText,
                             type = SessionType.entries[sessionTypeIndex],
                             format = if (formatIndex == 0) SessionFormat.ONLINE else SessionFormat.IN_PERSON,
-                            // Кабинет берётся из выбранного слота. При «другом
-                            // времени» слота нет, и очная встреча по-прежнему
-                            // сохраняется без места — это отдельная дыра, она
-                            // названа в PR, а не закрыта тихо.
-                            addressId = selectedSlot?.addressId,
+                            // Кабинет слота, а если слота нет («Другое время»)
+                            // — выбранный на экране. У онлайновой встречи
+                            // кабинета нет: сервер присланный отбрасывает,
+                            // но и слать его отсюда незачем.
+                            addressId = effectiveAddressId,
                             comment = comment,
                         ) { success, message, hasOnboarding ->
                             if (!success) showMessage(message)
@@ -540,6 +610,55 @@ private fun ClientPicker(
                     },
                     leadingIcon = { Avatar(client.name, 34.dp) },
                     onClick = { onSelect(client) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Выбор кабинета для очной встречи.
+ *
+ * Отдельный список, а не поле адреса строкой: адрес уже заведён в настройках
+ * практики, и второе место, где его набирают руками, означало бы два разных
+ * адреса одного кабинета.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddressPicker(
+    addresses: List<PracticeAddress>,
+    selected: PracticeAddress?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelect: (PracticeAddress) -> Unit,
+) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpandedChange) {
+        GlassCard(Modifier.menuAnchor().fillMaxWidth(), padding = 4.dp) {
+            OutlinedTextField(
+                // Название и адрес одной строкой: у практика бывает два
+                // кабинета с похожими названиями, и выбирать вслепую по
+                // «Кабинет 1» — это ошибиться местом встречи.
+                value = selected?.let { "${it.name} · ${it.address}" } ?: "Выбрать кабинет",
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Outlined.LocationOn, null, tint = Forest700) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                shape = RoundedCornerShape(16.dp),
+                colors = glassTextFieldColors(),
+            )
+        }
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+            addresses.forEach { address ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(address.name, style = tBody, color = CompasFg)
+                            Text(address.address, style = tMeta, color = CompasMutedFg)
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Outlined.LocationOn, null, tint = if (address.isPrimary) Forest700 else CompasMutedFg) },
+                    onClick = { onSelect(address) },
                 )
             }
         }
