@@ -128,9 +128,17 @@ jobs:
             # Токен только в адресе запроса, в ответе его нет; адрес
             # вебхука на всякий случай прячем.
             TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2-)
-            curl -sS --max-time 20 --proxy http://127.0.0.1:1080 \
-              "https://api.telegram.org/bot${TOKEN}/getWebhookInfo" 2>&1 \
-              | sed 's/"url":"[^"]*"/"url":"<адрес вебхука>"/' | head -5
+            HOOK=$(curl -sS --max-time 20 --proxy http://127.0.0.1:1080 \
+              "https://api.telegram.org/bot${TOKEN}/getWebhookInfo" 2>&1)
+            # Сначала главное: СТОИТ ли вебхук вообще. Замена адреса на
+            # заглушку прятала это: пустой url выглядел ровно так же, как
+            # рабочий, и «вебхук на месте» из вывода прочитать было нельзя.
+            case "$HOOK" in
+              *'"url":""'*) echo 'вебхук НЕ УСТАНОВЛЕН (url пустой)' ;;
+              *'"url":"'*)  echo 'вебхук установлен (адрес не печатаем)' ;;
+              *)            echo 'ответ без поля url — Telegram не ответил как ожидалось' ;;
+            esac
+            echo "$HOOK" | sed 's/"url":"[^"]*"/"url":"<адрес вебхука>"/' | head -5
             echo "--- смотрим pending_update_count, last_error_message, allowed_updates"
 
             echo

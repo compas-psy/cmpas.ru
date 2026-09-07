@@ -19,14 +19,17 @@
  *   3. Очередь копится И Telegram недавно жаловался на доставку — только
  *      тогда включается запасной путь: снимаем вебхук, забираем
  *      накопившееся через getUpdates по тоннелю, отдаём каждое обновление
- *      в НАШ ЖЕ вебхук-маршрут и ставим вебхук обратно.
+ *      ТОМУ ЖЕ обработчику, что и вебхук, и ставим вебхук обратно.
  *   4. Очередь есть, но жалоб не было — не вмешиваемся: Telegram просто
  *      ещё не донёс, и лезть под руку незачем.
  *
- * Почему обновления отдаются в собственный маршрут, а не разбираются
- * здесь: разбор, проверка подлинности и все обработчики остаются ровно
- * теми же. Второго места, где живёт логика бота, не появляется — а
- * значит, ей неоткуда разойтись.
+ * Почему обновления отдаются общему обработчику, а не разбираются здесь:
+ * разбор и все обработчики остаются ровно теми же. Второго места, где
+ * живёт логика бота, не появляется — а значит, ей неоткуда разойтись.
+ *
+ * Подтверждение забранного (offset) двигается только за успешно
+ * обработанным. Иначе получается тихая потеря: у Telegram обновления уже
+ * нет, а до обработчика оно не дошло.
  *
  * Вебхук возвращается в блоке finally: даже если забор упадёт на середине,
  * главный путь восстановится. А если и это не удастся — пункт 2 на
@@ -58,7 +61,7 @@ export type WatchdogOutcome =
     | { action: 'waiting'; pending: number }
     | { action: 'rescued'; delivered: number; failed: number; webhookRestored: boolean };
 
-/** Из обновления нам нужен только его номер: остальное разбирает вебхук. */
+/** Из обновления нам нужен только его номер: остальное разбирает обработчик. */
 type TelegramUpdate = { update_id: number };
 
 type WebhookInfo = {
@@ -101,23 +104,27 @@ async function callTelegram<T>(method: string, body?: Record<string, unknown>): 
     return (await res.json()) as TelegramReply<T>;
 }
 
-/** Отдать обновление собственному вебхуку — тому же коду, что и всегда. */
-async function feedToOwnWebhook(update: unknown): Promise<boolean> {
+/**
+ * Обработать спасённое обновление тем же кодом, что и обычный вебхук.
+ *
+ * Раньше здесь был HTTP-стук к самому себе на 127.0.0.1:3000 — и он не
+ * проходил ни разу: standalone-сборка Next.js слушает на имени из HOSTNAME,
+ * а docker кладёт туда идентификатор контейнера, то есть приложение слушает
+ * на IP контейнера, но НЕ на петле. Это уже было выяснено и записано в
+ * scripts/db-doctor.sh («Куда на самом деле слушает приложение»), и всё
+ * равно повторилось: обновление забиралось у Telegram, не доходило до
+ * обработчика и подтверждалось как разобранное — то есть исчезало совсем.
+ *
+ * Сети внутри собственного процесса больше нет. Проверка секрета не нужна:
+ * обновление мы взяли у Telegram сами, его подлинность и есть источник.
+ */
+async function handleRescuedUpdate(update: unknown): Promise<boolean> {
     try {
-        const res = await fetch(`http://127.0.0.1:3000${WEBHOOK_PATH}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // Маршрут проверяет этот заголовок и без него молча
-                // отвечает 200, не обрабатывая — то есть тихо потеряет
-                // спасённое обновление.
-                ...(WEBHOOK_SECRET ? { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET } : {}),
-            },
-            body: JSON.stringify(update),
-        });
-        return res.ok;
+        const { processTelegramUpdate } = await import('@/lib/telegram/process-update');
+        await processTelegramUpdate(update);
+        return true;
     } catch (error) {
-        console.error('[tg-watchdog] обновление не отдалось своему же вебхуку:',
+        console.error('[tg-watchdog] обновление не обработалось:',
             error instanceof Error ? error.message : error);
         return false;
     }
@@ -166,29 +173,40 @@ export async function rescueUndeliveredTelegramUpdates(): Promise<WatchdogOutcom
         // мы пришли спасать.
         await callTelegram('deleteWebhook', { drop_pending_updates: false });
 
-        let offset: number | undefined;
+        // offset у Telegram — это И запрос следующей порции, И подтверждение
+        // всего, что до него. Поэтому двигаем его ТОЛЬКО за успешно
+        // обработанным обновлением: не справились — обрываем забор и
+        // оставляем остаток в очереди, чтобы вернувшийся вебхук принёс его
+        // снова. Потерять обновление хуже, чем принести его позже.
+        let confirmed: number | undefined;
         for (;;) {
             const batch = await callTelegram<TelegramUpdate[]>('getUpdates', {
-                ...(offset === undefined ? {} : { offset }),
+                ...(confirmed === undefined ? {} : { offset: confirmed }),
                 limit: BATCH,
                 timeout: 0, // забор, а не ожидание: сторож не должен висеть
             });
             const updates: TelegramUpdate[] = Array.isArray(batch?.result) ? batch.result : [];
             if (updates.length === 0) break;
 
+            let stopped = false;
             for (const update of updates) {
-                if (await feedToOwnWebhook(update)) delivered++;
-                else failed++;
+                if (await handleRescuedUpdate(update)) {
+                    delivered++;
+                    confirmed = update.update_id + 1;
+                } else {
+                    failed++;
+                    stopped = true;
+                    break;
+                }
             }
 
-            offset = updates[updates.length - 1].update_id + 1;
-            if (updates.length < BATCH) break;
+            if (stopped || updates.length < BATCH) break;
         }
 
-        // Подтверждаем разобранное: без этого Telegram отдаст те же
+        // Подтверждаем ровно разобранное: без этого Telegram отдаст те же
         // обновления снова, и человек получит повтор ответа.
-        if (offset !== undefined) {
-            await callTelegram<TelegramUpdate[]>('getUpdates', { offset, limit: 1, timeout: 0 });
+        if (confirmed !== undefined) {
+            await callTelegram<TelegramUpdate[]>('getUpdates', { offset: confirmed, limit: 1, timeout: 0 });
         }
     } finally {
         // Вебхук — главный путь, и он возвращается всегда: даже если забор
