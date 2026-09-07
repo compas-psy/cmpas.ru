@@ -64,7 +64,7 @@ export default function ClientsPage() {
     const notesTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
     const suppressAutoSelect = useRef(false);
     const [isMobile, setIsMobile] = useState(false);
-    const { guard: attestationGuard, modal: attestationModal } = useAttestationGate();
+    const { guard: attestationGuard, modal: attestationModal, openStandalone: openAttestation } = useAttestationGate();
 
     // Onboarding state: after psychologist adds a new client + first session
     const [pendingOnboardingClientId, setPendingOnboardingClientId] = useState<string | null>(null);
@@ -76,6 +76,36 @@ export default function ClientsPage() {
         check(); window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
     }, []);
+
+    // ?attest=1 — приход по ссылке из бота.
+    //
+    // Бот на пересланный контакт отвечает «подтвердите, что вы оператор
+    // персональных данных» и даёт ссылку сюда. До этой ветки окно
+    // подтверждения существовало ТОЛЬКО как реакция на неудачную попытку
+    // завести клиента, поэтому по ссылке открывался обычный список, где
+    // не спрашивают ничего: человек приходил выполнить просьбу и не
+    // находил, чем её выполнить.
+    //
+    // Спрашиваем состояние перед показом: уже подтвердившему это окно
+    // говорило бы неправду («прежде чем добавить первого клиента»).
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (new URLSearchParams(window.location.search).get('attest') !== '1') return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { checkPracticeOperatorAttestation } = await import('../actions/attestation');
+                const { attested } = await checkPracticeOperatorAttestation();
+                if (cancelled) return;
+                if (attested) toast.success('Подтверждение уже записано — можно заводить клиентов.');
+                else openAttestation();
+            } catch { /* не смогли спросить — не мешаем работать со списком */ }
+            // Адрес чистим в любом случае: перезагрузка страницы не должна
+            // снова открывать окно, а ссылка не должна жить в закладках.
+            window.history.replaceState({}, '', window.location.pathname);
+        })();
+        return () => { cancelled = true; };
+    }, [openAttestation]);
 
     const fetchClients = useCallback(async () => {
         try {
