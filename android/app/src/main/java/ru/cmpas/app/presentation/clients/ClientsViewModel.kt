@@ -38,17 +38,41 @@ class ClientsViewModel @Inject constructor(
             val localClients = localStore.getClients()
             try {
                 val response = api.getClients()
-                val remoteClients = if (response.isSuccessful) response.body().orEmpty() else emptyList()
-                remoteClients.forEach(localStore::upsertClient)
+                if (response.isSuccessful) {
+                    val remoteClients = response.body().orEmpty()
+                    remoteClients.forEach(localStore::upsertClient)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            error = null,
+                            allClients = mergeClients(remoteClients, localStore.getClients()),
+                        )
+                    }
+                } else {
+                    // Неуспешный ответ раньше превращался в ПУСТОЙ список
+                    // клиентов, и склейка с кэшем отдавала старый состав как
+                    // будто он свежий. Экран выглядел обычным, просто без
+                    // нового клиента — то есть отказ был неотличим от «всё в
+                    // порядке, у вас правда столько клиентов».
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            error = "Не удалось получить список с сервера (код ${response.code()}). Показан сохранённый.",
+                            allClients = if (it.allClients.isEmpty()) localClients else it.allClients,
+                        )
+                    }
+                }
+            } catch (_: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        allClients = mergeClients(remoteClients, localStore.getClients()),
+                        error = "Нет связи с сервером. Показан сохранённый список.",
+                        allClients = if (it.allClients.isEmpty()) localClients else it.allClients,
                     )
                 }
-            } catch (_: Exception) {
-                _uiState.update { it.copy(isLoading = false, isRefreshing = false, allClients = localClients) }
             }
             applyFilters()
         }
@@ -87,6 +111,15 @@ class ClientsViewModel @Inject constructor(
 data class ClientsUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
+    /**
+     * Почему список может быть устаревшим. null — список свежий.
+     *
+     * Раньше поля не было вовсе: любой отказ (401, 500, обрыв связи,
+     * неразобранный ответ) молча подменял список сохранённым, и человек
+     * видел обычный экран без нового клиента. Отличить «клиента нет» от
+     * «мы не смогли спросить» было невозможно — ни ему, ни нам.
+     */
+    val error: String? = null,
     val searchQuery: String = "",
     val statusFilter: ClientStatus? = null,
     val allClients: List<Client> = emptyList(),

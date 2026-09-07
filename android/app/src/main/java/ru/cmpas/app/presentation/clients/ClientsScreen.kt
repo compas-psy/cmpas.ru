@@ -12,9 +12,11 @@ import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientStatus
 import ru.cmpas.app.presentation.components.*
@@ -33,6 +38,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientsScreen(
     onClientClick: (String) -> Unit = {},
@@ -40,6 +46,26 @@ fun ClientsScreen(
     viewModel: ClientsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Список грузился ровно один раз — в init ViewModel — и обновлялся
+    // только по событиям, которые порождало САМО приложение
+    // (PracticeRefreshBus). Клиент, заведённый на сайте или ботом, такого
+    // события не порождает, а вкладки в CompasNavHost сохраняют своё
+    // состояние (saveState/restoreState), поэтому возврат на экран
+    // ViewModel не пересоздаёт и init второй раз не выполняется. Список
+    // оставался вчерашним до перезапуска приложения.
+    //
+    // Тот же приём, что на дашборде: возвращение в приложение — момент,
+    // когда стоит спросить сервер заново.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val segments = listOf("Активные", "Все", "Архив")
     val selIndex = when (uiState.statusFilter) {
         ClientStatus.ACTIVE -> 0
@@ -49,71 +75,87 @@ fun ClientsScreen(
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
-        LazyColumn(
+        // Потягивания вниз здесь не было вовсе: uiState.isRefreshing
+        // выставлялся, но UI его не читал, а viewModel.refresh() никто не
+        // вызывал. Жест «обновить» существовал только как ожидание —
+        // список просто оттягивался и вставал на место.
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = viewModel::refresh,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Eyebrow("База · ${uiState.allClients.size} ${peopleWord(uiState.allClients.size)}")
-                        Spacer(Modifier.height(4.dp))
-                        Text("Клиенты", style = tHero, color = CompasFg)
-                    }
-                    IconButtonGlass(Icons.Outlined.Add, "Добавить", onClick = onAddClient)
-                }
-            }
-
-            // Search
-            item {
-                Row(
-                    Modifier.fillMaxWidth().height(46.dp).glass(radius = 15.dp).padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = CompasMutedFg)
-                    Spacer(Modifier.width(10.dp))
-                    Box(Modifier.weight(1f)) {
-                        if (uiState.searchQuery.isEmpty()) {
-                            Text("Поиск по имени", style = tBody, color = CompasMutedFg)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 120.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Eyebrow("База · ${uiState.allClients.size} ${peopleWord(uiState.allClients.size)}")
+                            Spacer(Modifier.height(4.dp))
+                            Text("Клиенты", style = tHero, color = CompasFg)
                         }
-                        BasicTextField(
-                            value = uiState.searchQuery,
-                            onValueChange = viewModel::onSearchChange,
-                            singleLine = true,
-                            textStyle = tBody.copy(color = CompasFg),
-                            cursorBrush = SolidColor(Forest700),
+                        IconButtonGlass(Icons.Outlined.Add, "Добавить", onClick = onAddClient)
+                    }
+                }
+
+                // Почему список может быть неполным. Молчание на этом месте
+                // читалось как «клиентов правда столько».
+                uiState.error?.let { message ->
+                    item { Text(message, style = tMeta, color = Red600) }
+                }
+
+                // Search
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().height(46.dp).glass(radius = 15.dp).padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = CompasMutedFg)
+                        Spacer(Modifier.width(10.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (uiState.searchQuery.isEmpty()) {
+                                Text("Поиск по имени", style = tBody, color = CompasMutedFg)
+                            }
+                            BasicTextField(
+                                value = uiState.searchQuery,
+                                onValueChange = viewModel::onSearchChange,
+                                singleLine = true,
+                                textStyle = tBody.copy(color = CompasFg),
+                                cursorBrush = SolidColor(Forest700),
+                            )
+                        }
+                    }
+                }
+
+                // Segment
+                item {
+                    CompasSegmented(segments, selIndex, onSelect = { i ->
+                        viewModel.setStatusFilter(
+                            when (i) {
+                                0 -> ClientStatus.ACTIVE
+                                2 -> ClientStatus.ARCHIVED
+                                else -> null
+                            },
                         )
-                    }
+                    })
                 }
-            }
 
-            // Segment
-            item {
-                CompasSegmented(segments, selIndex, onSelect = { i ->
-                    viewModel.setStatusFilter(
-                        when (i) {
-                            0 -> ClientStatus.ACTIVE
-                            2 -> ClientStatus.ARCHIVED
-                            else -> null
-                        },
-                    )
-                })
-            }
-
-            if (uiState.isLoading && uiState.filteredClients.isEmpty()) {
-                item {
-                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                if (uiState.isLoading && uiState.filteredClients.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
                     }
-                }
-            } else if (uiState.filteredClients.isEmpty()) {
-                item {
-                    GlassCard(padding = 18.dp) { Text("Никого не найдено", style = tBody2) }
-                }
-            } else {
-                items(uiState.filteredClients, key = { it.id }) { c ->
-                    ClientRow(c, onClick = { onClientClick(c.id) })
+                } else if (uiState.filteredClients.isEmpty()) {
+                    item {
+                        GlassCard(padding = 18.dp) { Text("Никого не найдено", style = tBody2) }
+                    }
+                } else {
+                    items(uiState.filteredClients, key = { it.id }) { c ->
+                        ClientRow(c, onClick = { onClientClick(c.id) })
+                    }
                 }
             }
         }
