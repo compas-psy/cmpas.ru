@@ -17,7 +17,15 @@ import { recordRequestDuration } from '@/lib/infra-pulse/response-time';
 
 export function proxy(request: NextRequest) {
     const startedAt = Date.now();
-    const response = NextResponse.next();
+
+    // Куда человек шёл. Layout кабинета отправляет незалогиненного на
+    // /auth, но серверный layout своего адреса не знает — Next его не
+    // передаёт. Без этого заголовка ссылка из бота
+    // (/diary/clients?attest=1) после входа теряется, и человек попадает
+    // не туда, куда его позвали.
+    const forwarded = new Headers(request.headers);
+    forwarded.set('x-pathname', request.nextUrl.pathname + request.nextUrl.search);
+    const response = NextResponse.next({ request: { headers: forwarded } });
     after(() => {
         recordRequestDuration(Date.now() - startedAt);
     });

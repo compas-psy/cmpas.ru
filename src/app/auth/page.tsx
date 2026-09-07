@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react"
 import { useState } from "react"
+import { safeReturnPath } from "@/lib/auth/return-path"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowRight, ShieldCheck } from "lucide-react"
@@ -15,6 +16,17 @@ interface EmailCheckResponse {
 }
 
 export default function AuthPage() {
+    // Куда вернуть после входа — читаем в момент нажатия, а не хуком.
+    //
+    // useSearchParams() здесь потребовал бы обёртки в Suspense и ронял
+    // сборку на пререндере /auth. А значение нужно ровно один раз, когда
+    // человек нажимает «Войти», — тогда его и берём.
+    //
+    // Разбор строгий (см. safeReturnPath): без него параметр «куда
+    // вернуться» стал бы открытой переадресацией.
+    const returnPath = () => safeReturnPath(
+        typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("next")
+    )
     const [email, setEmail] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [emailWarning, setEmailWarning] = useState<string | null>(null)
@@ -22,7 +34,7 @@ export default function AuthPage() {
 
     const handleYandexAuth = async () => {
         try {
-            await signIn("yandex", { callbackUrl: "/diary" })
+            await signIn("yandex", { callbackUrl: returnPath() })
         } catch (error) {
             console.error("Yandex sign-in error:", error)
         }
@@ -58,7 +70,7 @@ export default function AuthPage() {
                 return
             }
 
-            await signIn("nodemailer", { email, callbackUrl: "/diary" })
+            await signIn("nodemailer", { email, callbackUrl: returnPath() })
         } catch (error) {
             console.error("Email sign-in error:", error)
         }

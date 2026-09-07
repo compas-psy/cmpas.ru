@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+import { safeReturnPath, DEFAULT_RETURN_PATH } from '@/lib/auth/return-path';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import Link from 'next/link';
@@ -98,8 +100,14 @@ export default async function DiaryLayout({
 }) {
     const session = await auth();
 
+    // Отправляя на вход, запоминаем, куда человек шёл: иначе ссылка из
+    // бота на /diary/clients?attest=1 после входа приводит на «Сегодня»,
+    // и обещанное окно подтверждения не открывается.
+    const here = safeReturnPath((await headers()).get('x-pathname'));
+    const signInPath = here === DEFAULT_RETURN_PATH ? '/auth' : `/auth?next=${encodeURIComponent(here)}`;
+
     if (!session?.user?.email) {
-        redirect('/auth');
+        redirect(signInPath);
     }
 
     let dbUser;
@@ -118,7 +126,7 @@ export default async function DiaryLayout({
     }
 
     if (!dbUser) {
-        redirect('/auth');
+        redirect(signInPath);
     }
 
     // Legal gate goes before onboarding: a new psychologist must explicitly

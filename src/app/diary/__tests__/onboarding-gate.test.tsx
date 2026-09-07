@@ -16,6 +16,7 @@ const world = vi.hoisted(() => ({
     onboardingCompleted: false,
     needsAcceptance: [] as string[],
     trialEndsAt: new Date('2099-01-01T00:00:00.000Z'),
+    pathname: '/diary',
 }));
 
 class RedirectError extends Error {
@@ -28,9 +29,16 @@ vi.mock('next/navigation', () => ({
     redirect: (target: string) => { throw new RedirectError(target); },
 }));
 
-vi.mock('@/auth', () => ({
-    auth: vi.fn(async () => ({ user: { id: 'psy-1', name: 'Илья', email: 'psy@example.com' } })),
+// Layout спрашивает у заголовков, куда человек шёл, чтобы вернуть его
+// туда после входа. Вне запроса headers() бросает — здесь запроса нет,
+// поэтому подменяем. Значение важно только для одной проверки ниже:
+// адрес назначения должен попасть в ссылку на вход.
+vi.mock('next/headers', () => ({
+    headers: async () => new Headers({ 'x-pathname': world.pathname }),
 }));
+
+const authMock = vi.hoisted(() => vi.fn());
+vi.mock('@/auth', () => ({ auth: authMock }));
 
 vi.mock('@/lib/db', () => ({
     db: {
@@ -75,6 +83,8 @@ beforeEach(() => {
     world.onboardingCompleted = false;
     world.needsAcceptance = [];
     world.trialEndsAt = new Date('2099-01-01T00:00:00.000Z');
+    world.pathname = '/diary';
+    authMock.mockResolvedValue({ user: { id: 'psy-1', name: 'Илья', email: 'psy@example.com' } });
 });
 
 describe('барьеры на входе в кабинет', () => {
@@ -109,6 +119,24 @@ describe('барьеры на входе в кабинет', () => {
             world.onboardingCompleted = completed;
             expect(await redirectedTo()).not.toBe('/onboarding');
         }
+    });
+
+    it('без сессии уводит на вход, запомнив, куда человек шёл', async () => {
+        // Ссылка из бота ведёт на /diary/clients?attest=1, а открывают её
+        // из мессенджера, где сессии нет. Потеряв адрес здесь, мы вернём
+        // человека после входа на «Сегодня», и обещанное окно не
+        // откроется — та же ложь, только на шаг позже.
+        world.pathname = '/diary/clients?attest=1';
+        authMock.mockResolvedValue(null);
+
+        expect(await redirectedTo()).toBe('/auth?next=%2Fdiary%2Fclients%3Fattest%3D1');
+    });
+
+    it('шёл в сам кабинет — лишнего параметра в ссылке нет', async () => {
+        world.pathname = '/diary';
+        authMock.mockResolvedValue(null);
+
+        expect(await redirectedTo()).toBe('/auth');
     });
 
     it('истёкшая подписка по-прежнему уводит в оплату', async () => {
