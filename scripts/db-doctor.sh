@@ -447,6 +447,51 @@ for key in SIMPASID_ISSUER SIMPASID_CLIENT_ID SIMPASID_CLIENT_SECRET; do
 done
 echo "--- все три заданы = кнопка на /auth обязана быть"
 
+# Достижим ли издатель ИЗ КОНТЕЙНЕРА, а не с раннера.
+#
+# При первом входе next-auth сам идёт на .well-known/openid-configuration
+# издателя. Если этот запрос не пройдёт — упавший сертификат, закрытая сеть,
+# остановленный auth-контейнер, — вход сломается в момент, когда человек уже
+# нажал кнопку. Сегодня мы узнали бы об этом от него, а не от диагностики.
+#
+# Спрашивать надо изнутри cmpas-app: там свой список доверенных корней
+# (NODE_EXTRA_CA_CERTS с корнем Минцифры) и своя сеть. С хоста ответ был бы
+# про хост, а ходит не он.
+simpasid_issuer="$(grep -E '^SIMPASID_ISSUER=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+if [ -n "$simpasid_issuer" ]; then
+  echo "### Единый вход: достижим ли издатель из контейнера приложения"
+  docker exec -e PROBE_URL="${simpasid_issuer%/}/.well-known/openid-configuration" cmpas-app \
+    node -e 'fetch(process.env.PROBE_URL).then(r => console.log("openid-configuration ->", r.status)).catch(e => console.log("openid-configuration -> ОТКАЗ:", e.message))' 2>&1 | head -3
+  echo "--- 200 = вход через СИМПАС возможен; отказ = кнопка есть, а войти нельзя"
+fi
+
+# Разошёлся ли sub.
+#
+# Account.providerAccountId — это sub из токена, и он первичен для связи. Если
+# у одного человека sub когда-нибудь изменится (перевыпуск учётной записи,
+# миграция хранилища), заведётся ВТОРАЯ строка Account, а
+# allowDangerousEmailAccountLinking привяжет её к тому же пользователю по
+# почте — молча. Обещания неизменности sub у нас пока нет (вопрос стоит в
+# issue #132), поэтому ловим следствие: в норме здесь ноль.
+echo "### Единый вход: пользователи с более чем одной учётной записью simpasid"
+q "SELECT count(*) FROM (SELECT \"userId\" FROM \"Account\" WHERE provider = 'simpasid' GROUP BY \"userId\" HAVING count(*) > 1) t;"
+echo "--- 0 = sub у всех один; больше нуля = sub разошёлся, связь пошла по почте"
+
+# Кто какой дверью входит.
+#
+# Нужно ДО решения сделать единый вход единственной дверью. Человек, у
+# которого нет ни одной строки Account, входит только магической ссылкой на
+# почту: учётной записи в СИМПАС у него нет, и редирект туда запрёт его
+# снаружи собственной практики, пока он там не заведётся. Это не довод против
+# решения — это число, которое надо знать заранее, а не после.
+echo "### Чем входят: строк Account по провайдерам"
+q "SELECT provider || ': ' || count(*) FROM \"Account\" GROUP BY provider ORDER BY provider;"
+
+echo "### Людей, у которых дверь только одна — почта (ни одной строки Account)"
+q "SELECT count(*) FROM \"User\" u WHERE NOT EXISTS (SELECT 1 FROM \"Account\" a WHERE a.\"userId\" = u.id);"
+q "SELECT 'всего людей: ' || count(*) FROM \"User\";"
+echo "--- это те, кого редирект на auth.cmpas.ru оставит снаружи, пока они там не заведутся"
+
 # ── Подсказки адресов: почему они молчат ──────────────────────────────────
 #
 # «Подсказки временно недоступны. Введите адрес вручную.» на экране кабинетов
