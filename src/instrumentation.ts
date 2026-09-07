@@ -8,7 +8,26 @@ export async function register() {
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
         const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
         const { pruneOldAnalyticsEvents } = await import('./lib/cron/analytics-retention');
+        const { rescueUndeliveredTelegramUpdates } = await import('./lib/telegram/webhook-watchdog');
         const { runExclusive } = await import('./lib/cron/run-exclusive');
+
+        // Подстраховка доставки Telegram — каждые 5 минут.
+        //
+        // Вебхук остаётся главным: пока очередь у Telegram пуста, сторож
+        // не делает ничего, кроме одного дешёвого вопроса. Запасной путь
+        // включается, только когда Telegram сам жалуется, что не может к
+        // нам достучаться, — и сразу возвращает вебхук обратно.
+        //
+        // Пять минут — это и предельная задержка в плохом случае. Без
+        // сторожа она была 23 минуты и больше, и предела у неё не было
+        // вовсе.
+        cron.schedule('*/5 * * * *', runExclusive('telegram-webhook-watchdog', async () => {
+            try {
+                await rescueUndeliveredTelegramUpdates();
+            } catch (error) {
+                console.error('[CRON] Ошибка сторожа доставки Telegram:', error);
+            }
+        }));
 
         // Напоминания каждые 15 минут
         cron.schedule('*/15 * * * *', runExclusive('reminders', async () => {
