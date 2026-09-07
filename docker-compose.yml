@@ -55,6 +55,15 @@ services:
     container_name: cmpas-singbox
     restart: always
     profiles: ["vpn"]
+    # Порт наружу — только на петлю хоста. Он нужен выкладке: регистрация
+    # вебхука Telegram (setWebhook) идёт с хоста обычным curl, а у хоста
+    # прямого хода до api.telegram.org нет, и без этой строки она молча
+    # падала по таймауту — тоннель работал для приложения, но Telegram не
+    # знал, куда слать обновления. 127.0.0.1 обязателен: без него Docker
+    # опубликовал бы прокси на все интерфейсы, то есть открыл бы наш
+    # тоннель всему интернету.
+    ports:
+      - "127.0.0.1:1080:1080"
     volumes:
       - ./deploy/singbox-config.json:/etc/sing-box/config.json:ro
     command: ["run", "-c", "/etc/sing-box/config.json"]

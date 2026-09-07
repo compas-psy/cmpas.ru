@@ -490,11 +490,54 @@ tg_token=$(grep '^TELEGRAM_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)
 tg_api_url=$(grep '^TELEGRAM_API_URL=' .env 2>/dev/null | cut -d= -f2- || true)
 tg_api_url=${tg_api_url:-https://api.telegram.org}
 tg_webhook_secret=$(grep '^TELEGRAM_WEBHOOK_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)
+# Регистрация вебхука идёт через тоннель, а не напрямую.
+#
+# Это второй, отдельный от приложения путь до Telegram, и про него легко
+# забыть: тоннель поднят для контейнера приложения, а setWebhook зовётся
+# ЗДЕСЬ, с хоста, обычным curl. У хоста прямого хода до api.telegram.org
+# нет, поэтому вызов молча падал по таймауту в две минуты —
+# «WARNING: Telegram webhook registration failed» — и Telegram не знал,
+# куда слать обновления. Исходящий канал при этом работал, входящего не
+# было; снаружи это неотличимо от «бот сломан».
+#
+# --max-time: без него мёртвый тоннель держит выкладку 132 секунды на
+# одном curl. Тридцати секунд хватает с запасом, а ждать дольше незачем —
+# ответ либо есть, либо тоннеля нет.
+tg_proxy_args=''
+if [ "$vpn_enabled" = '1' ]; then
+  tg_proxy_args='--proxy http://127.0.0.1:1080'
+fi
 if [ -n "$tg_token" ]; then
-  curl -fsS -X POST "${tg_api_url}/bot${tg_token}/setWebhook" \
-    -H 'Content-Type: application/json' \
-    -d "{\"url\":\"https://cmpas.ru/api/telegram/webhook\",\"drop_pending_updates\":false,\"secret_token\":\"${tg_webhook_secret}\"}" \
-    >/dev/null || log 'WARNING: Telegram webhook registration failed.'
+  if curl -fsS --max-time 30 $tg_proxy_args -X POST "${tg_api_url}/bot${tg_token}/setWebhook" \
+      -H 'Content-Type: application/json' \
+      -d "{\"url\":\"https://cmpas.ru/api/telegram/webhook\",\"drop_pending_updates\":false,\"secret_token\":\"${tg_webhook_secret}\"}" \
+      >/dev/null; then
+    # Проверка, а не надежда: getWebhookInfo говорит, принял ли Telegram
+    # адрес и не копятся ли необработанные обновления. В журнал уходят
+    # только безопасные поля — ни токена, ни secret_token.
+    tg_info=$(curl -fsS --max-time 30 $tg_proxy_args "${tg_api_url}/bot${tg_token}/getWebhookInfo" 2>/dev/null || true)
+    case "$tg_info" in
+      *'"url":"https://cmpas.ru/api/telegram/webhook"'*)
+        # `|| true` у обоих: скрипт под `set -e`, а grep без совпадения —
+        # не ошибка выкладки. Без этого отсутствие необязательного поля в
+        # ответе роняло бы весь деплой.
+        tg_pending=$(printf '%s' "$tg_info" | grep -o '"pending_update_count":[0-9]*' | cut -d: -f2 || true)
+        tg_last_error=$(printf '%s' "$tg_info" | grep -o '"last_error_message":"[^"]*"' | cut -d: -f2- || true)
+        log "Telegram webhook registered${tg_proxy_args:+ through the tunnel}; pending updates: ${tg_pending:-0}."
+        if [ -n "$tg_last_error" ]; then
+          log "NOTE: Telegram reports a previous webhook delivery error: ${tg_last_error}"
+        fi
+        ;;
+      '')
+        log 'WARNING: setWebhook succeeded but getWebhookInfo returned nothing; inbound Telegram is unverified.'
+        ;;
+      *)
+        log 'WARNING: Telegram does not report our webhook URL after setWebhook; inbound Telegram is NOT working.'
+        ;;
+    esac
+  else
+    log "WARNING: Telegram webhook registration failed${tg_proxy_args:+ (through the tunnel)}; the bot will not receive updates."
+  fi
 fi
 
 max_token=$(grep '^MAX_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)

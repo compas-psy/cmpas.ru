@@ -149,6 +149,30 @@ describe('сборка конфигурации sing-box', () => {
         expect(statSync(out).mode & 0o077).toBe(0);
     });
 
+    it('регистрация вебхука Telegram идёт через тоннель, а не напрямую', () => {
+        const deploy = readFileSync(path.join(process.cwd(), 'scripts/deploy-production-remote.sh'), 'utf8');
+
+        // Второй, отдельный от приложения путь до Telegram. Тоннель поднят
+        // для контейнера приложения, а setWebhook зовётся с хоста обычным
+        // curl — и падал по таймауту, пока не пошёл через прокси. Итог был
+        // самый скверный из возможных: исходящий канал работает, входящего
+        // нет, и снаружи это неотличимо от «бот сломан».
+        expect(deploy).toMatch(/tg_proxy_args='--proxy http:\/\/127\.0\.0\.1:1080'/);
+        // Без --max-time мёртвый тоннель держал выкладку 132 секунды.
+        expect(deploy).toMatch(/curl -fsS --max-time \d+ \$tg_proxy_args -X POST "\$\{tg_api_url\}\/bot\$\{tg_token\}\/setWebhook"/);
+        // Регистрация без проверки — это надежда, а не результат.
+        expect(deploy).toContain('getWebhookInfo');
+    });
+
+    it('порт тоннеля на хосте открыт только на петлю', () => {
+        const compose = readFileSync(path.join(process.cwd(), 'docker-compose.yml'), 'utf8');
+
+        // Без 127.0.0.1 Docker публикует порт на всех интерфейсах — то есть
+        // отдаёт наш тоннель всему интернету открытым прокси.
+        expect(compose).toContain('"127.0.0.1:1080:1080"');
+        expect(compose).not.toMatch(/^\s+- "1080:1080"/m);
+    });
+
     it('в выкладке не осталось mieru', () => {
         const deploy = readFileSync(path.join(process.cwd(), 'scripts/deploy-production-remote.sh'), 'utf8');
         const template = readFileSync(TEMPLATE, 'utf8');
