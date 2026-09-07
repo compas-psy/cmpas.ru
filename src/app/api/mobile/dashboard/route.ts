@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
+import { addDays, isoWeekWindow, utcDayStart } from '@/lib/practice/week-window';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { clientBookingLink } from '@/lib/client-workflow';
 import { getPsychologistBookingUrl } from '@/lib/booking/slug';
@@ -57,18 +58,36 @@ export async function GET(req: NextRequest) {
         });
 
         const now = new Date();
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-        const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7);
-        const horizon = new Date(today); horizon.setDate(horizon.getDate() + 30);
+        // Границы дня — в UTC, как у соседнего маршрута блокировок и как
+        // пишет даты бронирование (Date.UTC в booking.ts). setHours считал
+        // бы их в часовом поясе ОС сервера: пока он в UTC, разницы нет, но
+        // при переезде «сегодня» поехало бы на сутки. Снятая мина, а не
+        // смена поведения.
+        const today = utcDayStart(now);
+        const tomorrow = addDays(today, 1);
+        const horizon = addDays(today, 30);
 
-        const [todaySessions, weekSessions, user, futureCandidates, attentionItems, notificationPage] = await Promise.all([
+        // Неделя — КАЛЕНДАРНАЯ, понедельник–воскресенье, и та, в которой
+        // сегодняшний день. Раньше здесь было окно «последние 7 дней
+        // назад», и оно расходилось с двумя вещами сразу: с календарём в
+        // том же приложении, который считает неделю Пн–Вс, и со смыслом
+        // слова «за неделю» для человека. Сессия в среду при взгляде в
+        // понедельник в старое окно не попадала ПО ПОСТРОЕНИЮ — то есть
+        // плитка молчала именно о том, к чему специалист готовится.
+        const { start: weekStart, end: weekEnd } = isoWeekWindow(now);
+
+        const [todaySessions, weekSessions, newClientsCount, user, futureCandidates, attentionItems, notificationPage] = await Promise.all([
             db.diarySession.findMany({
                 where: { psychologistId: auth.userId, date: { gte: today, lt: tomorrow }, status: { not: 'cancelled' } },
                 include: { client: { select: { id: true, name: true } } },
                 orderBy: { time: 'asc' },
             }),
-            db.diarySession.findMany({ where: { psychologistId: auth.userId, date: { gte: weekAgo, lt: tomorrow } }, select: { id: true, status: true, clientId: true } }),
+            db.diarySession.findMany({ where: { psychologistId: auth.userId, date: { gte: weekStart, lt: weekEnd } }, select: { id: true, status: true, clientId: true } }),
+            // Новые клиенты — те, чья карточка заведена на этой неделе.
+            // Раньше «новых» считалось как «сколько разных клиентов было на
+            // сессиях за 7 дней»: клиент, с которым работают третий год,
+            // попадал в новые просто потому, что на неделе была встреча.
+            db.diaryClient.count({ where: { psychologistId: auth.userId, createdAt: { gte: weekStart, lt: weekEnd } } }),
             db.user.findUnique({
                 where: { id: auth.userId },
                 select: { name: true, psychologistSettings: { select: { fullName: true, onlineSessionLink: true, onboardingCompleted: true } } },
@@ -116,14 +135,13 @@ export async function GET(req: NextRequest) {
         const slugBase = await getPsychologistBookingUrl(auth.userId).catch(() => null);
         const bookingLink = clientBookingLink(auth.userId, '', slugBase || undefined);
         const baseBookingLink = bookingLink.replace(/\/c\/[^?]+/, '');
-        const clientIds = new Set(weekSessions.map(s => s.clientId).filter(Boolean));
 
         return NextResponse.json({
             todaySessions: formattedSessions,
             nextSession: formattedNextSession,
             weekStats: {
                 sessionsCount: weekSessions.filter(s => s.status !== 'cancelled').length,
-                newClients: clientIds.size,
+                newClients: newClientsCount,
                 cancelledCount: weekSessions.filter(s => s.status === 'cancelled').length,
             },
             userName: user?.psychologistSettings?.fullName || user?.name || null,

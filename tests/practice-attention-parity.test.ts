@@ -60,6 +60,10 @@ vi.mock('@/lib/booking/slug', () => ({ getPsychologistBookingUrl: async () => 'h
 vi.mock('@/lib/db', () => ({
     db: {
         diarySession: { findMany: vi.fn(async () => []) },
+        // Плитка «новых» считает клиентов, заведённых на этой неделе,
+        // отдельным запросом — без этой заглушки маршрут падает целиком, и
+        // проверка про пункты внимания краснеет по чужой причине.
+        diaryClient: { count: vi.fn(async () => 0) },
         user: { findUnique: vi.fn(async () => ({ name: 'Илья', psychologistSettings: null })) },
         $queryRaw: vi.fn(async () => []),
     },
