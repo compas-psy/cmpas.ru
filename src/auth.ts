@@ -8,7 +8,7 @@ import { html, text } from "@/lib/email-template"
 import { linkVisitorAndTrackIdentity } from "@/lib/analytics/link-visitor"
 import { track } from "@/lib/analytics/track"
 import { VISITOR_ID_COOKIE } from "@/lib/analytics/visitor-cookie"
-import { isSimpasIdConfigured, isSimpasIdEmailTrustworthy, SIMPASID_PROVIDER_ID } from "@/lib/auth/simpasid"
+import { isAccountProvider, isSimpasIdConfigured, isSimpasIdEmailTrustworthy, SIMPASID_PROVIDER_ID } from "@/lib/auth/simpasid"
 // @ts-expect-error - nodemailer types not installed due to peer dep conflict
 import { createTransport } from "nodemailer"
 
@@ -78,15 +78,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     }
                 })
 
-                // Only block if user has OAuth account (e.g., Yandex)
-                // Allow email login for users who registered via email magic link
-                const hasOAuthAccount = existingUser?.accounts?.some(
-                    acc => acc.provider === "yandex"
-                )
+                // Человека, заведшего аккаунт через провайдера, отправляем
+                // входить тем же способом. Вход по ссылке сам подтверждает
+                // владение почтой, так что это не запрет, а маршрутизация.
+                //
+                // Условие берётся из общего места: раньше здесь стояло
+                // acc.provider === "yandex", а экран входа
+                // (api/auth/check-email) считал аккаунтом ЛЮБОЙ провайдер
+                // кроме nodemailer. Пока провайдера было два, разница
+                // ничего не значила; с третьим экран бы блокировал, а
+                // отправка письма пропускала — то есть один и тот же
+                // вопрос получал бы два разных ответа в зависимости от
+                // того, через какую дверь человек вошёл.
+                const accountProvider = existingUser?.accounts
+                    ?.map(acc => acc.provider)
+                    .find(isAccountProvider)
 
-                if (existingUser?.emailVerified && hasOAuthAccount) {
-                    // User registered via OAuth - they should use that method
-                    console.log(`[auth] User ${email} has OAuth account, redirecting to use Yandex login`)
+                if (existingUser?.emailVerified && accountProvider) {
+                    // Почту не пишем — персональные данные; провайдер её не раскрывает.
+                    console.log(`[auth] у пользователя есть аккаунт ${accountProvider}, отправляем входить через него`)
                     throw new Error("EMAIL_EXISTS")
                 }
 

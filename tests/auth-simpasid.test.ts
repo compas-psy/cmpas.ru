@@ -7,7 +7,7 @@
 // захват. Отсюда строгость: подтверждение должно быть сказано явно.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { isSimpasIdConfigured, isSimpasIdEmailTrustworthy } from '../src/lib/auth/simpasid';
+import { isSimpasIdConfigured, isSimpasIdEmailTrustworthy, isAccountProvider, providerDisplayName } from '../src/lib/auth/simpasid';
 
 const KEYS = ['SIMPASID_ISSUER', 'SIMPASID_CLIENT_ID', 'SIMPASID_CLIENT_SECRET'] as const;
 const ORIGINAL = Object.fromEntries(KEYS.map(k => [k, process.env[k]]));
@@ -97,6 +97,39 @@ describe('единый вход СИМПАС', () => {
         // проверка подлинности перестаёт быть проверкой.
         it('подтверждение строкой — не верим', () => {
             expect(isSimpasIdEmailTrustworthy({ email: 'psy@example.com', email_verified: 'true' })).toBe(false);
+        });
+    });
+
+    // Проверка «у человека уже есть аккаунт, отправь его входить туда»
+    // живёт в ДВУХ местах: на экране входа (api/auth/check-email) и в
+    // самой отправке письма (auth.ts). Они разошлись: экран считал
+    // аккаунтом любой провайдер кроме nodemailer, отправка письма —
+    // только yandex. Пока провайдера было два, разница ничего не значила;
+    // с третьим один и тот же вопрос получал бы два разных ответа в
+    // зависимости от того, через какую дверь человек вошёл.
+    describe('что считается аккаунтом', () => {
+        it('вход по ссылке аккаунтом не считается', () => {
+            expect(isAccountProvider('nodemailer')).toBe(false);
+        });
+
+        it('и Яндекс, и СИМПАС считаются — правило одно на всех', () => {
+            expect(isAccountProvider('yandex')).toBe(true);
+            expect(isAccountProvider('simpasid')).toBe(true);
+        });
+    });
+
+    // Экран входа показывает это имя человеку в лицо: «Этот email связан
+    // с аккаунтом X. Войдите через X». Пока провайдер был один, X всегда
+    // был «Яндекс»; с simpasid человек увидел бы латиницей строку из
+    // нашей конфигурации.
+    describe('как способ входа называется человеку', () => {
+        it('провайдеры названы по-русски', () => {
+            expect(providerDisplayName('yandex')).toBe('Яндекс');
+            expect(providerDisplayName('simpasid')).toBe('СИМПАС');
+        });
+
+        it('незнакомый провайдер не роняет экран, а показывается как есть', () => {
+            expect(providerDisplayName('vk')).toBe('vk');
         });
     });
 });

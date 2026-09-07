@@ -50,3 +50,38 @@ export function isSimpasIdEmailTrustworthy(profile: unknown): boolean {
     // проверку `undefined !== false`.
     return claims.email_verified === true;
 }
+
+/**
+ * Как способ входа называется для человека.
+ *
+ * Нужно потому, что экран входа показывает это имя в лицо: «Этот email
+ * связан с аккаунтом X. Войдите через X». До появления третьего
+ * провайдера X всегда был «Яндекс», и подставлять туда идентификатор
+ * было негде. С simpasid человек увидел бы в предложении латиницей
+ * «simpasid» — строку из нашей конфигурации, которая ему ничего не
+ * говорит.
+ *
+ * nodemailer сюда не попадает: это не «аккаунт», а вход по ссылке.
+ */
+const PROVIDER_NAMES: Record<string, string> = {
+    yandex: 'Яндекс',
+    [SIMPASID_PROVIDER_ID]: 'СИМПАС',
+};
+
+export function providerDisplayName(providerId: string): string {
+    return PROVIDER_NAMES[providerId] ?? providerId;
+}
+
+/**
+ * Считается ли способ входа «аккаунтом», по которому человека надо
+ * отправить обратно вместо входа по почте.
+ *
+ * Отдельная функция, а не два одинаковых условия: проверка живёт в ДВУХ
+ * местах — на экране входа (api/auth/check-email) и в самой отправке
+ * письма (auth.ts). Они успели разойтись: экран считал аккаунтом любой
+ * провайдер кроме nodemailer, а отправка письма смотрела только на
+ * yandex. Пока провайдера было два, разница ничего не значила.
+ */
+export function isAccountProvider(providerId: string): boolean {
+    return providerId !== 'nodemailer';
+}
