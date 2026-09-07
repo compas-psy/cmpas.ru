@@ -7,6 +7,8 @@
 // захват. Отсюда строгость: подтверждение должно быть сказано явно.
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync } from 'fs';
+import path from 'path';
 import { isSimpasIdConfigured, isSimpasIdEmailTrustworthy, isAccountProvider, providerDisplayName } from '../src/lib/auth/simpasid';
 
 const KEYS = ['SIMPASID_ISSUER', 'SIMPASID_CLIENT_ID', 'SIMPASID_CLIENT_SECRET'] as const;
@@ -130,6 +132,27 @@ describe('единый вход СИМПАС', () => {
 
         it('незнакомый провайдер не роняет экран, а показывается как есть', () => {
             expect(providerDisplayName('vk')).toBe('vk');
+        });
+    });
+
+    // Так это сломалось на бою 07.09.2026. Ключ на сервере был, приложение
+    // перезапущено — а кнопки не появилось и появиться не могло: Next.js
+    // пререндерил /auth во время `next build`, ВНУТРИ сборочного образа,
+    // где переменных единого входа нет. Ответ «не настроен» запёкся в
+    // разметку. Снаружи неотличимо от «ключ не доехал».
+    //
+    // Проверяется исходник, а не поведение: узнать режим рендера из
+    // модуля нельзя, его читает сборщик. Строка одна, и потерять её
+    // легко — например при возврате страницы к статике «ради скорости».
+    describe('страница входа считается на каждый запрос', () => {
+        const page = readFileSync(path.join(process.cwd(), 'src/app/auth/page.tsx'), 'utf8');
+
+        it('объявлен force-dynamic', () => {
+            expect(page).toMatch(/export const dynamic = ["']force-dynamic["']/);
+        });
+
+        it('состав экрана берётся из настройки сервера, а не из сборки', () => {
+            expect(page).toContain('isSimpasIdConfigured()');
         });
     });
 });
