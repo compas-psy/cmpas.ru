@@ -20,6 +20,7 @@ import ru.cmpas.app.domain.model.Session
 import ru.cmpas.app.domain.model.SessionReminder
 import ru.cmpas.app.domain.model.SessionStatus
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
+import ru.cmpas.app.presentation.util.SlotFormat
 import javax.inject.Inject
 
 @HiltViewModel
@@ -279,7 +280,15 @@ class SessionDetailViewModel @Inject constructor(
                 val sessionId = _uiState.value.session?.id
                 val r = api.getFreeTimes(date = date, sessionId = sessionId)
                 if (r.isSuccessful) {
-                    _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimes = r.body()?.times.orEmpty()) }
+                    // Перенос сохраняет формат встречи, поэтому и слоты
+                    // показываются только подходящие ему. Без отбора
+                    // очную сессию можно было перенести на онлайновый час
+                    // — и наоборот.
+                    val format = _uiState.value.session?.format?.name
+                    val times = r.body()?.times.orEmpty()
+                        .filter { SlotFormat.matches(it.format, format) }
+                        .map { it.time }
+                    _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimes = times) }
                 } else {
                     _uiState.update { it.copy(isLoadingFreeTimes = false, freeTimesError = "Нет доступных слотов") }
                 }
