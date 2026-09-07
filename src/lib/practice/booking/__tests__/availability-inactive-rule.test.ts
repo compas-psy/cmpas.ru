@@ -13,8 +13,9 @@
 import { describe, it, expect } from 'vitest';
 import { resolveAvailableTimesForDay } from '../availability';
 import type { AvailabilitySlotInput, ScheduleRuleInput } from '../types';
+import { futureMonday } from './future-monday';
 
-const MONDAY = '2026-09-07';
+const MONDAY = futureMonday();
 
 function rule(id: string, isActive: boolean, over: Partial<ScheduleRuleInput> = {}): ScheduleRuleInput {
     return {

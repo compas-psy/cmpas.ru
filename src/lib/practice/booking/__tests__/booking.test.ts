@@ -24,9 +24,10 @@
 // serialization, which is the part unit-testable without a live database.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { futureMonday } from './future-monday';
 
 const PSY_ID = 'psy-1';
-const MONDAY = '2026-09-07';
+const MONDAY = futureMonday();
 
 const { store, db, SLOTS } = vi.hoisted(() => {
     const onlineSlot = {

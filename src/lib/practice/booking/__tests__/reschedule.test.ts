@@ -13,10 +13,17 @@
 // pg_advisory_xact_lock serialization plus real transactional rollback.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { futureMonday } from './future-monday';
 
 const PSY_ID = 'psy-1';
-const MONDAY = '2026-09-07'; // dayOfWeek 0
-const TUESDAY = '2026-09-08'; // dayOfWeek 1
+const MONDAY = futureMonday();
+// Вторник считаем от понедельника, а не пишем отдельно: две зашитые
+// даты рядом расходятся молча.
+const TUESDAY = (() => {
+    const d = new Date(`${MONDAY}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+})(); // dayOfWeek 1
 
 const { store, db, SLOTS } = vi.hoisted(() => {
     const slotMonday = {
