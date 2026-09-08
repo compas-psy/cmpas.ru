@@ -500,6 +500,36 @@ echo "--- это те, кого редирект на auth.cmpas.ru остави
 # Маршрут /api/dadata их различает и пишет в журнал полями (без запроса и
 # без адреса — человек набирает туда что угодно, вплоть до адреса клиента),
 # но заглянуть в этот журнал было неоткуда.
+# ── Подписанные документы: дошло ли уведомление ───────────────────────────
+#
+# Клиент подписал информированное согласие: отметка в карточке проставилась,
+# а уведомления специалист не увидел. Код на месте — подтверждение зовёт
+# создание уведомления, тип document_acknowledged знают и сервер, и
+# приложение. Значит либо строка не создалась, либо создалась и не дошла.
+# Гадать об этом нельзя: это разные починки.
+#
+# Имён и названий документов НЕ печатаем: и то и другое — персональные
+# данные клиента. Только счёт и время.
+echo "### Документы: подписи и уведомления за 7 дней"
+q "SELECT 'вручений всего=' || count(*) FROM \"ClientDocumentDelivery\" WHERE \"createdAt\" >= now() - interval '7 days';"
+q "SELECT 'из них подписано=' || count(*) FROM \"ClientDocumentDelivery\" WHERE \"acknowledgedAt\" >= now() - interval '7 days';"
+q "SELECT 'уведомлений document_acknowledged=' || count(*) FROM \"PracticeNotification\" WHERE type = 'document_acknowledged' AND \"createdAt\" >= now() - interval '7 days';"
+q "SELECT 'уведомлений document_opened=' || count(*) FROM \"PracticeNotification\" WHERE type = 'document_opened' AND \"createdAt\" >= now() - interval '7 days';"
+
+echo "### Подписи без уведомления (то самое расхождение)"
+q "SELECT d.id || '  подписано ' || d.\"acknowledgedAt\"
+   FROM \"ClientDocumentDelivery\" d
+   WHERE d.\"acknowledgedAt\" IS NOT NULL
+     AND d.\"acknowledgedAt\" >= now() - interval '7 days'
+     AND NOT EXISTS (
+       SELECT 1 FROM \"PracticeNotification\" n
+       WHERE n.type = 'document_acknowledged'
+         AND n.\"psychologistId\" = d.\"psychologistId\"
+         AND n.\"clientId\" = d.\"clientId\"
+         AND n.\"createdAt\" >= d.\"acknowledgedAt\" - interval '5 minutes'
+     );"
+echo "--- пусто = уведомления создаются, дело в показе; строки = запись не создалась"
+
 echo "### Подсказки адресов: ключ DaData (значение не печатаем)"
 dadata="$(grep -E '^DADATA_API_KEY=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
 if [ -n "$dadata" ]; then
