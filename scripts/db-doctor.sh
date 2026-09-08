@@ -530,6 +530,29 @@ q "SELECT d.id || '  подписано ' || d.\"acknowledgedAt\"
      );"
 echo "--- пусто = уведомления создаются, дело в показе; строки = запись не создалась"
 
+# Гашение повторов у уведомления ключуется по (тип, заголовок, подзаголовок,
+# клиент, сессия) — но НЕ по самому вручению. Подзаголовок складывается из
+# имени клиента, названия документа и версии. Значит второе вручение ТОГО ЖЕ
+# документа тому же клиенту даёт тот же ключ, и подпись под ним считается
+# повтором уже показанного.
+#
+# Проверяем прямо: есть ли у клиента больше одного вручения одного документа
+# одной версии. Имён и названий не печатаем — только счёт.
+echo "### Повторные вручения одного документа одному клиенту (7 дней)"
+q "SELECT 'пар клиент+документ+версия с повтором=' || count(*) FROM (
+     SELECT \"clientId\", \"documentTitle\", \"documentVersion\"
+     FROM \"ClientDocumentDelivery\"
+     WHERE \"createdAt\" >= now() - interval '7 days'
+     GROUP BY 1,2,3 HAVING count(*) > 1
+   ) t;"
+q "SELECT 'из них с более чем одной подписью=' || count(*) FROM (
+     SELECT \"clientId\", \"documentTitle\", \"documentVersion\"
+     FROM \"ClientDocumentDelivery\"
+     WHERE \"acknowledgedAt\" IS NOT NULL AND \"createdAt\" >= now() - interval '7 days'
+     GROUP BY 1,2,3 HAVING count(*) > 1
+   ) t;"
+echo "--- больше нуля в первой строке = гашение повторов срабатывает не на том"
+
 echo "### Подсказки адресов: ключ DaData (значение не печатаем)"
 dadata="$(grep -E '^DADATA_API_KEY=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
 if [ -n "$dadata" ]; then
