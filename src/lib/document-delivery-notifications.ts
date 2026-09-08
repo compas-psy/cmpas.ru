@@ -28,14 +28,26 @@ export async function notifyDocumentDeliveryEvent(deliveryId: string, event: 'op
     const title = event === 'acknowledged' ? 'Документ подтверждён' : 'Документ открыт';
     const subtitle = `${delivery.clientName} · ${delivery.documentTitle} · версия ${delivery.documentVersion}`;
 
+    // Повтор гасится ПО САМОМУ ВРУЧЕНИЮ, а не по тексту уведомления.
+    //
+    // Раньше ключом были заголовок и подзаголовок. Подзаголовок складывается
+    // из имени клиента, названия документа и версии — то есть у второго
+    // вручения ТОГО ЖЕ документа тому же клиенту он совпадал полностью, и
+    // настоящая подпись под ним считалась повтором уже показанного.
+    //
+    // 08.09.2026 так пропала подпись под информированным согласием: отметка в
+    // карточке проставилась, а уведомления специалист не увидел. В базе на
+    // тот момент было три подписи и два уведомления, и ровно одна пара
+    // «клиент + документ + версия» вручалась дважды.
+    //
+    // Гасить всё равно надо: страница документа зовёт это на КАЖДОМ открытии,
+    // и без гашения «Документ открыт» приходило бы на каждое обновление
+    // страницы. Но гасить надо повтор ОДНОГО события, а не два разных.
     const existing = await db.practiceNotification.count({
         where: {
             psychologistId: delivery.psychologistId,
             type,
-            title,
-            subtitle,
-            clientId: delivery.clientId,
-            sessionId: delivery.sessionId,
+            refId: deliveryId,
         },
     }).catch(() => 0);
     if (existing > 0) return false;
@@ -47,6 +59,7 @@ export async function notifyDocumentDeliveryEvent(deliveryId: string, event: 'op
         subtitle,
         clientId: delivery.clientId,
         sessionId: delivery.sessionId,
+        refId: deliveryId,
     });
     return true;
 }

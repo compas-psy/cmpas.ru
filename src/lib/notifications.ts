@@ -27,6 +27,14 @@ export async function createNotification(params: {
     subtitle?: string | null;
     sessionId?: string | null;
     clientId?: string | null;
+    /**
+     * Событие, о котором уведомление: id вручения документа и т.п.
+     *
+     * Нужно тем, кто гасит повторы. Гасить по заголовку и подзаголовку нельзя:
+     * подзаголовок — это текст для человека, и у двух РАЗНЫХ событий он
+     * совпадает запросто (одно и то же согласие, врученное дважды).
+     */
+    refId?: string | null;
 }) {
     try {
         await db.practiceNotification.create({
@@ -37,6 +45,7 @@ export async function createNotification(params: {
                 subtitle: params.subtitle || null,
                 sessionId: params.sessionId || null,
                 clientId: params.clientId || null,
+                refId: params.refId || null,
             },
         });
     } catch (e) {
