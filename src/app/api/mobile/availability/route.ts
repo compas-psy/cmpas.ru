@@ -56,6 +56,11 @@ export async function GET(req: NextRequest) {
                 duration: slot.duration ?? 50,
                 format: slot.format || 'online',
                 addressId: slot.addressId,
+                // Период окна нужен приложению, чтобы правка и добавление
+                // часов оставались внутри того же срока, а не заводили окно
+                // на «сегодня-плюс-сколько-то» по своему усмотрению.
+                startDate: slot.startDate ? slot.startDate.toISOString().split('T')[0] : null,
+                endDate: slot.endDate ? slot.endDate.toISOString().split('T')[0] : null,
             })),
             blocks: blocks.map((block) => ({
                 id: block.id,

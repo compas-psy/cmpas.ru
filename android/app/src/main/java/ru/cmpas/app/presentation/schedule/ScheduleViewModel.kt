@@ -11,6 +11,8 @@ import ru.cmpas.app.data.api.AvailabilityRule
 import ru.cmpas.app.data.api.AvailabilitySlotDto
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.CreateBlockRequest
+import ru.cmpas.app.data.api.CreateSlotRequest
+import ru.cmpas.app.data.api.UpdateSlotRequest
 import ru.cmpas.app.data.api.ScheduleModeRequest
 import ru.cmpas.app.domain.model.TimeBlock
 import ru.cmpas.app.presentation.util.PracticeRefreshBus
@@ -91,11 +93,19 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Быстрая кнопка. `null` в часах — это «весь день».
+     *
+     * Именно null, а не 00:00–23:59 руками: значения по умолчанию живут в
+     * общем серверном правиле (src/lib/practice/block-window.ts), и вторая
+     * их копия здесь однажды разошлась бы с первой. Кнопка «С 18:00»
+     * передаёт настоящие часы — ей есть что сказать.
+     */
     fun quickBlock(
         startDate: String,
         endDate: String = startDate,
-        startTime: String = "00:00",
-        endTime: String = "23:59",
+        startTime: String? = null,
+        endTime: String? = null,
         type: String = "personal",
         reason: String,
         cancelIntersectingSessions: Boolean = false,
@@ -105,24 +115,6 @@ class ScheduleViewModel @Inject constructor(
         endDate = endDate,
         startTime = startTime,
         endTime = endTime,
-        type = type,
-        reason = reason,
-        cancelIntersectingSessions = cancelIntersectingSessions,
-        onFinished = onFinished,
-    )
-
-    fun createBlock(
-        startDate: String,
-        endDate: String,
-        type: String,
-        reason: String?,
-        cancelIntersectingSessions: Boolean,
-        onFinished: (Boolean, String) -> Unit,
-    ) = createBlock(
-        startDate = startDate,
-        endDate = endDate,
-        startTime = null,
-        endTime = null,
         type = type,
         reason = reason,
         cancelIntersectingSessions = cancelIntersectingSessions,
@@ -164,6 +156,130 @@ class ScheduleViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false) }
                 onFinished(false, e.localizedMessage ?: "Не удалось сохранить")
+            }
+        }
+    }
+
+    // ── Рабочие часы ──────────────────────────────────────────────────────
+    //
+    // До этого приложение расписание только показывало, а на любую правку
+    // отправляло в веб-кабинет. Практик с телефоном в руках не мог поменять
+    // часы конкретного дня недели — а это и есть та правка, которая нужна
+    // чаще всего и обычно срочно.
+    //
+    // Правила живут на сервере (пересечения, кабинет, обед) и одни на оба
+    // входа. Здесь только вызов и честная передача ответа на экран.
+
+    /**
+     * Сообщение сервера для человека, а не «Ошибка (400)».
+     *
+     * Сервер отвечает `{"error":"Расписание пересекается с существующим:
+     * Вт 10:00–18:00"}` — это единственная подсказка, из которой понятно,
+     * ЧТО именно мешает сохранить. Заменить её кодом ответа значит оставить
+     * человека наедине с непонятно почему не сохраняющейся формой.
+     */
+    private fun errorText(raw: String?, fallback: String): String {
+        if (raw.isNullOrBlank()) return fallback
+        val message = Regex("\"error\"\\s*:\\s*\"(.*?)\"").find(raw)?.groupValues?.getOrNull(1)
+        return message?.takeIf { it.isNotBlank() } ?: fallback
+    }
+
+    fun addSlot(
+        dayOfWeek: Int,
+        startTime: String,
+        endTime: String,
+        duration: Int,
+        format: String,
+        addressId: String?,
+        startDate: String,
+        endDate: String,
+        scheduleRuleId: String?,
+        onFinished: (Boolean, String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            try {
+                val response = api.createSlot(
+                    CreateSlotRequest(
+                        startDate = startDate,
+                        endDate = endDate,
+                        daysOfWeek = listOf(dayOfWeek),
+                        startTime = startTime,
+                        endTime = endTime,
+                        duration = duration,
+                        format = format,
+                        addressId = addressId,
+                        scheduleRuleId = scheduleRuleId,
+                    ),
+                )
+                _uiState.update { it.copy(isSaving = false) }
+                if (response.isSuccessful) {
+                    PracticeRefreshBus.notifyChanged()
+                    loadSchedule()
+                    onFinished(true, "Часы добавлены")
+                } else {
+                    onFinished(false, errorText(response.errorBody()?.string(), "Не удалось добавить часы"))
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSaving = false) }
+                onFinished(false, e.localizedMessage ?: "Не удалось добавить часы")
+            }
+        }
+    }
+
+    fun updateSlot(
+        id: String,
+        startTime: String,
+        endTime: String,
+        duration: Int,
+        format: String,
+        addressId: String?,
+        onFinished: (Boolean, String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            try {
+                val response = api.updateSlot(
+                    id,
+                    UpdateSlotRequest(
+                        startTime = startTime,
+                        endTime = endTime,
+                        duration = duration,
+                        format = format,
+                        addressId = addressId,
+                    ),
+                )
+                _uiState.update { it.copy(isSaving = false) }
+                if (response.isSuccessful) {
+                    PracticeRefreshBus.notifyChanged()
+                    loadSchedule()
+                    onFinished(true, "Часы изменены")
+                } else {
+                    onFinished(false, errorText(response.errorBody()?.string(), "Не удалось изменить часы"))
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSaving = false) }
+                onFinished(false, e.localizedMessage ?: "Не удалось изменить часы")
+            }
+        }
+    }
+
+    fun deleteSlot(id: String, onFinished: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(deletingId = id) }
+            try {
+                val response = api.deleteSlot(id)
+                _uiState.update { it.copy(deletingId = null) }
+                if (response.isSuccessful) {
+                    PracticeRefreshBus.notifyChanged()
+                    loadSchedule()
+                    onFinished(true, "Часы убраны")
+                } else {
+                    onFinished(false, errorText(response.errorBody()?.string(), "Не удалось убрать часы"))
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(deletingId = null) }
+                onFinished(false, e.localizedMessage ?: "Не удалось убрать часы")
             }
         }
     }

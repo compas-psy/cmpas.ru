@@ -166,9 +166,11 @@ describe('срок ожидания', () => {
         // Проба с боевого сервера: прямого хода до api.telegram.org нет
         // вовсе, запрос просто висит. Без своего срока браузер специалиста
         // ждал бы на КАЖДОМ кружке, и список выглядел бы зависшим.
-        const fetcher = vi.fn((_url: string, init?: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
-            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
-        }));
+        // Молчащий сервер: ответа нет, пока запрос не отменят по сроку.
+        const fetcher = vi.fn(async (...args: [string, RequestInit?]) => {
+            await new Promise(wake => args[1]?.signal?.addEventListener('abort', wake));
+            throw new Error('прервано по сроку');
+        });
         const started = Date.now();
         const image = await downloadImage('https://example/hang.png', fetcher as never);
         expect(image).toBeNull();
@@ -176,10 +178,9 @@ describe('срок ожидания', () => {
     }, 20000);
 
     it('срок передаётся запросу, а не только меряется', async () => {
-        const fetcher = vi.fn(async () => png());
+        const fetcher = vi.fn(async (...args: [string, RequestInit?]) => { void args; return png(); });
         await downloadImage('https://example/a.png', fetcher as never);
-        const init = fetcher.mock.calls[0][1] as { signal?: AbortSignal } | undefined;
-        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        expect(fetcher.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
     });
 });
 
