@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker, TimePicker } from '@/components/ui/date-picker';
+import { blockWindowLabel } from '@/lib/practice/block-window';
 import {
     getAvailabilitySlots,
     getTimeBlocks,
@@ -52,7 +53,7 @@ type Slot = {
     scheduleRuleId?: string | null;
     scheduleRule?: { id: string; name: string; color: string | null } | null;
 };
-type Block = { id: string; startDate: string; endDate: string; type: string; reason: string | null };
+type Block = { id: string; startDate: string; endDate: string; startTime?: string; endTime?: string; type: string; reason: string | null };
 type Address = { id: string; name: string; address: string };
 type Settings = {
     scheduleMode: string;
@@ -151,7 +152,10 @@ export default function AvailabilityPage() {
         format: 'online', addressId: ''
     };
     const [newSlot, setNewSlot] = useState(initialSlot);
-    const [newBlock, setNewBlock] = useState({ startDate: '', endDate: '', type: 'vacation', reason: '' });
+    // wholeDay отдельным полем, а не по совпадению часов с 00:00–23:59:
+    // «весь день» — это выбор человека, и читать его из значений времени
+    // значит угадывать намерение по следствию.
+    const [newBlock, setNewBlock] = useState({ startDate: '', endDate: '', type: 'vacation', reason: '', wholeDay: true, startTime: '10:00', endTime: '12:00' });
 
     const fetchData = useCallback(async () => {
         try {
@@ -361,18 +365,28 @@ export default function AvailabilityPage() {
     const [cancelIntersecting, setCancelIntersecting] = useState(false);
     const [isConfirmingBlock, setIsConfirmingBlock] = useState(false);
 
+    /**
+     * Часы, которые уедут на сервер. «Весь день» — это отсутствие часов, а не
+     * 00:00–23:59 руками: значения по умолчанию живут в общем правиле
+     * (src/lib/practice/block-window.ts), и дублировать их здесь значит
+     * завести второе место, где они могут разойтись.
+     */
+    const blockHours = (b: { wholeDay: boolean; startTime: string; endTime: string }) =>
+        b.wholeDay ? {} : { startTime: b.startTime, endTime: b.endTime };
+
     const addBlock = async () => {
         if (!newBlock.startDate || !newBlock.endDate) { toast.error('Укажите даты'); return; }
+        if (!newBlock.wholeDay && newBlock.startTime >= newBlock.endTime) { toast.error('Конец должен быть позже начала'); return; }
         try {
             if (!isConfirmingBlock) {
-                const res = await checkBlockIntersections(newBlock.startDate, newBlock.endDate);
+                const res = await checkBlockIntersections(newBlock.startDate, newBlock.endDate, blockHours(newBlock));
                 if (res.success && res.data && res.data.length > 0) {
                     setIntersectingSessions(res.data.map((x: any) => ({ ...x, date: new Date(x.date) })));
                     setIsConfirmingBlock(true);
                     return;
                 }
             }
-            const res = await createTimeBlock({ ...newBlock, cancelIntersectingSessions: cancelIntersecting });
+            const res = await createTimeBlock({ ...newBlock, ...blockHours(newBlock), cancelIntersectingSessions: cancelIntersecting });
             if (res.success) {
                 toast.success('Блокировка добавлена');
                 setShowNewBlock(false); setIsConfirmingBlock(false);
@@ -763,7 +777,12 @@ export default function AvailabilityPage() {
                                             <div className="w-8 h-8 bg-muted text-muted-foreground rounded-xl flex items-center justify-center shrink-0"><Icon className="w-4 h-4" /></div>
                                             <div className="truncate">
                                                 <div className="text-sm font-bold text-foreground truncate">{BLOCK_LABELS[block.type] || 'Блок'}</div>
-                                                <div className="text-xs text-muted-foreground">{b.toLocaleDateString()} — {e.toLocaleDateString()}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {b.toLocaleDateString()}
+                                                    {e.getTime() !== b.getTime() ? ` — ${e.toLocaleDateString()}` : ''}
+                                                    {' · '}
+                                                    {blockWindowLabel({ startTime: block.startTime || '00:00', endTime: block.endTime || '23:59' })}
+                                                </div>
                                             </div>
                                         </div>
                                         <button onClick={() => rmBlock(block.id)} className="p-2 bg-muted/50 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all shrink-0 md:opacity-0 group-hover:opacity-100">
@@ -1222,6 +1241,31 @@ export default function AvailabilityPage() {
                             <Field label="С"><DatePicker value={newBlock.startDate} onChange={d => setNewBlock(s => ({ ...s, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                             <Field label="По"><DatePicker value={newBlock.endDate} onChange={d => setNewBlock(s => ({ ...s, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' }))} /></Field>
                         </div>
+                        <Field label="Когда">
+                            <div className="flex gap-2">
+                                {[{ v: true, l: 'Весь день' }, { v: false, l: 'Часы' }].map(o => (
+                                    <button key={String(o.v)} type="button" onClick={() => setNewBlock(s => ({ ...s, wholeDay: o.v }))}
+                                        className={`flex-1 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${newBlock.wholeDay === o.v ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{o.l}</button>
+                                ))}
+                            </div>
+                        </Field>
+                        {!newBlock.wholeDay && (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Field label="Начало"><TimePicker value={newBlock.startTime} onChange={t => setNewBlock(s => ({ ...s, startTime: t }))} /></Field>
+                                    <Field label="Конец"><TimePicker value={newBlock.endTime} onChange={t => setNewBlock(s => ({ ...s, endTime: t }))} /></Field>
+                                </div>
+                                {/* Диапазон дат с часами — это одни и те же часы в
+                                    каждый день диапазона, а не один непрерывный
+                                    отрезок с вечера первого дня до утра последнего.
+                                    Сказано вслух, потому что читается двояко. */}
+                                {newBlock.startDate !== newBlock.endDate && newBlock.startDate && newBlock.endDate && (
+                                    <p className="text-[11px] text-muted-foreground -mt-2">
+                                        {newBlock.startTime}–{newBlock.endTime} закроется в каждый день выбранного периода
+                                    </p>
+                                )}
+                            </>
+                        )}
                         <Field label="Тип">
                             <div className="flex gap-2">
                                 {[{ v: 'vacation', l: 'Отпуск' }, { v: 'personal', l: 'Личное' }, { v: 'other', l: 'Другое' }].map(t => (

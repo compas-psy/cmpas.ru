@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
+import { resolveBlockWindow, sessionOverlapsBlock } from '@/lib/practice/block-window';
 
 // Границы календарного дня берутся в UTC, а не через setHours.
 //
@@ -24,20 +25,10 @@ function dayEnd(value: string) {
     return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate(), 23, 59, 59, 999));
 }
 
-function normalizeTime(value: unknown, fallback: string) {
-    if (typeof value !== 'string') return fallback;
-    const trimmed = value.trim();
-    return /^\d{2}:\d{2}$/.test(trimmed) ? trimmed : fallback;
-}
-
-function minutesOf(value: string) {
-    const [hours, minutes] = value.split(':').map(Number);
-    return hours * 60 + minutes;
-}
-
-function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
-    return minutesOf(aStart) < minutesOf(bEnd) && minutesOf(aEnd) > minutesOf(bStart);
-}
+// Разбор часов и правило пересечения переехали в
+// src/lib/practice/block-window.ts: до этого они жили ЗДЕСЬ и только здесь, а
+// веб-действие про часы не знало вовсе и при отмене пересекающихся сессий на
+// них не смотрело. Одно правило на оба входа.
 
 /**
  * GET /api/mobile/blocks?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -92,15 +83,14 @@ export async function POST(req: NextRequest) {
         const endDate = body.endDate || startDate;
         const type = typeof body.type === 'string' && body.type.trim() ? body.type.trim() : 'personal';
         const reason = typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim() : null;
-        const startTime = normalizeTime(body.startTime, '00:00');
-        const endTime = normalizeTime(body.endTime, body.startTime ? '23:59' : '23:59');
-
         if (!startDate) {
             return NextResponse.json({ error: 'startDate or date required' }, { status: 400 });
         }
-        if (minutesOf(startTime) >= minutesOf(endTime)) {
+        const window = resolveBlockWindow(body);
+        if (!window) {
             return NextResponse.json({ error: 'endTime must be after startTime' }, { status: 400 });
         }
+        const { startTime, endTime } = window;
 
         const start = dayStart(startDate);
         const end = dayStart(endDate);
@@ -133,14 +123,7 @@ export async function POST(req: NextRequest) {
                 include: { client: true },
             });
 
-            const intersecting = sessionsToCancel.filter((session) => {
-                const sessionStart = session.time || '00:00';
-                const sessionEnd = session.endTime || (() => {
-                    const endMinutes = minutesOf(sessionStart) + (session.duration || 50);
-                    return `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-                })();
-                return overlaps(startTime, endTime, sessionStart, sessionEnd);
-            });
+            const intersecting = sessionsToCancel.filter(session => sessionOverlapsBlock(session, window));
 
             if (intersecting.length > 0) {
                 await db.diarySession.updateMany({

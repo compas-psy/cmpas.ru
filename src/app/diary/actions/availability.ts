@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { resolveScheduleAddressId } from '@/lib/practice/ownership';
+import { resolveBlockWindow, sessionOverlapsBlock } from '@/lib/practice/block-window';
 
 async function fixMissingIsActive(psychologistId: string) {
     try {
@@ -229,10 +230,15 @@ export async function getTimeBlocks() {
             orderBy: { date: 'desc' },
         });
 
+        // Часы отдаются экрану: с появлением почасовых блокировок две записи
+        // на один день различаются только ими, и без них список показывал бы
+        // одинаковые карточки для разного времени.
         const formatted = blocks.map(b => ({
             id: b.id,
             startDate: b.date,
             endDate: b.date,
+            startTime: b.startTime,
+            endTime: b.endTime,
             type: b.type,
             reason: b.reason
         }));
@@ -248,10 +254,23 @@ export async function createTimeBlock(data: {
     endDate: string;
     type: string;
     reason?: string;
+    /**
+     * Часы блокировки. Не заданы — целый день, как было до появления этих
+     * полей: специалист, закрывавший вторник целиком, продолжает делать это
+     * тем же действием.
+     */
+    startTime?: string;
+    endTime?: string;
     cancelIntersectingSessions?: boolean;
 }) {
     try {
         const psychologistId = await getPsychologistId();
+
+        // Окно разбирается общим правилом — тем же, которым живёт мобильный
+        // маршрут блокировок. Две трактовки «что такое пересечение» здесь
+        // означали бы отменённые встречи живых людей.
+        const window = resolveBlockWindow(data);
+        if (!window) return { success: false, error: 'Конец блокировки должен быть позже начала' };
 
         const start = new Date(data.startDate);
         const end = new Date(data.endDate);
@@ -262,8 +281,8 @@ export async function createTimeBlock(data: {
             blocksToCreate.push({
                 psychologistId,
                 date: new Date(d),
-                startTime: '00:00',
-                endTime: '23:59',
+                startTime: window.startTime,
+                endTime: window.endTime,
                 type: data.type,
                 reason: data.reason || null,
             });
@@ -278,7 +297,7 @@ export async function createTimeBlock(data: {
             // 'no_show' excluded alongside 'completed' (O-260829): a session
             // already marked "не пришёл" already happened (or didn't) — it's
             // not an open booking to auto-cancel with a client notification.
-            const sessionsToCancel = await db.diarySession.findMany({
+            const candidates = await db.diarySession.findMany({
                 where: {
                     psychologistId,
                     date: { gte: start, lte: end },
@@ -286,6 +305,11 @@ export async function createTimeBlock(data: {
                 },
                 include: { client: { include: { telegramClient: true } } }
             });
+
+            // Отбор по ЧАСАМ, а не только по дате. Без него блокировка обеда
+            // отменяла бы весь день — и клиенты получили бы отмену встреч,
+            // которых блокировка не касается.
+            const sessionsToCancel = candidates.filter(session => sessionOverlapsBlock(session, window));
 
             if (sessionsToCancel.length > 0) {
                 await db.diarySession.updateMany({
@@ -333,11 +357,18 @@ export async function deleteTimeBlock(id: string) {
     }
 }
 
-export async function checkBlockIntersections(startDate: string, endDate: string) {
+export async function checkBlockIntersections(
+    startDate: string,
+    endDate: string,
+    /** Часы блокировки. Не заданы — целый день. */
+    hours?: { startTime?: string; endTime?: string },
+) {
     try {
         const psychologistId = await getPsychologistId();
         const start = new Date(startDate);
         const end = new Date(endDate);
+        const window = resolveBlockWindow(hours ?? {});
+        if (!window) return { success: false, error: 'Конец блокировки должен быть позже начала' };
 
         // Find sessions in this date range
         const sessions = await db.diarySession.findMany({
@@ -352,12 +383,17 @@ export async function checkBlockIntersections(startDate: string, endDate: string
             include: { client: true }
         });
 
-        const formatted = sessions.map(s => ({
-            id: s.id,
-            date: s.date,
-            time: s.time,
-            clientName: s.client.name
-        }));
+        // Показываем человеку ровно то, что попадёт под отмену: тот же отбор
+        // по часам, что и в самой отмене. Иначе список пересечений обещал бы
+        // одно, а отменялось бы другое.
+        const formatted = sessions
+            .filter(s => sessionOverlapsBlock(s, window))
+            .map(s => ({
+                id: s.id,
+                date: s.date,
+                time: s.time,
+                clientName: s.client.name
+            }));
         return { success: true, data: formatted };
     } catch (e: any) {
         console.error('[Availability] checkBlockIntersections error:', e);
