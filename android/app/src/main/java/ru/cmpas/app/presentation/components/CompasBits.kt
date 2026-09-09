@@ -26,6 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import ru.cmpas.app.BuildConfig
 import ru.cmpas.app.domain.model.SessionStatus
 import ru.cmpas.app.presentation.theme.*
 
@@ -47,7 +50,19 @@ private fun initialsOf(name: String): String =
         .joinToString("") { it.first().uppercaseChar().toString() }
         .ifEmpty { "?" }
 
-/** Squircle avatar with gradient fill and optional white ring. */
+/**
+ * Squircle avatar with gradient fill and optional white ring.
+ *
+ * С `clientId` поверх инициалов проявляется фотография клиента из его
+ * мессенджера. Фотография не хранится ни у нас на сервере, ни в карточке:
+ * сервер спрашивает её у мессенджера в момент показа (решение учредителя;
+ * подробности — src/lib/clients/avatar.ts в веб-части).
+ *
+ * ИНИЦИАЛЫ РИСУЮТСЯ ВСЕГДА, а картинка ложится сверху. Это не украшение
+ * порядка: аватарки не будет у клиента без мессенджера, у клиента с
+ * закрытым фото и в минуты, когда мессенджер недоступен, — и во всех этих
+ * случаях на экране должен остаться прежний кружок, а не серая дыра.
+ */
 @Composable
 fun Avatar(
     name: String,
@@ -55,6 +70,7 @@ fun Avatar(
     ring: Boolean = false,
     color: Color = avatarColor(name),
     modifier: Modifier = Modifier,
+    clientId: String? = null,
 ) {
     val initials = remember(name) { initialsOf(name) }
     val radius = size * 0.34f
@@ -73,6 +89,16 @@ fun Avatar(
             fontWeight = FontWeight.Bold,
             fontSize = (size.value * 0.36f).sp,
         )
+        if (!clientId.isNullOrBlank()) {
+            AsyncImage(
+                model = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/clients/$clientId/avatar",
+                // Подписи нет намеренно: имя стоит рядом, и повторять его
+                // голосом для незрячего — шум, а не помощь.
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
     }
 }
 

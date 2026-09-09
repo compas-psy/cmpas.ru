@@ -65,6 +65,9 @@ datastore = { group = "androidx.datastore", name = "datastore-preferences", vers
 
 # Coil (images)
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+# Сеть для Coil: без неё AsyncImage умеет читать только локальные
+# источники, а по http-адресу молча ничего не показывает.
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
 # Coroutines
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }

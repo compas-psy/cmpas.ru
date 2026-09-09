@@ -608,7 +608,7 @@ private fun ClientPicker(
                             Text(clientContext(client), style = tMeta, color = CompasMutedFg)
                         }
                     },
-                    leadingIcon = { Avatar(client.name, 34.dp) },
+                    leadingIcon = { Avatar(client.name, 34.dp, clientId = client.id) },
                     onClick = { onSelect(client) },
                 )
             }

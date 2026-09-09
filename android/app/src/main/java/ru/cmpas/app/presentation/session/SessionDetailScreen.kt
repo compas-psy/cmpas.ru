@@ -443,7 +443,7 @@ private fun ClientTile(session: Session, since: String?, onClick: () -> Unit) {
             .clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(session.clientName, 46.dp)
+        Avatar(session.clientName, 46.dp, clientId = session.clientId)
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
             Text(session.clientName, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)

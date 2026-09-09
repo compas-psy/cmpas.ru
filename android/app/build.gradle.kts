@@ -186,6 +186,7 @@ dependencies {
 
     implementation(libs.datastore)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.zxing.core)
 
     implementation(libs.coroutines.core)

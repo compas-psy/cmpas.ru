@@ -416,7 +416,7 @@ private fun HeroNextSession(session: Session, onOpen: () -> Unit, onConnect: () 
         }
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(session.clientName, 52.dp, ring = true)
+            Avatar(session.clientName, 52.dp, ring = true, clientId = session.clientId)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(session.clientName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -477,7 +477,7 @@ private fun ScheduleRow(
         Spacer(Modifier.width(10.dp))
         GlassCard(modifier = Modifier.weight(1f), padding = 12.dp, onClick = onClick) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(s.clientName, 40.dp)
+                Avatar(s.clientName, 40.dp, clientId = s.clientId)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(s.clientName, color = CompasFg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)

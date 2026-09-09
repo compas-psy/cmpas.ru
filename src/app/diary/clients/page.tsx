@@ -10,6 +10,7 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { ClientTimeline } from '@/components/psidairy/ClientTimeline';
 import { ShareButton } from '@/components/psidairy/ShareSheet';
 import { useAttestationGate } from '@/components/legal/useAttestationGate';
+import { ClientAvatar } from './ClientAvatar';
 
 type QuestionnaireData = {
     fullName?: string; dateOfBirth?: string; age?: number; gender?: string;
@@ -263,9 +264,12 @@ export default function ClientsPage() {
                         <ChevronLeft className="w-4 h-4" /> Клиенты
                     </button>
                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-lg uppercase shrink-0">
-                            {clientInitials(selectedClient)}
-                        </div>
+                        <ClientAvatar
+                            clientId={selectedClient.id}
+                            initials={clientInitials(selectedClient)}
+                            lazy={false}
+                            className="w-14 h-14 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-lg uppercase shrink-0"
+                        />
                         <div className="flex-1 min-w-0">
                             <h2 className="text-xl font-bold text-foreground truncate">{clientName(selectedClient)}</h2>
                             <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
@@ -562,9 +566,11 @@ export default function ClientsPage() {
                                 {showLetter && <div id={`client-letter-${letter}`} className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1 pt-3 pb-1">{letter}</div>}
                                 <button onClick={() => { setSelectedClient(c); fetchClientDetail(c.id); setMobileTab('sessions'); setDesktopTab('sessions'); }}
                                     className={`w-full p-4 bg-card rounded-2xl border text-left hover:shadow-md transition-all flex items-center gap-4 ${selectedClient?.id === c.id ? 'border-primary ring-2 ring-primary ring-inset shadow-sm' : 'border-border shadow-sm'}`}>
-                                    <div className="w-12 h-12 rounded-full bg-sage-100 border-2 border-sage-200 flex items-center justify-center text-forest-700 font-bold text-base shrink-0 uppercase">
-                                        {clientInitials(c)}
-                                    </div>
+                                    <ClientAvatar
+                                        clientId={c.id}
+                                        initials={clientInitials(c)}
+                                        className="w-12 h-12 rounded-full bg-sage-100 border-2 border-sage-200 flex items-center justify-center text-forest-700 font-bold text-base shrink-0 uppercase"
+                                    />
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-foreground text-[15px] truncate">{clientName(c)}</p>
                                         <p className="text-[12px] text-muted-foreground mt-0.5">{c.totalSessions} сессий</p>
@@ -594,7 +600,12 @@ export default function ClientsPage() {
                             <div className="p-6 pb-4">
                                 {/* Top: avatar + name + contact + stats */}
                                 <div className="flex items-start gap-5">
-                                    <div className="w-16 h-16 rounded-full bg-sage-100 border-2 border-sage-200 flex items-center justify-center text-forest-700 font-bold text-xl uppercase shrink-0">{clientInitials(selectedClient)}</div>
+                                    <ClientAvatar
+                                        clientId={selectedClient.id}
+                                        initials={clientInitials(selectedClient)}
+                                        lazy={false}
+                                        className="w-16 h-16 rounded-full bg-sage-100 border-2 border-sage-200 flex items-center justify-center text-forest-700 font-bold text-xl uppercase shrink-0"
+                                    />
                                     <div className="flex-1 min-w-0">
                                         <h2 className="text-[24px] font-bold text-foreground mb-1">{clientName(selectedClient)}</h2>
                                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
