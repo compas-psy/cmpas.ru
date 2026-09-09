@@ -479,8 +479,8 @@ fi
 # нарочно копирует только .next/standalone и пару отдельных .js-скриптов
 # (см. verify-production-schema.js выше). У infra-pulse — ровно то, что
 # нужно: та же стадия `builder`, тот же полный `npm install` со всеми
-# devDependencies (tsx в их числе) и `COPY . .` — и этот образ уже собран
-# несколькими строками выше вместе с app, пересобирать не нужно. DATABASE_URL
+# devDependencies и `COPY . .` — и этот образ уже собран несколькими
+# строками выше вместе с app, пересобирать не нужно. DATABASE_URL
 # у infra-pulse по умолчанию — read-only роль infra_pulse_reader, поэтому
 # здесь он переопределяется на обычного пользователя приложения из .env, у
 # которого есть право писать в Subscription.
@@ -520,13 +520,13 @@ backfill_status=0
 timeout --kill-after=30s 5m \
   docker compose --profile infra-pulse run --rm --no-deps \
     --name "$backfill_container" -e DATABASE_URL="$app_database_url" infra-pulse \
-    npx tsx scripts/backfill-subscriptions.ts || backfill_status=$?
+    npx --no-install tsx scripts/backfill-subscriptions.ts || backfill_status=$?
 if [ "$backfill_status" -eq 124 ] || [ "$backfill_status" -eq 137 ]; then
   # 124 — timeout прервал по сроку, 137 — пришлось добивать сигналом KILL.
   log 'WARNING: Subscription backfill timed out after 5m and was stopped; this only fills historical data and must not block the deploy.'
   docker rm -f "$backfill_container" >/dev/null 2>&1 || true
 elif [ "$backfill_status" -ne 0 ]; then
-  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL=... infra-pulse npx tsx scripts/backfill-subscriptions.ts).'
+  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL=... infra-pulse npx --no-install tsx scripts/backfill-subscriptions.ts).'
 fi
 
 tg_token=$(grep '^TELEGRAM_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)

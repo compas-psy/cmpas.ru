@@ -90,4 +90,9 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
 
-CMD ["npx", "tsx", "scripts/infra-pulse-collector.ts"]
+# --no-install: tsx лежит в образе (devDependency, стадия deps ставит их все).
+# Без этого флага npx на КАЖДОМ старте контейнера тянет пакет из реестра —
+# сеть у сервера ненадёжна, и такая загрузка однажды повисла на 42 минуты и
+# уронила выкладку. С флагом пропажа пакета падает за секунду и называет
+# себя, вместо того чтобы ждать сеть.
+CMD ["npx", "--no-install", "tsx", "scripts/infra-pulse-collector.ts"]
