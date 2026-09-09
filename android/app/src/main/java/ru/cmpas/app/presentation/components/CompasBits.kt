@@ -91,7 +91,14 @@ fun Avatar(
         )
         if (!clientId.isNullOrBlank()) {
             AsyncImage(
-                model = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/clients/$clientId/avatar",
+                // Строго ОТ БАЗЫ приложения, а не мимо неё. Первая версия
+                // собирала «база + /api/clients/…» и получала
+                // https://cmpas.ru/api/mobile/api/clients/…/avatar — адрес,
+                // которого нет: в приложении не грузилась ни одна
+                // фотография. Приёмочные сборки подменяют эту базу, чтобы не
+                // ходить в боевые данные, и своя сборка ссылки мимо неё
+                // однажды увела бы тестовый прогон на боевой сервер.
+                model = "${BuildConfig.API_BASE_URL.trimEnd('/')}/clients/$clientId/avatar",
                 // Подписи нет намеренно: имя стоит рядом, и повторять его
                 // голосом для незрячего — шум, а не помощь.
                 contentDescription = null,

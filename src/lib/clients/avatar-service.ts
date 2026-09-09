@@ -1,0 +1,167 @@
+/**
+ * Аватарка клиента: обслуживание запроса, общее для веба и приложения.
+ *
+ * Отдаёт картинку из мессенджера, к которому клиент подключён. Ничего не
+ * сохраняет: у нас лежит только идентификатор, который был и до этой правки
+ * (см. src/lib/clients/avatar.ts — там расписано, почему именно так).
+ *
+ * Отвечает и вебу, и Android: у веба сессия в куке, у приложения
+ * Bearer-токен. Адреса два — /api/clients/<id>/avatar и
+ * /api/mobile/clients/<id>/avatar, — но код один: приложение строит все свои
+ * запросы от одного настроенного адреса, и второй маршрут существует ровно
+ * затем, чтобы эта настройка продолжала работать.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { auth } from '@/auth';
+import { authenticateMobileRequest } from '@/lib/mobile-auth';
+import {
+    avatarSourceOf,
+    fetchMaxAvatar,
+    fetchTelegramAvatar,
+    type AvatarImage,
+} from '@/lib/clients/avatar';
+import { AvatarCache } from '@/lib/clients/avatar-cache';
+import { nodeFetch, telegramSendAgent } from '@/lib/telegram-proxy';
+
+/**
+ * Кэш живёт в модуле, то есть в памяти процесса и только там. Значения
+ * подобраны под список клиентов: у практика их 12–25, у кэша запас на
+ * несколько практиков в одном процессе.
+ */
+const cache = new AvatarCache<AvatarImage>({
+    maxEntries: 200,
+    hitTtlMs: 6 * 60 * 60 * 1000,
+    missTtlMs: 30 * 60 * 1000,
+});
+
+/** Кто спрашивает: сессия веба или токен приложения. */
+async function requesterId(req: NextRequest): Promise<string | null> {
+    const mobile = await authenticateMobileRequest(req);
+    if (mobile) return mobile.userId;
+    const session = await auth();
+    return session?.user?.id ?? null;
+}
+
+/**
+ * «Нет аватарки» — это 404, а не пустая картинка и не ошибка. Экран на 404
+ * показывает инициалы, и это нормальный, а не аварийный вид.
+ *
+ * Но 404 на экране выглядит одинаково для СОВЕРШЕННО разных причин: клиент
+ * не привязан к мессенджеру, у человека нет фотографии, мессенджер не
+ * ответил. Не различать их — значит на вопрос «почему пусто» отвечать
+ * «пусто». Поэтому причина называется в журнале, как это уже сделано у
+ * подсказок адресов, и её вытаскивает scripts/db-doctor.sh.
+ *
+ * В журнал идёт ТОЛЬКО код причины. Ни имени, ни телефона, ни
+ * идентификатора мессенджера: журнал читают люди, которым карточки этого
+ * клиента не показывают.
+ */
+type NoAvatarReason =
+    /** Карточки нет или она чужая. */
+    | 'not_found'
+    /** Мессенджер не подключён — идти не за чем. */
+    | 'no_messenger'
+    /** Ключ бота не задан: спросить нечем. */
+    | 'no_token'
+    /** Сходили и не принесли: нет фотографии, закрыта, либо не ответили. */
+    | 'empty';
+
+const noAvatar = (reason: NoAvatarReason) => {
+    console.log(`[avatar] ${reason}`);
+    return new NextResponse(null, {
+        status: 404,
+        headers: { 'Cache-Control': 'private, max-age=300' },
+    });
+};
+
+/**
+ * Одна реализация на два адреса.
+ *
+ * Веб просит /api/clients/<id>/avatar, приложение —
+ * /api/mobile/clients/<id>/avatar. Разные адреса нужны не из прихоти:
+ * приложение собирает все свои запросы от ОДНОГО настроенного адреса
+ * (BuildConfig.API_BASE_URL), и именно он подменяется на приёмочных сборках,
+ * чтобы тест не ходил в боевые данные. Второй адрес — это способ оставить
+ * эту подмену работающей, а не второй код.
+ */
+export async function serveClientAvatar(req: NextRequest, clientId: string) {
+    const psychologistId = await requesterId(req);
+    if (!psychologistId) return new NextResponse(null, { status: 401 });
+
+    // Идентификатор в адресе — не разрешение (Task 1). Запрос сразу сужен
+    // до клиентов этого специалиста: чужая карточка отвечает так же, как
+    // несуществующая, и по ответу их не различить.
+    const client = await db.diaryClient.findFirst({
+        where: { id: clientId, psychologistId },
+        select: { id: true, telegramChatId: true, maxDialogId: true },
+    });
+    if (!client) return noAvatar('not_found');
+
+    const source = avatarSourceOf(client);
+    if (!source) return noAvatar('no_messenger');
+
+    // Ключ кэша включает источник: клиент мог перепривязать мессенджер, и
+    // тогда это уже другая аватарка, а не та же самая.
+    const key = `${client.id}:${source.messenger}:${source.id}`;
+    const cached = cache.get(key);
+
+    let image: AvatarImage | null;
+    if (cached) {
+        image = cached.value;
+    } else {
+        image = await loadFromMessenger(source);
+        cache.set(key, image);
+    }
+
+    if (!image) return noAvatar('empty');
+
+    return new NextResponse(image.bytes, {
+        status: 200,
+        headers: {
+            'Content-Type': image.contentType,
+            'Content-Length': String(image.bytes.byteLength),
+            // private — картинка чужого лица не должна оседать в общих
+            // прокси между нами и специалистом.
+            'Cache-Control': 'private, max-age=3600',
+        },
+    });
+}
+
+/**
+ * Telegram — той же дорогой, что и сообщения.
+ *
+ * Прямой fetch тут не годится: когда включён VPN-сайдкар, он включён
+ * потому, что напрямую до api.telegram.org не достучаться. Аватарки ходили
+ * бы мимо и молча не грузились — а выглядело бы это как «у клиентов нет
+ * фотографий», а не как «мы ходим не той дорогой».
+ *
+ * Прокси остаётся добавкой: telegramSendAgent отдаёт агента, только если
+ * флаг включён И проба через прокси прошла. Нет агента — обычный fetch.
+ */
+async function telegramFetcher(): Promise<typeof fetch> {
+    try {
+        const agent = await telegramSendAgent();
+        if (!agent) return fetch;
+        const nf = nodeFetch();
+        return ((url: string, init?: Record<string, unknown>) =>
+            nf(url, { ...(init ?? {}), agent })) as unknown as typeof fetch;
+    } catch {
+        return fetch;
+    }
+}
+
+async function loadFromMessenger(source: { messenger: 'telegram' | 'max'; id: string }) {
+    if (source.messenger === 'telegram') {
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        if (!token) { console.log('[avatar] no_token telegram'); return null; }
+        return fetchTelegramAvatar(source.id, {
+            apiRoot: process.env.TELEGRAM_API_URL || 'https://api.telegram.org',
+            token,
+        }, await telegramFetcher());
+    }
+    const token = process.env.MAX_BOT_TOKEN;
+    if (!token) { console.log('[avatar] no_token max'); return null; }
+    return fetchMaxAvatar(source.id, { apiRoot: 'https://platform-api2.max.ru', token });
+}
