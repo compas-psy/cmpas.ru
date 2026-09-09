@@ -1193,11 +1193,19 @@ model PracticeNotification {
   subtitle       String?
   sessionId      String?
   clientId       String?
+  /// Событие, о котором уведомление: id вручения документа и т.п.
+  /// Нужно ДЛЯ ГАШЕНИЯ ПОВТОРОВ. Раньше повтор определялся по совпадению
+  /// заголовка и подзаголовка, а подзаголовок складывался из имени клиента,
+  /// названия документа и версии — то есть второе вручение ТОГО ЖЕ документа
+  /// тому же клиенту давало тот же ключ, и настоящая подпись под ним
+  /// считалась повтором уже показанного. Именно так пропала подпись 08.09.
+  refId          String?
   readAt         DateTime?
   createdAt      DateTime  @default(now())
 
   @@index([psychologistId, createdAt])
   @@index([psychologistId, readAt])
+  @@index([psychologistId, type, refId])
 }
 
 // CJM_booking_v1.md §2 этап 8: capture only, shown when the suggested-times
