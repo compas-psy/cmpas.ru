@@ -146,7 +146,7 @@ private fun QuickClientRow(client: Client, onClick: () -> Unit) {
     }
     GlassCard(Modifier.fillMaxWidth(), padding = 12.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(client.name, 42.dp)
+            Avatar(client.name, 42.dp, clientId = client.id)
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(client.name, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)

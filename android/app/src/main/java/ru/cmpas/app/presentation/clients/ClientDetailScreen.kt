@@ -379,7 +379,7 @@ private fun ClientHeader(
 private fun ClientHero(client: Client, sessions: List<Session>) {
     GlassTintCard(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(client.name, 62.dp, ring = true)
+            Avatar(client.name, 62.dp, ring = true, clientId = client.id)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(client.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2)

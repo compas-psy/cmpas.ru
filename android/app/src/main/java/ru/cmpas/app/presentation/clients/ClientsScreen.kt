@@ -166,7 +166,7 @@ fun ClientsScreen(
 private fun ClientRow(c: Client, onClick: () -> Unit) {
     GlassCard(padding = 12.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(c.name, 46.dp)
+            Avatar(c.name, 46.dp, clientId = c.id)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -379,7 +379,17 @@ model DiaryClient {
   telegramClient TelegramClient?
 
   // MAX Integration
-  maxChatId String? // For MAX messenger notifications
+  maxChatId   String? // For MAX messenger notifications
+  // Идентификатор ДИАЛОГА в MAX (message.recipient.chat_id).
+  //
+  // maxChatId — это user_id: его хватает, чтобы написать человеку, но не
+  // чтобы спросить у MAX его аватарку: GET /chats/{chat_id} отдаёт
+  // dialog_with_user только по идентификатору диалога. Диалог приходит в
+  // каждом входящем сообщении, поэтому поле заполняется само.
+  //
+  // Здесь лежит ИДЕНТИФИКАТОР, а не фотография: аватарка не хранится вовсе,
+  // она запрашивается у мессенджера в момент показа.
+  maxDialogId String?
 
   // Consent (152-FZ)
   consentVersion String? // Version of consent text agreed to

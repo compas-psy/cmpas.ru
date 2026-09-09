@@ -59,6 +59,32 @@ export type MaxUpdate = {
 const MAX_PREFIX = 'max_';
 function maxId(uid: number | string) { return `${MAX_PREFIX}${uid}`; }
 
+/**
+ * Запомнить идентификатор ДИАЛОГА клиента в MAX.
+ *
+ * maxChatId — это user_id: им пишут человеку, но по нему нельзя спросить у
+ * MAX его аватарку — GET /chats/{chat_id} отдаёт dialog_with_user только по
+ * идентификатору диалога. Диалог приходит в каждом входящем сообщении,
+ * поэтому поле заполняется само, без единого лишнего запроса.
+ *
+ * Хранится ИДЕНТИФИКАТОР, а не фотография: сама аватарка не сохраняется
+ * нигде и запрашивается в момент показа (src/lib/clients/avatar.ts).
+ *
+ * Ошибка здесь ничего не должна ломать: не записали — у клиента просто
+ * останутся инициалы, а сообщение обработается как обычно.
+ */
+async function rememberMaxDialog(userId: number | string, chatId?: string | number | null) {
+    if (chatId === undefined || chatId === null || chatId === '') return;
+    try {
+        await db.diaryClient.updateMany({
+            where: { maxChatId: maxId(userId), maxDialogId: null },
+            data: { maxDialogId: String(chatId) },
+        });
+    } catch (e) {
+        console.error('[MAX Bot] Не удалось запомнить диалог:', e instanceof Error ? e.message : e);
+    }
+}
+
 async function maxApi(path: string, body?: Record<string, unknown>, query: Record<string, string> = {}) {
     if (!MAX_TOKEN) return null;
     const qs = new URLSearchParams(query);
@@ -461,6 +487,10 @@ export async function handleMaxUpdate(update: MaxUpdate) {
 
         if (update.update_type === 'message_created' && update.message) {
             const userId = update.message.sender.user_id;
+
+            // Запоминаем диалог до разбора самого сообщения: чем бы оно ни
+            // оказалось, идентификатор диалога в нём уже есть.
+            await rememberMaxDialog(userId, update.message.recipient?.chat_id);
 
             // Контакт разбираем до текста: у сообщения с вложением текста
             // обычно нет вовсе, и оно ушло бы в меню-заглушку.

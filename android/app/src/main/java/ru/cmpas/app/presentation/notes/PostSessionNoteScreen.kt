@@ -389,7 +389,7 @@ private fun NotePushHeader(onBack: () -> Unit) {
 private fun NoteContextCard(session: Session?, sessionId: String) {
     GlassTintCard(modifier = Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(session?.clientName ?: "Клиент", 44.dp, ring = true)
+            Avatar(session?.clientName ?: "Клиент", 44.dp, ring = true, clientId = session?.clientId)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(session?.clientName ?: "Заметка клиента", style = tBody, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -95,7 +95,7 @@ fun NotesScreen(
 private fun NoteSessionCard(session: Session, onClick: () -> Unit) {
     GlassCard(Modifier.fillMaxWidth(), padding = 15.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(session.clientName, 46.dp)
+            Avatar(session.clientName, 46.dp, clientId = session.clientId)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(session.clientName, style = tBody, color = CompasFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
