@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Save, Clock, Video, MapPin, AlertCircle, Eye, CreditCard, ChevronRight } from 'lucide-react';
+import { Save, Clock, Video, MapPin, AlertCircle, Eye, CreditCard, ChevronRight, User, Lock, Download } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import AddressAutocomplete from '@/components/ui/address-autocomplete';
@@ -217,14 +217,18 @@ export default function SettingsPage() {
 
     const [activeTab, setActiveTab] = useState('profile');
 
+    // Иконки те же, что в левом меню кабинета: тот же набор (lucide), тот же
+    // размер и та же толщина линии. Эмодзи здесь выбивались — они рисуются
+    // шрифтом системы, у каждой платформы свой, и рядом со строгим меню
+    // выглядели наклейками, а не частью интерфейса.
     const tabs = [
-        { id: 'profile', icon: '👤', label: 'Профиль' },
-        { id: 'time', icon: '🕐', label: 'Время и язык' },
-        { id: 'offices', icon: '📍', label: 'Офлайн-кабинеты' },
-        { id: 'cancellation', icon: '⚠️', label: 'Правила отмены' },
-        { id: 'billing', icon: '💳', label: 'Подписка' },
-        { id: 'security', icon: '🔒', label: 'Безопасность' },
-        { id: 'export', icon: '📦', label: 'Экспорт данных' },
+        { id: 'profile', icon: User, label: 'Профиль' },
+        { id: 'time', icon: Clock, label: 'Время и язык' },
+        { id: 'offices', icon: MapPin, label: 'Офлайн-кабинеты' },
+        { id: 'cancellation', icon: AlertCircle, label: 'Правила отмены' },
+        { id: 'billing', icon: CreditCard, label: 'Подписка' },
+        { id: 'security', icon: Lock, label: 'Безопасность' },
+        { id: 'export', icon: Download, label: 'Экспорт данных' },
     ];
 
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -247,14 +251,20 @@ export default function SettingsPage() {
                 {/* Left: Sidebar Tabs */}
                 <div className="w-full lg:w-[220px] shrink-0">
                     <nav className="bg-card border border-border rounded-2xl p-2 shadow-card space-y-0.5 lg:sticky lg:top-4">
-                        {tabs.map(t => (
-                            <button key={t.id} onClick={() => setActiveTab(t.id)}
-                                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all text-left ${activeTab === t.id ? 'bg-primary/10 text-forest-700' : 'text-muted-foreground hover:bg-sage-50 hover:text-foreground'}`}>
-                                <span className="text-[15px]">{t.icon}</span>
-                                {t.label}
-                                {t.id === activeTab && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-                            </button>
-                        ))}
+                        {tabs.map(t => {
+                            const Icon = t.icon;
+                            const active = activeTab === t.id;
+                            return (
+                                <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all text-left ${active ? 'bg-primary/10 text-forest-700' : 'text-muted-foreground hover:bg-sage-50 hover:text-foreground'}`}>
+                                    {/* Толщина линии меняется у выбранного пункта — тем же
+                                        приёмом, что в левом меню (sidebar-nav). */}
+                                    <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={active ? 2 : 1.5} />
+                                    {t.label}
+                                    {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                                </button>
+                            );
+                        })}
                     </nav>
                 </div>
 
@@ -446,11 +456,11 @@ export default function SettingsPage() {
                     )}
 
                     {activeTab === 'security' && (
-                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5">🔒 Безопасность</h2><p className="text-sm text-muted-foreground">Управление доступом — в разработке.</p></div>
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Lock className="w-5 h-5 text-muted-foreground" /> Безопасность</h2><p className="text-sm text-muted-foreground">Управление доступом — в разработке.</p></div>
                     )}
 
                     {activeTab === 'export' && (
-                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5">📦 Экспорт данных</h2><p className="text-sm text-muted-foreground">Выгрузка данных — в разработке.</p></div>
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Download className="w-5 h-5 text-muted-foreground" /> Экспорт данных</h2><p className="text-sm text-muted-foreground">Выгрузка данных — в разработке.</p></div>
                     )}
 
                 </div>

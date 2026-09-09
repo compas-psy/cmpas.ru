@@ -100,21 +100,21 @@ export async function processPostSessionNudge() {
             const clientMaxId = session.client?.maxChatId;
 
             if (clientTgId || clientMaxId) {
-                const msg = `💬 Спасибо за сессию, ${session.client.name}!\n\nКак вы себя чувствуете?`;
+                const msg = `Спасибо за сессию, ${session.client.name}!\n\nКак вы себя чувствуете?`;
 
                 await notifyClient(clientTgId, clientMaxId, msg, {
                     reply_markup: {
                         inline_keyboard: [
                             [
-                                { text: '😊 Отлично', callback_data: `mood_1_${session.id}` },
-                                { text: '🙂 Хорошо', callback_data: `mood_2_${session.id}` },
+                                { text: 'Отлично', callback_data: `mood_1_${session.id}` },
+                                { text: 'Хорошо', callback_data: `mood_2_${session.id}` },
                             ],
                             [
-                                { text: '😐 Нормально', callback_data: `mood_3_${session.id}` },
-                                { text: '😔 Так себе', callback_data: `mood_4_${session.id}` },
+                                { text: 'Нормально', callback_data: `mood_3_${session.id}` },
+                                { text: 'Так себе', callback_data: `mood_4_${session.id}` },
                             ],
                             [
-                                { text: '😢 Плохо', callback_data: `mood_5_${session.id}` },
+                                { text: 'Плохо', callback_data: `mood_5_${session.id}` },
                             ]
                         ]
                     }

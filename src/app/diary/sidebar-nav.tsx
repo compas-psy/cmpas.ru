@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     Calendar, Users, Clock, Link2, Settings, Bell, HelpCircle,
-    BarChart3, FileText, Layers, StickyNote, Stethoscope,
+    FileText, Layers, StickyNote,
     ChevronRight, Sparkles
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -23,9 +23,12 @@ const navGroups = [
     {
         label: 'Практика',
         items: [
-            { href: '/diary/analytics', label: 'Аналитика', icon: BarChart3 },
+            // «Аналитика» и «Диагностика» убраны: обе страницы были макетами.
+            // В аналитике стояли одни прочерки, в диагностике — выдуманные
+            // тесты с выдуманными счётчиками использования («48 раз») у
+            // живого специалиста. Пункт меню, ведущий в декорацию, хуже
+            // отсутствующего пункта: он обещает то, чего нет.
             { href: '/diary/documents', label: 'Документы', icon: FileText },
-            { href: '/diary/diagnostics', label: 'Диагностика', icon: Stethoscope },
         ],
     },
     {

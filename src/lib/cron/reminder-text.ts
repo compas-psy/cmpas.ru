@@ -1,3 +1,5 @@
+import { onlineLinkLine } from '@/lib/messaging/format';
+
 // Reminder message copy, split out from processReminders() so the neutral
 // wording (product/practice/CJM_booking_v1.md §1.3, closes backlog B-260816-02)
 // is unit-testable without a database. The 24h template never names the
@@ -14,9 +16,10 @@ export interface Reminder24hInput {
 }
 
 export function build24hReminderText(input: Reminder24hInput): string {
-    const linkText = input.format === 'online' && input.onlineLink
-        ? `\n🔗 Ссылка для подключения: ${input.onlineLink}`
-        : '';
+    // Ссылка — за словом, а не голым адресом на полторы строки: правило
+    // оформления автосообщений живёт в src/lib/messaging/format.ts.
+    const line = input.format === 'online' ? onlineLinkLine(input.onlineLink) : '';
+    const linkText = line ? `\n${line}` : '';
     const formatText = input.format === 'online'
         ? 'Онлайн'
         : `В кабинете: ${input.addressName || 'адрес уточнит специалист'}`;

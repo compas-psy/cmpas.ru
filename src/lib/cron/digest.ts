@@ -53,15 +53,14 @@ export async function processMorningDigest() {
             const dateStr = format(today, 'd MMMM, EEEE', { locale: ru });
             const count = sessions.length;
             const word = count === 1 ? 'сессия' : count < 5 ? 'сессии' : 'сессий';
+            // Формат встречи — словом, а не значком: «💻» и «🏢» надо
+            // расшифровывать, а «онлайн» и «в кабинете» читаются сразу.
             const lines = [
-                `☀️ <b>${dateStr}</b>`,
+                `<b>${dateStr}</b>`,
                 '',
-                `📋 Сегодня ${count} ${word}:`,
+                `Сегодня ${count} ${word}:`,
                 '',
-                ...sessions.map(s => {
-                    const icon = s.format === 'online' ? '💻' : '🏢';
-                    return `${s.time} — ${s.client.name} ${icon}`;
-                })
+                ...sessions.map(s => `${s.time} — ${s.client.name}, ${s.format === 'online' ? 'онлайн' : 'в кабинете'}`),
             ];
 
             await notify(psy.telegramChatId, psy.maxChatId, lines.join('\n'));
@@ -119,12 +118,12 @@ export async function processWeeklyDigest() {
 
             const word = completed === 1 ? 'сессия' : completed < 5 ? 'сессии' : 'сессий';
             const lines = [
-                '📊 <b>Итоги недели</b>',
+                '<b>Итоги недели</b>',
                 '',
-                `✅ Проведено: ${completed} ${word}`,
-                ...(cancelled > 0 ? [`❌ Отменено: ${cancelled}`] : []),
-                `👥 Клиентов: ${uniqueClients}`,
-                ...(newClients > 0 ? [`🆕 Новых: ${newClients}`] : []),
+                `Проведено: ${completed} ${word}`,
+                ...(cancelled > 0 ? [`Отменено: ${cancelled}`] : []),
+                `Клиентов: ${uniqueClients}`,
+                ...(newClients > 0 ? [`Новых: ${newClients}`] : []),
             ];
 
             await notify(psy.telegramChatId, psy.maxChatId, lines.join('\n'));

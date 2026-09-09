@@ -73,22 +73,22 @@ export async function testNotification(type: string) {
 
         switch (type) {
             case 'newBooking':
-                message = settings?.newBookingTemplate || '🔥 Тестовое уведомление о новой записи';
+                message = settings?.newBookingTemplate || 'Тестовое уведомление о новой записи';
                 break;
             case 'reminder':
-                message = settings?.reminderTemplate || '⏰ Тестовое напоминание';
+                message = settings?.reminderTemplate || 'Тестовое напоминание';
                 break;
             case 'clientReminder25h':
-                message = settings?.clientReminder25hTemplate || '📋 Тестовое напоминание (25ч)';
+                message = settings?.clientReminder25hTemplate || 'Тестовое напоминание (25ч)';
                 break;
             case 'clientReminder1h':
-                message = settings?.clientReminder1hTemplate || '📋 Тестовое напоминание (1ч)';
+                message = settings?.clientReminder1hTemplate || 'Тестовое напоминание (1ч)';
                 break;
             case 'clientPsyCancel':
-                message = settings?.clientPsyCancelTemplate || '❌ Тестовая отмена';
+                message = settings?.clientPsyCancelTemplate || 'Тестовая отмена';
                 break;
             default:
-                message = '🧪 Тестовое уведомление';
+                message = 'Тестовое уведомление';
         }
 
         // Подставляем переменные

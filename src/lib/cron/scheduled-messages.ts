@@ -80,7 +80,7 @@ export async function processScheduledMessages() {
                 });
 
                 if (psych?.telegramChatId || psych?.maxChatId) {
-                    const reminder = `📩 Пора отправить сообщение клиенту ${client?.name || ''}${client?.phone ? ` (${client.phone})` : ''}:\n\n${msg.text}`;
+                    const reminder = `Пора отправить сообщение клиенту ${client?.name || ''}${client?.phone ? ` (${client.phone})` : ''}:\n\n${msg.text}`;
                     if (psych.telegramChatId) {
                         await sendTelegramMessage(psych.telegramChatId, reminder);
                     } else if (psych.maxChatId) {

@@ -27,27 +27,52 @@ export type AvatarImage = { bytes: ArrayBuffer; contentType: string };
 
 export type AvatarSource =
     | { messenger: 'telegram'; id: string }
-    | { messenger: 'max'; id: string };
+    /** Известен диалог MAX — можно спрашивать аватарку сразу. */
+    | { messenger: 'max'; id: string }
+    /** Известен только пользователь MAX — диалог придётся выяснить. */
+    | { messenger: 'max-user'; id: string };
 
 export type ClientMessengerIds = {
     telegramChatId?: string | null;
+    /** Идентификатор пользователя MAX: им пишут человеку. */
+    maxChatId?: string | null;
+    /** Идентификатор ДИАЛОГА MAX: по нему спрашивают аватарку. */
     maxDialogId?: string | null;
 };
 
 /**
- * Откуда брать аватарку. Чистая функция — на ней держатся проверки.
+ * Откуда брать аватарку — ВСЕ подключённые мессенджеры, по порядку.
  *
- * Порядок не случаен: «основной мессенджер» клиента — тот, через который
- * он на связи, и Telegram у нас первичный канал (через него идут и
- * уведомления, и самозапись). Если подключены оба, спрашиваем Telegram:
- * ходить за одной картинкой в два сервиса незачем.
+ * ПОЧЕМУ СПИСОК, А НЕ ОДИН. Первая версия возвращала первый подходящий и
+ * ставила Telegram впереди. Учредитель спросил ровно про это: «а пытается
+ * ли вытянуть иконку из Макса, если он основной?» — нет, не пытался. У
+ * клиента, подключённого к обоим, спрашивали Telegram, где фотографии могло
+ * не быть вовсе, и на этом останавливались.
+ *
+ * ПОЧЕМУ MAX ПЕРВЫЙ. Не по симпатии, а по тому же правилу, по которому
+ * продукт выбирает канал для сообщений: getClientChannels отдаёт
+ * recommendedChannel = max, когда MAX подключён (src/lib/channel-binding.ts).
+ * Основной мессенджер — это тот, которым человеку пишут; логично и лицо
+ * брать оттуда же.
+ *
+ * MAX попадает в список и по maxChatId — без известного диалога. Диалог
+ * тогда придётся выяснить у самого MAX, но это лучше, чем не пытаться: до
+ * этой правки аватарка MAX не работала вовсе, потому что maxDialogId
+ * заполняется только со следующим сообщением клиента боту, и на боевом
+ * сервере он был пуст у всех.
  */
-export function avatarSourceOf(client: ClientMessengerIds): AvatarSource | null {
+export function avatarSourcesOf(client: ClientMessengerIds): AvatarSource[] {
+    const sources: AvatarSource[] = [];
+
+    const maxDialog = client.maxDialogId?.trim();
+    const maxUser = client.maxChatId?.trim();
+    if (maxDialog) sources.push({ messenger: 'max', id: maxDialog });
+    else if (maxUser) sources.push({ messenger: 'max-user', id: maxUser });
+
     const telegram = client.telegramChatId?.trim();
-    if (telegram) return { messenger: 'telegram', id: telegram };
-    const max = client.maxDialogId?.trim();
-    if (max) return { messenger: 'max', id: max };
-    return null;
+    if (telegram) sources.push({ messenger: 'telegram', id: telegram });
+
+    return sources;
 }
 
 /**
@@ -131,31 +156,67 @@ export type TelegramConfig = { apiRoot: string; token: string };
  * 44×44 больше не нужно, а каждый лишний килобайт — это чужой трафик и наше
  * ожидание.
  */
+/**
+ * Почему за фотографией сходили и вернулись ни с чем.
+ *
+ * Один общий «пусто» уже дважды увёл меня в неверную догадку: на экране и в
+ * журнале «у человека нет фото», «Telegram не ответил» и «файл не забрался»
+ * выглядели одинаково. Шаг называется, чтобы следующий раз отвечал журнал, а
+ * не предположение.
+ */
+export type AvatarMiss =
+    /** Telegram не ответил или ответил ошибкой на список фотографий. */
+    | 'tg_photos_unreachable'
+    /** Telegram ответил, фотографий у человека нет (или закрыты). */
+    | 'tg_no_photos'
+    /** Не удалось получить путь к файлу. */
+    | 'tg_file_unreachable'
+    /** Путь есть, а сам файл не забрался или пришёл не картинкой. */
+    | 'tg_download_failed'
+    /** MAX не ответил или у диалога нет аватарки. */
+    | 'max_no_avatar'
+    /** Не нашли диалог MAX с этим человеком. */
+    | 'max_no_dialog';
+
+export type AvatarAttempt =
+    | { image: AvatarImage; miss?: undefined }
+    | { image: null; miss: AvatarMiss };
+
 export async function fetchTelegramAvatar(
     userId: string,
     config: TelegramConfig,
     fetcher: Fetcher = fetch,
 ): Promise<AvatarImage | null> {
+    return (await tryTelegramAvatar(userId, config, fetcher)).image;
+}
+
+/** То же, но с названной причиной отказа. */
+export async function tryTelegramAvatar(
+    userId: string,
+    config: TelegramConfig,
+    fetcher: Fetcher = fetch,
+): Promise<AvatarAttempt> {
     const api = `${config.apiRoot}/bot${config.token}`;
     try {
         const photosRes = await withTimeout(fetcher, `${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
-        if (!photosRes || !photosRes.ok) return null;
+        if (!photosRes || !photosRes.ok) return { image: null, miss: 'tg_photos_unreachable' };
         const photos = await photosRes.json();
         // Пусто — это норма: человек закрыл фото настройками приватности.
         const sizes: Array<{ file_id?: string; width?: number }> = photos?.result?.photos?.[0] ?? [];
-        if (!Array.isArray(sizes) || sizes.length === 0) return null;
+        if (!Array.isArray(sizes) || sizes.length === 0) return { image: null, miss: 'tg_no_photos' };
         const smallest = [...sizes].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0];
-        if (!smallest?.file_id) return null;
+        if (!smallest?.file_id) return { image: null, miss: 'tg_no_photos' };
 
         const fileRes = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(smallest.file_id)}`);
-        if (!fileRes || !fileRes.ok) return null;
+        if (!fileRes || !fileRes.ok) return { image: null, miss: 'tg_file_unreachable' };
         const file = await fileRes.json();
         const path = file?.result?.file_path;
-        if (typeof path !== 'string' || !path) return null;
+        if (typeof path !== 'string' || !path) return { image: null, miss: 'tg_file_unreachable' };
 
-        return await downloadImage(`${config.apiRoot}/file/bot${config.token}/${path}`, fetcher);
+        const image = await downloadImage(`${config.apiRoot}/file/bot${config.token}/${path}`, fetcher);
+        return image ? { image } : { image: null, miss: 'tg_download_failed' };
     } catch {
-        return null;
+        return { image: null, miss: 'tg_photos_unreachable' };
     }
 }
 
@@ -173,6 +234,64 @@ export type MaxConfig = { apiRoot: string; token: string };
  * кэше браузера специалиста и жил бы там дольше показа. Качаем здесь, как и
  * у Telegram, — одна дорога у обоих.
  */
+/**
+ * Найти ДИАЛОГ MAX по идентификатору пользователя.
+ *
+ * MAX отдаёт аватарку через GET /chats/{chat_id} — по диалогу, а не по
+ * пользователю. Диалог приходит во входящем сообщении и запоминается, но у
+ * давно привязанных клиентов его нет: на боевом сервере он был пуст у ВСЕХ,
+ * и аватарка MAX не работала ни у кого.
+ *
+ * Поэтому спрашиваем список чатов бота и ищем среди них диалог с этим
+ * человеком. Дорого — поэтому результат вызывающий обязан запомнить, чтобы
+ * второй раз не искать.
+ *
+ * Страницы ограничены: у бота чатов столько же, сколько у него собеседников,
+ * и бесконечно листать чужой сервис ради украшения незачем.
+ */
+export const MAX_DIALOG_SCAN_PAGES = 5;
+export const MAX_DIALOG_PAGE_SIZE = 100;
+
+export async function resolveMaxDialogId(
+    userId: string,
+    config: MaxConfig,
+    fetcher: Fetcher = fetch,
+): Promise<string | null> {
+    const wanted = String(userId).replace(/^max_/, '');
+    let marker: string | null = null;
+
+    for (let page = 0; page < MAX_DIALOG_SCAN_PAGES; page++) {
+        const query = new URLSearchParams({ count: String(MAX_DIALOG_PAGE_SIZE) });
+        if (marker) query.set('marker', marker);
+        const res = await withTimeout(fetcher, `${config.apiRoot}/chats?${query.toString()}`, {
+            headers: { Authorization: config.token },
+        });
+        if (!res || !res.ok) return null;
+
+        let body: {
+            chats?: Array<{ chat_id?: number | string; type?: string; dialog_with_user?: { user_id?: number | string } | null }>;
+            marker?: number | string | null;
+        };
+        try {
+            body = await res.json();
+        } catch {
+            return null;
+        }
+
+        for (const chat of body?.chats ?? []) {
+            if (chat?.type !== 'dialog') continue;
+            const withUser = chat?.dialog_with_user?.user_id;
+            if (withUser !== undefined && withUser !== null && String(withUser) === wanted) {
+                return chat.chat_id === undefined || chat.chat_id === null ? null : String(chat.chat_id);
+            }
+        }
+
+        if (body?.marker === undefined || body?.marker === null) return null;
+        marker = String(body.marker);
+    }
+    return null;
+}
+
 export async function fetchMaxAvatar(
     dialogId: string,
     config: MaxConfig,

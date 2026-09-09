@@ -17,9 +17,12 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { authenticateMobileRequest } from '@/lib/mobile-auth';
 import {
-    avatarSourceOf,
+    avatarSourcesOf,
+    resolveMaxDialogId,
+    type AvatarSource,
     fetchMaxAvatar,
-    fetchTelegramAvatar,
+    tryTelegramAvatar,
+    type AvatarMiss,
     type AvatarImage,
 } from '@/lib/clients/avatar';
 import { AvatarCache } from '@/lib/clients/avatar-cache';
@@ -65,8 +68,10 @@ type NoAvatarReason =
     | 'no_messenger'
     /** Ключ бота не задан: спросить нечем. */
     | 'no_token'
-    /** Сходили и не принесли: нет фотографии, закрыта, либо не ответили. */
-    | 'empty';
+    /** Сходили и не принесли, но чем именно кончилось — сказано отдельно. */
+    | 'empty'
+    /** Названный шаг, на котором сорвалось (см. AvatarMiss). */
+    | AvatarMiss;
 
 const noAvatar = (reason: NoAvatarReason) => {
     console.log(`[avatar] ${reason}`);
@@ -95,27 +100,41 @@ export async function serveClientAvatar(req: NextRequest, clientId: string) {
     // несуществующая, и по ответу их не различить.
     const client = await db.diaryClient.findFirst({
         where: { id: clientId, psychologistId },
-        select: { id: true, telegramChatId: true, maxDialogId: true },
+        select: { id: true, telegramChatId: true, maxChatId: true, maxDialogId: true },
     });
     if (!client) return noAvatar('not_found');
 
-    const source = avatarSourceOf(client);
-    if (!source) return noAvatar('no_messenger');
+    // ВСЕ подключённые мессенджеры, а не первый попавшийся, и MAX впереди,
+    // если он подключён: это и есть «основной» по правилу самого продукта
+    // (см. avatarSourcesOf). До этого клиенту с двумя мессенджерами всегда
+    // задавали вопрос Telegram и на его молчании останавливались.
+    const sources = avatarSourcesOf(client);
+    if (sources.length === 0) return noAvatar('no_messenger');
 
-    // Ключ кэша включает источник: клиент мог перепривязать мессенджер, и
-    // тогда это уже другая аватарка, а не та же самая.
-    const key = `${client.id}:${source.messenger}:${source.id}`;
-    const cached = cache.get(key);
+    for (const source of sources) {
+        // Ключ кэша включает источник: клиент мог перепривязать мессенджер,
+        // и тогда это уже другая аватарка, а не та же самая.
+        const key = `${client.id}:${source.messenger}:${source.id}`;
+        const cached = cache.get(key);
 
-    let image: AvatarImage | null;
-    if (cached) {
-        image = cached.value;
-    } else {
-        image = await loadFromMessenger(source);
-        cache.set(key, image);
+        if (cached) {
+            if (cached.value) return imageResponse(cached.value);
+            continue;
+        }
+
+        const attempt = await loadFromMessenger(source, client.id);
+        cache.set(key, attempt.image);
+        if (attempt.image) return imageResponse(attempt.image);
+        // Причина называется на КАЖДОЙ неудавшейся попытке: у клиента с
+        // двумя мессенджерами их две, и «пусто» без разбора снова не дало бы
+        // понять, кто именно смолчал.
+        console.log(`[avatar] ${attempt.miss}`);
     }
 
-    if (!image) return noAvatar('empty');
+    return noAvatar('empty');
+}
+
+function imageResponse(image: AvatarImage) {
 
     return new NextResponse(image.bytes, {
         status: 200,
@@ -176,21 +195,63 @@ async function telegramRoads(): Promise<Array<typeof fetch>> {
     return preferProxy ? [viaProxy, direct] : [direct, viaProxy];
 }
 
-async function loadFromMessenger(source: { messenger: 'telegram' | 'max'; id: string }) {
+/**
+ * Сходить в мессенджер за фотографией.
+ *
+ * MAX ХОДИТ НАПРЯМУЮ, НЕ ЧЕРЕЗ ТУННЕЛЬ — решение учредителя. Сайдкар подняли
+ * ради Telegram, и гонять через него чужой сервис незачем: это лишний узел
+ * на пути и лишняя нагрузка на тоннель, от которого зависит доставка
+ * сообщений. Проверено tests/client-avatar-route: у MAX не должно быть
+ * клиента с агентом.
+ */
+async function loadFromMessenger(
+    source: AvatarSource,
+    clientId: string,
+): Promise<{ image: AvatarImage | null; miss?: AvatarMiss }> {
     if (source.messenger === 'telegram') {
         const token = process.env.TELEGRAM_BOT_TOKEN;
-        if (!token) { console.log('[avatar] no_token telegram'); return null; }
+        if (!token) { console.log('[avatar] no_token telegram'); return { image: null, miss: 'tg_photos_unreachable' }; }
         const config = {
             apiRoot: process.env.TELEGRAM_API_URL || 'https://api.telegram.org',
             token,
         };
+        let miss: AvatarMiss = 'tg_photos_unreachable';
         for (const road of await telegramRoads()) {
-            const image = await fetchTelegramAvatar(source.id, config, road);
-            if (image) return image;
+            const attempt = await tryTelegramAvatar(source.id, config, road);
+            if (attempt.image) return { image: attempt.image };
+            miss = attempt.miss;
+            // «Фотографий нет» — это ответ Telegram, а не отказ дороги:
+            // вторая дорога принесёт тот же ответ, ходить незачем.
+            if (miss === 'tg_no_photos') break;
         }
-        return null;
+        return { image: null, miss };
     }
     const token = process.env.MAX_BOT_TOKEN;
-    if (!token) { console.log('[avatar] no_token max'); return null; }
-    return fetchMaxAvatar(source.id, { apiRoot: 'https://platform-api2.max.ru', token });
+    if (!token) { console.log('[avatar] no_token max'); return { image: null, miss: 'max_no_avatar' }; }
+    const config = { apiRoot: MAX_API_ROOT, token };
+
+    // Известен только пользователь — сначала выясняем диалог, иначе спросить
+    // аватарку не у чего. Найденный диалог запоминаем: поиск листает список
+    // чатов бота, и делать это на каждый показ кружка нельзя.
+    if (source.messenger === 'max-user') {
+        const dialogId = await resolveMaxDialogId(source.id, config);
+        if (!dialogId) return { image: null, miss: 'max_no_dialog' };
+        try {
+            await db.diaryClient.update({ where: { id: clientId }, data: { maxDialogId: dialogId } });
+        } catch {
+            // Не записали — не беда: аватарку всё равно покажем, а в
+            // следующий раз просто поищем снова.
+        }
+        const image = await fetchMaxAvatar(dialogId, config);
+        return image ? { image } : { image: null, miss: 'max_no_avatar' };
+    }
+
+    const image = await fetchMaxAvatar(source.id, config);
+    return image ? { image } : { image: null, miss: 'max_no_avatar' };
 }
+
+/**
+ * Адрес MAX. Отдельной константой, потому что к нему ходят два места —
+ * поиск диалога и сама аватарка.
+ */
+const MAX_API_ROOT = 'https://platform-api2.max.ru';

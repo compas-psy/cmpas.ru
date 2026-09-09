@@ -203,7 +203,13 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
         await processWeeklyFollowup();
 
         expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
-        expect(sendTelegramMessage.mock.calls[0][1]).toMatch(/ваша ссылка на запись всегда здесь/);
+        // Требование прежнее: клиенту уходит его ссылка на запись. Изменился
+        // только вид — теперь она спрятана за словом, а не вклеена голым
+        // адресом в конец сообщения.
+        const text = sendTelegramMessage.mock.calls[0][1];
+        expect(text).toMatch(/Если решите продолжить/);
+        expect(text).toContain('<a href="https://cmpas.ru/u/anna-volkova?c=token-client_1">');
+        expect(text).toContain('Выбрать время');
         expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { weeklyFollowupSent: true } });
     });
 

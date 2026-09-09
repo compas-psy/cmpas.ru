@@ -167,6 +167,62 @@ describe('маршрут аватарки', () => {
         expect(viaProxy).not.toHaveBeenCalled();
     });
 
+    it('МАКС спрашивается первым и НЕ через туннель', async () => {
+        // Решение учредителя: сайдкар подняли ради Telegram, гонять через
+        // него чужой сервис незачем — это лишний узел на пути и лишняя
+        // нагрузка на тоннель, от которого зависит доставка сообщений.
+        process.env.MAX_BOT_TOKEN = 'ТОКЕН-MAX';
+        authFn.mockResolvedValue({ user: { id: 'psy-1' } });
+        findFirst.mockResolvedValue({ id: 'c1', telegramChatId: '12345', maxChatId: null, maxDialogId: '77' });
+        proxyAgent.mockReturnValue({ сайдкар: true });
+        sendAgent.mockResolvedValue({ сайдкар: true });
+
+        (fetch as unknown as { mockImplementation: (v: unknown) => void })
+            .mockImplementation(async (url: string) => {
+                if (String(url).includes('/chats/77')) return json({ dialog_with_user: { avatar_url: 'https://cdn.max.ru/a.png' } });
+                return png();
+            });
+
+        const res = await call('c1');
+        expect(res.status).toBe(200);
+        // Через агент не ходили ни разу: MAX ответил напрямую, а до
+        // Telegram дело и не дошло.
+        expect(viaProxy).not.toHaveBeenCalled();
+    });
+
+    it('МАКС смолчал — спрашиваем Telegram, а не сдаёмся', async () => {
+        process.env.MAX_BOT_TOKEN = 'ТОКЕН-MAX';
+        authFn.mockResolvedValue({ user: { id: 'psy-1' } });
+        findFirst.mockResolvedValue({ id: 'c1', telegramChatId: '12345', maxChatId: null, maxDialogId: '77' });
+
+        (fetch as unknown as { mockImplementation: (v: unknown) => void })
+            .mockImplementation(async (url: string) => {
+                if (String(url).includes('/chats/77')) return json({ dialog_with_user: { user_id: 77 } });
+                if (String(url).includes('getUserProfilePhotos')) return json({ result: { photos: [[{ file_id: 'f', width: 160 }]] } });
+                if (String(url).includes('getFile')) return json({ result: { file_path: 'photos/file_1.jpg' } });
+                return png();
+            });
+
+        const res = await call('c1');
+        expect(res.status).toBe(200);
+    });
+
+    it('журнал называет ШАГ, а не общее «пусто»', async () => {
+        // Общий «пусто» дважды увёл в неверную догадку: «нет фотографии»,
+        // «Telegram не ответил» и «файл не забрался» выглядели одинаково.
+        const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+        authFn.mockResolvedValue({ user: { id: 'psy-1' } });
+        findFirst.mockResolvedValue({ id: 'c1', telegramChatId: '12345', maxChatId: null, maxDialogId: null });
+        (fetch as unknown as { mockImplementation: (v: unknown) => void })
+            .mockImplementation(async () => json({ result: { photos: [] } }));
+
+        const res = await call('c1');
+        expect(res.status).toBe(404);
+        const lines = log.mock.calls.map(c => c.join(' ')).join('\n');
+        expect(lines).toContain('tg_no_photos');
+        log.mockRestore();
+    });
+
     it('токен бота в ответ не попадает', async () => {
         authFn.mockResolvedValue({ user: { id: 'psy-1' } });
         findFirst.mockResolvedValue({ id: 'c1', telegramChatId: '12345', maxDialogId: null });
