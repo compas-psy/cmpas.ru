@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { OPERATOR_EMAIL, OPERATOR_INN, OPERATOR_NAME, OPERATOR_OGRNIP, PUBLIC_SITE } from '@/lib/legal/operator';
 
 export const metadata: Metadata = {
-    title: 'Пользовательское соглашение — Compas',
-    description: 'Пользовательское соглашение и условия использования сервиса Compas (cmpas.ru).',
+    title: 'Пользовательское соглашение — СИМПАС',
+    description: 'Пользовательское соглашение и условия использования сервиса СИМПАС (cmpas.ru).',
 };
 
 export default function TermsOfUsePage() {
@@ -57,7 +58,7 @@ export default function TermsOfUsePage() {
                     <section>
                         <h2 className="text-xl font-semibold text-primary mt-8 mb-3">6. Возврат и обмен</h2>
                         <p>Возврат и обмен товаров осуществляется в соответствии с Законом РФ «О защите прав потребителей».</p>
-                        <p>Для оформления возврата свяжитесь с нами по email: <a href="mailto:eliah.n.martynov@gmail.com" className="text-primary hover:underline">eliah.n.martynov@gmail.com</a></p>
+                        <p>Для оформления возврата свяжитесь с нами по email: <a href={`mailto:${OPERATOR_EMAIL}`} className="text-primary hover:underline">{OPERATOR_EMAIL}</a></p>
                     </section>
 
                     <section>
@@ -88,8 +89,11 @@ export default function TermsOfUsePage() {
                     <section>
                         <h2 className="text-xl font-semibold text-primary mt-8 mb-3">11. Контакты</h2>
                         <p>По вопросам, связанным с настоящим Соглашением:</p>
-                        <p>Email: <a href="mailto:eliah.n.martynov@gmail.com" className="text-primary hover:underline">eliah.n.martynov@gmail.com</a></p>
-                        <p>Сайт: <a href="https://cmpas.ru" className="text-primary hover:underline">cmpas.ru</a></p>
+                        <p>Оператор: {OPERATOR_NAME}</p>
+                        <p>ОГРНИП: {OPERATOR_OGRNIP}</p>
+                        <p>ИНН: {OPERATOR_INN}</p>
+                        <p>Email: <a href={`mailto:${OPERATOR_EMAIL}`} className="text-primary hover:underline">{OPERATOR_EMAIL}</a></p>
+                        <p>Сайт: <a href={`https://${PUBLIC_SITE}`} className="text-primary hover:underline">{PUBLIC_SITE}</a></p>
                     </section>
 
                     <div className="mt-12 pt-6 border-t border-border">

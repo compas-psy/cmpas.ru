@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { OPERATOR_EMAIL, OPERATOR_INN, OPERATOR_NAME, OPERATOR_OGRNIP, PUBLIC_SITE } from '@/lib/legal/operator';
 
 export const metadata: Metadata = {
-    title: 'Политика конфиденциальности — Compas',
-    description: 'Политика конфиденциальности и обработки персональных данных сервиса Compas (cmpas.ru).',
+    title: 'Политика конфиденциальности — СИМПАС',
+    description: 'Политика конфиденциальности и обработки персональных данных сервиса СИМПАС (cmpas.ru).',
 };
 
 export default function PrivacyPolicyPage() {
@@ -77,7 +78,7 @@ export default function PrivacyPolicyPage() {
                             <li>Отозвать согласие на обработку персональных данных</li>
                             <li>Отключить интеграции с внешними сервисами в личном кабинете</li>
                         </ul>
-                        <p className="mt-2">Для реализации своих прав свяжитесь с нами по email: <a href="mailto:eliah.n.martynov@gmail.com" className="text-primary hover:underline">eliah.n.martynov@gmail.com</a></p>
+                        <p className="mt-2">Для реализации своих прав свяжитесь с нами по email: <a href={`mailto:${OPERATOR_EMAIL}`} className="text-primary hover:underline">{OPERATOR_EMAIL}</a></p>
                     </section>
 
                     <section>
@@ -88,8 +89,11 @@ export default function PrivacyPolicyPage() {
                     <section>
                         <h2 className="text-xl font-semibold text-primary mt-8 mb-3">9. Контакты</h2>
                         <p>По вопросам обработки персональных данных:</p>
-                        <p>Email: <a href="mailto:eliah.n.martynov@gmail.com" className="text-primary hover:underline">eliah.n.martynov@gmail.com</a></p>
-                        <p>Сайт: <a href="https://cmpas.ru" className="text-primary hover:underline">cmpas.ru</a></p>
+                        <p>Оператор: {OPERATOR_NAME}</p>
+                        <p>ОГРНИП: {OPERATOR_OGRNIP}</p>
+                        <p>ИНН: {OPERATOR_INN}</p>
+                        <p>Email: <a href={`mailto:${OPERATOR_EMAIL}`} className="text-primary hover:underline">{OPERATOR_EMAIL}</a></p>
+                        <p>Сайт: <a href={`https://${PUBLIC_SITE}`} className="text-primary hover:underline">{PUBLIC_SITE}</a></p>
                     </section>
 
                     <div className="mt-12 pt-6 border-t border-border">

@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-    title: 'Условия практики — Compas',
-    description: 'Условия ведения практики через сервис Compas (cmpas.ru).',
+    title: 'Условия практики — СИМПАС',
+    description: 'Условия ведения практики через сервис СИМПАС (cmpas.ru).',
 };
 
 export default function PracticeTermsPage() {
@@ -17,7 +17,7 @@ export default function PracticeTermsPage() {
                 <div className="prose prose-sm max-w-none text-foreground/90 space-y-6">
                     <p>
                         Условия практики — отдельный документ, описывающий обязательства специалиста
-                        при ведении практики через сервис Compas: работу с данными клиентов, порядок
+                        при ведении практики через сервис СИМПАС: работу с данными клиентов, порядок
                         привлечения новых клиентов и правила самозаписи. Он готовится и будет
                         опубликован здесь до того, как согласие с ним станет обязательным условием
                         использования соответствующих функций.

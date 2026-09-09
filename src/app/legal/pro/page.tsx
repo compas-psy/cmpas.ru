@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-    title: 'Профессиональное соглашение — Compas',
-    description: 'Профессиональное соглашение специалиста, использующего сервис Compas (cmpas.ru).',
+    title: 'Профессиональное соглашение — СИМПАС',
+    description: 'Профессиональное соглашение специалиста, использующего сервис СИМПАС (cmpas.ru).',
 };
 
 export default function ProfessionalAgreementPage() {
@@ -17,7 +17,7 @@ export default function ProfessionalAgreementPage() {
                 <div className="prose prose-sm max-w-none text-foreground/90 space-y-6">
                     <p>
                         Профессиональное соглашение — отдельный документ, описывающий условия работы
-                        специалиста с клиентами через сервис Compas: границы ответственности,
+                        специалиста с клиентами через сервис СИМПАС: границы ответственности,
                         требования к квалификации и этические обязательства. Он готовится и будет
                         опубликован здесь до того, как согласие с ним станет обязательным условием
                         использования соответствующих функций.
