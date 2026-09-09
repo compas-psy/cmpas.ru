@@ -143,6 +143,42 @@ describe('G4: обратное заполнение подписок выпол�
         expect(nearby).toMatch(/WARNING/);
         expect(nearby).not.toMatch(/exit\s+1/);
     });
+
+    /**
+     * Проверка выше СУЩЕСТВОВАЛА и была зелёной в тот день, когда этот шаг
+     * уронил выкладку.
+     *
+     * Она сторожила только тот путь, где шаг ОТВЕТИЛ отказом: `if ! ...`
+     * ловит ненулевой код возврата. Путь, где шаг не отвечает вовсе, не
+     * сторожил никто. 09.09.2026 контейнер дозаполнения создался и замолчал;
+     * через 42 минуты выкладку убил предел SSH-шага в 45 минут. Приложение к
+     * тому моменту было выложено и здорово, но прогон значился упавшим, а
+     * хвост скрипта — регистрация вебхука Telegram — не выполнился вовсе.
+     *
+     * Поэтому проверки ниже сторожат вторую половину того же обещания.
+     */
+    it('зависание тоже не валит выкладку: у запуска есть предел по времени', () => {
+        const invocationIdx = indexOf(/npx tsx scripts\/backfill-subscriptions\.ts/);
+        const around = source.slice(Math.max(0, invocationIdx - 400), invocationIdx + 400);
+        expect(around).toMatch(/timeout\s+(--\S+\s+)*\d+[smh]/);
+    });
+
+    it('прерывание по сроку кончается предупреждением, а не падением', () => {
+        const invocationIdx = indexOf(/npx tsx scripts\/backfill-subscriptions\.ts/);
+        const nearby = source.slice(invocationIdx, invocationIdx + 700);
+        // 124 — код, которым timeout сообщает «прервал по сроку».
+        expect(nearby).toMatch(/124/);
+        expect(nearby).toMatch(/WARNING: Subscription backfill timed out/);
+        expect(nearby).not.toMatch(/exit\s+1/);
+    });
+
+    it('контейнер, убитый по сроку, сносится, а не остаётся висеть на базе', () => {
+        // `--rm` убирает контейнер по завершении команды; у прерванной
+        // команды завершения не было. Без явного сноса он остаётся держать
+        // соединение с базой до следующего человека, который о нём узнает.
+        expect(source).toMatch(/--name\s+"\$backfill_container"/);
+        expect(source).toMatch(/docker rm -f "\$backfill_container"/);
+    });
 });
 
 describe('G5: стоимость инфраструктуры задаётся переменной окружения, а не SQL руками', () => {
