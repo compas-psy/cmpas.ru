@@ -23,7 +23,7 @@ import {
     type AvatarImage,
 } from '@/lib/clients/avatar';
 import { AvatarCache } from '@/lib/clients/avatar-cache';
-import { nodeFetch, telegramSendAgent } from '@/lib/telegram-proxy';
+import { nodeFetch, telegramSendAgent, telegramProxyAgentUnchecked } from '@/lib/telegram-proxy';
 
 /**
  * Кэш живёт в модуле, то есть в памяти процесса и только там. Значения
@@ -130,36 +130,65 @@ export async function serveClientAvatar(req: NextRequest, clientId: string) {
 }
 
 /**
- * Telegram — той же дорогой, что и сообщения.
+ * Дороги до Telegram — ОБЕ, а не одна выбранная.
  *
- * Прямой fetch тут не годится: когда включён VPN-сайдкар, он включён
- * потому, что напрямую до api.telegram.org не достучаться. Аватарки ходили
- * бы мимо и молча не грузились — а выглядело бы это как «у клиентов нет
- * фотографий», а не как «мы ходим не той дорогой».
+ * Первая версия ходила той дорогой, которую выбирает отправка сообщений:
+ * сайдкар, только если флаг включён И проба через него прошла, иначе
+ * напрямую. На боевом сервере это дало «сходили и вернулись ни с чем» у
+ * всех привязанных клиентов, и разобрать почему было нечем: на экране
+ * «нет фотографии» и «пошли не той дорогой» выглядят одинаково.
  *
- * Прокси остаётся добавкой: telegramSendAgent отдаёт агента, только если
- * флаг включён И проба через прокси прошла. Нет агента — обычный fetch.
+ * Поэтому здесь пробуются обе: сначала предпочтительная, потом вторая.
+ * Первая, которая ответила, и выигрывает.
+ *
+ * Почему так МОЖНО именно тут и НЕЛЬЗЯ в отправке сообщений. У отправки
+ * мёртвый тоннель однажды подвесил запрос на ~500 секунд и сломал привязку
+ * — оттуда и флаг с пробой. У аватарки свой срок в 4 секунды и безвредный
+ * отказ: не ответила ни одна дорога — человек видит инициалы, как и до
+ * этой правки. Цена второй попытки — те же 4 секунды и только в случае,
+ * когда первая и так ничего не принесла.
  */
-async function telegramFetcher(): Promise<typeof fetch> {
+async function telegramRoads(): Promise<Array<typeof fetch>> {
+    const direct = fetch;
+
+    let viaProxy: typeof fetch | null = null;
     try {
-        const agent = await telegramSendAgent();
-        if (!agent) return fetch;
-        const nf = nodeFetch();
-        return ((url: string, init?: Record<string, unknown>) =>
-            nf(url, { ...(init ?? {}), agent })) as unknown as typeof fetch;
+        const agent = telegramProxyAgentUnchecked();
+        if (agent) {
+            const nf = nodeFetch();
+            viaProxy = ((url: string, init?: Record<string, unknown>) =>
+                nf(url, { ...(init ?? {}), agent })) as unknown as typeof fetch;
+        }
     } catch {
-        return fetch;
+        viaProxy = null;
     }
+    if (!viaProxy) return [direct];
+
+    // Порядок — по тому, что отправка сообщений считает рабочим сейчас: если
+    // она ходит через тоннель, начинать с прямой дороги значит каждый раз
+    // ждать её отказа впустую.
+    let preferProxy = false;
+    try {
+        preferProxy = Boolean(await telegramSendAgent());
+    } catch {
+        preferProxy = false;
+    }
+    return preferProxy ? [viaProxy, direct] : [direct, viaProxy];
 }
 
 async function loadFromMessenger(source: { messenger: 'telegram' | 'max'; id: string }) {
     if (source.messenger === 'telegram') {
         const token = process.env.TELEGRAM_BOT_TOKEN;
         if (!token) { console.log('[avatar] no_token telegram'); return null; }
-        return fetchTelegramAvatar(source.id, {
+        const config = {
             apiRoot: process.env.TELEGRAM_API_URL || 'https://api.telegram.org',
             token,
-        }, await telegramFetcher());
+        };
+        for (const road of await telegramRoads()) {
+            const image = await fetchTelegramAvatar(source.id, config, road);
+            if (image) return image;
+        }
+        return null;
     }
     const token = process.env.MAX_BOT_TOKEN;
     if (!token) { console.log('[avatar] no_token max'); return null; }

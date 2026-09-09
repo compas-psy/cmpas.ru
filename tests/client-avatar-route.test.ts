@@ -15,9 +15,14 @@ const mobileAuth = vi.fn();
 vi.mock('@/lib/db', () => ({ db: { diaryClient: { findFirst: (...a: unknown[]) => findFirst(...a) } } }));
 vi.mock('@/auth', () => ({ auth: () => authFn() }));
 vi.mock('@/lib/mobile-auth', () => ({ authenticateMobileRequest: (r: unknown) => mobileAuth(r) }));
+const proxyAgent = vi.fn(() => undefined as unknown);
+const sendAgent = vi.fn(async () => undefined as unknown);
+const viaProxy = vi.fn();
 vi.mock('@/lib/telegram-proxy', () => ({
-    nodeFetch: () => globalThis.fetch,
-    telegramSendAgent: async () => undefined,
+    // nodeFetch отдаёт ДРУГОЙ клиент — так видно, какой дорогой пошёл запрос.
+    nodeFetch: () => viaProxy,
+    telegramSendAgent: () => sendAgent(),
+    telegramProxyAgentUnchecked: () => proxyAgent(),
 }));
 
 const png = () => ({
@@ -41,6 +46,9 @@ describe('маршрут аватарки', () => {
         findFirst.mockReset();
         authFn.mockReset();
         mobileAuth.mockReset().mockResolvedValue(null);
+        proxyAgent.mockReset().mockReturnValue(undefined);
+        sendAgent.mockReset().mockResolvedValue(undefined);
+        viaProxy.mockReset();
         process.env.TELEGRAM_BOT_TOKEN = 'ТОКЕН-БОТА';
         process.env.TELEGRAM_API_URL = 'https://api.telegram.org';
         vi.stubGlobal('fetch', vi.fn(async (url: string) => {
@@ -121,6 +129,42 @@ describe('маршрут аватарки', () => {
         expect(lines).not.toContain('c-секрет');
         expect(lines).not.toContain('999888');
         log.mockRestore();
+    });
+
+    it('прямая дорога молчит — пробуем сайдкар, а не сдаёмся', async () => {
+        // То, из-за чего аватарки не появились на боевом: ходили ОДНОЙ
+        // дорогой, выбранной флагом отправки сообщений. Флаг выключен, а
+        // напрямую до Telegram хода нет — и на экране это неотличимо от
+        // «у человека нет фотографии».
+        authFn.mockResolvedValue({ user: { id: 'psy-1' } });
+        findFirst.mockResolvedValue({ id: 'c1', telegramChatId: '12345', maxDialogId: null });
+        proxyAgent.mockReturnValue({ сайдкар: true });
+
+        // Прямая дорога не отвечает…
+        (fetch as unknown as { mockRejectedValue: (v: unknown) => void })
+            .mockRejectedValue(new Error('ETIMEDOUT'));
+        // …а через сайдкар Telegram отвечает.
+        viaProxy.mockImplementation(async (url: string) => {
+            if (String(url).includes('getUserProfilePhotos')) return json({ result: { photos: [[{ file_id: 'f', width: 160 }]] } });
+            if (String(url).includes('getFile')) return json({ result: { file_path: 'photos/file_1.jpg' } });
+            return png();
+        });
+
+        const res = await call('c1');
+        expect(res.status).toBe(200);
+        expect(viaProxy).toHaveBeenCalled();
+    });
+
+    it('сайдкара нет — ходим только напрямую, лишних попыток не делаем', async () => {
+        authFn.mockResolvedValue({ user: { id: 'psy-1' } });
+        findFirst.mockResolvedValue({ id: 'c1', telegramChatId: '12345', maxDialogId: null });
+        proxyAgent.mockReturnValue(undefined);
+        (fetch as unknown as { mockRejectedValue: (v: unknown) => void })
+            .mockRejectedValue(new Error('ETIMEDOUT'));
+
+        const res = await call('c1');
+        expect(res.status).toBe(404);
+        expect(viaProxy).not.toHaveBeenCalled();
     });
 
     it('токен бота в ответ не попадает', async () => {

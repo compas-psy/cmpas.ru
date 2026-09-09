@@ -113,6 +113,23 @@ export async function getVpnProxyStatus(force = false): Promise<VpnProxyStatus> 
 }
 
 /**
+ * Агент сайдкара БЕЗ оглядки на флаг и на пробу.
+ *
+ * Нужен только для запросов, у которых отказ безвреден и есть свой срок
+ * ожидания — сегодня это аватарки. Им нельзя зависеть от флага: аватарка
+ * молча не показывается, если флаг выключен, а прямой дороги нет, — и
+ * отличить это от «у человека нет фото» на экране невозможно.
+ *
+ * Для ОТПРАВКИ сообщений так делать нельзя, и поэтому есть отдельная
+ * telegramSendAgent: там мёртвый тоннель однажды подвесил отправку на ~500
+ * секунд и сломал привязку. Флаг и проба — это защита именно отправки, и
+ * снимать её нечего.
+ */
+export function telegramProxyAgentUnchecked(): unknown {
+    return proxyAgent();
+}
+
+/**
  * The agent Telegram sends should use right now: the proxy agent only when the
  * flag is on AND the proxy is healthy; otherwise undefined (direct).
  */
