@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { resolveScheduleAddressId } from '@/lib/practice/ownership';
+import { createSlotsFor, updateSlotFor, deleteSlotFor } from '@/lib/practice/availability-core';
 import { resolveBlockWindow, sessionOverlapsBlock } from '@/lib/practice/block-window';
 
 async function fixMissingIsActive(psychologistId: string) {
@@ -67,6 +68,12 @@ export async function getAvailabilitySlots() {
     }
 }
 
+/**
+ * Веб-вход в создание окон. Тонкая обёртка: сессия → ядро → revalidate.
+ * Сами правила (пересечения, кабинет, раскладка обеда) живут в
+ * src/lib/practice/availability-core.ts, потому что тем же правилам должен
+ * подчиняться и мобильный маршрут.
+ */
 export async function createAvailabilitySlot(data: {
     startDate: string;
     endDate: string;
@@ -83,90 +90,8 @@ export async function createAvailabilitySlot(data: {
 }) {
     try {
         const psychologistId = await getPsychologistId();
-        console.log(`[Availability] Creating slots for psychologist: ${psychologistId}`, data);
-
-        const start = new Date(data.startDate);
-        const end = new Date(data.endDate);
-
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-            throw new Error('Некорректные даты начала или окончания');
-        }
-
-        const isRecurring = start.getTime() !== end.getTime();
-
-        // Задача 18 P0-2: кабинет решается на сервере — чужой или выведенный
-        // из работы не сохранится, а у онлайн-окна кабинета не будет, что бы
-        // ни прислал вызывающий.
-        const addressId = await resolveScheduleAddressId(psychologistId, data.format, data.addressId);
-
-        // Валидация: проверяем пересечения с существующими слотами
-        const existingSlots = await db.availabilitySlot.findMany({
-            where: { psychologistId, isActive: true },
-        });
-
-        const [newStartH, newStartM] = data.startTime.split(':').map(Number);
-        const [newEndH, newEndM] = data.endTime.split(':').map(Number);
-        const newStartMins = newStartH * 60 + newStartM;
-        const newEndMins = newEndH * 60 + newEndM;
-
-        for (const existing of existingSlots) {
-            // Проверяем пересечение по дням недели
-            if (!data.daysOfWeek.includes(existing.dayOfWeek)) continue;
-
-            // Проверяем пересечение по датам
-            const existStart = existing.startDate ? existing.startDate.getTime() : 0;
-            const existEnd = existing.endDate ? existing.endDate.getTime() : Infinity;
-            const newStart = start.getTime();
-            const newEnd = end.getTime();
-
-            if (newStart > existEnd || newEnd < existStart) continue;
-
-            // Проверяем пересечение по времени
-            const [exStartH, exStartM] = existing.startTime.split(':').map(Number);
-            const [exEndH, exEndM] = existing.endTime.split(':').map(Number);
-            const exStartMins = exStartH * 60 + exStartM;
-            const exEndMins = exEndH * 60 + exEndM;
-
-            if (newStartMins < exEndMins && newEndMins > exStartMins) {
-                const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-                throw new Error(`Расписание пересекается с существующим: ${dayNames[existing.dayOfWeek]} ${existing.startTime}–${existing.endTime}`);
-            }
-        }
-
-        const slotsToCreate = [];
-
-        for (const dayOfWeek of data.daysOfWeek) {
-            const baseSlot = {
-                psychologistId,
-                dayOfWeek,
-                duration: data.duration || 50,
-                isRecurring,
-                startDate: start,
-                endDate: end,
-                format: data.format || 'online',
-                addressId,
-                isActive: true,
-                scheduleRuleId: data.scheduleRuleId || null,
-            };
-
-            if (data.hasLunch && data.lunchStart && data.lunchEnd) {
-                slotsToCreate.push({ ...baseSlot, startTime: data.startTime, endTime: data.lunchStart });
-                slotsToCreate.push({ ...baseSlot, startTime: data.lunchEnd, endTime: data.endTime });
-            } else {
-                slotsToCreate.push({ ...baseSlot, startTime: data.startTime, endTime: data.endTime });
-            }
-        }
-
-        console.log(`[Availability] Prepared ${slotsToCreate.length} slots for creation`);
-
-        if (slotsToCreate.length > 0) {
-            // Sequential creation to avoid potential issues with index/cuid defaults in createMany
-            for (const slotData of slotsToCreate) {
-                await db.availabilitySlot.create({ data: slotData });
-            }
-        }
-
-        console.log(`[Availability] Successfully created ${slotsToCreate.length} slots`);
+        const created = await createSlotsFor(psychologistId, data);
+        console.log(`[Availability] Created ${created} slots`);
         revalidatePath('/diary/availability');
         return { success: true };
     } catch (e: any) {
@@ -178,7 +103,7 @@ export async function createAvailabilitySlot(data: {
 export async function deleteAvailabilitySlot(id: string) {
     try {
         const psychologistId = await getPsychologistId();
-        await db.availabilitySlot.deleteMany({ where: { id, psychologistId } });
+        await deleteSlotFor(psychologistId, id);
         revalidatePath('/diary/availability');
         return { success: true };
     } catch (e: any) {
@@ -196,24 +121,7 @@ export async function updateAvailabilitySlot(id: string, data: {
 }) {
     try {
         const psychologistId = await getPsychologistId();
-        // Only allow updating owned slots
-        const existing = await db.availabilitySlot.findUnique({ where: { id } });
-        if (!existing || existing.psychologistId !== psychologistId) {
-            throw new Error('Unauthorized');
-        }
-
-        const addressId = await resolveScheduleAddressId(psychologistId, data.format, data.addressId);
-
-        await db.availabilitySlot.update({
-            where: { id },
-            data: {
-                startTime: data.startTime,
-                endTime: data.endTime,
-                duration: data.duration,
-                format: data.format,
-                addressId,
-            }
-        });
+        await updateSlotFor(psychologistId, id, data);
         revalidatePath('/diary/availability');
         return { success: true };
     } catch (e: any) {

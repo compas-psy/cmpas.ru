@@ -47,6 +47,11 @@ vi.mock('@/lib/db', () => ({
                     && (where.isActive === undefined || s.isActive === where.isActive))),
             findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
                 world.slots.find(s => s.id === where.id) ?? null),
+            // См. комментарий в schedule-address-guard: правка сужена по
+            // специалисту прямо в запросе.
+            findFirst: vi.fn(async ({ where }: { where: { id: string; psychologistId?: string } }) =>
+                world.slots.find(s => s.id === where.id
+                    && (where.psychologistId === undefined || s.psychologistId === where.psychologistId)) ?? null),
             create: vi.fn(async ({ data }: { data: Omit<SlotRow, 'id'> }) => {
                 const row = { id: `slot-${world.nextId++}`, ...data } as SlotRow;
                 world.slots.push(row);

@@ -547,3 +547,73 @@ if [ -n "$dadata" ]; then
     --max-time 15 -X POST -H 'Content-Type: application/json' -d '{"query":"Москва"}' \
     https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address 2>&1 | head -2
 fi
+
+# ── Аватарки клиентов: почему кружки пустые ───────────────────────────────
+#
+# Учредитель выложил правку и не увидел ни одной фотографии. Логика маршрута
+# закрыта тестами (tests/client-avatar-route.test.ts), значит дело либо в
+# данных, либо в дороге до мессенджера. Это ЧЕТЫРЕ разные причины под одной
+# надписью «пусто»:
+#   1. ни один клиент не привязан к мессенджеру — спрашивать не о ком;
+#   2. привязан, но у человека нет фотографии или она закрыта настройками;
+#   3. до api.telegram.org с сервера нет хода напрямую (сервер ходит туда
+#      через VPN-сайдкар — это видно в журнале выкладки);
+#   4. маршрут падает.
+#
+# Ниже они различаются. ПД не печатаем: только счётчики и коды ответов.
+echo "### Аватарки: к скольким клиентам вообще есть за чем идти"
+q "SELECT count(*) FILTER (WHERE \"telegramChatId\" IS NOT NULL) AS telegram,
+          count(*) FILTER (WHERE \"maxDialogId\" IS NOT NULL) AS max_диалог,
+          count(*) FILTER (WHERE \"maxChatId\" IS NOT NULL) AS max_привязан,
+          count(*) AS всего
+   FROM \"DiaryClient\";"
+echo "--- telegram=0 и max_диалог=0 значит, что кружки пусты по данным, а не по коду"
+echo "--- max_привязан больше max_диалог: диалог заполнится с их следующим сообщением боту"
+
+echo "### Аватарки: на что жаловался маршрут за 24 часа"
+docker logs -t cmpas-app --since 24h 2>&1 | grep -F '[avatar]' | tail -20
+echo "--- пусто = маршрут не жаловался (или ещё ни разу не спрашивали)"
+
+echo "### Аватарки: есть ли с сервера ход до Telegram НАПРЯМУЮ"
+# Именно напрямую: выкладка сообщает «webhook registered through the tunnel»,
+# то есть прямой дороги может не быть вовсе. Токен не шлём — проверяем только
+# достижимость.
+curl -sS -o /dev/null -w 'GET api.telegram.org -> %{http_code} за %{time_total}s\n' \
+  --max-time 15 https://api.telegram.org/ 2>&1 | head -2
+echo "--- код 200/404 = ход есть; 000/таймаут = напрямую хода нет, нужен сайдкар"
+
+echo "### Аватарки: отдаёт ли Telegram фотографию живого клиента"
+# Берём ОДИН привязанный идентификатор и спрашиваем у Telegram только число
+# фотографий. Ни идентификатор, ни имя, ни сама фотография в вывод не идут.
+tg_uid="$(q "SELECT \"telegramChatId\" FROM \"DiaryClient\" WHERE \"telegramChatId\" IS NOT NULL ORDER BY \"updatedAt\" DESC LIMIT 1;" 2>/dev/null | tr -d ' \r\n')"
+tg_token="$(grep -E '^TELEGRAM_BOT_TOKEN=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+if [ -z "$tg_uid" ]; then
+  echo "привязанных к Telegram клиентов нет — проверять нечего (причина 1)"
+elif [ -z "$tg_token" ]; then
+  echo "TELEGRAM_BOT_TOKEN в .env не найден — проба невозможна"
+else
+  # Токен уходит через stdin: аргументы видны в списке процессов всем, кто
+  # есть на сервере. В вывод идёт только total_count.
+  printf 'url = "https://api.telegram.org/bot%s/getUserProfilePhotos?user_id=%s&limit=1"\n' "$tg_token" "$tg_uid" \
+    | curl -sS -K - --max-time 15 2>/dev/null \
+    | grep -o '"total_count":[0-9]*' | head -1 \
+    || echo "ответа нет — Telegram не ответил (причина 3)"
+  echo "--- total_count:0 = у человека нет фотографии или она закрыта (причина 2)"
+  echo "--- total_count:N>0 = фотография есть, значит дело в коде или в дороге"
+
+  # Прямой дороги до Telegram с этого сервера нет — это уже показано выше.
+  # Значит спрашивать надо ТЕМ ЖЕ путём, которым ходят сообщения: через
+  # VPN-сайдкар. Иначе проба отвечает «Telegram молчит» там, где на самом
+  # деле молчит только прямая дорога.
+  tg_proxy="$(grep -E '^TELEGRAM_PROXY=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+  if [ -n "$tg_proxy" ]; then
+    echo "### Аватарки: то же самое ЧЕРЕЗ САЙДКАР (этой дорогой ходит бот)"
+    printf 'url = "https://api.telegram.org/bot%s/getUserProfilePhotos?user_id=%s&limit=1"\nproxy = "%s"\n' "$tg_token" "$tg_uid" "$tg_proxy" \
+      | curl -sS -K - --max-time 20 2>/dev/null \
+      | grep -o '"total_count":[0-9]*' | head -1 \
+      || echo "и через сайдкар ответа нет — тоннель не работает"
+    echo "--- total_count здесь и есть правда: этой дорогой пойдёт и маршрут аватарок"
+  else
+    echo "TELEGRAM_PROXY не задан — сайдкара нет, а прямой дороги, судя по пробе выше, тоже"
+  fi
+fi

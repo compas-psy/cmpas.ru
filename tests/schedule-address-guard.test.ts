@@ -42,6 +42,13 @@ vi.mock('@/lib/db', () => ({
                 world.slots.filter(s => s.psychologistId === where.psychologistId)),
             findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
                 world.slots.find(s => s.id === where.id) ?? null),
+            // Правка ищет окно сразу СУЖЕННЫМ запросом — по id И специалисту
+            // (Task 1: идентификатор не разрешение). Поэтому подделка обязана
+            // уметь findFirst, иначе она проверяет не тот путь, каким ходит
+            // боевой код.
+            findFirst: vi.fn(async ({ where }: { where: { id: string; psychologistId?: string } }) =>
+                world.slots.find(s => s.id === where.id
+                    && (where.psychologistId === undefined || s.psychologistId === where.psychologistId)) ?? null),
             create: vi.fn(async ({ data }: { data: Partial<SlotRow> }) => {
                 const row = { id: `slot-${world.nextId++}`, ...data } as SlotRow;
                 world.slots.push(row);

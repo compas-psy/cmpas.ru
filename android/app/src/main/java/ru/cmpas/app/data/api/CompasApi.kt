@@ -108,6 +108,20 @@ interface CompasApi {
     @PATCH("availability/mode")
     suspend fun updateScheduleMode(@Body body: ScheduleModeRequest): Response<ScheduleModeResponse>
 
+    // Рабочие часы правятся с телефона. До этого мобильный API умел
+    // расписание только читать, и экран отправлял человека в веб-кабинет:
+    // практик не мог поправить часы вторника, держа телефон в руках.
+    // Правила (пересечения, кабинет, обед) на сервере одни на оба входа —
+    // src/lib/practice/availability-core.ts.
+    @POST("availability/slots")
+    suspend fun createSlot(@Body body: CreateSlotRequest): Response<CreateSlotResponse>
+
+    @PATCH("availability/slots/{id}")
+    suspend fun updateSlot(@Path("id") id: String, @Body body: UpdateSlotRequest): Response<Unit>
+
+    @DELETE("availability/slots/{id}")
+    suspend fun deleteSlot(@Path("id") id: String): Response<Unit>
+
     @GET("scheduled-messages")
     suspend fun getScheduledMessages(): Response<List<ScheduledMessage>>
 
@@ -335,6 +349,34 @@ data class AvailabilitySlotDto(
     val endTime: String,
     val duration: Int = 50,
     val format: String = "online",
+    val addressId: String? = null,
+    /** Срок действия окна. Правка и добавление держатся внутри него. */
+    val startDate: String? = null,
+    val endDate: String? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class CreateSlotRequest(
+    val startDate: String,
+    val endDate: String,
+    val daysOfWeek: List<Int>,
+    val startTime: String,
+    val endTime: String,
+    val duration: Int? = null,
+    val format: String? = null,
+    val addressId: String? = null,
+    val scheduleRuleId: String? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class CreateSlotResponse(val created: Int = 0)
+
+@kotlinx.serialization.Serializable
+data class UpdateSlotRequest(
+    val startTime: String,
+    val endTime: String,
+    val duration: Int? = null,
+    val format: String? = null,
     val addressId: String? = null,
 )
 
