@@ -36,7 +36,14 @@ import {
     getAvailableDates,
     getAvailableTimes,
 } from '@/app/bot/actions';
-import { RuleWeekSchedule } from './RuleWeekSchedule';
+import { RuleWeekSchedule, WEEKDAY_FULL } from './RuleWeekSchedule';
+import {
+    groupDaysByHours,
+    hoursForDay,
+    validateRuleHours,
+    describeRuleHours,
+    type PerDayHours,
+} from '@/lib/practice/rule-day-hours';
 import { BookingLinkCard } from './BookingLinkCard';
 
 type ScheduleRule = {
@@ -121,11 +128,28 @@ export default function AvailabilityPage() {
         name: '', color: RULE_COLORS[0], format: 'online', addressId: '', duration: 50, breakDuration: 15, audienceFilter: 'all', startDate: '', endDate: '',
         daysOfWeek: [0, 1, 2, 3, 4] as number[], startTime: '09:00', endTime: '18:00',
         hasLunch: false, lunchStart: '13:00', lunchEnd: '14:00',
+        // Раздельные часы по дням: выключены по умолчанию, потому что у
+        // типового расписания часы у всех дней одни, и лишние семь пар полей
+        // на экране — это плата за случай, а не за правило.
+        perDayEnabled: false, perDayHours: {} as PerDayHours,
     };
     const [newRuleData, setNewRuleData] = useState(initialRuleData);
     const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
     const [editingRule, setEditingRule] = useState<ScheduleRule | null>(null);
     const [showCloneModal, setShowCloneModal] = useState<ScheduleRule | null>(null);
+    /**
+     * Часы, добавляемые КОНКРЕТНОМУ дню недели изнутри правила.
+     *
+     * Отдельное состояние, а не общая форма «Шаблон расписания»: там день
+     * выбирается заново набором чипов, и чтобы дать субботе часы, надо было
+     * выйти из правила. Здесь день уже известен — тот, рядом с которым
+     * нажали, — и правило остаётся открытым.
+     */
+    const [addingWindow, setAddingWindow] = useState<{
+        ruleId: string; dayOfWeek: number; startDate: string; endDate: string;
+        startTime: string; endTime: string; duration: number;
+        format: string; addressId: string;
+    } | null>(null);
     const [cloneData, setCloneData] = useState({ name: '', startDate: '', endDate: '' });
 
     // Client preview
@@ -361,6 +385,50 @@ export default function AvailabilityPage() {
         } catch { toast.error('Ошибка'); }
     };
 
+    /**
+     * Часы одному дню недели внутри правила. Формат и кабинет по умолчанию
+     * берутся у правила: окно без собственного формата всё равно наследует
+     * правило (см. resolveWindowFormat), и предлагать здесь «Онлайн» значило
+     * бы предлагать не то, что окно получит на самом деле.
+     */
+    const openAddWindow = (rule: ScheduleRule, dayOfWeek: number) => {
+        const asDate = (value: string | Date | null | undefined) =>
+            value ? new Date(value).toISOString().split('T')[0] : '';
+        setAddingWindow({
+            ruleId: rule.id,
+            dayOfWeek,
+            startDate: asDate(rule.startDate),
+            endDate: asDate(rule.endDate),
+            startTime: '09:00',
+            endTime: '18:00',
+            duration: rule.duration || settings.defaultSessionDuration,
+            format: rule.format || 'online',
+            addressId: rule.addressId || '',
+        });
+    };
+
+    const saveAddWindow = async () => {
+        if (!addingWindow) return;
+        if (!addingWindow.startDate || !addingWindow.endDate) { toast.error('Укажите даты действия'); return; }
+        if (new Date(addingWindow.endDate) < new Date(addingWindow.startDate)) { toast.error('Дата окончания раньше начала'); return; }
+        if (addingWindow.startTime >= addingWindow.endTime) { toast.error('Конец должен быть позже начала'); return; }
+        try {
+            const res = await createAvailabilitySlot({
+                startDate: addingWindow.startDate,
+                endDate: addingWindow.endDate,
+                daysOfWeek: [addingWindow.dayOfWeek],
+                startTime: addingWindow.startTime,
+                endTime: addingWindow.endTime,
+                duration: addingWindow.duration,
+                format: addingWindow.format,
+                addressId: addingWindow.addressId,
+                scheduleRuleId: addingWindow.ruleId,
+            });
+            if (res.success) { toast.success('Часы добавлены'); setAddingWindow(null); fetchData(); }
+            else toast.error(res.error || 'Ошибка');
+        } catch { toast.error('Ошибка'); }
+    };
+
     const [intersectingSessions, setIntersectingSessions] = useState<{ id: string; date: Date; time: string; clientName: string }[]>([]);
     const [cancelIntersecting, setCancelIntersecting] = useState(false);
     const [isConfirmingBlock, setIsConfirmingBlock] = useState(false);
@@ -406,14 +474,26 @@ export default function AvailabilityPage() {
 
     // ── Schedule Rules Actions ──
 
+    /** Часы правила в том виде, в каком их понимает раскладка по дням. */
+    const ruleHoursInput = {
+        days: newRuleData.daysOfWeek,
+        common: { startTime: newRuleData.startTime, endTime: newRuleData.endTime },
+        perDay: newRuleData.perDayHours,
+        perDayEnabled: newRuleData.perDayEnabled,
+    };
+
     const handleCreateRule = async () => {
         if (!newRuleData.name.trim()) { toast.error('Введите название'); return; }
         if (!newRuleData.startDate || !newRuleData.endDate) { toast.error('Укажите даты действия'); return; }
-        if (newRuleData.daysOfWeek.length === 0) { toast.error('Выберите дни недели'); return; }
-        if (newRuleData.startTime >= newRuleData.endTime) { toast.error('Некорректное время'); return; }
-        if (newRuleData.hasLunch && (newRuleData.lunchStart <= newRuleData.startTime || newRuleData.lunchEnd >= newRuleData.endTime || newRuleData.lunchStart >= newRuleData.lunchEnd)) {
-            toast.error('Некорректное время обеда'); return;
-        }
+        // Проверка называет день: с раздельными часами «Некорректное время»
+        // заставляло бы искать, какой из семи дней не так.
+        const hoursError = validateRuleHours({
+            ...ruleHoursInput,
+            hasLunch: newRuleData.hasLunch,
+            lunchStart: newRuleData.lunchStart,
+            lunchEnd: newRuleData.lunchEnd,
+        });
+        if (hoursError) { toast.error(hoursError); return; }
         const payload: any = {
             name: newRuleData.name.trim(),
             color: newRuleData.color,
@@ -428,24 +508,41 @@ export default function AvailabilityPage() {
         
         const res = await createScheduleRule(payload);
         if (res.success && res.data?.id) {
-            // Now create slots for this rule
-            try {
-                await createAvailabilitySlot({
-                    startDate: newRuleData.startDate,
-                    endDate: newRuleData.endDate,
-                    daysOfWeek: newRuleData.daysOfWeek,
-                    startTime: newRuleData.startTime,
-                    endTime: newRuleData.endTime,
-                    duration: newRuleData.duration,
-                    hasLunch: newRuleData.hasLunch,
-                    lunchStart: newRuleData.lunchStart,
-                    lunchEnd: newRuleData.lunchEnd,
-                    format: newRuleData.format,
-                    addressId: newRuleData.addressId || '',
-                    scheduleRuleId: res.data.id,
-                });
-            } catch { /* slots creation failed but rule exists */ }
-            toast.success('Правило создано');
+            // Дни с одинаковыми часами уезжают одним запросом, дни со своими
+            // часами — своим. Сервер принимает список дней и ОДИН диапазон,
+            // поэтому раскладка живёт здесь, а не в действии.
+            const groups = groupDaysByHours(ruleHoursInput);
+            const failed: number[] = [];
+            for (const group of groups) {
+                try {
+                    const slotRes = await createAvailabilitySlot({
+                        startDate: newRuleData.startDate,
+                        endDate: newRuleData.endDate,
+                        daysOfWeek: group.days,
+                        startTime: group.startTime,
+                        endTime: group.endTime,
+                        duration: newRuleData.duration,
+                        hasLunch: newRuleData.hasLunch,
+                        lunchStart: newRuleData.lunchStart,
+                        lunchEnd: newRuleData.lunchEnd,
+                        format: newRuleData.format,
+                        addressId: newRuleData.addressId || '',
+                        scheduleRuleId: res.data.id,
+                    });
+                    if (!slotRes.success) failed.push(...group.days);
+                } catch { failed.push(...group.days); }
+            }
+            // Молчать про неудачу нельзя: правило уже создано, и человек
+            // увидел бы «Правило создано» с расписанием, в котором нет
+            // половины дней. Раньше группа была одна, и молчание стоило
+            // всего правила целиком; теперь оно стоило бы отдельных дней —
+            // их и называем.
+            if (failed.length > 0) {
+                const days = [...new Set(failed)].sort((a, b) => a - b).map(d => DAY_LABELS[d]).join(', ');
+                toast.error(`Правило создано, но часы не сохранились: ${days}. Добавьте их в правиле.`);
+            } else {
+                toast.success('Правило создано');
+            }
             setShowNewRule(false);
             setNewRuleData(initialRuleData);
             fetchData();
@@ -940,8 +1037,46 @@ export default function AvailabilityPage() {
                     </div>
                 </Field>
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="Начало рабочего дня"><TimePicker value={newRuleData.startTime} onChange={t => setNewRuleData(s => ({ ...s, startTime: t }))} /></Field>
-                    <Field label="Конец рабочего дня"><TimePicker value={newRuleData.endTime} onChange={t => setNewRuleData(s => ({ ...s, endTime: t }))} /></Field>
+                    <Field label={newRuleData.perDayEnabled ? 'Начало (по умолчанию)' : 'Начало рабочего дня'}><TimePicker value={newRuleData.startTime} onChange={t => setNewRuleData(s => ({ ...s, startTime: t }))} /></Field>
+                    <Field label={newRuleData.perDayEnabled ? 'Конец (по умолчанию)' : 'Конец рабочего дня'}><TimePicker value={newRuleData.endTime} onChange={t => setNewRuleData(s => ({ ...s, endTime: t }))} /></Field>
+                </div>
+                {/* Раздельные часы по дням. Понедельник 09:00–13:00 и вторник
+                    15:00–21:00 — это одно расписание практика, а не два
+                    правила; до этой галочки описать его одним правилом было
+                    нельзя. Выключено по умолчанию: у типового расписания часы
+                    у всех дней одни. */}
+                <div className="bg-muted/30 p-4 rounded-2xl space-y-3 border border-border/50">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={newRuleData.perDayEnabled}
+                            onChange={e => setNewRuleData(s => ({ ...s, perDayEnabled: e.target.checked }))}
+                            className="w-5 h-5 rounded border-border accent-primary" data-testid="per-day-hours-toggle" />
+                        <span className="text-sm font-semibold">Разные часы по дням</span>
+                    </label>
+                    {newRuleData.perDayEnabled && (
+                        newRuleData.daysOfWeek.length === 0 ? (
+                            <p className="text-[12px] text-muted-foreground">Сначала выберите дни недели</p>
+                        ) : (
+                            <div className="space-y-2" data-testid="per-day-hours">
+                                {[...newRuleData.daysOfWeek].sort((a, b) => a - b).map(day => {
+                                    const hours = hoursForDay(day, ruleHoursInput);
+                                    const setDay = (patch: { startTime?: string; endTime?: string }) =>
+                                        setNewRuleData(s => ({
+                                            ...s,
+                                            perDayHours: { ...s.perDayHours, [day]: { ...hours, ...patch } },
+                                        }));
+                                    return (
+                                        <div key={day} className="flex items-center gap-2" data-testid={`per-day-${day}`}>
+                                            <span className="w-8 text-[11px] font-bold text-muted-foreground uppercase shrink-0">{DAY_LABELS[day]}</span>
+                                            <div className="flex-1"><TimePicker value={hours.startTime} onChange={t => setDay({ startTime: t })} /></div>
+                                            <span className="text-muted-foreground text-sm">–</span>
+                                            <div className="flex-1"><TimePicker value={hours.endTime} onChange={t => setDay({ endTime: t })} /></div>
+                                        </div>
+                                    );
+                                })}
+                                <p className="text-[11px] text-muted-foreground">{describeRuleHours(ruleHoursInput, DAY_LABELS)}</p>
+                            </div>
+                        )
+                    )}
                 </div>
                 <div className="bg-muted/30 p-4 rounded-2xl space-y-3 border border-border/50">
                     <label className="flex items-center gap-3 cursor-pointer">
@@ -1055,18 +1190,25 @@ export default function AvailabilityPage() {
                 <div className="border-t border-border/50 pt-4 mt-2">
                     <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-bold text-foreground">Рабочие часы</span>
-                        <button type="button" onClick={() => { setEditingRule(null); setSelectedRuleId(editingRule.id); setShowNewSlot(true); }} className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Добавить</button>
+                        <button type="button" onClick={() => { setSelectedRuleId(editingRule.id); setShowNewSlot(true); }} className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Сразу несколько дней</button>
                     </div>
                     {/* Задача 18 §1: окна одного дня не схлопываются и не
-                        дедуплицируются по времени — у каждого свой формат и кабинет. */}
+                        дедуплицируются по времени — у каждого свой формат и кабинет.
+
+                        Правка и добавление часов НЕ закрывают правило: до этого
+                        правка часов одного дня выкидывала из правила, и вернуться
+                        к остальным дням можно было только открыв его заново —
+                        из-за этого «поменять слоты конкретного дня недели» и
+                        ощущалось невозможным. */}
                     <RuleWeekSchedule
                         windows={ruleSlots}
                         cabinets={addresses}
                         ruleFormat={editingRule.format}
                         ruleAddressId={editingRule.addressId}
-                        onEditWindow={w => { setEditingRule(null); setEditingSlot(slots.find(s => s.id === w.id) || null); }}
+                        onEditWindow={w => setEditingSlot(slots.find(s => s.id === w.id) || null)}
                         onDeleteWindow={rmSlot}
-                        emptyHint="Нет рабочих часов. Нажмите «Добавить»."
+                        onAddWindow={day => openAddWindow(editingRule, day)}
+                        emptyHint="Нет рабочих часов."
                     />
                 </div>
             </Modal>);
@@ -1302,7 +1444,46 @@ export default function AvailabilityPage() {
             </Modal>}
 
             {/* Edit Slot Modal */}
-            {editingSlot && <Modal title="Редактировать" onClose={() => setEditingSlot(null)} onSubmit={saveEditSlot}>
+            {/* Часы одному дню недели. Рисуется ПОВЕРХ правила и правило не
+                закрывает: человек добавляет субботу и остаётся там же, где
+                видит остальные дни. */}
+            {addingWindow && <Modal title={`Часы: ${WEEKDAY_FULL[addingWindow.dayOfWeek]}`} onClose={() => setAddingWindow(null)} onSubmit={saveAddWindow}>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Начало"><TimePicker value={addingWindow.startTime} onChange={t => setAddingWindow(w => w ? { ...w, startTime: t } : w)} /></Field>
+                    <Field label="Конец"><TimePicker value={addingWindow.endTime} onChange={t => setAddingWindow(w => w ? { ...w, endTime: t } : w)} /></Field>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Формат">
+                        <select value={addingWindow.format} onChange={e => setAddingWindow(w => w ? { ...w, format: e.target.value } : w)} className="inp bg-white">
+                            <option value="online">Онлайн</option><option value="offline">Кабинет</option><option value="both">Онлайн + Кабинет</option>
+                        </select>
+                    </Field>
+                    <Field label="Длительность (мин)">
+                        <input type="number" min={15} max={180} value={addingWindow.duration} onChange={e => setAddingWindow(w => w ? { ...w, duration: Number(e.target.value) } : w)} className="inp" />
+                    </Field>
+                </div>
+                {(addingWindow.format === 'offline' || addingWindow.format === 'both') && (
+                    <Field label="Кабинет">
+                        {addresses.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Добавьте кабинет в Настройках</p>
+                        ) : (
+                            <select value={addingWindow.addressId} onChange={e => setAddingWindow(w => w ? { ...w, addressId: e.target.value } : w)} className="inp bg-white">
+                                <option value="">— Выберите —</option>
+                                {addresses.map(a => <option key={a.id} value={a.id}>{a.name} ({a.address})</option>)}
+                            </select>
+                        )}
+                    </Field>
+                )}
+                {/* Даты видны и правятся: у правила они могут быть не заданы, и
+                    подставлять их молча значит завести окно на срок, которого
+                    человек не выбирал. */}
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Действует с"><DatePicker value={addingWindow.startDate} onChange={d => setAddingWindow(w => w ? { ...w, startDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' } : w)} /></Field>
+                    <Field label="Действует по"><DatePicker value={addingWindow.endDate} onChange={d => setAddingWindow(w => w ? { ...w, endDate: d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : '' } : w)} /></Field>
+                </div>
+            </Modal>}
+
+            {editingSlot && <Modal title={`Редактировать: ${WEEKDAY_FULL[editingSlot.dayOfWeek]}`} onClose={() => setEditingSlot(null)} onSubmit={saveEditSlot}>
                 <div className="grid grid-cols-2 gap-4">
                     <Field label="Начало"><TimePicker value={editingSlot.startTime} onChange={t => setEditingSlot(s => s ? { ...s, startTime: t } : s)} /></Field>
                     <Field label="Конец"><TimePicker value={editingSlot.endTime} onChange={t => setEditingSlot(s => s ? { ...s, endTime: t } : s)} /></Field>

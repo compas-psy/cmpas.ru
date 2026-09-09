@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Monitor, Shuffle, X } from 'lucide-react';
+import { Building2, Monitor, Plus, Shuffle, X } from 'lucide-react';
 
 export type ScheduleWindow = {
     id: string;
@@ -96,6 +96,7 @@ export function RuleWeekSchedule({
     ruleAddressId,
     onEditWindow,
     onDeleteWindow,
+    onAddWindow,
     emptyHint = 'Рабочих часов пока нет',
 }: {
     windows: ScheduleWindow[];
@@ -105,9 +106,26 @@ export function RuleWeekSchedule({
     ruleAddressId?: string | null;
     onEditWindow?: (window: ScheduleWindow) => void;
     onDeleteWindow?: (id: string) => void;
+    /**
+     * Добавить окно КОНКРЕТНОМУ дню недели.
+     *
+     * Пока этого не было, добавление часов шло через общую форму «Шаблон
+     * расписания» со своим набором дней: чтобы дать субботе часы, надо было
+     * выйти из правила и собрать день заново. С этой кнопкой день уже
+     * известен — он тот, рядом с которым нажали.
+     */
+    onAddWindow?: (dayOfWeek: number) => void;
     emptyHint?: string;
 }) {
-    const days = groupWindowsByWeekday(windows);
+    const grouped = groupWindowsByWeekday(windows);
+    // Когда день можно наполнить, показываем всю неделю: иначе у дня без
+    // окон нет строки, а значит и места, куда нажать, чтобы их завести.
+    const days = onAddWindow
+        ? WEEKDAY_SHORT.map((_, dayOfWeek) => ({
+            dayOfWeek,
+            windows: grouped.find(d => d.dayOfWeek === dayOfWeek)?.windows ?? [],
+        }))
+        : grouped;
 
     if (days.length === 0) {
         return <p className="text-[12px] text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">{emptyHint}</p>;
@@ -152,6 +170,18 @@ export function RuleWeekSchedule({
                                 )}
                             </span>
                         ))}
+                        {onAddWindow && (
+                            <button
+                                type="button"
+                                onClick={() => onAddWindow(dayOfWeek)}
+                                data-testid={`add-window-${dayOfWeek}`}
+                                className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-border rounded-lg text-[12px] font-semibold text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+                                aria-label={`Добавить часы: ${WEEKDAY_FULL[dayOfWeek]}`}
+                            >
+                                <Plus className="w-3 h-3" />
+                                {dayWindows.length === 0 && 'Часы'}
+                            </button>
+                        )}
                     </div>
                 </div>
             ))}
