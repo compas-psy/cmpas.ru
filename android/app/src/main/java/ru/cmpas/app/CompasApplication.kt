@@ -9,6 +9,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
+import okio.Path.Companion.toOkioPath
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -38,7 +39,7 @@ class CompasApplication : Application(), SingletonImageLoader.Factory {
             // уведомления.
             .diskCache {
                 DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("avatars"))
+                    .directory(context.cacheDir.resolve("avatars").toOkioPath())
                     .maxSizeBytes(16L * 1024 * 1024)
                     .build()
             }
