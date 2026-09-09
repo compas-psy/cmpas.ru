@@ -75,13 +75,40 @@ export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 export type Fetcher = typeof fetch;
 
 /**
+ * Срок ожидания мессенджера.
+ *
+ * Не перестраховка. Проба с боевого сервера: прямого хода до
+ * api.telegram.org нет вовсе — запрос висит и обрывается через 15 секунд по
+ * таймауту операционной системы. Без своего срока браузер специалиста ждал
+ * бы эти секунды на КАЖДОМ кружке, прежде чем показать инициалы, и список
+ * клиентов выглядел бы намертво зависшим.
+ *
+ * Аватарка — украшение: лучше быстро показать инициалы, чем долго ждать
+ * фотографию.
+ */
+export const MESSENGER_TIMEOUT_MS = 4000;
+
+/** Запрос со сроком. Истёк — это «аватарки нет», а не исключение наружу. */
+async function withTimeout(fetcher: Fetcher, url: string, init?: RequestInit): Promise<Response | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MESSENGER_TIMEOUT_MS);
+    try {
+        return await fetcher(url, { ...(init ?? {}), signal: controller.signal });
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
  * Скачать картинку по адресу. Общая часть для обоих мессенджеров: проверка
  * типа и размера одна и та же, а адрес у каждого свой.
  */
 export async function downloadImage(url: string, fetcher: Fetcher = fetch): Promise<AvatarImage | null> {
     try {
-        const res = await fetcher(url);
-        if (!res.ok) return null;
+        const res = await withTimeout(fetcher, url);
+        if (!res || !res.ok) return null;
         const contentType = safeImageContentType(res.headers.get('content-type'));
         if (!contentType) return null;
         const length = Number(res.headers.get('content-length') ?? 0);
@@ -111,8 +138,8 @@ export async function fetchTelegramAvatar(
 ): Promise<AvatarImage | null> {
     const api = `${config.apiRoot}/bot${config.token}`;
     try {
-        const photosRes = await fetcher(`${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
-        if (!photosRes.ok) return null;
+        const photosRes = await withTimeout(fetcher, `${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
+        if (!photosRes || !photosRes.ok) return null;
         const photos = await photosRes.json();
         // Пусто — это норма: человек закрыл фото настройками приватности.
         const sizes: Array<{ file_id?: string; width?: number }> = photos?.result?.photos?.[0] ?? [];
@@ -120,8 +147,8 @@ export async function fetchTelegramAvatar(
         const smallest = [...sizes].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0];
         if (!smallest?.file_id) return null;
 
-        const fileRes = await fetcher(`${api}/getFile?file_id=${encodeURIComponent(smallest.file_id)}`);
-        if (!fileRes.ok) return null;
+        const fileRes = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(smallest.file_id)}`);
+        if (!fileRes || !fileRes.ok) return null;
         const file = await fileRes.json();
         const path = file?.result?.file_path;
         if (typeof path !== 'string' || !path) return null;
@@ -152,10 +179,10 @@ export async function fetchMaxAvatar(
     fetcher: Fetcher = fetch,
 ): Promise<AvatarImage | null> {
     try {
-        const res = await fetcher(`${config.apiRoot}/chats/${encodeURIComponent(dialogId)}`, {
+        const res = await withTimeout(fetcher, `${config.apiRoot}/chats/${encodeURIComponent(dialogId)}`, {
             headers: { Authorization: config.token },
         });
-        if (!res.ok) return null;
+        if (!res || !res.ok) return null;
         const chat = await res.json();
         const url = chat?.dialog_with_user?.avatar_url;
         if (typeof url !== 'string' || !url.startsWith('https://')) return null;

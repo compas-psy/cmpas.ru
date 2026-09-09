@@ -20,6 +20,7 @@ import {
     fetchTelegramAvatar,
     fetchMaxAvatar,
     MAX_AVATAR_BYTES,
+    MESSENGER_TIMEOUT_MS,
 } from '@/lib/clients/avatar';
 
 const TELEGRAM = { apiRoot: 'https://api.telegram.org', token: 'ТОКЕН-БОТА' };
@@ -157,6 +158,28 @@ describe('MAX', () => {
         });
         expect(await fetchMaxAvatar('77', MAX, fetcher as never)).toBeNull();
         expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('срок ожидания', () => {
+    it('мессенджер молчит — не ждём его вечно', async () => {
+        // Проба с боевого сервера: прямого хода до api.telegram.org нет
+        // вовсе, запрос просто висит. Без своего срока браузер специалиста
+        // ждал бы на КАЖДОМ кружке, и список выглядел бы зависшим.
+        const fetcher = vi.fn((_url: string, init?: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }));
+        const started = Date.now();
+        const image = await downloadImage('https://example/hang.png', fetcher as never);
+        expect(image).toBeNull();
+        expect(Date.now() - started).toBeLessThan(MESSENGER_TIMEOUT_MS + 2000);
+    }, 20000);
+
+    it('срок передаётся запросу, а не только меряется', async () => {
+        const fetcher = vi.fn(async () => png());
+        await downloadImage('https://example/a.png', fetcher as never);
+        const init = fetcher.mock.calls[0][1] as { signal?: AbortSignal } | undefined;
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
     });
 });
 

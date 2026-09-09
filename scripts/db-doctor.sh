@@ -600,4 +600,20 @@ else
     || echo "ответа нет — Telegram не ответил (причина 3)"
   echo "--- total_count:0 = у человека нет фотографии или она закрыта (причина 2)"
   echo "--- total_count:N>0 = фотография есть, значит дело в коде или в дороге"
+
+  # Прямой дороги до Telegram с этого сервера нет — это уже показано выше.
+  # Значит спрашивать надо ТЕМ ЖЕ путём, которым ходят сообщения: через
+  # VPN-сайдкар. Иначе проба отвечает «Telegram молчит» там, где на самом
+  # деле молчит только прямая дорога.
+  tg_proxy="$(grep -E '^TELEGRAM_PROXY=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+  if [ -n "$tg_proxy" ]; then
+    echo "### Аватарки: то же самое ЧЕРЕЗ САЙДКАР (этой дорогой ходит бот)"
+    printf 'url = "https://api.telegram.org/bot%s/getUserProfilePhotos?user_id=%s&limit=1"\nproxy = "%s"\n' "$tg_token" "$tg_uid" "$tg_proxy" \
+      | curl -sS -K - --max-time 20 2>/dev/null \
+      | grep -o '"total_count":[0-9]*' | head -1 \
+      || echo "и через сайдкар ответа нет — тоннель не работает"
+    echo "--- total_count здесь и есть правда: этой дорогой пойдёт и маршрут аватарок"
+  else
+    echo "TELEGRAM_PROXY не задан — сайдкара нет, а прямой дороги, судя по пробе выше, тоже"
+  fi
 fi
