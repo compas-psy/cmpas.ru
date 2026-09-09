@@ -20,17 +20,29 @@ const APP = 'https://cmpas.ru';
 const PAGE = readFileSync(path.join(process.cwd(), 'src/app/diary/clients/page.tsx'), 'utf8');
 
 describe('ссылка на подтверждение из бота', () => {
+    // Требование прежнее: адрес с ?attest=1 доходит до специалиста и
+    // открывает окно подтверждения. Изменился только способ — теперь это
+    // кнопка, а не адрес, вклеенный в текст: голая ссылка занимала полторы
+    // строки и в сообщении выглядела мусором.
+    const links = (buttons: Array<{ url?: string }>) => buttons.map(b => b.url ?? '').join(' ');
+
     it('на пересланный контакт без аттестации бот даёт ссылку, открывающую подтверждение', () => {
         const reply = previewMessage({ kind: 'attestation_required', psychologistId: 'psy_1' }, APP);
 
         expect(reply).not.toBeNull();
-        expect(reply!.text).toContain('/diary/clients?attest=1');
+        expect(links(reply!.buttons)).toContain('/diary/clients?attest=1');
     });
 
     it('то же самое при нажатии кнопки, когда аттестации всё ещё нет', () => {
-        const text = commitMessage({ kind: 'attestation_required' }, APP);
+        const reply = commitMessage({ kind: 'attestation_required' }, APP);
 
-        expect(text).toContain('/diary/clients?attest=1');
+        expect(links(reply.buttons)).toContain('/diary/clients?attest=1');
+    });
+
+    it('адрес не остаётся ещё и в тексте — иначе ссылка задвоится', () => {
+        const preview = previewMessage({ kind: 'attestation_required', psychologistId: 'psy_1' }, APP);
+        expect(preview!.text).not.toContain('http');
+        expect(commitMessage({ kind: 'attestation_required' }, APP).text).not.toContain('http');
     });
 
     it('страница клиентов этот параметр читает и открывает окно', () => {
@@ -55,8 +67,9 @@ describe('ссылка на подтверждение из бота', () => {
             APP,
         );
 
-        expect(done).toContain('/diary/clients');
-        expect(done).not.toContain('attest=1');
+        expect(links(done.buttons)).toContain('/diary/clients');
+        expect(links(done.buttons)).not.toContain('attest=1');
+        expect(done.text).not.toContain('attest=1');
         expect(incomplete!.text).not.toContain('attest=1');
     });
 });

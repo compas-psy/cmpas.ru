@@ -44,11 +44,10 @@ export function html(params: { url: string; host: string; theme?: Record<string,
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: ${brandColor}; border-radius: 24px; overflow: hidden;">
                                 <tr>
                                     <td style="padding: 48px 40px; text-align: center;">
-                                        <!-- Icon -->
-                                        <div style="width: 64px; height: 64px; background-color: rgba(255,255,255,0.1); border-radius: 50%; margin: 0 auto 24px; line-height: 64px;">
-                                            <span style="font-size: 28px;">✉️</span>
-                                        </div>
-                                        
+                                        <!-- Кружок с эмодзи-конвертом убран: почтовый клиент
+                                             рисует эмодзи шрифтом системы, и в письме от
+                                             специалиста это выглядело наклейкой. Заголовок
+                                             и кнопка говорят то же самое и без него. -->
                                         <!-- Title -->
                                         <h1 style="margin: 0 0 16px; font-size: 24px; font-weight: 600; color: ${buttonTextColor};">
                                             Войти в аккаунт

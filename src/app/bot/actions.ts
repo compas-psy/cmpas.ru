@@ -6,6 +6,7 @@ import { sendMaxMessage } from '@/lib/max-bot';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
+import { onlineLinkLine } from '@/lib/messaging/format';
 import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalClientToken } from '@/lib/client-workflow';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 import { resolveAvailableTimesForDay } from '@/lib/practice/booking/availability';
@@ -359,13 +360,16 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
     }) as any;
 
     const onlineLink = format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
-    const linkText = onlineLink ? `\n🔗 Ссылка для подключения: ${onlineLink}` : '';
+    // Ссылка — за словом: правило оформления автосообщений в
+    // src/lib/messaging/format.ts.
+    const line = onlineLinkLine(onlineLink);
+    const linkText = line ? `\n${line}` : '';
 
     // Notify psychologist (Telegram + MAX)
     await notifyUser(
         psy?.telegramChatId,
         (psy as any)?.maxChatId,
-        `🔥 <b>Новая запись!</b>\n\nКлиент: ${form.name} (${form.phone})\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n📍 Формат: ${format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
+        `<b>Новая запись</b>\n\nКлиент: ${form.name} (${form.phone})\nДата: ${dateStr}\nВремя: ${session.time}\nФормат: ${format === 'offline' ? 'Очно (в кабинете)' : 'Онлайн'}`
     );
     await createNotification({
         psychologistId,
@@ -377,7 +381,7 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
     });
 
     // Notify client (Telegram + MAX)
-    const clientMsg = `✅ <b>Вы успешно записаны!</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\n📅 Дата: ${dateStr}\n⏰ Время: ${session.time}\n📍 Формат: ${format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
+    const clientMsg = `<b>Вы записаны</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\nДата: ${dateStr}\nВремя: ${session.time}\nФормат: ${format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
     await notifyUser(
         client.telegramChatId,
         (client as any).maxChatId,

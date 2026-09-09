@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { db } from '@/lib/db';
+import { messageLink } from '@/lib/messaging/format';
 import { extractFirstName } from '@/lib/person-name';
 import { appSecret, safeEqualHex } from '@/lib/app-secret';
 
@@ -291,8 +292,10 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
         settings.prepaymentRequired ? 'Оплата консультации производится по инструкции специалиста.' : 'Оплата консультации: по договорённости со специалистом.',
         settings.paymentDueText ? `Срок оплаты: ${settings.paymentDueText}` : '',
         settings.paymentText || '',
-        settings.paymentLink ? `Ссылка на оплату: ${settings.paymentLink}` : '',
-        settings.paymentQrUrl ? `QR-код для оплаты: ${settings.paymentQrUrl}` : '',
+        // Ссылки — за словом. Ссылка на оплату у эквайринга легко занимает
+        // полторы строки, и в сообщении о встрече это выглядит как мусор.
+        settings.paymentLink ? messageLink(settings.paymentLink, 'Перейти к оплате') : '',
+        settings.paymentQrUrl ? messageLink(settings.paymentQrUrl, 'QR-код для оплаты') : '',
         'ПРАКТИКА не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
     ];
 
@@ -452,7 +455,7 @@ export function buildSessionClientMessage(params: {
         '',
         `Подтверждаю запись на консультацию к специалисту ${psyName}.`,
         '',
-        `📅 ${bold(`${dateText} в ${params.time}`)}`,
+        bold(`${dateText} в ${params.time}`),
         `Формат: ${bold(formatText)}`,
     ];
 

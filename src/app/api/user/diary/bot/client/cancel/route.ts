@@ -71,7 +71,7 @@ export async function POST(req: Request) {
                 const dateStr = format(new Date(cancelled.date), 'd MMMM', { locale: ru });
                 await sendTelegramMessage(
                     cancelled.psychologist.telegramChatId,
-                    `⚠️ <b>Отмена сессии</b>\n\nКлиент ${clientName || cancelled.client?.name || 'по ссылке'} отменил запись:\n📅 Дата: ${dateStr}\n⏰ Время: ${cancelled.time}\n\nСлот снова доступен для записи.`,
+                    `<b>Отмена сессии</b>\n\nКлиент ${clientName || cancelled.client?.name || 'по ссылке'} отменил запись:\nДата: ${dateStr}\nВремя: ${cancelled.time}\n\nСлот снова доступен для записи.`,
                     { parse_mode: 'HTML' }
                 );
             } catch (e) {

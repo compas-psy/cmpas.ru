@@ -8,6 +8,7 @@
 // старой подходящей заявке, без гонки и без давления на клиента.
 
 import { db } from '@/lib/db';
+import { messageLink } from '@/lib/messaging/format';
 import { matchesPreference, type TimePreference } from '@/lib/booking/suggested-times';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max';
@@ -105,7 +106,9 @@ export async function notifyWaitlistOnFreedSlot(
     const psychologistName = await psychologistDisplayName(psychologistId);
     const dateLabel = freedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
     const bookingLink = `${publicBaseUrl()}/bot/book/${psychologistId}`;
-    const text = `Здравствуйте! У ${psychologistName} освободилось время: ${dateLabel} в ${freedTime}. Записаться: ${bookingLink}`;
+    // Ссылка — за словом: голый адрес в конце фразы читается как спам, а
+    // сообщение это первое, что человек из очереди видит от специалиста.
+    const text = `Здравствуйте! У ${psychologistName} освободилось время: ${dateLabel} в ${freedTime}. ${messageLink(bookingLink, 'Записаться')}`;
 
     for (const entry of matching) {
         const channel = await resolveContactChannel(psychologistId, entry.contact);

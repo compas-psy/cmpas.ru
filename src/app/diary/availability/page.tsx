@@ -997,7 +997,6 @@ export default function AvailabilityPage() {
                                 <div className="text-[11px] text-muted-foreground">Конверсия</div>
                             </div>
                         </div>
-                        <a href="/diary/analytics" className="block mt-4 text-[12px] text-primary font-semibold hover:underline text-center">Перейти к аналитике →</a>
                     </div>
                 </div>
             </div>

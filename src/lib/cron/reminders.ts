@@ -4,6 +4,7 @@ import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 import { build24hReminderText } from './reminder-text';
+import { onlineLinkLine } from '@/lib/messaging/format';
 
 /** MAX-функции возвращают либо null (нет токена / HTTP не ok / исключение — см. maxApi в max-bot.ts),
  *  либо разобранный JSON-ответ, который может нести success:false при формально успешном HTTP-ответе. */
@@ -143,7 +144,10 @@ function buildClientReminderText(session: any, kind: ClientReminderKind): string
             confirmationRequired: session.status === 'pending',
         });
     }
-    const linkText = session.format === 'online' && onlineLink ? `\n🔗 Подключение: ${onlineLink}` : '';
+    // Та же подпись, что и в напоминании за сутки: разнобой в двух письмах
+    // одному человеку в один день выглядит небрежностью.
+    const line = session.format === 'online' ? onlineLinkLine(onlineLink) : '';
+    const linkText = line ? `\n${line}` : '';
     const confirmationText = session.status === 'pending' ? '\nПодтвердите, пожалуйста, встречу.' : '';
     return `Сессия начнётся через 1 час, в ${session.time}.${linkText}${confirmationText}`;
 }
@@ -188,10 +192,12 @@ function sessionActions(session: { id: string; psychologistId: string; clientId:
     const actionUrl = (action: 'confirm' | 'cancel') =>
         `${publicBaseUrl()}/api/client/session-action?s=${session.id}&a=${action}&t=${sessionActionToken(session.psychologistId, session.clientId, session.id, action, expiresAt)}`;
     const rows: Array<Array<{ text: string; url: string }>> = [];
-    if (pending) rows.push([{ text: '✅ Подтвердить', url: actionUrl('confirm') }]);
+    // Подписи кнопок без эмодзи: кнопка и так выделена, а «✅» перед словом
+    // «Подтвердить» ничего не добавляет — только делает рассылочный вид.
+    if (pending) rows.push([{ text: 'Подтвердить', url: actionUrl('confirm') }]);
     rows.push([
-        { text: '🔄 Перенести', url: clientBookingLink(session.psychologistId, session.clientId) },
-        { text: '❌ Отменить', url: actionUrl('cancel') },
+        { text: 'Перенести', url: clientBookingLink(session.psychologistId, session.clientId) },
+        { text: 'Отменить', url: actionUrl('cancel') },
     ]);
     return { reply_markup: { inline_keyboard: rows } };
 }
@@ -292,7 +298,7 @@ export async function processReminders() {
                 const message = `Завтра в ${session.time} сессия с клиентом ${client.name}. Статус: ${statusText}.`;
                 const outcome = await sendNotification(psychologistTelegramId, psychologistMaxId, message, {
                     reply_markup: {
-                        inline_keyboard: [[{ text: '👤 Профиль клиента', url: `https://cmpas.ru/diary/clients?clientId=${client.id}` }]],
+                        inline_keyboard: [[{ text: 'Профиль клиента', url: `https://cmpas.ru/diary/clients?clientId=${client.id}` }]],
                     },
                 });
                 noteOutcome(outcome);

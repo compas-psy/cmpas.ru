@@ -21,6 +21,7 @@ import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
+import { htmlToPlain } from '@/lib/messaging/format';
 
 const MAX_API = 'https://platform-api2.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -118,7 +119,10 @@ export async function sendMaxMessage(
     buttons?: { text: string; url?: string; payload?: string }[][]
 ) {
     const uid = String(userId).replace(MAX_PREFIX, '');
-    const body: Record<string, unknown> = { text };
+    // MAX не понимает разметку Telegram. Перевод стоит ЗДЕСЬ, на единственной
+    // двери в MAX: забыть его в отдельном сообщении невозможно, потому что
+    // мимо этой функции в MAX ничего не уходит.
+    const body: Record<string, unknown> = { text: htmlToPlain(text) };
     if (buttons?.length) {
         body.attachments = [{
             type: 'inline_keyboard',
@@ -157,7 +161,7 @@ async function handleStart(userId: number, payload: string | undefined) {
     if (psy) {
         return sendMaxMessage(userId,
             `Добро пожаловать в ПРАКТИКУ, ${psy.name || 'Специалист'}!\n\nВыберите действие:`,
-            [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '🔗 Ссылка на запись', url: `${APP_URL}/bot/book/${psy.id}` }]]
+            [[{ text: 'Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: 'Ссылка на запись', url: `${APP_URL}/bot/book/${psy.id}` }]]
         );
     }
 
@@ -176,7 +180,7 @@ async function handleStart(userId: number, payload: string | undefined) {
             });
 
             await sendMaxMessage(userId,
-                `Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`,
+                `Здравствуйте, ${client.name}!\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`,
             );
 
             try {
@@ -240,15 +244,15 @@ async function handleStart(userId: number, payload: string | undefined) {
             }
             const psyName = targetPsy.psychologistSettings?.fullName || targetPsy.name || 'Специалист';
             const bookUrl = linkClientId ? `${APP_URL}/bot/book/${psychologistId}?c=${personalClientToken(linkClientId)}` : `${APP_URL}/bot/book/${psychologistId}`;
-            return sendMaxMessage(userId, `Добро пожаловать! Вы можете записаться к специалисту ${psyName}.`, [[{ text: '📅 Записаться', url: bookUrl }]]);
+            return sendMaxMessage(userId, `Добро пожаловать! Вы можете записаться к специалисту ${psyName}.`, [[{ text: 'Записаться', url: bookUrl }]]);
         }
     }
 
     const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } });
     if (client) {
         return sendMaxMessage(userId, `Добро пожаловать, ${client.name}!`, [
-            [{ text: '📅 Записаться', url: `${APP_URL}/bot/book/${client.psychologistId}?c=${personalClientToken(client.id)}` }],
-            [{ text: '🗓 Мои сессии', url: `${APP_URL}/bot/client` }],
+            [{ text: 'Записаться', url: `${APP_URL}/bot/book/${client.psychologistId}?c=${personalClientToken(client.id)}` }],
+            [{ text: 'Мои сессии', url: `${APP_URL}/bot/client` }],
         ]);
     }
 
@@ -256,14 +260,14 @@ async function handleStart(userId: number, payload: string | undefined) {
     if (tgClient?.psychologistId) {
         const bookUrl = tgClient.diaryClientId ? `${APP_URL}/bot/book/${tgClient.psychologistId}?c=${personalClientToken(tgClient.diaryClientId)}` : `${APP_URL}/bot/book/${tgClient.psychologistId}`;
         return sendMaxMessage(userId, `Добро пожаловать, ${tgClient.fullName || 'Клиент'}!`, [
-            [{ text: '📅 Записаться', url: bookUrl }],
-            [{ text: '🗓 Мои сессии', url: `${APP_URL}/bot/client` }],
+            [{ text: 'Записаться', url: bookUrl }],
+            [{ text: 'Мои сессии', url: `${APP_URL}/bot/client` }],
         ]);
     }
 
     return sendMaxMessage(userId,
         'Добро пожаловать в ПРАКТИКУ!\n\nЕсли вы психолог — войдите в кабинет и привяжите MAX через раздел Интеграции.',
-        [[{ text: '💼 Войти в кабинет', url: `${APP_URL}/diary/integrations` }]]
+        [[{ text: 'Войти в кабинет', url: `${APP_URL}/diary/integrations` }]]
     );
 }
 
@@ -276,7 +280,7 @@ async function handleConnect(userId: number) {
             body: JSON.stringify({ maxUserId: mid }),
         });
         const data = await res.json();
-        if (data.url) return sendMaxMessage(userId, 'Нажмите кнопку ниже, чтобы привязать ваш MAX аккаунт к ПРАКТИКЕ.\n\n⚠️ Ссылка действует 15 минут.', [[{ text: '🔗 Привязать аккаунт', url: data.url }]]);
+        if (data.url) return sendMaxMessage(userId, 'Нажмите кнопку ниже, чтобы привязать ваш MAX аккаунт к ПРАКТИКЕ.\n\nСсылка действует 15 минут.', [[{ text: 'Привязать аккаунт', url: data.url }]]);
     } catch (e) {
         console.error('[MAX Bot] /connect error:', e);
     }
@@ -294,8 +298,8 @@ async function handleSessions(userId: number) {
             include: { client: true }
         });
         if (!sessions.length) return sendMaxMessage(userId, 'У вас нет предстоящих подтвержденных сессий.');
-        let msg = '📅 Ваши ближайшие сессии:\n\n';
-        sessions.forEach(s => { msg += `👤 ${s.client.name}\n⏰ ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 ${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`; });
+        let msg = 'Ваши ближайшие сессии:\n\n';
+        sessions.forEach(s => { msg += `${s.client.name}\n${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`; });
         return sendMaxMessage(userId, msg);
     }
 
@@ -306,8 +310,8 @@ async function handleSessions(userId: number) {
             orderBy: [{ date: 'asc' }, { time: 'asc' }]
         });
         if (!sessions.length) return sendMaxMessage(userId, 'У вас нет предстоящих записей.');
-        let msg = '📅 Ваши записи:\n\n';
-        sessions.forEach(s => { msg += `⏰ ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 ${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`; });
+        let msg = 'Ваши записи:\n\n';
+        sessions.forEach(s => { msg += `${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`; });
         return sendMaxMessage(userId, msg);
     }
 
@@ -319,11 +323,11 @@ async function handleHelp(userId: number) {
     const psy = await db.user.findFirst({ where: { maxChatId: mid } });
     if (psy) {
         return sendMaxMessage(userId,
-            '📋 Доступные команды:\n\n/sessions — ваши ближайшие сессии\n/link — ссылка для записи клиентов\n/help — эта справка\n\nТакже вы можете открыть кабинет по кнопке ниже.',
-            [[{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: '📅 Календарь', url: `${APP_URL}/diary/calendar` }]]
+            'Доступные команды:\n\n/sessions — ваши ближайшие сессии\n/link — ссылка для записи клиентов\n/help — эта справка\n\nТакже вы можете открыть кабинет по кнопке ниже.',
+            [[{ text: 'Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: 'Календарь', url: `${APP_URL}/diary/calendar` }]]
         );
     }
-    return sendMaxMessage(userId, '📋 Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n/connect — привязать аккаунт психолога', [[{ text: '💼 Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
+    return sendMaxMessage(userId, 'Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n/connect — привязать аккаунт психолога', [[{ text: 'Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
 }
 
 async function handleShareLink(userId: number) {
@@ -331,7 +335,9 @@ async function handleShareLink(userId: number) {
     const psy = await db.user.findFirst({ where: { maxChatId: mid } });
     if (!psy) return sendMaxMessage(userId, 'Эта команда доступна только для психологов.');
     const bookUrl = `${APP_URL}/bot/book/${psy.id}`;
-    return sendMaxMessage(userId, `🔗 Ссылка для записи клиентов:\n\n${bookUrl}\n\nОтправьте эту ссылку клиенту — он сможет выбрать удобное время.`, [[{ text: '📅 Открыть страницу записи', url: bookUrl }]]);
+    // Адрес в тексте не повторяем: он уже есть в кнопке ниже, а вклеенный в
+    // середину сообщения занимал полторы строки и ничего не пояснял.
+    return sendMaxMessage(userId, 'Кнопка ниже открывает вашу страницу записи. Перешлите это сообщение клиенту — он сможет выбрать удобное время.', [[{ text: 'Открыть страницу записи', url: bookUrl }]]);
 }
 
 /**
@@ -354,7 +360,9 @@ async function handleContactShared(userId: number, payload: NonNullable<MaxAttac
     await sendMaxMessage(
         userId,
         reply.text,
-        reply.buttons.length > 0 ? reply.buttons.map((b) => [{ text: b.label, payload: b.payload }]) : undefined
+        reply.buttons.length > 0
+            ? reply.buttons.map((b) => [b.url ? { text: b.label, url: b.url } : { text: b.label, payload: b.payload }])
+            : undefined
     );
 }
 
@@ -368,7 +376,10 @@ async function handleContactIntakeCallback(callbackId: string, userId: number, p
     const draftId = payload.replace('intake_ok_', '').replace('intake_fill_', '').replace('intake_no_', '');
 
     const result = await commitContactIntake({ draftId, psychologistId: psy.id, action: kind });
-    await sendMaxMessage(userId, commitMessage(result, APP_URL));
+    const done = commitMessage(result, APP_URL);
+    await sendMaxMessage(userId, done.text, done.buttons.length > 0
+        ? done.buttons.map((b) => [b.url ? { text: b.label, url: b.url } : { text: b.label, payload: b.payload }])
+        : undefined);
 }
 
 async function handleCallback(callbackId: string, userId: number, payload: string) {
@@ -406,10 +417,10 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
 
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
         autoDeleteSessionFromCalendars(session.psychologistId, session.id).catch(console.error);
-        await sendMaxMessage(userId, `❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
+        await sendMaxMessage(userId, `Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
         const psyMaxId = (session.psychologist as any)?.maxChatId;
-        if (psyMaxId) await sendMaxMessage(psyMaxId, `⚠️ Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`);
+        if (psyMaxId) await sendMaxMessage(psyMaxId, `Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`);
         await createNotification({
             psychologistId: session.psychologistId,
             type: 'session_cancelled',
@@ -429,9 +440,9 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
         }
         if (session.status !== 'cancelled') await db.diarySession.update({ where: { id: session.id }, data: { status: 'confirmed' } });
         const formatText = session.format === 'offline' ? 'Очно' : 'Онлайн';
-        await sendMaxMessage(userId, `✅ Отлично, ждём вас!\n\n📅 ${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n📍 ${formatText}`);
+        await sendMaxMessage(userId, `Отлично, ждём вас!\n\n${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n${formatText}`);
         const psyMaxId = (session.psychologist as any)?.maxChatId;
-        if (psyMaxId) await sendMaxMessage(psyMaxId, `✅ Клиент ${session.client.name} подтвердил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`);
+        if (psyMaxId) await sendMaxMessage(psyMaxId, `Клиент ${session.client.name} подтвердил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`);
         await createNotification({
             psychologistId: session.psychologistId,
             type: 'session_confirmed',
@@ -451,7 +462,7 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
         }
         const token = sessionActionToken(session.psychologistId, session.clientId, session.id, 'reschedule', sessionActionTokenExpiry(session.date));
         const rescheduleUrl = `${APP_URL}/client/reschedule/${session.id}?t=${token}`;
-        await sendMaxMessage(userId, '🔄 Чтобы перенести сессию, выберите новое время:', [[{ text: '📅 Выбрать новое время', url: rescheduleUrl }]]);
+        await sendMaxMessage(userId, 'Чтобы перенести сессию, выберите новое время:', [[{ text: 'Выбрать новое время', url: rescheduleUrl }]]);
     }
 
     else if (payload.startsWith('mood_')) {
@@ -460,8 +471,9 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
         const sessionId = parts.slice(2).join('_');
         try {
             await db.diarySession.update({ where: { id: sessionId }, data: { clientMoodRating: rating } as any });
-            const emojis: Record<number, string> = { 1: '😊', 2: '🙂', 3: '😐', 4: '😔', 5: '😢' };
-            await sendMaxMessage(userId, `${emojis[rating] || '👍'} Спасибо за обратную связь! Ваш ответ записан.`);
+            // Оценка называется словом, а не смайликом: так видно, что записано.
+    const moodWords: Record<number, string> = { 1: 'Отлично', 2: 'Хорошо', 3: 'Нормально', 4: 'Так себе', 5: 'Плохо' };
+            await sendMaxMessage(userId, `Спасибо за обратную связь! Записано: ${moodWords[rating] || 'ваш ответ'}.`);
         } catch (e) {
             console.error('[MAX Bot] mood callback error:', e);
             await sendMaxMessage(userId, 'Спасибо! (не удалось сохранить ответ)');
@@ -510,19 +522,19 @@ export async function handleMaxUpdate(update: MaxUpdate) {
                 await handleSessions(userId);
             } else if (text === '/help' || text === '/помощь' || text === 'Помощь') {
                 await handleHelp(userId);
-            } else if (text === '/link' || text === '/ссылка' || text === '🔗 Ссылка на запись') {
+            } else if (text === '/link' || text === '/ссылка' || text === 'Ссылка на запись' || text === '🔗 Ссылка на запись') {
                 await handleShareLink(userId);
             } else {
                 const mid = maxId(userId);
                 const psy = await db.user.findFirst({ where: { maxChatId: mid } });
                 if (psy) {
                     await sendMaxMessage(userId, 'Выберите действие:', [
-                        [{ text: '💼 Открыть кабинет', url: `${APP_URL}/diary` }],
-                        [{ text: '🔗 Ссылка для клиента', url: `${APP_URL}/bot/book/${psy.id}` }],
-                        [{ text: '🗓 Мои сессии', payload: '/sessions' }],
+                        [{ text: 'Открыть кабинет', url: `${APP_URL}/diary` }],
+                        [{ text: 'Ссылка для клиента', url: `${APP_URL}/bot/book/${psy.id}` }],
+                        [{ text: 'Мои сессии', payload: '/sessions' }],
                     ]);
                 } else {
-                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/help — помощь', [[{ text: '💼 Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
+                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/help — помощь', [[{ text: 'Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
                 }
             }
         }

@@ -15,7 +15,16 @@ import type { PreviewResult, CommitResult } from './contact-intake';
 export interface IntakeButton {
     label: string;
     /** Кладётся в callback_data (Telegram) или payload (MAX). */
-    payload: string;
+    payload?: string;
+    /**
+     * Кнопка-ссылка вместо кнопки-действия.
+     *
+     * Появилась, чтобы не вклеивать адрес в текст: «Это делается в кабинете:
+     * https://cmpas.ru/diary/clients?attest=1» — полторы строки, из которых
+     * человеку полезно одно слово «кабинет». Кнопка говорит то же самое и
+     * занимает строку.
+     */
+    url?: string;
 }
 
 export interface IntakeMessage {
@@ -45,10 +54,8 @@ export function previewMessage(preview: PreviewResult, appUrl: string): IntakeMe
 
         case 'attestation_required':
             return {
-                text:
-                    'Чтобы заводить карточки клиентов, нужно один раз подтвердить, что вы оператор их персональных данных.\n\n'
-                    + `Это делается в кабинете: ${appUrl}/diary/clients?attest=1`,
-                buttons: [],
+                text: 'Чтобы заводить карточки клиентов, нужно один раз подтвердить, что вы оператор их персональных данных.',
+                buttons: [{ label: 'Подтвердить в кабинете', url: `${appUrl}/diary/clients?attest=1` }],
             };
 
         case 'incomplete':
@@ -61,10 +68,8 @@ export function previewMessage(preview: PreviewResult, appUrl: string): IntakeMe
 
         case 'conflict':
             return {
-                text:
-                    `Под именем «${name}» у вас несколько карточек. Выбрать за вас нельзя — откройте список клиентов и решите сами:\n`
-                    + `${appUrl}/diary/clients`,
-                buttons: [],
+                text: `Под именем «${name}» у вас несколько карточек. Выбрать за вас нельзя — откройте список клиентов и решите сами.`,
+                buttons: [{ label: 'Открыть список клиентов', url: `${appUrl}/diary/clients` }],
             };
 
         case 'existing':
@@ -105,24 +110,36 @@ export function previewMessage(preview: PreviewResult, appUrl: string): IntakeMe
     }
 }
 
-/** Что бот отвечает после нажатия кнопки. */
-export function commitMessage(result: CommitResult, appUrl: string): string {
+/**
+ * Что бот отвечает после нажатия кнопки.
+ *
+ * Отвечает тем же видом, что и previewMessage — текстом И кнопками. Раньше
+ * тут была голая строка, и адрес приходилось вклеивать прямо в неё: «Готово.
+ * Мария в вашей базе:\nhttps://cmpas.ru/diary/clients». Ссылка за словом
+ * требует кнопки, значит вид должен быть общим.
+ */
+export function commitMessage(result: CommitResult, appUrl: string): IntakeMessage {
+    const openClients: IntakeButton[] = [{ label: 'Открыть список клиентов', url: `${appUrl}/diary/clients` }];
+
     switch (result.kind) {
         case 'created':
-            return `Готово. ${result.clientName} в вашей базе:\n${appUrl}/diary/clients`;
+            return { text: `Готово. ${result.clientName} в вашей базе.`, buttons: openClients };
         case 'filled':
-            return `Дополнил карточку ${result.clientName}: ${listFields(result.filled ?? [])}.`;
+            return { text: `Дополнил карточку ${result.clientName}: ${listFields(result.filled ?? [])}.`, buttons: openClients };
         case 'nothing_to_fill':
-            return `В карточке ${result.clientName} уже всё заполнено — ничего не менял.`;
+            return { text: `В карточке ${result.clientName} уже всё заполнено — ничего не менял.`, buttons: [] };
         case 'cancelled':
-            return 'Отменил, ничего не создал.';
+            return { text: 'Отменил, ничего не создал.', buttons: [] };
         case 'already_used':
-            return 'Эта карточка уже заведена — второй раз не создаю.';
+            return { text: 'Эта карточка уже заведена — второй раз не создаю.', buttons: [] };
         case 'expired':
-            return 'Контакт был прислан больше часа назад. Перешлите его ещё раз.';
+            return { text: 'Контакт был прислан больше часа назад. Перешлите его ещё раз.', buttons: [] };
         case 'attestation_required':
-            return `Сначала подтвердите в кабинете, что вы оператор персональных данных клиентов: ${appUrl}/diary/clients?attest=1`;
+            return {
+                text: 'Сначала подтвердите в кабинете, что вы оператор персональных данных клиентов.',
+                buttons: [{ label: 'Подтвердить в кабинете', url: `${appUrl}/diary/clients?attest=1` }],
+            };
         case 'not_found':
-            return 'Не нахожу, к чему относится эта кнопка.';
+            return { text: 'Не нахожу, к чему относится эта кнопка.', buttons: [] };
     }
 }

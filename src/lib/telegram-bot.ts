@@ -97,9 +97,13 @@ if (bot && TELEGRAM_PROXY) {
 
 async function showPsyMenu(ctx: Context, psy: any) {
     await ctx.reply(`Добро пожаловать в кабинет психолога, ${psy.name || 'Специалист'}!`,
+        // Надписи без эмодзи. СТАРЫЕ варианты продолжают приниматься в
+        // bot.hears ниже: клавиатура живёт в клиенте Telegram, пока бот не
+        // пришлёт новую, и у человека, который просто нажмёт старую кнопку,
+        // бот иначе замолчал бы.
         Markup.keyboard([
-            ['💼 Мой кабинет', '🗓 Мои сессии'],
-            ['🔗 Отправить ссылку на запись']
+            ['Мой кабинет', 'Мои сессии'],
+            ['Отправить ссылку на запись']
         ]).resize()
     );
 }
@@ -111,8 +115,8 @@ async function showClientMenu(ctx: Context, psychologistId: string, clientName: 
 
     await ctx.reply(`Добро пожаловать, ${clientName}!\nИспользуйте меню для управления записями.`,
         Markup.keyboard([
-            [Markup.button.webApp('📅 Записаться', bookUrl)],
-            [Markup.button.webApp('🗓 Мои сессии', `${TELEGRAM_APP_URL}/bot/client?v=${Date.now()}`)]
+            [Markup.button.webApp('Записаться', bookUrl)],
+            [Markup.button.webApp('Мои сессии', `${TELEGRAM_APP_URL}/bot/client?v=${Date.now()}`)]
         ]).resize()
     );
 }
@@ -144,14 +148,14 @@ export function setupBot() {
         const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
         if (psy) {
             return ctx.reply(
-                '✅ Ваш Telegram уже привязан к ПРАКТИКЕ.\n\nЧтобы также подключить MAX мессенджер — откройте страницу интеграций.',
-                Markup.inlineKeyboard([[Markup.button.webApp('⚙️ Интеграции', `${TELEGRAM_APP_URL}/diary/integrations`)]])
+                'Ваш Telegram уже привязан к ПРАКТИКЕ.\n\nЧтобы также подключить MAX мессенджер — откройте страницу интеграций.',
+                Markup.inlineKeyboard([[Markup.button.webApp('Интеграции', `${TELEGRAM_APP_URL}/diary/integrations`)]])
             );
         }
 
         await ctx.reply(
             'Чтобы привязать аккаунт психолога, войдите в кабинет:',
-            Markup.inlineKeyboard([[Markup.button.webApp('💼 Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot`)]])
+            Markup.inlineKeyboard([[Markup.button.webApp('Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot`)]])
         );
     });
 
@@ -176,7 +180,9 @@ export function setupBot() {
         if (!reply) return;
 
         await ctx.reply(reply.text, reply.buttons.length > 0
-            ? Markup.inlineKeyboard(reply.buttons.map((b) => [Markup.button.callback(b.label, b.payload)]))
+            ? Markup.inlineKeyboard(reply.buttons.map((b) => [
+                b.url ? Markup.button.url(b.label, b.url) : Markup.button.callback(b.label, b.payload ?? ''),
+            ]))
             : undefined);
     });
 
@@ -202,7 +208,12 @@ export function setupBot() {
         await ctx.editMessageReplyMarkup(undefined).catch(() => {});
         // Итог — отдельным сообщением, а не заменой: новое сообщение
         // уходит независимо от возраста нажатия.
-        await ctx.reply(commitMessage(result, TELEGRAM_APP_URL));
+        const done = commitMessage(result, TELEGRAM_APP_URL);
+        await ctx.reply(done.text, done.buttons.length > 0
+            ? Markup.inlineKeyboard(done.buttons.map((b) => [
+                b.url ? Markup.button.url(b.label, b.url) : Markup.button.callback(b.label, b.payload ?? ''),
+            ]))
+            : undefined);
     });
 
     bot.start(async (ctx: Context) => {
@@ -224,7 +235,7 @@ export function setupBot() {
                     username: ctx.from?.username || null,
                 });
 
-                await ctx.reply(`Привет, ${client.name}! 👋\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`);
+                await ctx.reply(`Здравствуйте, ${client.name}!\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`);
 
                 try {
                     const queued = await db.scheduledClientMessage.findMany({
@@ -289,26 +300,26 @@ export function setupBot() {
 
         await ctx.reply(
             'Добро пожаловать в Compas.ru!\n\nЕсли вы психолог — нажмите кнопку ниже, чтобы привязать свой аккаунт и получать уведомления.',
-            Markup.inlineKeyboard([[Markup.button.webApp('💼 Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}`)]])
+            Markup.inlineKeyboard([[Markup.button.webApp('Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}`)]])
         );
     });
 
-    bot.hears('💼 Мой кабинет', async (ctx) => {
+    bot.hears(['Мой кабинет', '💼 Мой кабинет'], async (ctx) => {
         await ctx.reply('Нажмите на кнопку ниже, чтобы перейти в свой кабинет:',
             Markup.inlineKeyboard([[Markup.button.webApp('Открыть кабинет', `${TELEGRAM_APP_URL}/diary?v=${Date.now()}`)]])
         );
     });
 
-    bot.hears('🔗 Отправить ссылку на запись', async (ctx) => {
+    bot.hears(['Отправить ссылку на запись', '🔗 Отправить ссылку на запись'], async (ctx) => {
         const tgId = ctx.from?.id.toString();
         const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
         if (!psy) return;
         await ctx.reply('Перешлите это сообщение вашему клиенту:',
-            Markup.inlineKeyboard([[Markup.button.url('📅 Записаться', `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}`)]])
+            Markup.inlineKeyboard([[Markup.button.url('Записаться', `${TELEGRAM_APP_URL}/bot/book/${psy.id}?v=${Date.now()}`)]])
         );
     });
 
-    bot.hears('🗓 Мои сессии', async (ctx) => {
+    bot.hears(['Мои сессии', '🗓 Мои сессии'], async (ctx) => {
         const tgId = ctx.from?.id.toString();
         if (!tgId) return;
 
@@ -321,9 +332,9 @@ export function setupBot() {
                 include: { client: true }
             });
             if (sessions.length === 0) return ctx.reply('У вас нет предстоящих подтвержденных сессий.');
-            let msg = '📅 <b>Ваши ближайшие сессии:</b>\n\n';
+            let msg = '<b>Ваши ближайшие сессии:</b>\n\n';
             sessions.forEach(s => {
-                msg += `👤 <b>${s.client.name}</b>\n⏰ ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 ${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`;
+                msg += `<b>${s.client.name}</b>\n${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`;
             });
             return ctx.reply(msg, { parse_mode: 'HTML' });
         }
@@ -338,13 +349,13 @@ export function setupBot() {
             if (sessions.length === 0) return ctx.reply('У вас нет предстоящих записей.');
             for (const s of sessions) {
                 const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?c=${personalClientToken(s.clientId)}&v=${Date.now()}`;
-                const msg = `📅 <b>Сессия с психологом ${s.psychologist.name}</b>\n\n⏰ Дата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n📍 Формат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}`;
+                const msg = `<b>Сессия с психологом ${s.psychologist.name}</b>\n\nДата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\nФормат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}`;
                 await ctx.reply(msg, {
                     parse_mode: 'HTML',
                     reply_markup: {
                         inline_keyboard: [
-                            [{ text: '🔄 Перенести (Новая запись)', web_app: { url: bookUrl } }],
-                            [{ text: '❌ Отменить', callback_data: `cancel_${s.id}` }]
+                            [{ text: 'Перенести', web_app: { url: bookUrl } }],
+                            [{ text: 'Отменить', callback_data: `cancel_${s.id}` }]
                         ]
                     }
                 });
@@ -386,11 +397,11 @@ export function setupBot() {
         autoDeleteSessionFromCalendars(session.psychologistId, session.id).catch(console.error);
 
         await ack(ctx, 'Вы успешно отменили запись');
-        await editOrReply(ctx, `❌ Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
+        await editOrReply(ctx, `Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
         if (session.psychologist.telegramChatId) {
             try {
-                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `⚠️ <b>Отмена записи</b>\n\nКлиент ${session.client.name} отменил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
+                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `<b>Отмена записи</b>\n\nКлиент ${session.client.name} отменил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
             } catch (e) { }
         }
         await createNotification({
@@ -413,11 +424,11 @@ export function setupBot() {
             await db.diarySession.update({ where: { id: session.id }, data: { status: 'confirmed' } });
         }
         await ack(ctx, 'Спасибо за подтверждение!');
-        await editOrReply(ctx, `✅ Отлично, ждём вас!\n\n📅 ${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n📍 ${session.format === 'offline' ? 'Очно' : 'Онлайн'}`);
+        await editOrReply(ctx, `Отлично, ждём вас!\n\n${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n${session.format === 'offline' ? 'Очно' : 'Онлайн'}`);
 
         if (session.psychologist.telegramChatId) {
             try {
-                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `✅ Клиент ${session.client.name} подтвердил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
+                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `Клиент ${session.client.name} подтвердил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
             } catch (e) { }
         }
         await createNotification({
@@ -438,8 +449,8 @@ export function setupBot() {
         const token = sessionActionToken(session.psychologistId, session.clientId, session.id, 'reschedule', sessionActionTokenExpiry(session.date));
         const rescheduleUrl = `${TELEGRAM_APP_URL}/client/reschedule/${session.id}?t=${token}`;
         await ack(ctx);
-        await editOrReply(ctx, '🔄 Чтобы перенести сессию, выберите новое время:', {
-            reply_markup: { inline_keyboard: [[{ text: '📅 Выбрать новое время', web_app: { url: rescheduleUrl } }]] }
+        await editOrReply(ctx, 'Чтобы перенести сессию, выберите новое время:', {
+            reply_markup: { inline_keyboard: [[{ text: 'Выбрать новое время', web_app: { url: rescheduleUrl } }]] }
         });
     });
 
@@ -449,9 +460,11 @@ export function setupBot() {
         try {
             await db.diarySession.update({ where: { id: sessionId }, data: { clientMoodRating: rating } as any });
         } catch (e) { console.error('[mood callback]', e); }
-        const emojis = ['', '😊', '🙂', '😐', '😔', '😢'];
+        // Раньше в ответ прилетал тот же смайлик, что на кнопке. Теперь оценка
+    // называется словом: так понятнее, что именно записано.
+    const moodWords = ['', 'Отлично', 'Хорошо', 'Нормально', 'Так себе', 'Плохо'];
         await ack(ctx);
-        await editOrReply(ctx, `${emojis[rating] || '✅'} Спасибо за обратную связь! Ваша оценка сохранена.`);
+        await editOrReply(ctx, `Спасибо за обратную связь! Записано: ${moodWords[rating] || 'ваш ответ'}.`);
     });
 
     bot.on('inline_query', async (ctx) => {
@@ -489,22 +502,22 @@ export function setupBot() {
             results.push({
                 type: 'article',
                 id: 'booking_link',
-                title: matchedClient ? `🔗 Отправить ссылку клиенту: ${matchedClient.name}` : '🔗 Отправить ссылку на запись',
+                title: matchedClient ? `Отправить ссылку клиенту: ${matchedClient.name}` : 'Отправить ссылку на запись',
                 description: 'Клиент получит ссылку для самостоятельного выбора времени',
                 input_message_content: {
-                    message_text: `👋 Привет! Записаться ко мне на консультацию можно по ссылке ниже:\n\n[Выбрать время и записаться](${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParam})`,
+                    message_text: `Записаться ко мне на консультацию можно по ссылке ниже:\n\n[Выбрать время и записаться](${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParam})`,
                     parse_mode: 'Markdown'
                 },
-                reply_markup: { inline_keyboard: [[{ text: '📅 Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` }]] }
+                reply_markup: { inline_keyboard: [[{ text: 'Записаться', url: `${TELEGRAM_APP_URL}/bot/book/${psy.id}${clientQueryParamWithV}` }]] }
             });
 
             results.push({
                 type: 'article',
                 id: 'miniapp_calendar',
-                title: matchedClient ? `📅 Выбрать время через Telegram (для ${matchedClient.name})` : '📅 Выбрать время через Telegram',
+                title: matchedClient ? `Выбрать время через Telegram (для ${matchedClient.name})` : 'Выбрать время через Telegram',
                 description: 'Отправит карточку с кнопкой, открывающей календарь внутри Telegram',
-                input_message_content: { message_text: '👋 Привет! Чтобы выбрать удобное время для сессии, нажми на кнопку ниже. Откроется календарь прямо здесь, в Telegram.' },
-                reply_markup: { inline_keyboard: [[{ text: '📅 Выбрать время', url: `https://t.me/CompasProBot?start=${linkParam}` }]] }
+                input_message_content: { message_text: 'Чтобы выбрать удобное время для сессии, нажми на кнопку ниже. Откроется календарь прямо здесь, в Telegram.' },
+                reply_markup: { inline_keyboard: [[{ text: 'Выбрать время', url: `https://t.me/CompasProBot?start=${linkParam}` }]] }
             });
 
             if (slots.length > 0) {
@@ -513,10 +526,10 @@ export function setupBot() {
                 results.push({
                     type: 'article',
                     id: 'nearest_slot',
-                    title: `⚡️ Пригласить на окно: ${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}`,
+                    title: `Пригласить на окно: ${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}`,
                     description: `Длительность: ${nextSlot.duration} мин`,
                     input_message_content: {
-                        message_text: `👋 Привет! У меня появилось свободное окно для сессии: *${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}*.\n\nНажми на кнопку ниже, чтобы занять его!`,
+                        message_text: `У меня появилось свободное окно для сессии: *${dayLabels[nextSlot.dayOfWeek]} в ${nextSlot.startTime}*.\n\nНажми на кнопку ниже, чтобы занять его!`,
                         parse_mode: 'Markdown'
                     },
                     reply_markup: { inline_keyboard: [[{ text: 'Занять это время', url: `https://t.me/CompasProBot?start=${linkParam}` }]] }

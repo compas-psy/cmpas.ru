@@ -906,10 +906,6 @@ export default function DiaryCalendarPage() {
                                 </div>
                             ))}
                         </div>
-                        <button onClick={() => window.location.href = '/diary/analytics'}
-                            className="w-full flex items-center justify-between px-5 py-3 border-t border-border hover:bg-sage-50 transition-colors text-[12px] font-semibold text-forest-600">
-                            Перейти к аналитике <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
                     </div>
 
                 </div>

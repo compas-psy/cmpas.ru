@@ -229,7 +229,7 @@ export async function createTimeBlock(data: {
                 for (const session of sessionsToCancel) {
                     const clientChatId = session.client?.telegramClient?.telegramUserId || session.client?.telegramChatId;
                     if (clientChatId) {
-                        const message = `⚠️ Ваша запись на ${session.date.toLocaleDateString('ru-RU')} в ${session.time} была отменена психологом ` +
+                        const message = `Ваша запись на ${session.date.toLocaleDateString('ru-RU')} в ${session.time} была отменена психологом ` +
                             (data.reason ? `(Причина: ${data.reason}). ` : `. `) +
                             `Пожалуйста, свяжитесь для переноса.`;
 

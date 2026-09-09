@@ -29,6 +29,7 @@
 // явная отметка специалиста лишь подтверждает или поправляет это значение.
 
 import { db } from '@/lib/db';
+import { messageLink } from '@/lib/messaging/format';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage } from '../max';
 import { clientBookingLink } from '../client-workflow';
@@ -138,7 +139,10 @@ export async function processNextBookingNudge(): Promise<void> {
                     : '';
                 const bookingBase = await getPsychologistBookingUrl(session.psychologistId).catch(() => undefined);
                 const link = clientBookingLink(session.psychologistId, client.id, bookingBase);
-                const text = `Спасибо за встречу. Если захотите продолжить — вот ближайшее время у ${psychologistName}${timeLabel}.\n${link}`;
+                // Ссылка за словом: адрес с подписанным токеном длинный, а
+                // сообщение приходит человеку после сессии — оно должно
+                // выглядеть письмом, а не рассылкой.
+                const text = `Спасибо за встречу. Если захотите продолжить — вот ближайшее время у ${psychologistName}${timeLabel}.\n${messageLink(link, 'Выбрать время')}`;
                 await sendToClient(client, text);
 
                 // O-260829 §7: rebooking_nudge_sent — факт отправки, без
@@ -233,7 +237,7 @@ export async function processWeeklyFollowup(): Promise<void> {
                 if (client) {
                     const bookingBase = await getPsychologistBookingUrl(session.psychologistId).catch(() => undefined);
                     const link = clientBookingLink(session.psychologistId, client.id, bookingBase);
-                    const text = `Если решите продолжить — ваша ссылка на запись всегда здесь.\n${link}`;
+                    const text = `Если решите продолжить — записаться можно в любой момент.\n${messageLink(link, 'Выбрать время')}`;
                     await sendToClient(client, text);
 
                     // O-260829 §7: weekly_followup_sent — факт отправки, без содержимого.

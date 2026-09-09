@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import {
-    avatarSourceOf,
+    avatarSourcesOf,
     safeImageContentType,
     downloadImage,
     fetchTelegramAvatar,
@@ -34,31 +34,41 @@ const png = (size = 64) => ({
 const json = (body: unknown) => ({ ok: true, headers: new Headers(), json: async () => body });
 
 describe('откуда берём аватарку', () => {
-    it('нет мессенджера — источника нет', () => {
-        expect(avatarSourceOf({})).toBeNull();
-        expect(avatarSourceOf({ telegramChatId: null, maxDialogId: null })).toBeNull();
+    it('нет мессенджера — источников нет', () => {
+        expect(avatarSourcesOf({})).toEqual([]);
+        expect(avatarSourcesOf({ telegramChatId: null, maxChatId: null, maxDialogId: null })).toEqual([]);
     });
 
     it('пустая строка не считается подключённым мессенджером', () => {
         // Пустые строки в этих полях в базе встречаются; без trim источник
         // «есть», и каждый показ уходил бы в мессенджер за заведомо ничем.
-        expect(avatarSourceOf({ telegramChatId: '  ' })).toBeNull();
+        expect(avatarSourcesOf({ telegramChatId: '  ', maxChatId: '' })).toEqual([]);
     });
 
     it('Telegram', () => {
-        expect(avatarSourceOf({ telegramChatId: '12345' })).toEqual({ messenger: 'telegram', id: '12345' });
+        expect(avatarSourcesOf({ telegramChatId: '12345' })).toEqual([{ messenger: 'telegram', id: '12345' }]);
     });
 
-    it('MAX по идентификатору ДИАЛОГА, а не пользователя', () => {
-        // maxChatId (user_id) для запроса аватарки не годится: MAX отдаёт
-        // dialog_with_user только по chat_id. Поэтому источник смотрит
-        // именно на maxDialogId.
-        expect(avatarSourceOf({ maxDialogId: '77' })).toEqual({ messenger: 'max', id: '77' });
+    it('MAX с известным диалогом спрашивается сразу', () => {
+        expect(avatarSourcesOf({ maxDialogId: '77' })).toEqual([{ messenger: 'max', id: '77' }]);
     });
 
-    it('подключены оба — спрашиваем Telegram, а не оба сразу', () => {
-        expect(avatarSourceOf({ telegramChatId: '12345', maxDialogId: '77' }))
-            .toEqual({ messenger: 'telegram', id: '12345' });
+    it('MAX без диалога всё равно источник — диалог выясним', () => {
+        // До этой правки такой клиент считался «без мессенджера»: диалог
+        // заполняется только со следующим сообщением боту, и на боевом
+        // сервере он был пуст у ВСЕХ. Аватарка MAX не работала ни у кого.
+        expect(avatarSourcesOf({ maxChatId: 'max_500' })).toEqual([{ messenger: 'max-user', id: 'max_500' }]);
+    });
+
+    it('подключены оба — MAX первым, но Telegram остаётся запасным', () => {
+        // «Основной мессенджер» — тот, которым человеку пишут: при
+        // подключённом MAX продукт выбирает MAX (channel-binding). Логично и
+        // лицо брать оттуда же. Но если MAX фотографии не дал, спрашиваем
+        // Telegram, а не останавливаемся.
+        expect(avatarSourcesOf({ telegramChatId: '12345', maxDialogId: '77' })).toEqual([
+            { messenger: 'max', id: '77' },
+            { messenger: 'telegram', id: '12345' },
+        ]);
     });
 });
 
