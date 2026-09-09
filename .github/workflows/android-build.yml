@@ -346,9 +346,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.apk.outputs.tag }}
-          name: "КОМПАС ПРАКТИКА ${{ steps.apk.outputs.version }}"
+          # Продукт называется ПРАКТИКА. «КОМПАС» здесь остался от прежнего
+          # имени: переименование прошло по приложению, лендингу и письмам,
+          # а заголовок релиза — единственное место, куда не дошло. Человек
+          # видит его в загрузках рядом с именем файла simpas-praktika-*.
+          name: "ПРАКТИКА ${{ steps.apk.outputs.version }}"
           body: |
-            ## КОМПАС ПРАКТИКА для Android
+            ## ПРАКТИКА для Android
             Скачайте APK ниже и установите на телефон.
           files: simpas-*.apk
           # Не prerelease. Раньше стояло prerelease: true — и стояло на КАЖДОМ
