@@ -47,11 +47,34 @@ async function requesterId(req: NextRequest): Promise<string | null> {
 /**
  * «Нет аватарки» — это 404, а не пустая картинка и не ошибка. Экран на 404
  * показывает инициалы, и это нормальный, а не аварийный вид.
+ *
+ * Но 404 на экране выглядит одинаково для СОВЕРШЕННО разных причин: клиент
+ * не привязан к мессенджеру, у человека нет фотографии, мессенджер не
+ * ответил. Не различать их — значит на вопрос «почему пусто» отвечать
+ * «пусто». Поэтому причина называется в журнале, как это уже сделано у
+ * подсказок адресов, и её вытаскивает scripts/db-doctor.sh.
+ *
+ * В журнал идёт ТОЛЬКО код причины. Ни имени, ни телефона, ни
+ * идентификатора мессенджера: журнал читают люди, которым карточки этого
+ * клиента не показывают.
  */
-const noAvatar = () => new NextResponse(null, {
-    status: 404,
-    headers: { 'Cache-Control': 'private, max-age=300' },
-});
+type NoAvatarReason =
+    /** Карточки нет или она чужая. */
+    | 'not_found'
+    /** Мессенджер не подключён — идти не за чем. */
+    | 'no_messenger'
+    /** Ключ бота не задан: спросить нечем. */
+    | 'no_token'
+    /** Сходили и не принесли: нет фотографии, закрыта, либо не ответили. */
+    | 'empty';
+
+const noAvatar = (reason: NoAvatarReason) => {
+    console.log(`[avatar] ${reason}`);
+    return new NextResponse(null, {
+        status: 404,
+        headers: { 'Cache-Control': 'private, max-age=300' },
+    });
+};
 
 export async function GET(
     req: NextRequest,
@@ -69,10 +92,10 @@ export async function GET(
         where: { id: clientId, psychologistId },
         select: { id: true, telegramChatId: true, maxDialogId: true },
     });
-    if (!client) return noAvatar();
+    if (!client) return noAvatar('not_found');
 
     const source = avatarSourceOf(client);
-    if (!source) return noAvatar();
+    if (!source) return noAvatar('no_messenger');
 
     // Ключ кэша включает источник: клиент мог перепривязать мессенджер, и
     // тогда это уже другая аватарка, а не та же самая.
@@ -87,7 +110,7 @@ export async function GET(
         cache.set(key, image);
     }
 
-    if (!image) return noAvatar();
+    if (!image) return noAvatar('empty');
 
     return new NextResponse(image.bytes, {
         status: 200,
@@ -127,13 +150,13 @@ async function telegramFetcher(): Promise<typeof fetch> {
 async function loadFromMessenger(source: { messenger: 'telegram' | 'max'; id: string }) {
     if (source.messenger === 'telegram') {
         const token = process.env.TELEGRAM_BOT_TOKEN;
-        if (!token) return null;
+        if (!token) { console.log('[avatar] no_token telegram'); return null; }
         return fetchTelegramAvatar(source.id, {
             apiRoot: process.env.TELEGRAM_API_URL || 'https://api.telegram.org',
             token,
         }, await telegramFetcher());
     }
     const token = process.env.MAX_BOT_TOKEN;
-    if (!token) return null;
+    if (!token) { console.log('[avatar] no_token max'); return null; }
     return fetchMaxAvatar(source.id, { apiRoot: 'https://platform-api2.max.ru', token });
 }
