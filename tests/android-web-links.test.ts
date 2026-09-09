@@ -26,17 +26,70 @@ function kotlinFiles(dir: string): string[] {
     });
 }
 
-/** Адреса вида https://cmpas.ru/<путь> без интерполяции — только буквальные. */
+/**
+ * Комментарии — не ссылки.
+ *
+ * В комментарии рядом с починкой уместно назвать адрес, который был
+ * СЛОМАН: это и есть объяснение, зачем правка. Сторож, читающий
+ * комментарии, требовал бы вычищать из них ровно те примеры, ради которых
+ * они написаны.
+ */
+function stripComments(source: string): string {
+    return source
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+/**
+ * Адрес приложения, собранный из настройки сборки.
+ *
+ * Значение по умолчанию берётся из android/app/build.gradle.kts — из того же
+ * места, откуда его берёт сама сборка. Захардкодить его здесь значило бы
+ * сторожить не то, что поедет в APK.
+ */
+function apiBaseUrl(): string {
+    const gradle = readFileSync(path.join(process.cwd(), 'android/app/build.gradle.kts'), 'utf8');
+    const match = gradle.match(/\?:\s*"(https:\/\/[^"]+)"/);
+    if (!match) throw new Error('в build.gradle.kts не найден адрес по умолчанию для API_BASE_URL');
+    return match[1];
+}
+
+/**
+ * Адреса cmpas.ru, вбитые в исходники Android: и буквальные, и собранные
+ * от BuildConfig.API_BASE_URL.
+ *
+ * ВТОРЫЕ ДОБАВЛЕНЫ ПОТОМУ, ЧТО ИМЕННО ТАКОЙ АДРЕС И СЛОМАЛСЯ. Аватарка
+ * просилась как «база + /api/clients/<id>/avatar», база равна
+ * https://cmpas.ru/api/mobile/ — получалось /api/mobile/api/clients/…, чего
+ * нет. Сторож это пропустил: он читал только буквальные строки, а
+ * интерполяцию считал «собирается в рантайме, проверять нечем». Проверять
+ * есть чем: база известна из build.gradle.kts, а хвост после неё — обычная
+ * буквальная строка.
+ */
 function hardcodedPaths(): Array<{ file: string; url: string; route: string }> {
     const found: Array<{ file: string; url: string; route: string }> = [];
+    const base = apiBaseUrl().replace(/\/$/, '');
+
     for (const file of kotlinFiles(ANDROID_SRC)) {
-        const source = readFileSync(file, 'utf8');
+        const source = stripComments(readFileSync(file, 'utf8'));
+        const relative = path.relative(process.cwd(), file);
+
+        const add = (url: string, rawRoute: string) => {
+            const route = rawRoute.replace(/\/$/, '');
+            // Пустой путь — это главная, проверять нечего.
+            if (!route) return;
+            found.push({ file: relative, url, route });
+        };
+
         for (const match of source.matchAll(/https:\/\/cmpas\.ru(\/[A-Za-z0-9\-_/]*)/g)) {
-            const route = match[1].replace(/\/$/, '');
-            // Пустой путь — это главная, и адреса с ${…} собираются в рантайме:
-            // такие проверять здесь нечем.
-            if (!route) continue;
-            found.push({ file: path.relative(process.cwd(), file), url: match[0], route });
+            add(match[0], match[1]);
+        }
+
+        // "${BuildConfig.API_BASE_URL…}/что-то/$переменная/ещё"
+        for (const match of source.matchAll(/\$\{BuildConfig\.API_BASE_URL[^}]*\}([A-Za-z0-9\-_/$]*)/g)) {
+            const suffix = match[1].startsWith('/') ? match[1] : `/${match[1]}`;
+            const url = `${base}${suffix}`;
+            add(url, url.slice('https://cmpas.ru'.length));
         }
     }
     return found;
@@ -91,6 +144,16 @@ describe('ссылки из Android в веб-кабинет', () => {
         // откроет 404. Список меняется только осознанно.
         expect(KNOWN_BROKEN).toEqual(['/d']);
         expect(routeExists('/d')).toBe(false);
+    });
+
+    it('сторож видит адреса, собранные от базы приложения', () => {
+        // Регрессия на сам сторож. Аватарка в приложении просилась по
+        // несуществующему адресу и уехала в релиз именно потому, что
+        // проверка таких адресов не читала. Если этот список снова опустеет
+        // — значит разбор интерполяции сломался, и следующая такая ошибка
+        // опять доедет до людей.
+        const fromBase = hardcodedPaths().filter((entry) => entry.route.startsWith('/api/mobile/'));
+        expect(fromBase.length).toBeGreaterThan(0);
     });
 
     it('синхронизация календарей из Задачи 22 указывает на страницу интеграций', () => {

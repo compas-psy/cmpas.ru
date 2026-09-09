@@ -574,7 +574,63 @@ echo "### Аватарки: на что жаловался маршрут за 2
 docker logs -t cmpas-app --since 24h 2>&1 | grep -F '[avatar]' | tail -20
 echo "--- пусто = маршрут не жаловался (или ещё ни разу не спрашивали)"
 
-echo "### Аватарки: есть ли с сервера ход до Telegram НАПРЯМУЮ"
+# ВАЖНО: спрашивать надо у самого контейнера, а не у хоста.
+#
+# Первая проба этой правки мерила ход с ХОСТА и показала «дороги нет».
+# Но аватарку запрашивает приложение, а оно живёт в cmpas-app, и сеть у
+# контейнера своя. Ровно тот же урок уже был с ключом DaData: файл .env — это
+# то, что положил деплой, а не то, с чем работает процесс.
+#
+# Проба делает ИМЕННО ТОТ запрос, который делает маршрут аватарок, и обеими
+# дорогами: напрямую и через сайдкар. В вывод идёт только результат — ни
+# токена, ни идентификатора человека.
+echo "### Аватарки: тот же запрос ИЗНУТРИ КОНТЕЙНЕРА, обеими дорогами"
+if [ -n "$tg_uid" ] && [ -n "$tg_token" ]; then
+  docker exec -e TG_TOKEN="$tg_token" -e TG_UID="$tg_uid" cmpas-app node -e '
+    const url = `https://api.telegram.org/bot${process.env.TG_TOKEN}/getUserProfilePhotos?user_id=${process.env.TG_UID}&limit=1`;
+    const say = (road, text) => console.log(`${road}: ${text}`);
+    const probe = async (road, agent) => {
+      const started = Date.now();
+      try {
+        let res;
+        if (agent) {
+          const nf = require("node-fetch");
+          const f = typeof nf === "function" ? nf : (nf.default ?? nf);
+          const { HttpsProxyAgent } = require("https-proxy-agent");
+          res = await f(url, { agent: new HttpsProxyAgent(agent), timeout: 12000 });
+        } else {
+          res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+        }
+        const body = await res.json();
+        say(road, `HTTP ${res.status}, фотографий: ${body?.result?.total_count ?? "?"} за ${((Date.now()-started)/1000).toFixed(1)}с`);
+      } catch (e) {
+        say(road, `НЕТ ХОДА (${e.name}) за ${((Date.now()-started)/1000).toFixed(1)}с`);
+      }
+    };
+    (async () => {
+      await probe("напрямую", null);
+      const proxy = process.env.TELEGRAM_PROXY;
+      if (proxy) await probe("через сайдкар", proxy);
+      else say("через сайдкар", "TELEGRAM_PROXY контейнеру не виден");
+    })();
+  ' 2>&1 | head -6
+  echo "--- фотографий: N>0 хотя бы одной дорогой = Telegram отдаёт, дело в выборе дороги"
+  echo "--- обе НЕТ ХОДА = до Telegram из контейнера не достучаться вообще"
+else
+  echo "нет привязанного клиента или ключа бота — пробовать нечего"
+fi
+
+echo "### Аватарки: какую дорогу выберет код (флаг telegram_vpn_proxy)"
+# Код идёт через сайдкар ТОЛЬКО когда флаг включён И проба через него прошла.
+# Строки нет — действует значение по умолчанию: включён, если задан
+# TELEGRAM_PROXY (src/app/admin/actions/features.ts).
+q "SELECT key || ' = ' || value FROM \"SystemConfig\" WHERE key = 'telegram_vpn_proxy';"
+docker exec cmpas-app printenv TELEGRAM_PROXY >/dev/null 2>&1 \
+  && echo "TELEGRAM_PROXY внутри cmpas-app: задан" \
+  || echo "TELEGRAM_PROXY внутри cmpas-app: ПУСТ — сайдкар коду недоступен"
+echo "--- пустая строка флага = решения не принимали, действует умолчание"
+
+echo "### Аватарки: есть ли с ХОСТА ход до Telegram напрямую"
 # Именно напрямую: выкладка сообщает «webhook registered through the tunnel»,
 # то есть прямой дороги может не быть вовсе. Токен не шлём — проверяем только
 # достижимость.
