@@ -4,14 +4,22 @@
  * Если сессий нет — молчим.
  */
 import { db } from '@/lib/db';
-import { sendTelegramMessage } from '../telegram';
-import { sendMaxMessage } from '../max';
+import { deliverMessage } from '@/lib/messaging/deliver';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
+/**
+ * Одна сводка — один канал, и с разметкой.
+ *
+ * Здесь было сразу две ошибки. Первая: писали и в Telegram, и в MAX — у кого
+ * заведены оба, тот получал сводку дважды. Вторая тише и хуже: для MAX
+ * разметка вырезалась целиком, `.replace(/<[^>]+>/g, '')` — вместе с ней
+ * пропадали и АДРЕСА ссылок, и человек получал подпись, ведущую в никуда.
+ * Отправка в MAX сама переводит разметку и прячет ссылки в кнопки — ей нужно
+ * отдавать текст как есть.
+ */
 async function notify(tgId: string | null, maxId: string | null, text: string) {
-    if (tgId) await sendTelegramMessage(tgId, text, { parse_mode: 'HTML' }).catch(console.error);
-    if (maxId) await sendMaxMessage(maxId, text.replace(/<[^>]+>/g, '')).catch(console.error);
+    await deliverMessage({ telegramChatId: tgId, maxChatId: maxId, preferredChannel: null }, text);
 }
 
 /**

@@ -1,12 +1,11 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
+import { deliverMessage } from '@/lib/messaging/deliver';
+import { notifyClientAboutSession } from '@/lib/practice/session-notice';
 import { addDays } from 'date-fns';
 import { createHash } from 'crypto';
 import { createNotification } from '@/lib/notifications';
-import { onlineLinkLine } from '@/lib/messaging/format';
 import { resolvePersonalClientToken, resolveSignedPersonalClientToken, personalClientToken } from '@/lib/client-workflow';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 import { resolveAvailableTimesForDay } from '@/lib/practice/booking/availability';
@@ -49,18 +48,20 @@ export async function resolveVerifiedTelegramUserId(initData: string | null | un
     return user ? String(user.id) : null;
 }
 
-/** Send to Telegram and/or MAX depending on which IDs are set. Runs both in
- * parallel so a slow/failed Telegram send (e.g. flaky VPN) never delays or
- * blocks the MAX send, and vice versa. */
+/**
+ * Написать человеку — ОДИН раз, в основной канал.
+ *
+ * Было: «if (tgId) … if (maxId) …» — и тот, у кого заведены оба мессенджера,
+ * получал каждое сообщение дважды. Учредитель увидел это на живой записи, и
+ * как клиент, и как психолог. Выбор канала теперь один на весь продукт и
+ * живёт в src/lib/messaging/deliver.ts.
+ */
 async function notifyUser(
     tgId: string | null | undefined,
     maxId: string | null | undefined,
     text: string
 ) {
-    await Promise.allSettled([
-        tgId ? sendTelegramMessage(tgId, text, { parse_mode: 'HTML' }).catch(e => console.error('[notify] Telegram error:', e)) : null,
-        maxId ? sendMaxMessage(maxId, text).catch(e => console.error('[notify] MAX error:', e)) : null,
-    ]);
+    await deliverMessage({ telegramChatId: tgId, maxChatId: maxId, preferredChannel: null }, text);
 }
 
 export async function getPsychologist(id: string) {
@@ -359,12 +360,6 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
         include: { psychologistSettings: true }
     }) as any;
 
-    const onlineLink = format === 'online' ? (psy?.psychologistSettings?.onlineSessionLink || '') : '';
-    // Ссылка — за словом: правило оформления автосообщений в
-    // src/lib/messaging/format.ts.
-    const line = onlineLinkLine(onlineLink);
-    const linkText = line ? `\n${line}` : '';
-
     // Notify psychologist (Telegram + MAX)
     await notifyUser(
         psy?.telegramChatId,
@@ -380,13 +375,14 @@ export async function bookSession(psychologistId: string, telegramInitData: stri
         clientId: client.id,
     });
 
-    // Notify client (Telegram + MAX)
-    const clientMsg = `<b>Вы записаны</b>\n\nСпециалист: ${psy?.psychologistSettings?.fullName || psy?.name || 'Психолог'}\nДата: ${dateStr}\nВремя: ${session.time}\nФормат: ${format === 'offline' ? 'Очная встреча' : 'Онлайн-консультация'}${linkText}`;
-    await notifyUser(
-        client.telegramChatId,
-        (client as any).maxChatId,
-        clientMsg
-    );
+    // ОДИН ТЕКСТ О ЗАПИСИ НА ВСЕ ПУТИ.
+    //
+    // Здесь жило второе, отдельно сочинённое письмо: «Вы записаны» — с другим
+    // порядком строк, без документов и без ссылки на управление встречей.
+    // Какой из двух текстов получит человек, зависело от того, кто нажал
+    // кнопку: он сам на странице записи или специалист в приложении. Одно
+    // событие — один текст; сборщик у него общий.
+    await notifyClientAboutSession(psychologistId, session.id, sessionsCount === 1);
 
     // Auto-sync to calendars
     try {
