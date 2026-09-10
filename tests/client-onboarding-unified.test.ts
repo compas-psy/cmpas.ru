@@ -18,7 +18,11 @@ const DOC_LINK = 'https://cmpas.ru/client/documents/del-1?t=doctoken';
 const db = vi.hoisted(() => ({
     diaryClient: { findFirst: vi.fn() },
     user: { findUnique: vi.fn() },
-    diarySession: { findFirst: vi.fn() },
+    // Предстоящая встреча ищется общим findUpcomingSessionForClient
+    // (src/lib/practice/upcoming-session.ts), а он берёт findMany и
+    // отбирает по дате И времени: findFirst с orderBy date asc выбирал
+    // самую раннюю встречу за всю историю клиента.
+    diarySession: { findFirst: vi.fn(), findMany: vi.fn() },
     scheduledClientMessage: { create: vi.fn() },
     clientInviteToken: { create: vi.fn() },
 }));
@@ -99,7 +103,7 @@ beforeEach(() => {
         telegramChatId: null,
         psychologistSettings: { fullName: 'Анна Волкова', onlineSessionLink: null },
     });
-    db.diarySession.findFirst.mockResolvedValue(null);
+    db.diarySession.findMany.mockResolvedValue([]);
     db.scheduledClientMessage.create.mockResolvedValue({});
     db.clientInviteToken.create.mockResolvedValue({});
     setClient({ telegramChatId: 'tg-1', maxChatId: 'max-1' });
@@ -255,23 +259,23 @@ describe('паритет веб/мобайл — один билдер, один
         });
 
         it(`с предстоящей сессией: ${channel} получает от веба и мобайла один и тот же текст`, async () => {
-            db.diarySession.findFirst.mockResolvedValue({
+            db.diarySession.findMany.mockResolvedValue([{
                 id: 'session-1',
                 date: new Date('2026-09-15T00:00:00Z'),
                 time: '19:00',
                 format: 'online',
-            });
+            }]);
 
             await runWeb(channel, 'doc-1', true);
             const web = sentTo(channel);
 
             vi.clearAllMocks();
-            db.diarySession.findFirst.mockResolvedValue({
+            db.diarySession.findMany.mockResolvedValue([{
                 id: 'session-1',
                 date: new Date('2026-09-15T00:00:00Z'),
                 time: '19:00',
                 format: 'online',
-            });
+            }]);
             await runMobile(channel, 'doc-1', true);
 
             expect(sentTo(channel)).toBe(web);
@@ -279,18 +283,18 @@ describe('паритет веб/мобайл — один билдер, один
     }
 
     it('MAX никогда не получает HTML-разметку как видимый текст', async () => {
-        db.diarySession.findFirst.mockResolvedValue({
+        db.diarySession.findMany.mockResolvedValue([{
             id: 'session-1',
             date: new Date('2026-09-15T00:00:00Z'),
             time: '19:00',
             format: 'online',
-        });
+        }]);
 
         await runMobile('max', 'doc-1', true);
         expect(sentTo('max')).not.toContain('<a href');
 
         vi.clearAllMocks();
-        db.diarySession.findFirst.mockResolvedValue(null);
+        db.diarySession.findMany.mockResolvedValue([]);
         await runMobile('max', 'doc-1');
         expect(sentTo('max')).not.toContain('<a href');
     });
