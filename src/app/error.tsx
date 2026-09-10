@@ -39,6 +39,24 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
     const [decided, setDecided] = useState(false);
 
     useEffect(() => {
+        // След аварии. Без него мы узнаём о поломке только если человек
+        // расскажет, — а рассказать он может лишь то, что видел: серый экран.
+        // Что уходит и чего не уходит — src/app/api/client-error/route.ts.
+        try {
+            void fetch('/api/client-error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                keepalive: true,
+                body: JSON.stringify({
+                    name: error.name,
+                    message: error.message,
+                    frame: error.stack?.split('\n')[1]?.trim() ?? '',
+                    path: window.location.pathname,
+                    digest: error.digest ?? '',
+                }),
+            }).catch(() => undefined);
+        } catch { /* отчёт об аварии не должен становиться второй аварией */ }
+
         let shouldReload = false;
 
         if (looksLikeStaleBuild(error)) {

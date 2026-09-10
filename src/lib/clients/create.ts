@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
+import { NEW_CLIENT_SORT_SENTINEL } from './next-session-sentinel';
 
 /**
  * Заведение карточки клиента — без сессии.
@@ -41,7 +42,11 @@ export async function createClientRecord(input: CreateClientRecordInput) {
             // when no card is selected. For a just-created client we want the new card
             // to stay selected until the psychologist creates the first session,
             // instead of jumping to the client with the latest old session.
-            nextSessionDate: new Date('9999-12-31T00:00:00.000Z'),
+            //
+            // Это МЕТКА СОРТИРОВКИ, а не дата: показывать её человеку нельзя —
+            // см. src/lib/clients/next-session-sentinel.ts, там же правило,
+            // как узнать её при показе.
+            nextSessionDate: NEW_CLIENT_SORT_SENTINEL,
         },
     });
 }
