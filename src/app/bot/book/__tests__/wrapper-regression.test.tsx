@@ -24,6 +24,9 @@ vi.mock('react-phone-input-2', () => ({
 
 vi.mock('next/navigation', () => ({
     useParams: () => ({ psychologistId: 'psy-1' }),
+    // Страница читает адрес: `?date=`/`?time=` открывают нужный день и час
+    // («тот же час через неделю»). Без параметров ведёт себя как прежде.
+    useSearchParams: () => new URLSearchParams(),
 }));
 
 const actions = vi.hoisted(() => ({

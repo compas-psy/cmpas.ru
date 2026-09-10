@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { sessionActionButtons } from '@/lib/practice/session-action-links';
-import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
+import { buildSessionClientMessage, clientBookingLink, clientSessionLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 
 /**
  * Сообщение клиенту о назначенной встрече — одно на все пути записи.
@@ -39,6 +39,9 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
 
     const psyName = full.psychologist.psychologistSettings?.fullName || full.psychologist.name || 'специалист';
     const bookingLink = clientBookingLink(psychologistId, full.clientId);
+    // Ссылка ведёт на саму встречу: страница записи не умеет ни подтвердить,
+    // ни перенести, ни отменить, а строка ниже обещает именно это.
+    const manageLink = clientSessionLink(psychologistId, full.clientId, full.id);
     const onlineLink = full.format === 'online' ? full.psychologist.psychologistSettings?.onlineSessionLink : null;
     const paymentText = await getPaymentInstruction(psychologistId, full.id, full.clientId);
     const text = buildSessionClientMessage({
@@ -51,6 +54,7 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
         documentLinks: deliveries.map(d => ({ title: d.title, link: d.link })),
         paymentText,
         bookingLink,
+        manageLink,
     });
 
     // ТРИ КНОПКИ — РОВНО СТОЛЬКО, СКОЛЬКО ДЕЙСТВИЙ ОБЕЩАЕТ ТЕКСТ.

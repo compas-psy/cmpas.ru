@@ -16,6 +16,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('next/navigation', () => ({
     useParams: () => ({ psychologistId: 'psy-1' }),
     useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+    useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('react-datepicker', () => ({

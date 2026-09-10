@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, MapPin, Video, Calendar, X, Shield } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import DatePicker, { registerLocale } from 'react-datepicker';
@@ -136,6 +137,7 @@ function BookingToaster() {
 }
 
 export default function BookingPageClient({ psychologistId }: { psychologistId: string }) {
+    const searchParams = useSearchParams();
     // Extract clientId manually inside the init function to avoid race conditions.
     const [clientId, setClientId] = useState<string | null>(null);
     // The raw signed token itself (not the id it decodes to) — the only thing
@@ -451,6 +453,42 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
             toast.error('Ошибка при загрузке времени');
         }
     };
+
+    // ТОТ ЖЕ ЧАС ЧЕРЕЗ НЕДЕЛЮ — ОДНИМ НАЖАТИЕМ.
+    //
+    // Учредитель на живом проходе: по прошедшей встрече уместны и «просто
+    // забронировать слот», и «забронировать слот через неделю». Первое здесь
+    // было всегда, второго не было: клиент, ходящий по средам в 13:00,
+    // каждый раз заново листал календарь и искал тот же час.
+    //
+    // Час НЕ бронируется по ссылке. В адресе только пожелание — какой день и
+    // какое время открыть; настоящая бронь по-прежнему проходит через
+    // подписанный слот и все проверки занятости. Если этот час уже занят,
+    // человек увидит соседние, а не отказ после нажатия.
+    const wantedDate = searchParams?.get('date') || null;
+    const wantedTime = searchParams?.get('time') || null;
+    const [prefillHandled, setPrefillHandled] = useState(false);
+    useEffect(() => {
+        if (prefillHandled || loading || !wantedDate || !psy) return;
+        const parts = wantedDate.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN)) return;
+        setPrefillHandled(true);
+        setShowFullCalendar(true);
+        void handleDateChange(new Date(parts[0], parts[1] - 1, parts[2]));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillHandled, loading, wantedDate, psy]);
+
+    // Час выбирается только когда часы этого дня приехали и он среди них
+    // свободен. Молча подставить занятый час было бы обещанием, которого
+    // страница не может сдержать.
+    const [prefillTimePicked, setPrefillTimePicked] = useState(false);
+    useEffect(() => {
+        if (prefillTimePicked || !prefillHandled || !wantedTime || concreteOptions.length === 0) return;
+        const match = concreteOptions.find(option => option.time === wantedTime);
+        setPrefillTimePicked(true);
+        if (match) handleTimeSlotSelect(match);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillTimePicked, prefillHandled, wantedTime, concreteOptions]);
 
     // Handle month change in DatePicker — fetch dates for new month
     const handleMonthChange = async (date: Date) => {

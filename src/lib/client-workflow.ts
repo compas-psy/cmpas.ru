@@ -171,6 +171,24 @@ export function clientBookingLink(psychologistId: string, clientId: string, base
     return clientId ? `${linkBase}?c=${personalClientToken(clientId)}` : linkBase;
 }
 
+/**
+ * Ссылка НА ВСТРЕЧУ, а не на подбор нового времени.
+ *
+ * Сообщение о записи обещало «подтвердить, перенести или отменить встречу» и
+ * вело на `/bot/book/...` — страницу «Когда вам удобнее?», где нет ни одного
+ * из этих трёх действий. Человек шёл подтвердить встречу, а попадал на
+ * запись новой.
+ *
+ * Ведёт на «Мои встречи» с номером встречи: страница открывает сразу её.
+ * Номер сам по себе ничего не даёт — список приходит под проверенной
+ * личностью (подписанный токен `c=`), и чужая встреча в нём не окажется.
+ */
+export function clientSessionLink(psychologistId: string, clientId: string, sessionId: string) {
+    void psychologistId;
+    const token = personalClientToken(clientId);
+    return `${publicBaseUrl()}/bot/client?c=${token}&s=${encodeURIComponent(sessionId)}`;
+}
+
 export function clientDocumentLink(deliveryId: string) {
     const token = documentDeliveryToken(deliveryId);
     return `${publicBaseUrl()}/client/documents/${deliveryId}?t=${token}`;
@@ -436,6 +454,12 @@ export function buildSessionClientMessage(params: {
     onlineLink?: string | null;
     documentLinks?: Array<{ title: string; link: string }>;
     bookingLink: string;
+    /**
+     * Куда ведёт слово «здесь». Ссылка на саму встречу, если она известна;
+     * иначе остаётся страница записи — так уходят сообщения, собранные до
+     * появления встречи (онбординг).
+     */
+    manageLink?: string | null;
     paymentText?: string | null;
     mode?: 'html' | 'plain';
 }) {
@@ -474,7 +498,11 @@ export function buildSessionClientMessage(params: {
         lines.push('', esc(params.paymentText));
     }
 
-    lines.push('', `Подтвердить, перенести или отменить встречу можно ${html ? `<a href="${escapeHtml(params.bookingLink)}">здесь</a>` : `здесь: ${params.bookingLink}`}.`);
+    // Строка обещает ровно то, что человек найдёт по ссылке. Раньше она
+    // обещала три действия и вела на страницу новой записи, где не было ни
+    // одного.
+    const manage = params.manageLink || params.bookingLink;
+    lines.push('', `Посмотреть встречу, подтвердить, перенести или отменить — ${html ? `<a href="${escapeHtml(manage)}">здесь</a>` : `здесь: ${manage}`}.`);
 
     return lines.join('\n');
 }

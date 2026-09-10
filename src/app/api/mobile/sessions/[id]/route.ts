@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
-import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
+import { buildSessionClientMessage, clientBookingLink, clientSessionLink, getPaymentInstruction } from '@/lib/client-workflow';
+import { deliverMessage } from '@/lib/messaging/deliver';
+import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { formatSession, notesPlainFromStructured, toDatabasePaymentStatus } from '@/lib/mobile-sessions';
 import { rescheduleManualPracticeSession, BookingConflictError } from '@/lib/practice/booking/booking';
 import { observeNotesFilled, observePaymentSettled } from '@/lib/practice/attention-completion';
@@ -151,12 +151,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                     const psych = await db.user.findUnique({ where: { id: auth.userId }, include: { psychologistSettings: true } });
                     const psychologistName = psych?.psychologistSettings?.fullName || psych?.name || 'специалист';
                     const bookingLink = clientBookingLink(auth.userId, client.id);
+                    const manageLink = clientSessionLink(auth.userId, client.id, updated.id);
                     const onlineLink = updated.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
                     const paymentText = await getPaymentInstruction(auth.userId, id, client.id);
-                    const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: updated.date, time: updated.time, format: updated.format, onlineLink, documentLinks: [], paymentText, bookingLink });
+                    const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: updated.date, time: updated.time, format: updated.format, onlineLink, documentLinks: [], paymentText, bookingLink, manageLink });
                     const prefix = 'Встреча перенесена. Пожалуйста, подтвердите новое время.\n\n';
-                    if (client.telegramChatId) await sendTelegramMessage(client.telegramChatId, `${prefix}${text}`, { parse_mode: 'HTML' });
-                    else if (client.maxChatId) await sendMaxMessage(client.maxChatId, `${prefix}${text}`);
+                    // Перенесённую встречу надо подтвердить заново — кнопка
+                    // «Подтверждаю» здесь и нужна, поэтому includeConfirm
+                    // всегда true. Отправка одна и в один канал.
+                    await deliverMessage(client as never, `${prefix}${text}`, sessionActionButtons(
+                        { psychologistId: auth.userId, clientId: client.id, sessionId: updated.id, date: updated.date },
+                        { includeConfirm: true },
+                    ));
                 }
             } catch (error) {
                 console.error('[mobile/sessions/id PATCH] reschedule notice failed:', error);

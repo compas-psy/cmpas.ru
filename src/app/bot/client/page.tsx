@@ -126,6 +126,25 @@ function ClientCalendar() {
         fetchSessions();
     }, [fetchSessions]);
 
+    // ССЫЛКА О ВСТРЕЧЕ ОТКРЫВАЕТ ВСТРЕЧУ.
+    //
+    // Сообщение о записи обещало «подтвердить, перенести или отменить», а
+    // вело на страницу подбора нового времени. Теперь оно приводит сюда с
+    // номером встречи, и человек сразу видит свою — а не список, в котором её
+    // ещё надо найти. Номер сам по себе ничего не открывает: список приходит
+    // с сервера под проверенной личностью, и чужая встреча в нём не окажется.
+    const requestedSessionId = searchParams.get('s');
+    const [openedFromLink, setOpenedFromLink] = useState(false);
+    useEffect(() => {
+        if (openedFromLink || !requestedSessionId) return;
+        const found = upcomingSessions.find(session => session.id === requestedSessionId)
+            ?? pastSessions.find(session => session.id === requestedSessionId);
+        if (!found) return;
+        if (pastSessions.some(session => session.id === requestedSessionId)) setTab('past');
+        setSelectedSession(found);
+        setOpenedFromLink(true);
+    }, [requestedSessionId, upcomingSessions, pastSessions, openedFromLink]);
+
     const activeSessions = tab === 'upcoming' ? upcomingSessions : pastSessions;
     const groupedSessions = groupByDate(activeSessions);
     const sortedDates = Object.keys(groupedSessions).sort((a, b) => tab === 'upcoming' ? a.localeCompare(b) : b.localeCompare(a));
@@ -311,37 +330,77 @@ function ClientCalendar() {
                         )}
 
                         {tab === 'upcoming' ? (
-                            <div className="px-6 pb-6 grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => {
-                                        setSelectedSession(null);
-                                        window.location.href = `/bot/book/${selectedSession.psychologistId}`;
-                                    }}
-                                    className="py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm hover:border-[var(--booking-accent)] hover:text-[var(--booking-accent)] haptic-light border-[var(--booking-line)] text-[var(--booking-ink)] bg-[var(--booking-card)]"
-                                >
-                                    Перенести
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setSessionToCancel(selectedSession);
-                                        setSelectedSession(null);
-                                    }}
-                                    className="py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light"
-                                >
-                                    Отменить
-                                </button>
+                            <div className="px-6 pb-6 space-y-3">
+                                {/* ПОДТВЕРДИТЬ МОЖНО ЗДЕСЬ, А НЕ ТОЛЬКО В
+                                    НАПОМИНАНИИ. Это единственная страница, где
+                                    встреча показана как встреча, — и до
+                                    10.09.2026 подтверждения на ней не было
+                                    вовсе. Клиент, получивший сообщение о
+                                    записи, не мог подтвердить её ничем, пока
+                                    не придёт напоминание за сутки. */}
+                                {selectedSession.status !== 'confirmed' && selectedSession.confirm && (
+                                    <a
+                                        href={selectedSession.confirm}
+                                        className="flex w-full items-center justify-center py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-sm bg-[var(--booking-accent)] text-white border-[var(--booking-accent)] hover:opacity-90 haptic-light"
+                                    >
+                                        Подтверждаю
+                                    </a>
+                                )}
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* Перенос ЭТОЙ встречи, а не подбор нового
+                                        времени с нуля: страница переноса
+                                        существует и умеет ровно это. */}
+                                    <a
+                                        href={selectedSession.reschedule || `/bot/book/${selectedSession.psychologistId}`}
+                                        className="flex items-center justify-center py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm hover:border-[var(--booking-accent)] hover:text-[var(--booking-accent)] haptic-light border-[var(--booking-line)] text-[var(--booking-ink)] bg-[var(--booking-card)]"
+                                    >
+                                        Перенести
+                                    </a>
+                                    <button
+                                        onClick={() => {
+                                            setSessionToCancel(selectedSession);
+                                            setSelectedSession(null);
+                                        }}
+                                        className="py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 haptic-light"
+                                    >
+                                        Отменить
+                                    </button>
+                                </div>
                             </div>
                         ) : (
-                            <div className="px-6 pb-6">
+                            /* ПО ПРОШЕДШЕЙ ВСТРЕЧЕ — ДВА ПУТИ, А НЕ ОДИН.
+                               Учредитель: по прошедшей сессии уместны и
+                               «просто забронировать слот», и «забронировать
+                               слот через неделю». Регулярная работа устроена
+                               именно так: клиент ходит по средам в 13:00 и не
+                               решает это заново каждую неделю.
+
+                               «Регулярно на срок» здесь намеренно нет: занимая
+                               чужие среды на три месяца вперёд, клиент
+                               распоряжается расписанием специалиста — такое
+                               решение принимает специалист. */
+                            <div className="px-6 pb-6 space-y-3">
+                                <button
+                                    onClick={() => {
+                                        const next = new Date(selectedSession.date);
+                                        next.setDate(next.getDate() + 7);
+                                        const dateStr = format(next, 'yyyy-MM-dd');
+                                        setSelectedSession(null);
+                                        window.location.href = `/bot/book/${selectedSession.psychologistId}?date=${dateStr}&time=${encodeURIComponent(selectedSession.time)}`;
+                                    }}
+                                    className="w-full py-3.5 rounded-[var(--booking-radius-card)] border-2 font-semibold text-sm haptic-light text-white"
+                                    style={{ borderColor: 'var(--booking-accent)', background: 'var(--booking-accent)' }}
+                                >
+                                    Тот же час через неделю
+                                </button>
                                 <button
                                     onClick={() => {
                                         setSelectedSession(null);
                                         window.location.href = `/bot/book/${selectedSession.psychologistId}`;
                                     }}
-                                    className="w-full py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm haptic-light text-white"
-                                    style={{ borderColor: 'var(--booking-accent)', background: 'var(--booking-accent)' }}
+                                    className="w-full py-3 rounded-[var(--booking-radius-card)] border font-semibold transition-colors text-sm haptic-light border-[var(--booking-line)] text-[var(--booking-ink)] bg-[var(--booking-card)]"
                                 >
-                                    Записаться снова
+                                    Выбрать другое время
                                 </button>
                             </div>
                         )}
