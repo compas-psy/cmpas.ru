@@ -156,3 +156,45 @@ describe('единый вход СИМПАС', () => {
         });
     });
 });
+// ССЫЛКА НА ЛИЧНЫЙ КАБИНЕТ СИМПАС.
+//
+// Просьба стороны СИМПАС (issue #132, 10.09.2026): в ПРАКТИКЕ человек
+// управляет практикой, а всё, что относится к нему самому — сведения о себе,
+// способы входа, устройства и сеансы, согласия и рассылки, — живёт у них.
+// Попасть туда из продукта было неоткуда.
+describe('ссылка на кабинет СИМПАС', () => {
+    const issuerWas = process.env.SIMPASID_ISSUER;
+    afterEach(() => {
+        if (issuerWas === undefined) delete process.env.SIMPASID_ISSUER;
+        else process.env.SIMPASID_ISSUER = issuerWas;
+    });
+
+    it('без настроенного входа ссылки нет', async () => {
+        // Вести в кабинет, которого у человека нет, — тупик, а не помощь.
+        delete process.env.SIMPASID_ISSUER;
+        const { simpasIdAccountUrl } = await import('@/lib/auth/simpasid');
+        expect(simpasIdAccountUrl()).toBeNull();
+    });
+
+    it('адрес выводится из issuer, а не написан строкой', async () => {
+        // Второй источник правды об одном хосте разошёлся бы молча: на стенде
+        // ссылка увела бы в боевой кабинет.
+        process.env.SIMPASID_ISSUER = 'https://auth.example.test';
+        const { simpasIdAccountUrl } = await import('@/lib/auth/simpasid');
+        expect(simpasIdAccountUrl()).toBe('https://auth.example.test/account?return_to=practice');
+    });
+
+    it('лишняя косая черта в issuer не даёт двойного слэша', async () => {
+        process.env.SIMPASID_ISSUER = 'https://auth.example.test/';
+        const { simpasIdAccountUrl } = await import('@/lib/auth/simpasid');
+        expect(simpasIdAccountUrl()).toBe('https://auth.example.test/account?return_to=practice');
+    });
+
+    it('раздел открывается напрямую, и return_to остаётся', async () => {
+        // return_to обязателен: по нему кабинет показывает обратную дорогу
+        // «← Вернуться в ПРАКТИКУ». Без него он решит, что человек пришёл сам.
+        process.env.SIMPASID_ISSUER = 'https://auth.example.test';
+        const { simpasIdAccountUrl } = await import('@/lib/auth/simpasid');
+        expect(simpasIdAccountUrl('security')).toBe('https://auth.example.test/account/security?return_to=practice');
+    });
+});

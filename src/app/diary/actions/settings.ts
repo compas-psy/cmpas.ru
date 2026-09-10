@@ -15,6 +15,7 @@ import {
     updatePracticeAddress,
 } from '@/lib/practice/addresses';
 import { requirePracticeOperatorAttestation } from '@/lib/practice/attestation';
+import { simpasIdAccountUrl } from '@/lib/auth/simpasid';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -294,6 +295,10 @@ export async function getProfile() {
                 image: user.image || null,
                 methods: (settings as any)?.methods || [],
                 basePrice: (settings as any)?.basePrice || null,
+                // Адрес личного кабинета СИМПАС считается здесь, на сервере:
+                // страница профиля клиентская, а SIMPASID_ISSUER в браузер не
+                // уезжает. null — единый вход не настроен, ссылки нет.
+                accountUrl: simpasIdAccountUrl(),
             }
         };
     } catch (e: any) {

@@ -95,6 +95,46 @@ export function shouldSendToSimpasId(params: {
     return params.door !== EMAIL_DOOR;
 }
 
+/**
+ * КОД ПРОДУКТА ДЛЯ ВОЗВРАТА ИЗ КАБИНЕТА СИМПАС.
+ *
+ * Не адрес: свободную форму сторона СИМПАС не принимает намеренно — иначе
+ * получился бы открытый редирект. Допустимы ровно четыре кода, наш —
+ * `practice`.
+ */
+const SIMPASID_RETURN_CODE = 'practice';
+
+/**
+ * Ссылка на личный кабинет СИМПАС.
+ *
+ * ЗАЧЕМ ОНА ВООБЩЕ. В ПРАКТИКЕ человек управляет тем, что относится к
+ * практике. Всё, что относится к нему самому — сведения о себе, способы
+ * входа, устройства и сеансы, согласия и рассылки, — живёт не у нас, а на
+ * auth.cmpas.ru. Попасть туда из продукта было неоткуда: человеку было
+ * негде узнать, что это место вообще есть. На странице профиля при этом
+ * стояла подпись «Email обновляется через настройки аккаунта» — то есть мы
+ * отсылали в место, дороги к которому не давали.
+ *
+ * Адрес выводится из issuer, а не пишется строкой: issuer уже задан
+ * настройкой, и второй источник правды об одном и том же хосте разошёлся бы
+ * молча — на стенде ссылка увела бы в боевой кабинет.
+ *
+ * `return_to` обязателен: по нему кабинет показывает обратную дорогу
+ * «← Вернуться в ПРАКТИКУ». Без него кабинет решит, что человек пришёл сам,
+ * набрав адрес руками, и дороги назад не предложит — придумывать её было бы
+ * враньём про его путь.
+ *
+ * Возвращает null, когда единый вход не настроен: ссылка на кабинет, которого
+ * у человека нет, — это тупик, а не помощь.
+ */
+export function simpasIdAccountUrl(section?: 'personal' | 'security' | 'devices' | 'communications' | 'privacy'): string | null {
+    const issuer = process.env.SIMPASID_ISSUER;
+    if (!issuer) return null;
+    const base = issuer.replace(/\/+$/, '');
+    const path = section ? `/account/${section}` : '/account';
+    return `${base}${path}?return_to=${SIMPASID_RETURN_CODE}`;
+}
+
 export function isSimpasIdEmailTrustworthy(profile: unknown): boolean {
     const claims = (profile ?? {}) as { email?: unknown; email_verified?: unknown };
     if (typeof claims.email !== 'string' || claims.email.trim() === '') return false;

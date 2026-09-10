@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { User, Mail, Save, Briefcase, Camera } from 'lucide-react';
+import { User, Mail, Save, Briefcase, Camera, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 const METHODS = [
@@ -27,6 +27,8 @@ type ProfileData = {
     image: string | null;
     methods: string[];
     basePrice: number | null;
+    /** Личный кабинет СИМПАС. null — единый вход не настроен, ссылки нет. */
+    accountUrl?: string | null;
 };
 
 export default function ProfilePage() {
@@ -144,7 +146,27 @@ export default function ProfilePage() {
                                 disabled
                                 className="w-full px-4 py-3 min-h-[48px] border border-border rounded-xl bg-muted/50 text-sm font-medium text-muted-foreground cursor-not-allowed"
                             />
-                            <p className="text-xs text-muted-foreground mt-1.5 ml-1">Email обновляется через настройки аккаунта</p>
+                            {/* РАНЬШЕ ЗДЕСЬ БЫЛ ТУПИК.
+                                Подпись «Email обновляется через настройки
+                                аккаунта» отсылала в место, дороги к которому
+                                мы не давали: сведения о себе, способы входа,
+                                устройства и согласия живут не в ПРАКТИКЕ, а в
+                                СИМПАС — и человеку было негде узнать, что это
+                                место вообще есть.
+                                Ссылки нет, когда единый вход не настроен:
+                                вести в кабинет, которого у человека нет, —
+                                это тот же тупик. */}
+                            {profile.accountUrl ? (
+                                <a
+                                    href={profile.accountUrl}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-forest-700 hover:text-primary mt-2 ml-1 transition-colors"
+                                >
+                                    Изменить в аккаунте СИМПАС
+                                    <ExternalLink className="w-3 h-3" />
+                                </a>
+                            ) : (
+                                <p className="text-xs text-muted-foreground mt-1.5 ml-1">Email обновляется через настройки аккаунта</p>
+                            )}
                         </div>
                     </div>
                 </div>
