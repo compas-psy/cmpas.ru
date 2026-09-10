@@ -119,11 +119,18 @@ export async function serveClientAvatar(req: NextRequest, clientId: string) {
 
         if (cached) {
             if (cached.value) return imageResponse(cached.value);
+            // Причина называется и у ЗАКЭШИРОВАННОГО промаха. Иначе в
+            // журнале одно и то же событие выглядит по-разному в зависимости
+            // от того, спрашивали ли этого клиента полчаса назад: 09.09 в
+            // 19:41 причины были названы, а в 21:18 остался голый «empty» —
+            // не потому, что что-то изменилось, а потому, что ответ пришёл
+            // из кэша.
+            console.log(`[avatar] ${cached.note ?? 'empty'} (из кэша)`);
             continue;
         }
 
         const attempt = await loadFromMessenger(source, client.id);
-        cache.set(key, attempt.image);
+        cache.set(key, attempt.image, attempt.miss);
         if (attempt.image) return imageResponse(attempt.image);
         // Причина называется на КАЖДОЙ неудавшейся попытке: у клиента с
         // двумя мессенджерами их две, и «пусто» без разбора снова не дало бы

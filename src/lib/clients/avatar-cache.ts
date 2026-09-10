@@ -18,7 +18,19 @@
  * увидеть скоро, а вот уже показанная от лишнего часа жизни не портится.
  */
 
-export type CachedAvatar<T> = { value: T | null; expiresAt: number };
+/**
+ * `note` — почему аватарки нет, если её нет.
+ *
+ * Причина хранится ВМЕСТЕ с записью, а не выбрасывается. Иначе в журнале
+ * закэшированный промах выглядит иначе, чем свежий: 09.09 в 19:41 маршрут
+ * писал «tg_no_photos», «max_no_dialog», а в 21:18 — только «empty», хотя
+ * происходило ровно то же самое. Разница была не в мире, а в том, что
+ * второй раз ответ пришёл из кэша и причину потеряли по дороге.
+ *
+ * Смотрящий в журнал не должен догадываться, что «пусто» и «пусто по такой-
+ * то причине» — это одно и то же событие.
+ */
+export type CachedAvatar<T> = { value: T | null; expiresAt: number; note?: string };
 
 export class AvatarCache<T> {
     private readonly entries = new Map<string, CachedAvatar<T>>();
@@ -58,11 +70,12 @@ export class AvatarCache<T> {
         return entry;
     }
 
-    set(key: string, value: T | null): void {
+    set(key: string, value: T | null, note?: string): void {
         this.entries.delete(key);
         this.entries.set(key, {
             value,
             expiresAt: this.now() + (value === null ? this.missTtlMs : this.hitTtlMs),
+            note,
         });
         while (this.entries.size > this.maxEntries) {
             const oldest = this.entries.keys().next();
