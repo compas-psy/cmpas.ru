@@ -8,7 +8,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.theme.*
@@ -34,6 +38,48 @@ import ru.cmpas.app.presentation.theme.*
  * по 18dp с боков. Компактный вид убирает иконку и ужимает поля — подпись
  * помещается целиком, и обрезать больше нечего.
  */
+/**
+ * ПОДПИСЬ, КОТОРАЯ УМЕНЬШАЕТСЯ, А НЕ ОБРЕЗАЕТСЯ.
+ *
+ * Компактные кнопки убрали иконку и поля, и этого хватило для «Была» и «Не
+ * пришли». Но 10.09.2026 учредитель снова получил обрезанное — на этот раз
+ * «Запис…» вместо «Записать снова»: подпись длиннее, а места в карточке
+ * столько же.
+ *
+ * Подгонять слова под ширину — тупик: следующая подпись снова не влезет, и
+ * узнаем мы об этом опять от человека. Поэтому уменьшается размер шрифта, по
+ * половине пункта, пока строка не поместится. Ниже нижней границы не
+ * опускаемся: подпись, которую не прочесть, не лучше обрезанной, и там
+ * многоточие честнее.
+ *
+ * Обрезанная подпись выглядит осмысленной, не будучи ею, — это и делает её
+ * хуже мелкой.
+ */
+@Composable
+private fun FittedLabel(
+    text: String,
+    color: Color,
+    baseSize: TextUnit,
+    weight: FontWeight,
+    minSize: TextUnit = 11.sp,
+) {
+    var size by remember(text, baseSize) { mutableStateOf(baseSize) }
+    Text(
+        text,
+        color = color,
+        fontSize = size,
+        fontWeight = weight,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && size.value > minSize.value) {
+                size = (size.value - 0.5f).sp
+            }
+        },
+    )
+}
+
 @Composable
 fun PrimaryButton(
     text: String,
@@ -60,13 +106,11 @@ fun PrimaryButton(
             Icon(icon, null, Modifier.size(18.dp), tint = Color.White)
             Spacer(Modifier.width(8.dp))
         }
-        Text(
-            text,
+        FittedLabel(
+            text = text,
             color = Color.White,
-            fontSize = if (compact) 14.sp else 15.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            baseSize = if (compact) 14.sp else 15.5.sp,
+            weight = FontWeight.SemiBold,
         )
     }
 }
@@ -106,13 +150,11 @@ fun GhostButton(
             // помещается, человек должен это видеть. Задача 28 нашла на
             // экране кабинетов «Сделать» вместо «Сделать основным» — обрез
             // молчал, и кнопка выглядела осмысленной, не будучи ею.
-            Text(
-                text,
+            FittedLabel(
+                text = text,
                 color = foreground,
-                fontSize = if (compact) 14.sp else 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                baseSize = if (compact) 14.sp else 15.sp,
+                weight = FontWeight.SemiBold,
             )
         }
     }

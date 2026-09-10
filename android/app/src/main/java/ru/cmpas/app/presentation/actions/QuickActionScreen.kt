@@ -767,13 +767,26 @@ private fun OnboardingDialog(
     onDismiss: () -> Unit,
 ) {
     var channel by rememberSaveable { mutableStateOf("telegram") }
-    var sendNotification by rememberSaveable { mutableStateOf(true) }
+    // ПО УМОЛЧАНИЮ ВЫКЛЮЧЕНО.
+    //
+    // Этот лист открывается сразу после «Запись добавлена» — то есть в момент,
+    // когда клиенту уже ушло подтверждение записи от самой записи. Включённый
+    // по умолчанию переключатель означал второе такое же сообщение подряд, и
+    // 10.09.2026 учредитель получил ровно это: по два «Подтверждаю запись» на
+    // каждую запись.
+    //
+    // Отправить напоминание о записи по-прежнему можно — но это должно быть
+    // решением человека, а не тем, что произошло само.
+    var sendNotification by rememberSaveable { mutableStateOf(false) }
     var documentId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(options) {
         options?.let {
             channel = if (it.hasMax && !it.hasTelegram) "max" else "telegram"
-            sendNotification = it.hasSession
+            // Здесь стояло sendNotification = it.hasSession, то есть
+            // переключатель сам вставал в «включено» у любого клиента, у
+            // которого вообще есть встреча. Решение оставляем человеку.
+            sendNotification = false
         }
     }
 

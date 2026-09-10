@@ -6,6 +6,7 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
+import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
 
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
 const MAX_BOT_USERNAME = process.env.MAX_BOT_USERNAME || '';
@@ -42,11 +43,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         documents = rows.map(r => ({ id: r.id, title: r.title }));
     } catch { /* table may not exist */ }
 
-    const session = await db.diarySession.findFirst({
-        where: { clientId, psychologistId: auth.userId, status: { not: 'cancelled' } },
-        orderBy: { date: 'asc' },
-        select: { id: true },
-    });
+    // Есть ли о чём напоминать — только предстоящее. См.
+    // src/lib/practice/upcoming-session.ts: здесь бралась самая ранняя встреча
+    // за всю историю клиента.
+    const hasUpcoming = await hasUpcomingSessionForClient({ psychologistId: auth.userId, clientId });
 
     return NextResponse.json({
         clientName: client.name,
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         hasTelegram: !!client.telegramChatId,
         hasMax: !!(client as any).maxChatId,
         documents,
-        hasSession: !!session,
+        hasSession: hasUpcoming,
     });
 }
 
@@ -84,11 +84,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const psyName = psych?.psychologistSettings?.fullName || psych?.name || 'специалист';
         const bookingLink = clientBookingLink(auth.userId, clientId);
 
+        // ИМЕННО ПРЕДСТОЯЩАЯ встреча, а не первая в истории клиента: живой
+        // случай 10.09.2026 — клиенту ушло «Подтверждаю запись … 15 июня».
         const session = sendNotification
-            ? await db.diarySession.findFirst({
-                where: { clientId, psychologistId: auth.userId, status: { not: 'cancelled' } },
-                orderBy: { date: 'asc' },
-            })
+            ? await findUpcomingSessionForClient({ psychologistId: auth.userId, clientId })
             : null;
 
         let documentLinks: Array<{ title: string; link: string }> = [];

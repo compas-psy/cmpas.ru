@@ -8,6 +8,7 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { sendMaxMessage } from '@/lib/max-bot';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
 import { extractFirstName } from '@/lib/person-name';
+import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
 
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
@@ -51,11 +52,10 @@ export async function getOnboardingOptions(clientId: string) {
         documents = rows.map(r => ({ id: r.id, title: r.title }));
     } catch { /* table may not exist */ }
 
-    const session = await db.diarySession.findFirst({
-        where: { clientId, psychologistId, status: { not: 'cancelled' } },
-        orderBy: { date: 'asc' },
-        select: { id: true },
-    });
+    // Есть ли о чём напоминать. Раньше здесь бралась самая ранняя встреча за
+    // всю историю — то есть у постоянного клиента переключатель «уведомление
+    // о записи» предлагался всегда, даже когда впереди ничего нет.
+    const hasUpcoming = await hasUpcomingSessionForClient({ psychologistId, clientId });
 
     const channelStatus = await getClientChannelStatus(psychologistId, clientId).catch(() => null);
 
@@ -67,7 +67,7 @@ export async function getOnboardingOptions(clientId: string) {
         hasMax: Boolean(client.maxChatId),
         recommendedChannel: channelStatus?.recommendedChannel || (client.maxChatId ? 'max' as const : client.telegramChatId ? 'telegram' as const : 'max' as const),
         documents,
-        hasSession: Boolean(session),
+        hasSession: hasUpcoming,
     };
 }
 
@@ -86,11 +86,12 @@ export async function sendClientOnboarding(
     const psyName = psych?.psychologistSettings?.fullName || psych?.name || 'специалист';
     const bookingLink = clientBookingLink(psychologistId, clientId);
 
+    // ИМЕННО ПРЕДСТОЯЩАЯ, а не первая в истории: см.
+    // src/lib/practice/upcoming-session.ts. Здесь стояло orderBy date asc без
+    // условия на дату, и клиенту приходило «Подтверждаю запись» на встречу
+    // трёхмесячной давности.
     const session = opts.sendNotification
-        ? await db.diarySession.findFirst({
-            where: { clientId, psychologistId, status: { not: 'cancelled' } },
-            orderBy: { date: 'asc' },
-        })
+        ? await findUpcomingSessionForClient({ psychologistId, clientId })
         : null;
 
     let documentLinks: Array<{ title: string; link: string }> = [];
