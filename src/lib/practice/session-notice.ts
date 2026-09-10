@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
+import { deliverMessage } from '@/lib/messaging/deliver';
+import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 
 /**
@@ -53,18 +53,26 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
         bookingLink,
     });
 
-    let sentTo: string | null = null;
-    try {
-        if (full.client.telegramChatId) {
-            await sendTelegramMessage(full.client.telegramChatId, text, { parse_mode: 'HTML' });
-            sentTo = 'telegram';
-        } else if ((full.client as any).maxChatId) {
-            await sendMaxMessage((full.client as any).maxChatId, text);
-            sentTo = 'max';
-        }
-    } catch (error) {
-        console.error('client notice send failed:', error);
-    }
+    // ТРИ КНОПКИ — РОВНО СТОЛЬКО, СКОЛЬКО ДЕЙСТВИЙ ОБЕЩАЕТ ТЕКСТ.
+    //
+    // Учредитель 10.09.2026: «кнопки Подтверждаю, Перенести, Отменить».
+    // Раньше в сообщении не было ни одной: строка обещала три действия и
+    // отправляла человека по ссылке на страницу, где не было ни одного.
+    // Подтверждение жило только в кнопке напоминания — то есть до
+    // напоминания клиент не мог подтвердить встречу ничем.
+    //
+    // «Подтверждаю» показывается, пока встреча не подтверждена: предлагать
+    // подтвердить дважды — значит делать вид, что первого раза не было.
+    const buttons = sessionActionButtons(
+        { psychologistId, clientId: full.clientId, sessionId: full.id, date: full.date },
+        { includeConfirm: full.status !== 'confirmed' },
+    );
+
+    // Одна отправка в один канал. Раньше здесь стоял else if — правильный сам
+    // по себе, но два соседних пути писали в оба мессенджера сразу, и одно
+    // событие приходило дважды. Теперь правило одно на весь продукт.
+    const delivery = await deliverMessage(full.client as never, text, buttons);
+    const sentTo = delivery.sent ? delivery.channel : null;
 
     return {
         status: sentTo ? 'sent' as const : 'manual' as const,

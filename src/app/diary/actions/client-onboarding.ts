@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
+import { deliverMessage } from '@/lib/messaging/deliver';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
 import { extractFirstName } from '@/lib/person-name';
 import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
@@ -133,11 +133,20 @@ export async function sendClientOnboarding(
 
     const chatId = opts.channel === 'telegram' ? client.telegramChatId : client.maxChatId;
     if (chatId) {
-        if (opts.channel === 'telegram') {
-            await sendTelegramMessage(chatId, htmlText, { parse_mode: 'HTML', disable_web_page_preview: true });
-        } else {
-            await sendMaxMessage(chatId, plainText);
-        }
+        // В MAX уходит РАЗМЕЧЕННЫЙ текст, а не расплющенный. У MAX нет
+        // разметки, но есть кнопки со ссылкой, и отправка сама прячет в них
+        // адреса. Здесь ей отдавали текст, где адрес уже был развёрнут в
+        // «подпись: адрес» — прятать было нечего, и учредитель видел голую
+        // ссылку на полторы строки.
+        //
+        // Плоский текст остаётся там, где он и нужен: readyText — то, что
+        // специалист копирует руками, и кнопок в буфере обмена не бывает.
+        await deliverMessage(
+            opts.channel === 'telegram'
+                ? { telegramChatId: chatId, preferredChannel: 'telegram' }
+                : { maxChatId: chatId, preferredChannel: 'max' },
+            htmlText,
+        );
         return { status: 'sent' as const, channel: opts.channel };
     }
 
@@ -149,7 +158,10 @@ export async function sendClientOnboarding(
             clientId,
             sessionId: session?.id ?? null,
             channel: opts.channel,
-            text: opts.channel === 'telegram' ? htmlText : plainText,
+            // В очереди лежит РАЗМЕЧЕННЫЙ текст: перевод для MAX делает сама
+            // отправка, и она же прячет ссылки в кнопки. Плоский текст лишал
+            // её этой возможности, и адрес приезжал голым.
+            text: htmlText,
             sendAt: invite.expiresAt,
             status: 'pending',
         },

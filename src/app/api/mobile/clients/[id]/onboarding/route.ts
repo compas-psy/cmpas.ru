@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
+import { deliverMessage } from '@/lib/messaging/deliver';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
@@ -130,8 +129,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         const chatId = channel === 'telegram' ? client.telegramChatId : (client as any).maxChatId as string | null;
         if (chatId) {
-            if (channel === 'telegram') await sendTelegramMessage(chatId, htmlText, { parse_mode: 'HTML', disable_web_page_preview: true });
-            else await sendMaxMessage(chatId, plainText);
+            // В MAX уходит размеченный текст: ссылки там прячутся в кнопки, и
+            // делает это сама отправка. Расплющенный текст лишал её этой
+            // возможности — адрес оставался голым.
+            await deliverMessage(
+                channel === 'telegram'
+                    ? { telegramChatId: chatId, preferredChannel: 'telegram' }
+                    : { maxChatId: chatId, preferredChannel: 'max' },
+                htmlText,
+            );
             return NextResponse.json({ status: 'sent', channel });
         }
 
@@ -139,7 +145,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
         await db.clientInviteToken.create({ data: { psychologistId: auth.userId, clientId, token, channel, expiresAt } });
         await db.scheduledClientMessage.create({
-            data: { psychologistId: auth.userId, clientId, sessionId: session?.id ?? null, channel, text, sendAt: expiresAt, status: 'pending' },
+            // Размеченный текст: перевод для MAX делает отправка.
+            data: { psychologistId: auth.userId, clientId, sessionId: session?.id ?? null, channel, text: htmlText, sendAt: expiresAt, status: 'pending' },
         });
 
         return NextResponse.json({

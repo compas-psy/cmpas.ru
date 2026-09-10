@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { sessionActionToken, sessionActionTokenExpiry, clientBookingLink, publicBaseUrl } from '@/lib/client-workflow';
+import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
@@ -184,21 +184,24 @@ function clientReminderEnabled(
     return value !== false;
 }
 
+/**
+ * Кнопки под напоминанием.
+ *
+ * «Перенести» вела на страницу НОВОЙ записи — clientBookingLink, — хотя
+ * страница переноса конкретной встречи существует и умеет ровно это.
+ * Человек, нажавший «перенести», попадал в подбор времени с нуля, а его
+ * собственная встреча оставалась на месте.
+ *
+ * Адреса всех трёх действий теперь собираются в одном месте
+ * (src/lib/practice/session-action-links.ts) и одинаковы в напоминании и в
+ * сообщении о записи. Подписи без эмодзи: кнопка и так выделена, а «✅»
+ * перед «Подтверждаю» только делает рассылочный вид.
+ */
 function sessionActions(session: { id: string; psychologistId: string; clientId: string; date: Date }, pending: boolean) {
-    // Task 3 (item D): a per-action token — the 'confirm' button's token
-    // does not work as the 'cancel' button's, and neither works past this
-    // session or on any other session.
-    const expiresAt = sessionActionTokenExpiry(session.date);
-    const actionUrl = (action: 'confirm' | 'cancel') =>
-        `${publicBaseUrl()}/api/client/session-action?s=${session.id}&a=${action}&t=${sessionActionToken(session.psychologistId, session.clientId, session.id, action, expiresAt)}`;
-    const rows: Array<Array<{ text: string; url: string }>> = [];
-    // Подписи кнопок без эмодзи: кнопка и так выделена, а «✅» перед словом
-    // «Подтвердить» ничего не добавляет — только делает рассылочный вид.
-    if (pending) rows.push([{ text: 'Подтвердить', url: actionUrl('confirm') }]);
-    rows.push([
-        { text: 'Перенести', url: clientBookingLink(session.psychologistId, session.clientId) },
-        { text: 'Отменить', url: actionUrl('cancel') },
-    ]);
+    const rows = sessionActionButtons(
+        { psychologistId: session.psychologistId, clientId: session.clientId, sessionId: session.id, date: session.date },
+        { includeConfirm: pending },
+    );
     return { reply_markup: { inline_keyboard: rows } };
 }
 

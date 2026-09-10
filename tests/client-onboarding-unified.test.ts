@@ -254,7 +254,12 @@ describe('паритет веб/мобайл — один билдер, один
                 psychologistName: 'Анна Волкова',
                 documentLinks: [{ title: 'agreement_client_v2_final.pdf', link: DOC_LINK }],
                 bookingLink: clientBookingLink('psy-1', 'client-1'),
-                mode: channel === 'telegram' ? 'html' : 'plain',
+                // РАЗМЕЧЕННЫЙ текст в оба канала. Правка 10.09.2026: у MAX
+                // нет разметки, но есть кнопки со ссылкой, и отправка в MAX
+                // сама вынимает адреса из якорей в кнопки. Раньше сюда
+                // отдавали заранее расплющенный текст — вынимать было нечего,
+                // и учредитель видел голый адрес на полторы строки.
+                mode: 'html',
             }));
         });
 
@@ -282,7 +287,16 @@ describe('паритет веб/мобайл — один билдер, один
         });
     }
 
-    it('MAX никогда не получает HTML-разметку как видимый текст', async () => {
+    it('в MAX уходит РАЗМЕЧЕННЫЙ текст — иначе прятать ссылку не во что', async () => {
+        // Прежняя редакция этой проверки требовала обратного: «MAX никогда не
+        // получает HTML-разметку». Она была права, пока отправка в MAX
+        // разметку не понимала и адрес приезжал текстом. С тех пор
+        // sendMaxMessage переводит текст сама и вынимает ссылки в кнопки —
+        // и заранее расплющенный текст лишает её этой возможности.
+        //
+        // Обещание «человек не увидит тегов» никуда не делось, оно просто
+        // держится там, где ему и место: на самой отправке в MAX
+        // (tests/max-*.test.ts), а не в каждом вызывающем.
         db.diarySession.findMany.mockResolvedValue([{
             id: 'session-1',
             date: new Date('2026-09-15T00:00:00Z'),
@@ -291,12 +305,12 @@ describe('паритет веб/мобайл — один билдер, один
         }]);
 
         await runMobile('max', 'doc-1', true);
-        expect(sentTo('max')).not.toContain('<a href');
+        expect(sentTo('max')).toContain('<a href');
 
         vi.clearAllMocks();
         db.diarySession.findMany.mockResolvedValue([]);
         await runMobile('max', 'doc-1');
-        expect(sentTo('max')).not.toContain('<a href');
+        expect(sentTo('max')).toContain('<a href');
     });
 
     it('канал не подключён: в очередь кладётся текст того же канала — и у веба, и у мобайла', async () => {
@@ -311,7 +325,10 @@ describe('паритет веб/мобайл — один билдер, один
         const mobileQueued = db.scheduledClientMessage.create.mock.calls[0][0].data.text as string;
 
         expect(mobileQueued).toBe(webQueued);
-        expect(webQueued).not.toContain('<a href');
+        // В очереди лежит размеченный текст: перевод и кнопки делает та же
+        // отправка, когда человек наконец подключит мессенджер. Плоский текст
+        // в очереди означал бы голый адрес спустя месяц ожидания.
+        expect(webQueued).toContain('<a href');
         expect(telegram.sendTelegramMessage).not.toHaveBeenCalled();
         expect(maxBot.sendMaxMessage).not.toHaveBeenCalled();
     });
