@@ -14,16 +14,33 @@ import ru.cmpas.app.presentation.util.PracticeRefreshBus
 import ru.cmpas.app.presentation.util.repeatReferenceSession
 import javax.inject.Inject
 
+/** Занятая неделя так, как её вернул сервер: настоящая дата и настоящий час. */
+data class BookedSlot(val date: String, val time: String)
+
 data class RebookUiState(
     val isLoading: Boolean = true,
     val clientName: String = "",
     /** Встреча, из которой берётся «тот же час». Без неё повторять нечего. */
     val reference: Session? = null,
     val busyWeeks: Int? = null,
-    val bookedDates: List<String> = emptyList(),
+    /**
+     * Срок, который человек назвал. Нужен для ответа «Записаны на N недель
+     * вперёд»: число недель — это то, что он ввёл, а не длина списка занятых
+     * дат (часть недель могла быть пропущена).
+     */
+    val requestedWeeks: Int? = null,
+    val booked: List<BookedSlot> = emptyList(),
     val skipped: List<Pair<String, String>> = emptyList(),
+    /**
+     * Час, который сервер ФАКТИЧЕСКИ повторил. Показываем его, а не свою
+     * догадку: догадка уже однажды разошлась с сервером на день и на час.
+     */
+    val serverReference: BookedSlot? = null,
     val error: String? = null,
-)
+) {
+    /** Ответ получен — значит форму показывать больше незачем. */
+    val hasResult: Boolean get() = requestedWeeks != null && (booked.isNotEmpty() || skipped.isNotEmpty())
+}
 
 /**
  * «Записать снова» — развилка после состоявшейся встречи.
@@ -78,7 +95,9 @@ class RebookViewModel @Inject constructor(
      */
     fun repeat(clientId: String, weeks: Int) {
         viewModelScope.launch {
-            _uiState.update { it.copy(busyWeeks = weeks, error = null, bookedDates = emptyList(), skipped = emptyList()) }
+            _uiState.update {
+                it.copy(busyWeeks = weeks, error = null, requestedWeeks = null, booked = emptyList(), skipped = emptyList(), serverReference = null)
+            }
             try {
                 val response = api.repeatClientSlot(clientId, RepeatSlotRequest(weeks))
                 val body = response.body()
@@ -88,8 +107,10 @@ class RebookViewModel @Inject constructor(
                 }
                 _uiState.update {
                     it.copy(
-                        bookedDates = body.booked.map { item -> item.date },
+                        requestedWeeks = weeks,
+                        booked = body.booked.map { item -> BookedSlot(item.date, item.time) },
                         skipped = body.skipped.map { item -> item.date to item.reason },
+                        serverReference = body.reference?.let { ref -> BookedSlot(ref.date, ref.time) },
                     )
                 }
                 if (body.booked.isNotEmpty()) PracticeRefreshBus.notifyChanged()
@@ -101,5 +122,7 @@ class RebookViewModel @Inject constructor(
         }
     }
 
-    fun clearResult() = _uiState.update { it.copy(bookedDates = emptyList(), skipped = emptyList(), error = null) }
+    fun clearResult() = _uiState.update {
+        it.copy(requestedWeeks = null, booked = emptyList(), skipped = emptyList(), serverReference = null, error = null)
+    }
 }

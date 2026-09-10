@@ -92,6 +92,76 @@ class RepeatWeeksTest {
     }
 
     @Test
+    fun `сегодняшняя встреча остаётся опорной весь день, даже когда её час прошёл`() {
+        // Так отбирает сервер: date >= начало сегодняшнего дня. Приложение
+        // сравнивало дату вместе со временем и сегодняшнюю прошедшую встречу
+        // отбрасывало — и обещало человеку не тот день и не тот час, на
+        // которые запись потом происходила.
+        val today = LocalDate.now().toString()
+        val tomorrow = LocalDate.now().plusDays(1).toString()
+
+        val reference = repeatReferenceSession(listOf(
+            session(tomorrow, time = "14:00"),
+            session(today, time = "00:01"),
+        ))
+
+        assertEquals(today, reference?.date)
+        assertEquals("00:01", reference?.startTime)
+    }
+
+    @Test
+    fun `в один день опорная — та, что раньше по времени`() {
+        // Порядок тот же, что у сервера: по дате, затем по времени.
+        val day = LocalDate.now().plusDays(2).toString()
+
+        val reference = repeatReferenceSession(listOf(session(day, time = "18:00"), session(day, time = "11:00")))
+
+        assertEquals("11:00", reference?.startTime)
+    }
+
+    @Test
+    fun `правило опорной встречи то же, что на сервере`() {
+        // Сервер: date >= todayStart, порядок [date asc, time asc]; если
+        // впереди пусто — последняя по [date desc, time desc]. Расхождение
+        // здесь человек видит не в интерфейсе, а в уведомлении клиенту.
+        val server = File("../../src/lib/practice/booking/repeat-slot.ts").readText()
+        assertTrue(
+            "сервер должен отбирать будущее по НАЧАЛУ ДНЯ, а не по моменту",
+            server.contains("date: { gte: todayStart }"),
+        )
+        assertTrue(server.contains("orderBy: [{ date: 'asc' }, { time: 'asc' }]"))
+        assertTrue(server.contains("orderBy: [{ date: 'desc' }, { time: 'desc' }]"))
+    }
+
+    @Test
+    fun `ответ сервера замещает форму, а не дописывается под ней`() {
+        // Учредитель 10.09.2026: «после нажатия на кнопку интерфейс не
+        // меняется — должно исчезнуть поле и кнопка и написаться "Записаны на
+        // N недель вперёд"». Клавиатура закрывала низ экрана, где лежал ответ.
+        val screen = File("src/main/java/ru/cmpas/app/presentation/rebook/RebookScreen.kt").readText()
+        assertTrue("итог должен быть отдельным состоянием экрана", screen.contains("if (uiState.hasResult)"))
+        assertTrue(screen.contains("Записаны на "))
+        // Даты в итоге — те, что вернул сервер, а не собственная догадка.
+        assertTrue(screen.contains("uiState.booked.forEach"))
+        assertTrue(screen.contains("uiState.serverReference"))
+    }
+
+    @Test
+    fun `в заголовке не написано «был», когда встреча ещё впереди`() {
+        val screen = File("src/main/java/ru/cmpas/app/presentation/rebook/RebookScreen.kt").readText()
+        assertTrue(screen.contains("referenceTense(reference.date)"))
+        assertTrue("прошлое и будущее должны называться по-разному", screen.contains("\"записан\""))
+    }
+
+    @Test
+    fun `число недель склоняется`() {
+        val screen = File("src/main/java/ru/cmpas/app/presentation/rebook/RebookScreen.kt").readText()
+        for (form in listOf("неделю", "недели", "недель")) {
+            assertTrue("«Записаны на N ...» должно склоняться: $form", screen.contains("\"$form\""))
+        }
+    }
+
+    @Test
     fun `встреч не было — повторять нечего`() {
         assertNull(repeatReferenceSession(emptyList()))
     }

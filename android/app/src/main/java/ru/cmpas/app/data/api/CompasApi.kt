@@ -295,11 +295,21 @@ data class RepeatSlotBooked(val date: String, val time: String, val sessionId: S
 data class RepeatSlotSkipped(val date: String, val time: String, val reason: String)
 
 /**
+ * Опорная встреча, из которой сервер взял час. Приложение выбирает её и само
+ * (RepeatWeeks.kt), но выбор сервера — единственный настоящий: занял он по
+ * своему. Пока это поле не читалось, экран показывал одну дату, а запись
+ * происходила на другую.
+ */
+@kotlinx.serialization.Serializable
+data class RepeatSlotReference(val sessionId: String = "", val date: String = "", val time: String = "")
+
+/**
  * Отчёт поимённый, а не «получилось/не получилось»: занятая третья неделя не
  * отменяет первых двух, и специалист должен видеть, какая дата выпала.
  */
 @kotlinx.serialization.Serializable
 data class RepeatSlotResponse(
+    val reference: RepeatSlotReference? = null,
     val booked: List<RepeatSlotBooked> = emptyList(),
     val skipped: List<RepeatSlotSkipped> = emptyList(),
 )

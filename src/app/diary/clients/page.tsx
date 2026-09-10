@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { MAX_REPEAT_WEEKS, REPEAT_WEEK_PRESETS } from '@/lib/practice/booking/repeat-slot-limits';
+import { isSortSentinelDate } from '@/lib/clients/next-session-sentinel';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
@@ -564,7 +565,10 @@ export default function ClientsPage() {
                         const statusBadgeC = c.totalSessions === 0 ? { label: 'Новый', cls: 'bg-blue-50 text-blue-600' }
                             : c.status === 'archived' ? { label: 'Архив', cls: 'bg-muted text-muted-foreground' }
                             : { label: 'Активный', cls: 'bg-green-50 text-green-700' };
-                        const lastDate = c.nextSessionDate
+                        // Метку сортировки новых клиентов (9999-12-31) не
+                        // показываем: «31 дек.» — не дата встречи, а
+                        // техническая пометка. См. next-session-sentinel.ts.
+                        const lastDate = c.nextSessionDate && !isSortSentinelDate(c.nextSessionDate)
                             ? new Date(c.nextSessionDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
                             : null;
                         return (
