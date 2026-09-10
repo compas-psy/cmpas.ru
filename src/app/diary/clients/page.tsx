@@ -320,6 +320,11 @@ export default function ClientsPage() {
                             {!futureSessions.length && !pastSessions.length && (
                                 <div className="text-center py-12 text-muted-foreground text-sm">Нет сессий</div>
                             )}
+                            <RepeatSlotPanel
+                                sessions={selectedClient.sessions || []}
+                                clientId={selectedClient.id}
+                                onDone={() => { fetchClientDetail(selectedClient.id); fetchClients(); }}
+                            />
                             <button onClick={() => { setEditingSession(null); setShowNewSession(true); }}
                                 className="w-full py-3.5 bg-accent text-accent-foreground rounded-xl font-medium shadow-card active:scale-[0.98] transition-all">
                                 Запланировать сессию
@@ -693,6 +698,14 @@ export default function ClientsPage() {
                                             <div><h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Прошедшие</h3>{pastSessions.map(s => <SessionCard key={s.id} s={s} onEdit={() => { setEditingSession(s); setShowNewSession(true); }} />)}</div>
                                         )}
                                         {!futureSessions.length && !pastSessions.length && <div className="text-center py-12 text-muted-foreground text-sm">Нет сессий</div>}
+                                        {/* Тот же блок, что и в мобильной карточке: у нас нет
+                                            версии для iOS, и мобильный веб — это она, поэтому
+                                            расходиться этим двум местам нельзя. */}
+                                        <RepeatSlotPanel
+                                            sessions={selectedClient.sessions || []}
+                                            clientId={selectedClient.id}
+                                            onDone={() => { fetchClientDetail(selectedClient.id); fetchClients(); }}
+                                        />
                                     </div>
                                 )}
                                 {desktopTab === 'questionnaire' && (
@@ -927,6 +940,89 @@ function SessionCard({ s, onEdit, accent }: { s: Session; onEdit: () => void; ac
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
         </button>
+    );
+}
+
+/**
+ * ТОТ ЖЕ ЧАС — ЧЕРЕЗ НЕДЕЛЮ ИЛИ НА СРОК.
+ *
+ * Регулярная работа устроена так: клиент ходит по вторникам в 14:00. В
+ * карточке этого действия не было вовсе — чтобы занять тот же час, специалист
+ * открывал форму записи, выбирал клиента, листал календарь и искал время,
+ * хотя всё это уже известно из прошлой встречи.
+ *
+ * «Через неделю» и «занять на срок» — одно и то же с разным числом недель,
+ * поэтому и здесь один ряд кнопок, а не два разных экрана.
+ *
+ * Итог показывается поимённо. Если третья неделя занята, первые две всё равно
+ * записаны, и человек видит, какая дата выпала: «записано 3, 14 октября
+ * пропущено — время занято» честнее, чем «готово».
+ */
+function RepeatSlotPanel({ sessions, clientId, onDone }: { sessions: Session[]; clientId: string; onDone: () => void }) {
+    const [busy, setBusy] = useState<number | null>(null);
+
+    // Опорная встреча для ПОДПИСИ. Настоящий выбор делает сервер (repeat-slot.ts)
+    // по тому же правилу: ближайшая будущая, иначе последняя прошедшая.
+    const reference = (() => {
+        const alive = sessions.filter(s => s.status !== 'cancelled');
+        if (alive.length === 0) return null;
+        const now = new Date();
+        const future = alive
+            .filter(s => new Date(s.date) >= new Date(now.getFullYear(), now.getMonth(), now.getDate()))
+            .sort((a, b) => a.date.localeCompare(b.date))[0];
+        return future || [...alive].sort((a, b) => b.date.localeCompare(a.date))[0];
+    })();
+
+    if (!reference) return null;
+
+    const weekday = new Date(reference.date).toLocaleDateString('ru-RU', { weekday: 'long' });
+
+    const run = async (weeks: number) => {
+        setBusy(weeks);
+        try {
+            const { repeatSessionSlot } = await import('../actions/sessions');
+            const result = await repeatSessionSlot(clientId, weeks);
+            if (result.booked.length === 0) {
+                toast.error(result.skipped[0]?.reason || 'Не удалось занять время');
+            } else {
+                const bookedText = `Записано: ${result.booked.length}`;
+                const skippedText = result.skipped.length > 0
+                    ? ` · пропущено ${result.skipped.length}: ${result.skipped.map(x => new Date(x.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })).join(', ')}`
+                    : '';
+                toast.success(bookedText + skippedText);
+            }
+            onDone();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Не удалось занять время');
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    return (
+        <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><CalendarClock className="w-4 h-4" /></div>
+                <div className="min-w-0">
+                    <div className="text-sm font-bold text-foreground">Тот же час</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                        {weekday}, {reference.time} — как {new Date(reference.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </div>
+                </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2 mt-3">
+                {([[1, 'Через неделю'], [4, 'На месяц'], [8, 'На 8 недель'], [12, 'На квартал']] as [number, string][]).map(([weeks, label]) => (
+                    <button key={weeks} type="button" disabled={busy !== null} onClick={() => run(weeks)}
+                        className="px-2 py-2 rounded-xl text-[11px] font-bold border border-border text-muted-foreground hover:bg-sage-50 hover:text-forest-700 transition-colors disabled:opacity-50 min-h-[44px]">
+                        {busy === weeks ? '...' : label}
+                    </button>
+                ))}
+            </div>
+            {/* Клиенту уходит одно сообщение — про ближайшую встречу. Двенадцать
+                сообщений о занятом квартале ему ни к чему, а про ближайшую он
+                должен знать так же, как при обычной записи. */}
+            <p className="text-[11px] text-muted-foreground mt-2 ml-1">Клиент получит уведомление только о ближайшей встрече.</p>
+        </div>
     );
 }
 
