@@ -32,7 +32,7 @@ class FakeNoReference extends Error {}
 vi.mock('@/lib/practice/booking/repeat-slot', () => ({
     repeatClientSlot: (...args: unknown[]) => repeatClientSlot(...args),
     NoReferenceSessionError: FakeNoReference,
-    MAX_REPEAT_WEEKS: 12,
+    MAX_REPEAT_WEEKS: 26,
 }));
 
 const notifyClientAboutSession = vi.fn(async (_psychologistId: string, _sessionId: string, _isFirst: boolean) => ({ status: 'sent' as const }));
@@ -100,7 +100,7 @@ describe('POST /api/mobile/clients/[id]/repeat-slot', () => {
     it('срок вне границ отклоняется до записи', async () => {
         const { POST } = await import('@/app/api/mobile/clients/[id]/repeat-slot/route');
 
-        for (const weeks of [0, 13, 'много', undefined]) {
+        for (const weeks of [0, 27, 'много', undefined]) {
             const res = await POST(request({ weeks }), { params });
             expect(res.status).toBe(400);
         }

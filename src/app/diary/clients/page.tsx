@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Calendar, StickyNote, ClipboardList, Settings2, ChevronLeft, ClipboardPaste, CalendarClock, UserPlus, MessageCircle, Copy, CheckCircle2, Send, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
+import { MAX_REPEAT_WEEKS, REPEAT_WEEK_PRESETS } from '@/lib/practice/booking/repeat-slot-limits';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
@@ -960,6 +961,10 @@ function SessionCard({ s, onEdit, accent }: { s: Session; onEdit: () => void; ac
  */
 function RepeatSlotPanel({ sessions, clientId, onDone }: { sessions: Session[]; clientId: string; onDone: () => void }) {
     const [busy, setBusy] = useState<number | null>(null);
+    const [ownWeeks, setOwnWeeks] = useState('');
+    const ownWeeksValid = /^\d+$/.test(ownWeeks)
+        && Number(ownWeeks) >= 1
+        && Number(ownWeeks) <= MAX_REPEAT_WEEKS;
 
     // Опорная встреча для ПОДПИСИ. Настоящий выбор делает сервер (repeat-slot.ts)
     // по тому же правилу: ближайшая будущая, иначе последняя прошедшая.
@@ -1010,14 +1015,49 @@ function RepeatSlotPanel({ sessions, clientId, onDone }: { sessions: Session[]; 
                     </div>
                 </div>
             </div>
+            {/* Четыре кнопки — подсказки, а не весь выбор. Учредитель
+                10.09.2026: «по неделям нужно более гибко, например, 4, 8, 12,
+                предложить своё». «До Нового года» и «до отпуска» в три числа
+                не укладываются, а специалист, которому не дали задать свой
+                срок, доводит остаток руками — ровно то, от чего это действие
+                и избавляет. */}
             <div className="grid grid-cols-4 gap-2 mt-3">
-                {([[1, 'Через неделю'], [4, 'На месяц'], [8, 'На 8 недель'], [12, 'На квартал']] as [number, string][]).map(([weeks, label]) => (
+                {REPEAT_WEEK_PRESETS.map(({ weeks, label }) => (
                     <button key={weeks} type="button" disabled={busy !== null} onClick={() => run(weeks)}
                         className="px-2 py-2 rounded-xl text-[11px] font-bold border border-border text-muted-foreground hover:bg-sage-50 hover:text-forest-700 transition-colors disabled:opacity-50 min-h-[44px]">
                         {busy === weeks ? '...' : label}
                     </button>
                 ))}
             </div>
+            <div className="flex items-center gap-2 mt-2">
+                <label htmlFor={`repeat-weeks-${clientId}`} className="text-[11px] text-muted-foreground shrink-0">
+                    Свой срок
+                </label>
+                <input
+                    id={`repeat-weeks-${clientId}`}
+                    type="number"
+                    min={1}
+                    max={MAX_REPEAT_WEEKS}
+                    inputMode="numeric"
+                    value={ownWeeks}
+                    onChange={(e) => setOwnWeeks(e.target.value)}
+                    placeholder="недель"
+                    className="w-20 px-2 py-2 rounded-xl border border-border bg-background text-sm text-foreground min-h-[44px]"
+                />
+                <button
+                    type="button"
+                    disabled={busy !== null || !ownWeeksValid}
+                    onClick={() => run(Number(ownWeeks))}
+                    className="flex-1 px-2 py-2 rounded-xl text-[11px] font-bold border border-border text-muted-foreground hover:bg-sage-50 hover:text-forest-700 transition-colors disabled:opacity-40 min-h-[44px]"
+                >
+                    {busy !== null && busy === Number(ownWeeks) ? '...' : 'Занять'}
+                </button>
+            </div>
+            {ownWeeks !== '' && !ownWeeksValid && (
+                <p className="text-[11px] text-destructive mt-1 ml-1">
+                    От 1 до {MAX_REPEAT_WEEKS} недель — дальше планировать одним нажатием слишком дорого ошибаться.
+                </p>
+            )}
             {/* Клиенту уходит одно сообщение — про ближайшую встречу. Двенадцать
                 сообщений о занятом квартале ему ни к чему, а про ближайшую он
                 должен знать так же, как при обычной записи. */}

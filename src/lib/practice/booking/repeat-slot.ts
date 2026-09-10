@@ -25,8 +25,8 @@ import { createManualPracticeSession, BookingConflictError } from './booking';
  * видит, какая именно дата выпала и почему.
  */
 
-/** Максимум за один заход. Дальше горизонта планировать смысла нет, а цена ошибки растёт. */
-export const MAX_REPEAT_WEEKS = 12;
+export { MAX_REPEAT_WEEKS, REPEAT_WEEK_PRESETS } from './repeat-slot-limits';
+import { MAX_REPEAT_WEEKS } from './repeat-slot-limits';
 
 export interface RepeatSlotInput {
     psychologistId: string;

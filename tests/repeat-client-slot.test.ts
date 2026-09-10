@@ -136,6 +136,20 @@ describe('повтор часа клиента', () => {
             .rejects.toThrow('connection lost');
     });
 
+    it('свой срок задаётся числом, а не выбором из четырёх кнопок', async () => {
+        // Учредитель: «по неделям нужно более гибко, например, 4, 8, 12,
+        // предложить своё». Кнопки-подсказки не должны быть всем выбором:
+        // «до Нового года» в три числа не укладывается.
+        diarySessionFindFirst.mockResolvedValue(session());
+        const { repeatClientSlot, REPEAT_WEEK_PRESETS, MAX_REPEAT_WEEKS } = await import('@/lib/practice/booking/repeat-slot');
+
+        const own = await repeatClientSlot({ psychologistId: 'psy-1', clientId: 'cl-1', weeks: 17 }, NOW);
+
+        expect(own.booked).toHaveLength(17);
+        expect(REPEAT_WEEK_PRESETS.map(p => p.weeks)).not.toContain(17);
+        expect(MAX_REPEAT_WEEKS).toBeGreaterThanOrEqual(17);
+    });
+
     it('срок ограничен сверху и снизу', async () => {
         diarySessionFindFirst.mockResolvedValue(session());
         const { repeatClientSlot, MAX_REPEAT_WEEKS } = await import('@/lib/practice/booking/repeat-slot');
