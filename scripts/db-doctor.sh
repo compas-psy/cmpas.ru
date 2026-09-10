@@ -746,37 +746,46 @@ echo "--- пустая строка флага = решения не прини�
 # Telegram повторит доставку. Если время постороннее — дело в другом, и
 # тогда это уже повод копать.
 echo "### Вебхук Telegram: когда Telegram не смог до нас достучаться"
+# Спрашиваем ИЗНУТРИ КОНТЕЙНЕРА и той же дорогой, которой ходит бот.
+#
+# Первая попытка этой пробы спрашивала с хоста и ответила «Telegram не
+# ответил» — не потому, что что-то сломано, а потому, что прямой дороги до
+# Telegram с этого сервера нет вовсе (см. пробу ниже: 000 за 15с), а
+# TELEGRAM_PROXY задан для контейнера, а не для хоста. Проба, спрашивающая не
+# тем путём, отвечает про свой путь, а не про предмет вопроса.
 if [ -z "$tg_token" ]; then
   echo "TELEGRAM_BOT_TOKEN в .env не найден — проба невозможна"
 else
-  tg_proxy="$(grep -E '^TELEGRAM_PROXY=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
-  # Токен уходит через stdin: аргументы видны в списке процессов всем на сервере.
-  if [ -n "$tg_proxy" ]; then
-    wh_info=$(printf 'url = "https://api.telegram.org/bot%s/getWebhookInfo"\nproxy = "%s"\n' "$tg_token" "$tg_proxy" | curl -sS -K - --max-time 20 2>/dev/null || true)
-  else
-    wh_info=$(printf 'url = "https://api.telegram.org/bot%s/getWebhookInfo"\n' "$tg_token" | curl -sS -K - --max-time 20 2>/dev/null || true)
-  fi
-
-  if [ -z "$wh_info" ]; then
-    echo "Telegram не ответил — состояние вебхука неизвестно"
-  else
-    printf '%s' "$wh_info" | grep -o '"pending_update_count":[0-9]*' | head -1 || true
-    wh_err=$(printf '%s' "$wh_info" | grep -o '"last_error_message":"[^"]*"' | head -1 | cut -d: -f2- || true)
-    wh_at=$(printf '%s' "$wh_info" | grep -o '"last_error_date":[0-9]*' | head -1 | cut -d: -f2 || true)
-    if [ -z "$wh_at" ]; then
-      echo "неудачных доставок Telegram не помнит"
-    else
-      wh_when=$(date -u -d "@$wh_at" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "$wh_at")
-      wh_age_min=$(( ( $(date -u +%s) - wh_at ) / 60 ))
-      echo "последняя неудачная доставка: $wh_when (${wh_age_min} мин назад)"
-      echo "причина: ${wh_err:-не названа}"
-      # Момент запуска контейнера приложения — с ним и надо сравнивать.
-      app_started=$(docker inspect -f '{{.State.StartedAt}}' cmpas-app 2>/dev/null || true)
-      [ -n "$app_started" ] && echo "текущий контейнер приложения поднят: $app_started"
-    fi
-  fi
+  docker exec -e TG_TOKEN="$tg_token" cmpas-app node -e '
+    const url = `https://api.telegram.org/bot${process.env.TG_TOKEN}/getWebhookInfo`;
+    const ask = async (agent) => {
+      if (agent) {
+        const nf = require("node-fetch");
+        const f = typeof nf === "function" ? nf : (nf.default ?? nf);
+        const { HttpsProxyAgent } = require("https-proxy-agent");
+        return (await f(url, { agent: new HttpsProxyAgent(agent), timeout: 15000 })).json();
+      }
+      return (await fetch(url, { signal: AbortSignal.timeout(15000) })).json();
+    };
+    (async () => {
+      const proxy = process.env.TELEGRAM_PROXY;
+      let info = null;
+      try { info = await ask(proxy || null); } catch (e) { console.log(`Telegram не ответил (${e.name})`); return; }
+      const r = info?.result;
+      if (!r) { console.log("ответ без result — состояние неизвестно"); return; }
+      console.log(`адрес вебхука задан: ${r.url ? "да" : "НЕТ"}`);
+      console.log(`не разобрано обновлений: ${r.pending_update_count ?? "?"}`);
+      if (!r.last_error_date) { console.log("неудачных доставок Telegram не помнит"); return; }
+      const when = new Date(r.last_error_date * 1000);
+      const ageMin = Math.round((Date.now() - when.getTime()) / 60000);
+      console.log(`последняя неудачная доставка: ${when.toISOString()} (${ageMin} мин назад)`);
+      console.log(`причина: ${r.last_error_message ?? "не названа"}`);
+    })();
+  ' 2>&1 | head -6
+  app_started=$(docker inspect -f '{{.State.StartedAt}}' cmpas-app 2>/dev/null || true)
+  [ -n "$app_started" ] && echo "текущий контейнер приложения поднят: $app_started"
 fi
-echo "--- неудача во время пересоздания контейнера = наш краткий простой, Telegram повторит"
+echo "--- неудача в минуты пересоздания контейнера = наш краткий простой, Telegram повторит"
 echo "--- pending_update_count:0 = ничего не потеряно; N>0 = обновления копятся, доставки нет"
 
 echo "### Аватарки: есть ли с ХОСТА ход до Telegram напрямую"
