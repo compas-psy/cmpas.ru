@@ -6,6 +6,7 @@ import { Search, Plus, X, ChevronRight, FileText, Archive, RotateCcw, Trash2, Ca
 import { toast } from 'sonner';
 import { MAX_REPEAT_WEEKS, REPEAT_WEEK_PRESETS } from '@/lib/practice/booking/repeat-slot-limits';
 import { isSortSentinelDate } from '@/lib/clients/next-session-sentinel';
+import { compareByDayThenTime } from '@/lib/practice/session-day';
 import { SessionModal } from '../components/SessionModal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PhoneInput } from '@/components/ui/phone-input';
@@ -39,7 +40,11 @@ type Client = {
 };
 
 type Session = {
-    id: string; date: string; time: string; endTime: string | null;
+    // date приходит из серверного действия объектом Date, а не строкой:
+    // сериализация серверных действий даты сохраняет. Тип, обещавший строку,
+    // спрятал падение `date.localeCompare is not a function` — см.
+    // src/lib/practice/session-day.ts.
+    id: string; date: string | Date; time: string; endTime: string | null;
     duration: number; type: string; format: string; status: string; notes: string | null;
     structuredNotes?: any; privateNotes?: any; clientSummary?: string | null;
 };
@@ -243,8 +248,14 @@ export default function ClientsPage() {
     const clientInitials = (c: Client) => (clientName(c) || '?').slice(0, 2).toUpperCase();
 
     const now = new Date();
-    const futureSessions = selectedClient?.sessions?.filter(s => new Date(s.date) >= now && s.status !== 'cancelled') || [];
-    const pastSessions = selectedClient?.sessions?.filter(s => new Date(s.date) < now || s.status === 'completed') || [];
+    // Порядок задаётся здесь, а не наследуется от запроса: getClient отдаёт
+    // встречи от новых к старым, и «предстоящие» из-за этого читались задом
+    // наперёд — ближайшая оказывалась последней в списке. Для будущего
+    // естественный порядок обратный прошлому: сначала то, что скоро.
+    const futureSessions = (selectedClient?.sessions?.filter(s => new Date(s.date) >= now && s.status !== 'cancelled') || [])
+        .sort(compareByDayThenTime);
+    const pastSessions = (selectedClient?.sessions?.filter(s => new Date(s.date) < now || s.status === 'completed') || [])
+        .sort((a, b) => compareByDayThenTime(b, a));
     const sessionsWithNotes = selectedClient?.sessions?.filter(s => s.notes) || [];
 
     // Alphabet index
@@ -978,8 +989,8 @@ function RepeatSlotPanel({ sessions, clientId, onDone }: { sessions: Session[]; 
         const now = new Date();
         const future = alive
             .filter(s => new Date(s.date) >= new Date(now.getFullYear(), now.getMonth(), now.getDate()))
-            .sort((a, b) => a.date.localeCompare(b.date))[0];
-        return future || [...alive].sort((a, b) => b.date.localeCompare(a.date))[0];
+            .sort((a, b) => compareByDayThenTime(a, b))[0];
+        return future || [...alive].sort((a, b) => compareByDayThenTime(b, a))[0];
     })();
 
     if (!reference) return null;

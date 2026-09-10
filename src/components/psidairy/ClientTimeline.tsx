@@ -13,7 +13,11 @@ import { getDefinitionById, SmartBlock } from '@/lib/smart-notes/config';
 
 type TimelineSession = {
     id: string;
-    date: string;
+    // Строка ИЛИ Date: серверное действие отдаёт то, что пришло из базы, а там
+    // это Date — сериализация серверных действий даты сохраняет. Тип,
+    // обещавший строку, однажды уже спрятал падение (session-day.ts). Здесь
+    // дата всюду проходит через new Date(), поэтому оба вида законны.
+    date: string | Date;
     time: string;
     endTime: string | null;
     duration: number;

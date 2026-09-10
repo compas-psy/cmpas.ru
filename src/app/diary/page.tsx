@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
+import { compareByDayThenTime } from '@/lib/practice/session-day';
 import { RescheduleModal } from './components/RescheduleModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
 import { ShareButton, notifyBookingLinkShared } from '@/components/psidairy/ShareSheet';
@@ -317,7 +318,7 @@ export default function DiaryCalendarPage() {
         const todayStr = toLocalStr(now);
         return sessions
             .filter(s => s.status !== 'cancelled' && s.status !== 'completed' && toLocalStr(new Date(s.date)) > todayStr)
-            .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0] || null;
+            .sort((a, b) => compareByDayThenTime(a, b))[0] || null;
     }, [todaySessions, currentTimeStr, sessions, now]);
 
     // no_show считается "пройденной" наравне с completed для прогресса дня —
@@ -516,7 +517,7 @@ export default function DiaryCalendarPage() {
                         const nextSessionDate = new Date(nextSession.date).toISOString();
                         const lastCompletedSession = sessions
                             .filter(s => s.clientId === nextSession.clientId && s.id !== nextSession.id && s.date < nextSessionDate && (s.structuredNotes || s.notes || s.clientSummary || s.privateNotes))
-                            .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))[0];
+                            .sort((a, b) => compareByDayThenTime(b, a))[0];
                         
                         // Build summary from structured notes blocks
                         const buildSummaryFromBlocks = (session: typeof lastCompletedSession) => {

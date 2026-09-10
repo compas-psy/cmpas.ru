@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SessionModal } from '../components/SessionModal';
+import { compareByDayThenTime } from '@/lib/practice/session-day';
 import { RescheduleModal } from '../components/RescheduleModal';
 
 type Session = {
@@ -568,7 +569,7 @@ export default function DiaryCalendarView() {
                         const monthSessions = sessions.filter(s => {
                             const d = new Date(s.date);
                             return d.getMonth() === month && d.getFullYear() === year;
-                        }).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+                        }).sort((a, b) => compareByDayThenTime(a, b));
 
                         const grouped: { date: Date; sessions: Session[] }[] = [];
                         monthSessions.forEach(s => {
