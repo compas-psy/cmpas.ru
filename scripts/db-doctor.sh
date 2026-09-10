@@ -574,6 +574,14 @@ echo "### Аватарки: на что жаловался маршрут за 2
 docker logs -t cmpas-app --since 24h 2>&1 | grep -F '[avatar]' | tail -20
 echo "--- пусто = маршрут не жаловался (или ещё ни разу не спрашивали)"
 
+# Идентификатор и ключ нужны ОБЕИМ пробам ниже, поэтому берутся здесь, до
+# первой из них. Раньше они брались только перед второй — а первая читала их
+# заранее и роняла весь доктор строкой «tg_uid: unbound variable», потому что
+# скрипт идёт с set -u. Из-за этого проба, ради которой всё и затевалось, не
+# выполнилась ни разу.
+tg_uid="$(q "SELECT \"telegramChatId\" FROM \"DiaryClient\" WHERE \"telegramChatId\" IS NOT NULL ORDER BY \"updatedAt\" DESC LIMIT 1;" 2>/dev/null | tr -d ' \r\n')"
+tg_token="$(grep -E '^TELEGRAM_BOT_TOKEN=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+
 # ВАЖНО: спрашивать надо у самого контейнера, а не у хоста.
 #
 # Первая проба этой правки мерила ход с ХОСТА и показала «дороги нет».
@@ -620,6 +628,72 @@ else
   echo "нет привязанного клиента или ключа бота — пробовать нечего"
 fi
 
+# Отчёт 09.09.2026 показал у ОБОИХ привязанных к MAX клиентов «max_no_dialog».
+# Это может значить две разные вещи, и на экране они одинаковы: либо у бота
+# правда нет диалога с этим человеком, либо MAX не отдаёт список чатов и код
+# ищет в пустоте. Проба различает их, спрашивая ровно то же, что спрашивает
+# маршрут: сколько чатов вернулось и есть ли среди них диалог с этим
+# человеком. MAX ходит НАПРЯМУЮ — через сайдкар его гонять запрещено
+# решением учредителя.
+#
+# В вывод идут только числа: ни идентификатора человека, ни ключа бота.
+echo "### Аватарки: отдаёт ли MAX список чатов бота"
+max_uid="$(q "SELECT \"maxChatId\" FROM \"DiaryClient\" WHERE \"maxChatId\" IS NOT NULL ORDER BY \"updatedAt\" DESC LIMIT 1;" 2>/dev/null | tr -d ' \r\n')"
+max_token="$(grep -E '^MAX_BOT_TOKEN=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+if [ -z "$max_uid" ] || [ -z "$max_token" ]; then
+  echo "нет привязанного к MAX клиента или ключа бота — пробовать нечего"
+else
+  docker exec -e MAX_TOKEN="$max_token" -e MAX_UID="$max_uid" cmpas-app node -e '
+    const wanted = String(process.env.MAX_UID).replace(/^max_/, "");
+    const root = "https://platform-api2.max.ru";
+    const head = { Authorization: process.env.MAX_TOKEN };
+    const ask = (path) => fetch(`${root}${path}`, { headers: head, signal: AbortSignal.timeout(12000) });
+
+    // Форма ответа печатается КЛЮЧАМИ, без значений: «чатов 0» одинаково
+    // выглядит и когда их правда нет, и когда список лежит под другим
+    // именем, чем ждёт разбор. Ключи это различают и ничего не выдают.
+    const shape = (v) => Array.isArray(v) ? `массив(${v.length})` : (v && typeof v === "object" ? `объект{${Object.keys(v).join(",")}}` : typeof v);
+
+    (async () => {
+      try {
+        const me = await ask("/me");
+        console.log(`/me -> HTTP ${me.status}` + (me.ok ? " (ключ бота принят)" : " (ключ бота НЕ принят)"));
+      } catch (e) { console.log(`/me -> НЕТ ХОДА (${e.name})`); }
+
+      try {
+        const res = await ask("/chats?count=100");
+        if (!res.ok) { console.log(`/chats -> HTTP ${res.status}: список не отдан`); }
+        else {
+          const body = await res.json();
+          console.log(`/chats -> HTTP 200, тело: ${shape(body)}`);
+          const chats = body?.chats ?? [];
+          const dialogs = chats.filter((c) => c?.type === "dialog");
+          const types = [...new Set(chats.map((c) => c?.type ?? "(без типа)"))].join(",") || "(нет)";
+          console.log(`  чатов ${chats.length}, типы: ${types}, диалогов ${dialogs.length}`);
+          console.log(`  диалог с искомым: ${dialogs.some((c) => String(c?.dialog_with_user?.user_id ?? "") === wanted) ? "НАЙДЕН" : "нет"}`);
+          console.log(`  ещё страницы: ${body?.marker ? "есть" : "нет"}`);
+        }
+      } catch (e) { console.log(`/chats -> НЕТ ХОДА (${e.name})`); }
+
+      // А нужен ли вообще поиск диалога. Если MAX принимает user_id прямо в
+      // /chats/{id}, то листать список незачем — и вся ветка max-user лишняя.
+      try {
+        const res = await ask(`/chats/${wanted}`);
+        console.log(`/chats/<user_id> -> HTTP ${res.status}`);
+        if (res.ok) {
+          const body = await res.json();
+          console.log(`  тело: ${shape(body)}`);
+          console.log(`  аватарка в dialog_with_user: ${body?.dialog_with_user?.avatar_url ? "ЕСТЬ" : "нет"}`);
+        }
+      } catch (e) { console.log(`/chats/<user_id> -> НЕТ ХОДА (${e.name})`); }
+    })();
+  ' 2>&1 | head -12
+  echo "--- /me не 200 = ключ бота негоден, всё остальное ниже бессмысленно"
+  echo "--- чатов 0 при HTTP 200 и верном ключе = боту в MAX никто не писал"
+  echo "--- тело не объект{chats,marker} = MAX отвечает иначе, чем ждёт разбор, чинить код"
+  echo "--- /chats/<user_id> отдал аватарку = поиск диалога не нужен вовсе, упростить"
+fi
+
 echo "### Аватарки: какую дорогу выберет код (флаг telegram_vpn_proxy)"
 # Код идёт через сайдкар ТОЛЬКО когда флаг включён И проба через него прошла.
 # Строки нет — действует значение по умолчанию: включён, если задан
@@ -641,8 +715,6 @@ echo "--- код 200/404 = ход есть; 000/таймаут = напряму�
 echo "### Аватарки: отдаёт ли Telegram фотографию живого клиента"
 # Берём ОДИН привязанный идентификатор и спрашиваем у Telegram только число
 # фотографий. Ни идентификатор, ни имя, ни сама фотография в вывод не идут.
-tg_uid="$(q "SELECT \"telegramChatId\" FROM \"DiaryClient\" WHERE \"telegramChatId\" IS NOT NULL ORDER BY \"updatedAt\" DESC LIMIT 1;" 2>/dev/null | tr -d ' \r\n')"
-tg_token="$(grep -E '^TELEGRAM_BOT_TOKEN=' /var/www/cmpas.ru/.env 2>/dev/null | head -1 | cut -d= -f2-)"
 if [ -z "$tg_uid" ]; then
   echo "привязанных к Telegram клиентов нет — проверять нечего (причина 1)"
 elif [ -z "$tg_token" ]; then

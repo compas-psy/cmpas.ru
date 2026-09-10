@@ -479,22 +479,54 @@ fi
 # нарочно копирует только .next/standalone и пару отдельных .js-скриптов
 # (см. verify-production-schema.js выше). У infra-pulse — ровно то, что
 # нужно: та же стадия `builder`, тот же полный `npm install` со всеми
-# devDependencies (tsx в их числе) и `COPY . .` — и этот образ уже собран
-# несколькими строками выше вместе с app, пересобирать не нужно. DATABASE_URL
+# devDependencies и `COPY . .` — и этот образ уже собран несколькими
+# строками выше вместе с app, пересобирать не нужно. DATABASE_URL
 # у infra-pulse по умолчанию — read-only роль infra_pulse_reader, поэтому
 # здесь он переопределяется на обычного пользователя приложения из .env, у
 # которого есть право писать в Subscription.
 #
 # Ошибка НЕ валит выкладку: это дозаполнение истории, а не условие
 # работоспособности приложения — сайт уже поднят и здоров к этому моменту.
+#
+# ЭТО ОБЕЩАНИЕ ДЕРЖАЛОСЬ ТОЛЬКО НА ПОЛОВИНУ, И ВТОРАЯ ПОЛОВИНА ОДНАЖДЫ
+# УРОНИЛА ВЫКЛАДКУ. `if ! ...` ловит ненулевой код возврата — то есть шаг,
+# который ОТВЕТИЛ отказом. Шаг, который не ответил вовсе, не ловился ничем.
+# 09.09.2026 контейнер дозаполнения создался и замолчал; через 42 минуты
+# выкладку убил предел SSH-шага в 45 минут. Приложение к тому моменту было
+# уже выложено и здорово («New application is healthy», auth 200), но
+# прогон значился упавшим, а хвост скрипта — регистрация вебхука Telegram —
+# не выполнился вовсе, потому что до него не дошли.
+#
+# Отсюда предел по времени. Пять минут — с огромным запасом: проход идёт по
+# всей истории Payment/User разом и занимает секунды. Всё, что дольше, — это
+# не «долго считает», а «не отвечает», и ждать этого незачем.
+#
+# Каждый исходящий вызов в этом скрипте уже ограничен по времени (curl
+# --max-time у health-check и setWebhook); здесь такого ограничения не было
+# просто потому, что это не curl.
 log 'Running Subscription backfill (idempotent, scripts/backfill-subscriptions.ts).'
 app_database_url=$(grep '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- || true)
+# Имя контейнеру дано нарочно. `--rm` убирает контейнер, когда команда
+# ЗАВЕРШИЛАСЬ; убитый по таймауту `docker compose run` этого сделать не
+# успевает, и висящий контейнер остаётся держать соединение с базой до
+# следующего человека, который о нём узнает. С постоянным именем его можно
+# снести здесь же, не разбирая список контейнеров.
+backfill_container='cmpas-backfill-subscriptions'
+docker rm -f "$backfill_container" >/dev/null 2>&1 || true
 # --profile infra-pulse: тот же явный флаг, что у build/up этого сервиса
 # выше — сервис спрятан за профилем в docker-compose.yml, и `run` его тоже
 # не видит без этого флага.
-if ! docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL="$app_database_url" infra-pulse \
-    npx tsx scripts/backfill-subscriptions.ts; then
-  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL=... infra-pulse npx tsx scripts/backfill-subscriptions.ts).'
+backfill_status=0
+timeout --kill-after=30s 5m \
+  docker compose --profile infra-pulse run --rm --no-deps \
+    --name "$backfill_container" -e DATABASE_URL="$app_database_url" infra-pulse \
+    npx --no-install tsx scripts/backfill-subscriptions.ts || backfill_status=$?
+if [ "$backfill_status" -eq 124 ] || [ "$backfill_status" -eq 137 ]; then
+  # 124 — timeout прервал по сроку, 137 — пришлось добивать сигналом KILL.
+  log 'WARNING: Subscription backfill timed out after 5m and was stopped; this only fills historical data and must not block the deploy.'
+  docker rm -f "$backfill_container" >/dev/null 2>&1 || true
+elif [ "$backfill_status" -ne 0 ]; then
+  log 'WARNING: Subscription backfill failed; this only fills historical data and must not block the deploy (retry manually: docker compose --profile infra-pulse run --rm --no-deps -e DATABASE_URL=... infra-pulse npx --no-install tsx scripts/backfill-subscriptions.ts).'
 fi
 
 tg_token=$(grep '^TELEGRAM_BOT_TOKEN=' .env 2>/dev/null | cut -d= -f2- || true)

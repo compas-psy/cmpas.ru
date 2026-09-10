@@ -18,6 +18,7 @@ import {
     safeImageContentType,
     downloadImage,
     fetchTelegramAvatar,
+    tryTelegramAvatar,
     fetchMaxAvatar,
     MAX_AVATAR_BYTES,
     MESSENGER_TIMEOUT_MS,
@@ -132,9 +133,57 @@ describe('Telegram', () => {
         expect(calls.some(u => u.includes('file_id=big'))).toBe(false);
     });
 
-    it('человек закрыл фото — это норма, а не ошибка', async () => {
-        const fetcher = vi.fn(async () => json({ result: { total_count: 0, photos: [] } }));
-        expect(await fetchTelegramAvatar('12345', TELEGRAM, fetcher as never)).toBeNull();
+    /**
+     * «Фотографий 0» — это не то же самое, что «фотографии нет».
+     *
+     * Учредитель показал карточку клиента с живой фотографией в Telegram, а
+     * журнал на том же клиенте писал tg_no_photos: getUserProfilePhotos
+     * вернул пусто. Значит ответ означал «этому боту не показали».
+     *
+     * getChat — другая ручка: она отдаёт сам чат, и фотография лежит там
+     * отдельным полем. Спрашивается только при пустом первом ответе.
+     */
+    it('пусто у getUserProfilePhotos — спрашиваем getChat', async () => {
+        const calls: string[] = [];
+        const fetcher = vi.fn(async (url: string) => {
+            calls.push(url);
+            if (url.includes('getUserProfilePhotos')) return json({ result: { total_count: 0, photos: [] } });
+            if (url.includes('getChat')) return json({ result: { photo: { small_file_id: 'chat-small', big_file_id: 'chat-big' } } });
+            if (url.includes('getFile')) return json({ result: { file_path: 'photos/file_1.jpg' } });
+            return png();
+        });
+
+        const image = await fetchTelegramAvatar('12345', TELEGRAM, fetcher as never);
+        expect(image?.contentType).toBe('image/png');
+        // Мелкий размер и здесь: кружок маленький.
+        expect(calls.some(u => u.includes('file_id=chat-small'))).toBe(true);
+        expect(calls.some(u => u.includes('file_id=chat-big'))).toBe(false);
+    });
+
+    it('первая дорога сработала — второй запрос не делается', async () => {
+        const calls: string[] = [];
+        const fetcher = vi.fn(async (url: string) => {
+            calls.push(url);
+            if (url.includes('getUserProfilePhotos')) return json({ result: { photos: [[{ file_id: 'f', width: 160 }]] } });
+            if (url.includes('getFile')) return json({ result: { file_path: 'photos/file_1.jpg' } });
+            return png();
+        });
+
+        expect(await fetchTelegramAvatar('12345', TELEGRAM, fetcher as never)).not.toBeNull();
+        // Лишний поход к чужому сервису в удачном случае — это чужой предел
+        // на бота, тот же, которым уходят уведомления.
+        expect(calls.some(u => u.includes('getChat'))).toBe(false);
+    });
+
+    it('пусто у обеих дорог — тогда фотографии правда нет', async () => {
+        const fetcher = vi.fn(async (url: string) => {
+            if (url.includes('getUserProfilePhotos')) return json({ result: { total_count: 0, photos: [] } });
+            if (url.includes('getChat')) return json({ result: { id: 12345 } });
+            return png();
+        });
+        const attempt = await tryTelegramAvatar('12345', TELEGRAM, fetcher as never);
+        expect(attempt.image).toBeNull();
+        expect(attempt.miss).toBe('tg_no_photos');
     });
 
     it('телега ответила не тем — молчим, а не падаем', async () => {
