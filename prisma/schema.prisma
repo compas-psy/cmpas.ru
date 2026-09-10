@@ -14,6 +14,13 @@ datasource db {
 model User {
   id                    String                @id @default(cuid())
   name                  String?
+  /// Уникальность держится ДВУМЯ вещами. Этот индекс — посимвольный, а рядом
+  /// стоит функциональный по lower(email): миграция
+  /// 20260910120000_user_email_lower_unique. Функциональный индекс в схеме
+  /// Prisma не выражается и живёт только в миграции — не сносите его как
+  /// незнакомый. Зачем он: `Ivan@ya.ru` и `ivan@ya.ru` — один человек, и
+  /// вторая учётная запись означала бы для него пустую практику вместо своей
+  /// (src/lib/auth/email-identity.ts).
   email                 String                @unique
   emailVerified         DateTime?
   image                 String?
