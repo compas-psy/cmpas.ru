@@ -533,38 +533,43 @@ private fun ScheduleRow(
             // только несостоявшейся.
             //
             // Отсюда три состояния вместо одного нагромождения.
+            //
+            // Подписи — в одно слово там, где смысл от этого не страдает.
+            // «Записать снова» не помещалось в карточку ни при каком кегле
+            // (учредитель увидел «Запис…»), а «Записать» помещается и значит
+            // ровно то же: карточка уже говорит, о ком и о какой встрече речь.
+            // Ряды собирает FittingActionRow — если подпись всё же не влезет,
+            // кнопка уедет на второй ряд, а не обрежется.
             if (canRecordOutcome) {
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton(
-                        text = if (isUpdatingOutcome) "Отмечаем…" else "Была",
-                        modifier = Modifier.weight(1f),
-                        enabled = !isUpdatingOutcome,
-                        compact = true,
-                        onClick = onComplete,
-                    )
-                    // Безличная форма, как и в SessionHero: гадать пол
-                    // клиента ради грамматики здесь ни к чему.
-                    GhostButton(
-                        text = "Не пришли",
-                        modifier = Modifier.weight(1f),
-                        enabled = !isUpdatingOutcome,
-                        compact = true,
-                        onClick = onNoShow,
-                    )
-                }
+                FittingActionRow(
+                    compact = true,
+                    enabled = !isUpdatingOutcome,
+                    actions = listOf(
+                        RowAction(if (isUpdatingOutcome) "Отмечаем…" else "Была", onComplete, primary = true),
+                        // Безличная форма, как и в SessionHero: гадать пол
+                        // клиента ради грамматики здесь ни к чему.
+                        RowAction("Не пришли", onNoShow),
+                    ),
+                )
             } else if (passed && outcomeNamed) {
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostButton(text = "Заметка", modifier = Modifier.weight(1f), compact = true, onClick = onNote)
-                    PrimaryButton(text = "Записать снова", modifier = Modifier.weight(1f), compact = true, onClick = onRebook)
-                }
+                FittingActionRow(
+                    compact = true,
+                    actions = listOf(
+                        RowAction("Заметка", onNote),
+                        RowAction("Записать", onRebook, primary = true),
+                    ),
+                )
             } else if (s.status == SessionStatus.NO_SHOW) {
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostButton(text = "Причина", modifier = Modifier.weight(1f), compact = true, onClick = onReason)
-                    PrimaryButton(text = "Перенести", modifier = Modifier.weight(1f), compact = true, onClick = onReschedule)
-                }
+                FittingActionRow(
+                    compact = true,
+                    actions = listOf(
+                        RowAction("Причина", onReason),
+                        RowAction("Перенести", onReschedule, primary = true),
+                    ),
+                )
             }
 
             // ОПЛАТА — НЕ БЛОКЕР И НЕ РАВНАЯ КНОПКА.

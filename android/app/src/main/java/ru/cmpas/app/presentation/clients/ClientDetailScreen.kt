@@ -273,37 +273,30 @@ fun ClientDetailScreen(
         }
 
         if (client != null) {
-            Row(
+            Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                     .background(CompasBg.copy(alpha = 0.94f)).navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                PrimaryButton(
-                    text = "Записать сессию",
-                    icon = Icons.Outlined.CalendarMonth,
-                    onClick = { onScheduleClick(clientId) },
-                    modifier = Modifier.weight(1f),
-                )
+                // «Записать сессию» с иконкой занимает около 190 точек — в
+                // половину узкого экрана это не помещается. Ряд собирается по
+                // настоящей ширине: на широком экране обе кнопки рядом, на
+                // узком — одна под другой, и подпись цела в обоих случаях.
+                //
                 // Второе действие зависит от того, есть ли с клиентом связь.
                 // Спрашиваем сервер (hasMessenger), а не гадаем по телефону
                 // или почте: «Написать» непривязанному клиенту — это кнопка,
                 // которой некуда писать.
-                if (bound) {
-                    GhostButton(
-                        text = "Написать",
-                        icon = Icons.Outlined.Send,
-                        onClick = { sheet = ClientSheet.MESSAGE },
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    GhostButton(
-                        text = "Пригласить",
-                        icon = Icons.Outlined.PersonAdd,
-                        onClick = { inviteChannel = "auto"; sheet = ClientSheet.INVITE },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                FittingActionRow(
+                    actions = listOf(
+                        RowAction("Записать сессию", { onScheduleClick(clientId) }, icon = Icons.Outlined.CalendarMonth, primary = true),
+                        if (bound) {
+                            RowAction("Написать", { sheet = ClientSheet.MESSAGE }, icon = Icons.Outlined.Send)
+                        } else {
+                            RowAction("Пригласить", { inviteChannel = "auto"; sheet = ClientSheet.INVITE }, icon = Icons.Outlined.PersonAdd)
+                        },
+                    ),
+                )
             }
         }
 

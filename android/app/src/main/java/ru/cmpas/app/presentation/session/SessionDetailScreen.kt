@@ -392,34 +392,28 @@ private fun SessionHero(
         }
         if (canRecordOutcome) {
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton(
-                    text = "Была",
-                    icon = Icons.Outlined.CheckCircle,
-                    modifier = Modifier.weight(1f),
-                    enabled = !isActionLoading,
-                    onClick = onComplete,
-                )
-                // "Не пришли" — намеренно безличная форма (как и уже
-                // существующее "Перенесли" рядом), а не "Не пришёл/Не
-                // пришла": в кодовой базе нигде больше не выбирают текст по
-                // ClientDetail.gender, и гадать пол клиента ради грамматики
-                // рискованнее, чем один раз обойти её.
-                GhostButton(
-                    text = "Не пришли",
-                    icon = Icons.Outlined.PersonOff,
-                    modifier = Modifier.weight(1f),
-                    enabled = !isActionLoading,
-                    onClick = onNoShow,
-                )
-                GhostButton(
-                    text = "Перенесли",
-                    icon = Icons.Outlined.Schedule,
-                    modifier = Modifier.weight(1f),
-                    enabled = !isActionLoading,
-                    onClick = onReschedule,
-                )
-            }
+            // Три подписи с иконками в один ряд не помещались никогда: иконка
+            // и поля съедают шестьдесят две точки на кнопку, и учредитель
+            // увидел «Б… Не… Пе…». Отсюда компактный вид — он снимает иконки
+            // и широкие поля, — и сборка ряда по настоящей ширине: на узком
+            // экране «Перенесли» уезжает вниз, а не обрезается.
+            //
+            // Иконки здесь и не нужны: три подписи отвечают на один вопрос, и
+            // различает их слово, а не картинка рядом с ним.
+            FittingActionRow(
+                compact = true,
+                enabled = !isActionLoading,
+                actions = listOf(
+                    RowAction("Была", onComplete, primary = true),
+                    // "Не пришли" — намеренно безличная форма (как и уже
+                    // существующее "Перенесли" рядом), а не "Не пришёл/Не
+                    // пришла": в кодовой базе нигде больше не выбирают текст по
+                    // ClientDetail.gender, и гадать пол клиента ради грамматики
+                    // рискованнее, чем один раз обойти её.
+                    RowAction("Не пришли", onNoShow),
+                    RowAction("Перенесли", onReschedule),
+                ),
+            )
         }
         if (session.status == SessionStatus.PENDING) {
             Spacer(Modifier.height(10.dp))
