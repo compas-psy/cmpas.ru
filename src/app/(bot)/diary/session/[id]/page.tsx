@@ -1,100 +1,244 @@
-import { SmartEditor } from "@/components/diary/notes/SmartEditor";
+'use client';
 
-export default function SessionModePage({ params }: { params: { id: string } }) {
-    // Mock data for the layout structure
-    const clientName = "Алексей Смирнов";
-    const timer = "42:15";
+/**
+ * СТРАНИЦА ОДНОЙ ВСТРЕЧИ В ВЕБЕ.
+ *
+ * До 10.09.2026 по этому адресу лежала раскладка-заглушка: выдуманный «Алексей
+ * Смирнов», таймер 42:15, анамнез «32 года, работает в IT», домашнее задание
+ * «Дневник СМЭР». Ничего из этого не существовало — но адрес был настоящий, и
+ * пункт «оплата не отмечена» из «требует внимания» вёл ровно сюда
+ * (attentionHref, src/app/diary/page.tsx). Специалист нажимал на свою
+ * неоплаченную встречу и попадал в чужую придуманную жизнь.
+ *
+ * Теперь страница показывает настоящую встречу и предлагает ровно те действия,
+ * которые с ней ещё можно сделать. Правило одно с приложением и лежит в
+ * src/lib/practice/session-actions.ts — экран встречи в вебе и в телефоне
+ * обязан отвечать одинаково.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { format as formatDate } from 'date-fns';
+import { ru } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { ArrowLeft, Video, MapPin, Clock } from 'lucide-react';
+import { RescheduleModal } from '@/app/diary/components/RescheduleModal';
+import { paymentActionLabel, sessionActions, type SessionActionKind } from '@/lib/practice/session-actions';
+
+type SessionCard = Awaited<ReturnType<typeof import('@/app/diary/actions/session-view')['getSessionCard']>>;
+
+const STATUS_LABEL: Record<string, string> = {
+    pending: 'Ждём подтверждения клиента',
+    confirmed: 'Подтверждена',
+    completed: 'Прошла',
+    no_show: 'Клиент не пришёл',
+    cancelled: 'Отменена',
+};
+
+export default function SessionPage() {
+    const params = useParams();
+    const router = useRouter();
+    const sessionId = params.id as string;
+
+    const [session, setSession] = useState<SessionCard>(null);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+    const [showReschedule, setShowReschedule] = useState(false);
+
+    const load = useCallback(async () => {
+        const { getSessionCard } = await import('@/app/diary/actions/session-view');
+        setSession(await getSessionCard(sessionId));
+        setLoading(false);
+    }, [sessionId]);
+
+    useEffect(() => { void load(); }, [load]);
+
+    if (loading) {
+        return <div className="p-6 text-sm text-muted-foreground">Загружаем встречу…</div>;
+    }
+
+    if (!session) {
+        return (
+            <div className="p-6 max-w-md mx-auto space-y-4">
+                <p className="text-sm text-muted-foreground">Такой встречи нет — возможно, она удалена.</p>
+                <button onClick={() => router.push('/diary')} className="text-sm font-semibold text-forest-700">
+                    К расписанию
+                </button>
+            </div>
+        );
+    }
+
+    const date = new Date(session.date);
+    const online = session.format !== 'offline';
+    // Исход назван человеком — не выведен из статуса: сервер сам ставит
+    // completed через 15 минут после конца встречи.
+    const outcomeNamed = Boolean(session.outcomeRecordedAt);
+    const canAskOutcome = !outcomeNamed
+        && session.status !== 'cancelled'
+        && date.getTime() <= new Date().setHours(23, 59, 59, 999);
+    const actions = sessionActions(
+        { status: session.status, outcomeRecordedAt: session.outcomeRecordedAt, date, format: session.format },
+    );
+    const payment = paymentActionLabel(session.paymentStatus);
+
+    async function run(work: () => Promise<unknown>, done: string) {
+        setBusy(true);
+        try {
+            await work();
+            await load();
+            toast.success(done);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Не получилось');
+        }
+        setBusy(false);
+    }
+
+    const markOutcome = (outcome: 'completed' | 'no_show') => run(async () => {
+        const { markSessionOutcome } = await import('@/app/diary/actions/sessions');
+        await markSessionOutcome(sessionId, outcome);
+    }, outcome === 'completed' ? 'Отмечено: встреча была' : 'Отмечено: клиент не пришёл');
+
+    const markPaid = () => run(async () => {
+        const response = await fetch(`/api/diary/sessions/${sessionId}/payment`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentStatus: 'paid' }),
+        });
+        if (!response.ok) throw new Error('Не удалось отметить оплату');
+    }, 'Оплата отмечена');
+
+    const cancel = () => {
+        if (!confirm('Отменить эту встречу? Клиент получит уведомление.')) return;
+        void run(async () => {
+            const { updateSession } = await import('@/app/diary/actions/sessions');
+            await updateSession(sessionId, { status: 'cancelled' });
+        }, 'Встреча отменена');
+    };
+
+    const ACTION: Record<SessionActionKind, { label: string; onClick: () => void; primary?: boolean; danger?: boolean; enabled?: boolean }> = {
+        connect: {
+            label: 'Подключиться',
+            primary: true,
+            enabled: Boolean(session.onlineLink),
+            onClick: () => { if (session.onlineLink) window.open(session.onlineLink, '_blank', 'noopener'); },
+        },
+        rebook: {
+            label: 'Записать снова',
+            primary: true,
+            onClick: () => router.push(`/diary/clients?clientId=${session.clientId}`),
+        },
+        note: { label: 'Заметка', onClick: () => router.push(`/diary/session/${sessionId}/notes`) },
+        message: { label: 'Написать', onClick: () => router.push(`/diary/clients?clientId=${session.clientId}`) },
+        payment: { label: payment.label, enabled: payment.enabled, onClick: markPaid },
+        reschedule: { label: 'Перенести', onClick: () => setShowReschedule(true) },
+        cancel: { label: 'Отменить', danger: true, onClick: cancel },
+    };
 
     return (
-        <div className="flex flex-col h-screen bg-[#F9FAFB] text-gray-900 overflow-hidden">
-            {/* Session Header */}
-            <header className="flex-none h-16 border-b border-gray-200 bg-white flex items-center justify-between px-6 shadow-sm z-10">
-                <div className="flex items-center gap-4">
-                    <button className="text-gray-400 hover:text-gray-700 transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-                    </button>
+        <div className="min-h-screen bg-background">
+            <div className="max-w-lg mx-auto p-4 space-y-4">
+                <button
+                    onClick={() => router.push('/diary')}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-forest-700 transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4" /> К расписанию
+                </button>
+
+                <section className="bg-white rounded-2xl border border-border p-5 space-y-4 shadow-sm">
                     <div>
-                        <h1 className="font-semibold text-lg leading-tight">{clientName}</h1>
-                        <p className="text-xs text-gray-500 font-medium">Текущая сессия (Онлайн)</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                    {/* Active Therapy Goal */}
-                    <div className="hidden md:flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
-                        <span className="text-xs font-semibold">Запрос: Снижение тревоги</span>
+                        <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                            {formatDate(date, 'd MMMM yyyy, EEEE', { locale: ru })}
+                        </p>
+                        <p className="text-3xl font-semibold text-forest-900 mt-1 tabular-nums">
+                            {session.time}
+                            {session.endTime && <span className="text-base text-muted-foreground font-normal"> — {session.endTime}</span>}
+                        </p>
                     </div>
 
-                    <div className="font-mono text-xl text-red-500 font-bold bg-red-50 px-3 py-1 rounded-md">
-                        {timer}
-                    </div>
-                    <button className="bg-gray-900 text-white hover:bg-gray-800 transition-colors px-4 py-2 rounded-xl text-sm font-medium shadow-sm">
-                        Завершить сессию
+                    <button
+                        onClick={() => router.push(`/diary/clients?clientId=${session.clientId}`)}
+                        className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl bg-sage-50 border border-border hover:border-forest-700/30 transition-colors"
+                    >
+                        <span className="font-semibold text-forest-900">{session.clientName}</span>
+                        <span className="text-xs text-muted-foreground">карточка клиента</span>
                     </button>
-                </div>
-            </header>
 
-            {/* Split View */}
-            <main className="flex-1 flex overflow-hidden">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            {online ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                            {online ? 'Онлайн-консультация' : 'Очная встреча'}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <Clock className="w-4 h-4" />
+                            {STATUS_LABEL[session.status] ?? session.status}
+                        </span>
+                    </div>
 
-                {/* Left: Editor (Active Work Area) */}
-                <section className="flex-1 max-w-3xl p-6 overflow-y-auto">
-                    <SmartEditor />
+                    {/* Отметка исхода — тот же вопрос и в том же виде, что в
+                        приложении: пока не отвечен, спрашиваем; отвечен —
+                        показываем ответ, а не предлагаем его снова. */}
+                    {canAskOutcome ? (
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                            <button
+                                disabled={busy}
+                                onClick={() => void markOutcome('completed')}
+                                className="py-2.5 rounded-xl bg-forest-700 text-white font-semibold text-sm disabled:opacity-60"
+                            >
+                                Была
+                            </button>
+                            <button
+                                disabled={busy}
+                                onClick={() => void markOutcome('no_show')}
+                                className="py-2.5 rounded-xl border border-border font-semibold text-sm text-forest-900 disabled:opacity-60"
+                            >
+                                Не пришли
+                            </button>
+                        </div>
+                    ) : outcomeNamed ? (
+                        <p className="text-sm text-forest-700 font-medium">
+                            {session.status === 'no_show' ? 'Отмечено: клиент не пришёл' : 'Отмечено: встреча была'}
+                        </p>
+                    ) : null}
                 </section>
 
-                {/* Right: Client Context (Read-only / Handoff) */}
-                <aside className="w-[400px] border-l border-gray-200 bg-white hidden lg:flex flex-col">
-                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Контекст клиента</h2>
-                        <button className="text-xs font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                            Режим экрана анкеты
-                        </button>
-                    </div>
+                <section className="grid grid-cols-2 gap-2">
+                    {actions.map((kind) => {
+                        const action = ACTION[kind];
+                        const disabled = busy || action.enabled === false;
+                        return (
+                            <button
+                                key={kind}
+                                disabled={disabled}
+                                onClick={action.onClick}
+                                className={[
+                                    'py-3 rounded-xl text-sm font-semibold border transition-colors',
+                                    action.primary
+                                        ? 'bg-forest-700 text-white border-forest-700'
+                                        : action.danger
+                                            ? 'bg-white text-destructive border-destructive/30'
+                                            : 'bg-white text-forest-900 border-border',
+                                    disabled ? 'opacity-50 cursor-not-allowed' : '',
+                                ].join(' ')}
+                            >
+                                {action.label}
+                            </button>
+                        );
+                    })}
+                </section>
+            </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                        {/* Anamnesis Card */}
-                        <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase">Анамнез</h3>
-                            <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 border border-gray-100 shadow-sm">
-                                <p>32 года, работает в IT. В браке 5 лет. Предыдущий опыт терапии — 2 года назад (КПТ).</p>
-                                <div className="mt-2 text-xs text-gray-500 font-medium">Жалобы: бессонница, навязчивые мысли.</div>
-                            </div>
-                        </div>
-
-                        {/* Previous Session Summary */}
-                        <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase">Прошлая сессия (12 Дек)</h3>
-                            <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 border border-gray-100 shadow-sm relative overflow-hidden">
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-300"></div>
-                                <p className="font-medium mb-1">Фокус: Границы на работе</p>
-                                <p className="text-gray-600">Разобрали ситуацию с руководителем. Клиент осознал паттерн согласия спасателя.</p>
-                            </div>
-                        </div>
-
-                        {/* Homework Status */}
-                        <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase">Домашнее задание</h3>
-                            <div className="bg-yellow-50 rounded-xl p-3 text-sm border border-yellow-100 text-yellow-800 flex items-start gap-2 shadow-sm">
-                                <svg className="mt-0.5 shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" /><path d="m9 12 2 2 4-4" /></svg>
-                                <div>
-                                    <p className="font-medium">Дневник СМЭР</p>
-                                    <p className="text-xs text-yellow-700 mt-1 opacity-80">Клиент заполнил 2 ситуации до сессии.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Risks Warning */}
-                        <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase">Риски</h3>
-                            <div className="bg-white border-2 flex items-center gap-2 border-green-500/20 text-green-700 rounded-xl p-3 text-sm font-medium shadow-sm">
-                                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                Активных рисков нет
-                            </div>
-                        </div>
-                    </div>
-                </aside>
-            </main>
+            {showReschedule && (
+                <RescheduleModal
+                    isOpen={showReschedule}
+                    onClose={() => setShowReschedule(false)}
+                    onSave={() => { setShowReschedule(false); void load(); }}
+                    sessionId={session.id}
+                    currentDate={date.toISOString().split('T')[0]}
+                    currentTime={session.time}
+                    clientName={session.clientName}
+                    clientId={session.clientId}
+                />
+            )}
         </div>
     );
 }

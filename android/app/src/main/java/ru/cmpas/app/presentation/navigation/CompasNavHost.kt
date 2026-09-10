@@ -163,6 +163,7 @@ fun CompasNavHost(
                     onClientClick = { id -> navController.navigate(Screen.ClientDetail.createRoute(id)) },
                     onNoteClick = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
+                    onRebookClient = { clientId -> navController.navigate(Screen.QuickAction.createRoute("new-session", clientId)) },
                     focus = ScreenFocus.from(it.arguments?.getString("focus")),
                 )
             }

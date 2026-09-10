@@ -26,7 +26,9 @@ import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.navigation.ScreenFocus
 import ru.cmpas.app.presentation.theme.*
+import ru.cmpas.app.presentation.util.SessionAction
 import ru.cmpas.app.presentation.util.canRecordSessionOutcome
+import ru.cmpas.app.presentation.util.sessionActions
 import ru.cmpas.app.presentation.util.handleVideoLink
 import java.time.Instant
 import java.time.LocalDate
@@ -44,6 +46,8 @@ fun SessionDetailScreen(
     onClientClick: (String) -> Unit = {},
     onNoteClick: (String) -> Unit = {},
     onQuickAction: (String) -> Unit = {},
+    /** Записать этого же клиента снова — развилка после состоявшейся встречи. */
+    onRebookClient: (String) -> Unit = {},
     /** Задача 23: с чем именно пришли. PAYMENT — сразу раскрыть отметку оплаты. */
     focus: ScreenFocus? = null,
     viewModel: SessionDetailViewModel = hiltViewModel(),
@@ -90,6 +94,12 @@ fun SessionDetailScreen(
                 onDismissMenu = { showMenu = false },
                 onReschedule = { showMenu = false; viewModel.openRescheduleDialog() },
                 onCancel = { showMenu = false; showCancelSheet = true },
+                // Меню наверху предлагает ровно то же, что и панель внизу:
+                // у прошедшей встречи переносить и отменять нечего, и второй
+                // путь к тем же действиям — это тот же самый обман, только
+                // спрятанный под тремя точками.
+                canReschedule = session?.let { SessionAction.RESCHEDULE in sessionActions(it) } ?: false,
+                canCancel = session?.let { SessionAction.CANCEL in sessionActions(it) } ?: false,
             )
 
             when {
@@ -197,63 +207,47 @@ fun SessionDetailScreen(
         }
 
         if (session != null) {
+            // ЭКРАН РАЗЛИЧАЕТ ПРОШЛОЕ И БУДУЩЕЕ.
+            //
+            // В этой панели не было ни одного условия: шесть кнопок
+            // показывались одинаково и завтрашней встрече, и той, что
+            // специалист час назад отметил как состоявшуюся. Учредитель
+            // сказал об этом прямо: «Если сессия закончилась, то зачем
+            // подключаться? Я уже отметил, что сессия Была — если не была,
+            // то другое дело». Правило целиком в sessionActions().
+            //
+            // Компактный вид, без иконок: «Подключиться» с иконкой требует
+            // 166 точек, а в половину узкого экрана их 156 — то есть с
+            // иконками ряд неизбежно разъезжается на четыре строки и съедает
+            // экран. Подписи здесь и так однозначны.
+            val paid = session.paymentStatus == PaymentStatus.PAID
+            val actions = sessionActions(session).map { action ->
+                when (action) {
+                    SessionAction.CONNECT -> RowAction("Подключиться", { handleVideoLink(context, session.videoLink) }, primary = true)
+                    SessionAction.REBOOK -> RowAction("Записать снова", { onRebookClient(session.clientId) }, primary = true)
+                    SessionAction.MESSAGE -> RowAction("Написать", { messageText = ""; showMessage = true })
+                    SessionAction.NOTE -> RowAction("Заметка", { onNoteClick(session.id) })
+                    // Оплата называет ДЕЙСТВИЕ, пока оно возможно, и
+                    // становится неподвижной подписью, когда сделано:
+                    // «Оплачено» кнопкой предлагало отметить то, что уже
+                    // отмечено.
+                    SessionAction.PAYMENT -> RowAction(
+                        if (paid) "Оплачено" else "Отметить оплату",
+                        { showPayment = true },
+                        enabled = !paid,
+                    )
+                    SessionAction.RESCHEDULE -> RowAction("Перенести", viewModel::openRescheduleDialog)
+                    SessionAction.CANCEL -> RowAction("Отменить", { showCancelSheet = true }, danger = true)
+                }
+            }
             Column(
                 Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(CompasBg.copy(alpha = 0.94f))
                     .navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (session.format == SessionFormat.ONLINE) {
-                        PrimaryButton(
-                            text = "Подключиться",
-                            icon = Icons.Outlined.Videocam,
-                            modifier = Modifier.weight(1f),
-                            onClick = { handleVideoLink(context, session.videoLink) },
-                        )
-                    }
-                    GhostButton(
-                        text = if (session.format == SessionFormat.ONLINE) null else "Написать",
-                        icon = Icons.Outlined.Send,
-                        modifier = if (session.format == SessionFormat.ONLINE) Modifier.width(54.dp) else Modifier.weight(1f),
-                        onClick = { messageText = ""; showMessage = true },
-                    )
-                    GhostButton(
-                        text = if (session.format == SessionFormat.ONLINE) null else "Заметка",
-                        icon = Icons.Outlined.EditNote,
-                        modifier = if (session.format == SessionFormat.ONLINE) Modifier.width(54.dp) else Modifier.weight(1f),
-                        onClick = { onNoteClick(session.id) },
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Оплата — серверное поле сессии (PATCH /sessions/:id,
-                    // paymentStatus). Действие в ViewModel было и работало, а
-                    // кнопки к нему на экране не было вовсе: отметить оплату
-                    // из карточки сессии было нечем.
-                    GhostButton(
-                        text = if (session.paymentStatus == PaymentStatus.PAID) "Оплачено" else "Оплата",
-                        icon = Icons.Outlined.Payments,
-                        modifier = Modifier.weight(1f),
-                        onClick = { showPayment = true },
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostButton(
-                        text = "Перенести",
-                        icon = Icons.Outlined.Schedule,
-                        modifier = Modifier.weight(1f),
-                        onClick = viewModel::openRescheduleDialog,
-                    )
-                    GhostButton(
-                        text = "Отменить",
-                        icon = Icons.Outlined.Close,
-                        danger = true,
-                        modifier = Modifier.weight(1f),
-                        onClick = { showCancelSheet = true },
-                    )
-                }
+                FittingActionRow(actions = actions, compact = true)
             }
         }
 
@@ -322,19 +316,27 @@ private fun SessionPushHeader(
     onDismissMenu: () -> Unit,
     onReschedule: () -> Unit,
     onCancel: () -> Unit,
+    canReschedule: Boolean = true,
+    canCancel: Boolean = true,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButtonGlass(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", onClick = onBack)
         Text("Сессия", style = tSection, color = CompasFg, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
         Box {
-            IconButtonGlass(Icons.Outlined.MoreHoriz, "Меню", onClick = onMore)
+            // Меню без единого пункта не открывается: три точки, под которыми
+            // пусто, — обещание, которого нет.
+            if (canReschedule || canCancel) IconButtonGlass(Icons.Outlined.MoreHoriz, "Меню", onClick = onMore)
             DropdownMenu(expanded = showMenu, onDismissRequest = onDismissMenu) {
-                DropdownMenuItem(text = { Text("Перенести") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null) }, onClick = onReschedule)
-                DropdownMenuItem(
-                    text = { Text("Отменить", color = CompasDestructive) },
-                    leadingIcon = { Icon(Icons.Outlined.Close, null, tint = CompasDestructive) },
-                    onClick = onCancel,
-                )
+                if (canReschedule) {
+                    DropdownMenuItem(text = { Text("Перенести") }, leadingIcon = { Icon(Icons.Outlined.Schedule, null) }, onClick = onReschedule)
+                }
+                if (canCancel) {
+                    DropdownMenuItem(
+                        text = { Text("Отменить", color = CompasDestructive) },
+                        leadingIcon = { Icon(Icons.Outlined.Close, null, tint = CompasDestructive) },
+                        onClick = onCancel,
+                    )
+                }
             }
         }
     }
