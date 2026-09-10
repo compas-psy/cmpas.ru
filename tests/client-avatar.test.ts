@@ -175,6 +175,48 @@ describe('Telegram', () => {
         expect(calls.some(u => u.includes('getChat'))).toBe(false);
     });
 
+    /**
+     * ОТКАЗ ВТОРОЙ РУЧКИ — НЕ «ФОТОГРАФИИ НЕТ».
+     *
+     * Сервер, спрошенный про живого клиента, ответил «total_count: 1» —
+     * фотография есть. Приложение на том же клиенте в ту же минуту писало
+     * tg_no_photos. По журналу было не понять, кто из них прав: причина
+     * называла ВЫВОД, а не то, из чего он сделан.
+     *
+     * Поэтому у неответившей getChat теперь своя причина, а рядом с любой
+     * причиной идут числа, которые мессенджер реально вернул.
+     */
+    it('getChat не ответил — это своя причина, а не «фотографий нет»', async () => {
+        const fetcher = vi.fn(async (url: string) => {
+            if (url.includes('getUserProfilePhotos')) return json({ result: { total_count: 0, photos: [] } });
+            if (url.includes('getChat')) return { ok: false, status: 502, json: async () => ({}) };
+            return png();
+        });
+        const attempt = await tryTelegramAvatar('12345', TELEGRAM, fetcher as never);
+        expect(attempt.miss).toBe('tg_chat_unreachable');
+        expect(attempt.detail).toContain('502');
+    });
+
+    it('к причине приложены числа, которые мессенджер реально вернул', async () => {
+        const fetcher = vi.fn(async (url: string) => {
+            if (url.includes('getUserProfilePhotos')) return json({ result: { total_count: 0, photos: [] } });
+            if (url.includes('getChat')) return json({ result: { id: 12345 } });
+            return png();
+        });
+        const attempt = await tryTelegramAvatar('12345', TELEGRAM, fetcher as never);
+        expect(attempt.miss).toBe('tg_no_photos');
+        expect(attempt.detail).toContain('photos=0');
+        expect(attempt.detail).toContain('chat=фото нет');
+    });
+
+    it('в подробностях нет ни ключа бота, ни идентификатора человека', async () => {
+        const fetcher = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({}) }));
+        const attempt = await tryTelegramAvatar('987654321', TELEGRAM, fetcher as never);
+        // Журнал читают люди, которым карточки этого клиента не показывают.
+        expect(attempt.detail ?? '').not.toContain('987654321');
+        expect(attempt.detail ?? '').not.toContain(TELEGRAM.token);
+    });
+
     it('пусто у обеих дорог — тогда фотографии правда нет', async () => {
         const fetcher = vi.fn(async (url: string) => {
             if (url.includes('getUserProfilePhotos')) return json({ result: { total_count: 0, photos: [] } });

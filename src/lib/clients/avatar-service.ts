@@ -130,12 +130,17 @@ export async function serveClientAvatar(req: NextRequest, clientId: string) {
         }
 
         const attempt = await loadFromMessenger(source, client.id);
-        cache.set(key, attempt.image, attempt.miss);
+        // В кэш кладётся и подробность: иначе повторный показ снова покажет
+        // голую причину без чисел, на которых она построена.
+        const note = [attempt.miss, attempt.detail].filter(Boolean).join(' ');
+        cache.set(key, attempt.image, note || undefined);
         if (attempt.image) return imageResponse(attempt.image);
         // Причина называется на КАЖДОЙ неудавшейся попытке: у клиента с
         // двумя мессенджерами их две, и «пусто» без разбора снова не дало бы
-        // понять, кто именно смолчал.
-        console.log(`[avatar] ${attempt.miss}`);
+        // понять, кто именно смолчал. Рядом — что РЕАЛЬНО ответил мессенджер
+        // (числа и коды): сервер и приложение однажды разошлись в показаниях,
+        // и по одной лишь причине было не понять, кто из них прав.
+        console.log(`[avatar] ${note}`);
     }
 
     return noAvatar('empty');
@@ -214,7 +219,7 @@ async function telegramRoads(): Promise<Array<typeof fetch>> {
 async function loadFromMessenger(
     source: AvatarSource,
     clientId: string,
-): Promise<{ image: AvatarImage | null; miss?: AvatarMiss }> {
+): Promise<{ image: AvatarImage | null; miss?: AvatarMiss; detail?: string }> {
     if (source.messenger === 'telegram') {
         const token = process.env.TELEGRAM_BOT_TOKEN;
         if (!token) { console.log('[avatar] no_token telegram'); return { image: null, miss: 'tg_photos_unreachable' }; }
@@ -223,15 +228,21 @@ async function loadFromMessenger(
             token,
         };
         let miss: AvatarMiss = 'tg_photos_unreachable';
-        for (const road of await telegramRoads()) {
-            const attempt = await tryTelegramAvatar(source.id, config, road);
+        let detail: string | undefined;
+        // Дорога называется тоже. Сервер и приложение однажды разошлись в
+        // ответе на один и тот же вопрос, и первое, что нужно знать, — какой
+        // дорогой шёл тот, кто ответил иначе.
+        const roads = await telegramRoads();
+        for (let i = 0; i < roads.length; i++) {
+            const attempt = await tryTelegramAvatar(source.id, config, roads[i]);
             if (attempt.image) return { image: attempt.image };
             miss = attempt.miss;
+            detail = [`дорога ${i + 1}/${roads.length}`, attempt.detail].filter(Boolean).join(' ');
             // «Фотографий нет» — это ответ Telegram, а не отказ дороги:
             // вторая дорога принесёт тот же ответ, ходить незачем.
             if (miss === 'tg_no_photos') break;
         }
-        return { image: null, miss };
+        return { image: null, miss, detail };
     }
     const token = process.env.MAX_BOT_TOKEN;
     if (!token) { console.log('[avatar] no_token max'); return { image: null, miss: 'max_no_avatar' }; }

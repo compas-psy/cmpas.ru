@@ -175,12 +175,27 @@ export type AvatarMiss =
     | 'tg_download_failed'
     /** MAX не ответил или у диалога нет аватарки. */
     | 'max_no_avatar'
+    /** Вторую ручку (getChat) спросить не смогли — это НЕ «фотографии нет». */
+    | 'tg_chat_unreachable'
     /** Не нашли диалог MAX с этим человеком. */
     | 'max_no_dialog';
 
+/**
+ * `detail` — что РЕАЛЬНО ответил мессенджер: код ответа, число фотографий.
+ *
+ * Понадобилось, когда сервер и приложение разошлись в показаниях. Спросили
+ * Telegram с сервера про живого клиента — «total_count: 1», фотография есть.
+ * Приложение на том же клиенте в ту же минуту писало «tg_no_photos». Одно из
+ * двух неверно, а по journal'у не понять какое: причина называет ВЫВОД, а не
+ * то, из чего он сделан.
+ *
+ * Здесь только числа и коды ответа. Ни имени, ни телефона, ни идентификатора
+ * мессенджера, ни самой фотографии — журнал читают люди, которым карточки
+ * этого клиента не показывают.
+ */
 export type AvatarAttempt =
-    | { image: AvatarImage; miss?: undefined }
-    | { image: null; miss: AvatarMiss };
+    | { image: AvatarImage; miss?: undefined; detail?: string }
+    | { image: null; miss: AvatarMiss; detail?: string };
 
 export async function fetchTelegramAvatar(
     userId: string,
@@ -199,10 +214,15 @@ export async function tryTelegramAvatar(
     const api = `${config.apiRoot}/bot${config.token}`;
     try {
         let fileId: string | null = null;
+        // Копится по ходу и попадает в журнал вместе с причиной. Только
+        // числа и коды ответа.
+        const seen: string[] = [];
 
         const photosRes = await withTimeout(fetcher, `${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
-        if (!photosRes || !photosRes.ok) return { image: null, miss: 'tg_photos_unreachable' };
+        if (!photosRes) return { image: null, miss: 'tg_photos_unreachable', detail: 'photos=нет ответа' };
+        if (!photosRes.ok) return { image: null, miss: 'tg_photos_unreachable', detail: `photos=HTTP ${photosRes.status}` };
         const photos = await photosRes.json();
+        seen.push(`photos=${photos?.result?.total_count ?? '?'}`);
         const sizes: Array<{ file_id?: string; width?: number }> = photos?.result?.photos?.[0] ?? [];
         if (Array.isArray(sizes) && sizes.length > 0) {
             const smallest = [...sizes].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0];
@@ -226,17 +246,22 @@ export async function tryTelegramAvatar(
         // причина tg_no_photos станет наконец точной.
         if (!fileId) {
             const chatRes = await withTimeout(fetcher, `${api}/getChat?chat_id=${encodeURIComponent(userId)}`);
-            if (chatRes && chatRes.ok) {
-                const chat = await chatRes.json();
-                const photo = chat?.result?.photo;
-                // small — потому что кружок маленький, а большой файл тут
-                // только дольше качать.
-                const id = photo?.small_file_id ?? photo?.big_file_id;
-                if (typeof id === 'string' && id) fileId = id;
-            }
+            // ОТКАЗ ВТОРОЙ РУЧКИ — ЭТО НЕ «ФОТОГРАФИИ НЕТ». Раньше он молча
+            // сливался с пустым ответом, и обе беды выглядели в журнале
+            // одинаково. Так уже было с общим «empty», и урок тот же:
+            // причина обязана называть, на чём именно сорвалось.
+            if (!chatRes) return { image: null, miss: 'tg_chat_unreachable', detail: `${seen.join(' ')} chat=нет ответа` };
+            if (!chatRes.ok) return { image: null, miss: 'tg_chat_unreachable', detail: `${seen.join(' ')} chat=HTTP ${chatRes.status}` };
+            const chat = await chatRes.json();
+            const photo = chat?.result?.photo;
+            seen.push(`chat=${photo ? 'фото есть' : 'фото нет'}`);
+            // small — потому что кружок маленький, а большой файл тут
+            // только дольше качать.
+            const id = photo?.small_file_id ?? photo?.big_file_id;
+            if (typeof id === 'string' && id) fileId = id;
         }
 
-        if (!fileId) return { image: null, miss: 'tg_no_photos' };
+        if (!fileId) return { image: null, miss: 'tg_no_photos', detail: seen.join(' ') };
 
         const fileRes = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(fileId)}`);
         if (!fileRes || !fileRes.ok) return { image: null, miss: 'tg_file_unreachable' };
@@ -245,9 +270,10 @@ export async function tryTelegramAvatar(
         if (typeof path !== 'string' || !path) return { image: null, miss: 'tg_file_unreachable' };
 
         const image = await downloadImage(`${config.apiRoot}/file/bot${config.token}/${path}`, fetcher);
-        return image ? { image } : { image: null, miss: 'tg_download_failed' };
-    } catch {
-        return { image: null, miss: 'tg_photos_unreachable' };
+        return image ? { image } : { image: null, miss: 'tg_download_failed', detail: seen.join(' ') };
+    } catch (e) {
+        // Имя ошибки — не текст: текст может нести адрес с ключом бота.
+        return { image: null, miss: 'tg_photos_unreachable', detail: `сбой ${(e as Error)?.name ?? 'неизвестно'}` };
     }
 }
 
