@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { sessionActionToken, sessionActionTokenExpiry, resolveSignedPersonalClientToken } from '@/lib/client-workflow';
+import { sessionActionLinks } from '@/lib/practice/session-action-links';
 import { verifyTelegramWebAppInitData } from '@/lib/telegram-webapp';
 
 function startOfToday() {
@@ -68,6 +69,19 @@ function mapSession(session: any) {
         // the only action this list's UI (CancelSessionDialog) ever performs
         // with it — not a bare per-client token reusable on any session.
         clientToken: sessionActionToken(session.psychologistId, session.clientId, session.id, 'cancel', sessionActionTokenExpiry(session.date)),
+        // Подтверждение и перенос — такие же поимённые адреса, как отмена.
+        //
+        // До 10.09.2026 их здесь не было вовсе: «Мои встречи» — единственная
+        // страница, где встреча показана как встреча, — умела только отменить,
+        // а «Перенести» уводило на страницу НОВОЙ записи. Подтвердить встречу
+        // клиент не мог нигде, кроме кнопки в напоминании: то есть до
+        // напоминания — ничем.
+        ...sessionActionLinks({
+            psychologistId: session.psychologistId,
+            clientId: session.clientId,
+            sessionId: session.id,
+            date: session.date,
+        }),
         date: session.date,
         time: session.time,
         endTime: session.endTime,

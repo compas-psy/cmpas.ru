@@ -6,7 +6,7 @@
 // checked FIRST, before the phone fallback that remains for genuinely
 // unidentified visitors.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const verifyTelegramWebAppInitData = vi.fn();
 vi.mock('@/lib/telegram-webapp', () => ({ verifyTelegramWebAppInitData: (...args: unknown[]) => verifyTelegramWebAppInitData(...args) }));
@@ -71,11 +71,22 @@ function mintToken(overrides: Record<string, unknown> = {}) {
     });
 }
 
+// Время заморожено. Слот в тесте — 18:00 10 сентября 2026 по Москве, и без
+// заморозки проверка проходила ТОЛЬКО до этого часа: после него ядро записи
+// справедливо считает слот прошедшим и отказывает. То есть тест был бомбой с
+// часовым механизмом — зелёный утром, красный вечером и красный навсегда со
+// следующего дня. Проверяется здесь опознание клиента, а не течение времени.
 beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-09-10T06:00:00Z'));
     vi.clearAllMocks();
     fetchExternalBusyBlocks.mockResolvedValue([]);
     fake = makeFakeDb();
     fake.slots.push({ id: 'slot-1', psychologistId: 'psy-1', dayOfWeek: 3, startTime: '18:00', endTime: '19:00', duration: 50, format: 'online', addressId: null, isActive: true, scheduleRuleId: null, scheduleRule: null });
+});
+
+afterEach(() => {
+    vi.useRealTimers();
 });
 
 describe('createSelfPracticeBooking — known-client identity (Task 14 point 6)', () => {

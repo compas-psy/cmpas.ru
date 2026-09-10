@@ -29,6 +29,14 @@ sealed class Screen(val route: String) {
         fun createRoute(id: String) = "session/$id"
         fun createRoute(id: String, focus: ScreenFocus) = "session/$id?focus=${focus.key}"
     }
+    /**
+     * Развилка «записать снова»: тот же час через неделю, тот же час на срок
+     * или обычный календарь. Отдельный экран, а не параметр QuickAction:
+     * вопрос здесь другой — не «когда», а «так же или иначе».
+     */
+    data object Rebook : Screen("rebook/{clientId}") {
+        fun createRoute(clientId: String) = "rebook/$clientId"
+    }
     data object PostSessionNote : Screen("notes/post-session/{sessionId}") {
         fun createRoute(sessionId: String) = "notes/post-session/$sessionId"
     }

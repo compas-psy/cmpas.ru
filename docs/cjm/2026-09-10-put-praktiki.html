@@ -1,0 +1,892 @@
+<title>Карта пути ПРАКТИКИ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">10.09.2026 · утверждено, в работе</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Разбор пути · приложение и веб</div>
+  <h1>Карта пути ПРАКТИКИ</h1>
+  <p class="lede" style="margin-top:16px">Весь путь от «встреча прошла» до «клиент записан снова» — экраны приложения, страницы веба, тексты уведомлений и то, куда на самом деле ведут ссылки в них. Каждый узел проверен по коду, каждый дефект назван адресом файла.</p>
+
+  <div class="ask">
+    <b>Утверждено 10.09.2026.</b> Все четыре развилки — по предложенному варианту, с двумя правками учредителя, они внесены в каркасы К4 и К5 и помечены там прямо:
+    <br>· срок повторной записи задаётся не тремя кнопками, а числом недель — 4, 8, 12 как подсказки плюс своё значение;
+    <br>· в сообщении клиенту три кнопки, а не две: «Подтверждаю», «Перенести», «Отменить».
+    <br><br>Работа идёт по разделу 06 в указанном там порядке.
+  </div>
+
+  <nav class="toc">
+    <a href="#map"><span>01</span>Карта переходов</a>
+    <a href="#frames"><span>02</span>Каркасы экранов</a>
+    <a href="#texts"><span>03</span>Тексты и ссылки</a>
+    <a href="#defects"><span>04</span>Дефекты</a>
+    <a href="#forks"><span>05</span>Развилки</a>
+    <a href="#plan"><span>06</span>Порядок работ</a>
+  </nav>
+</header>
+
+<section id="map">
+  <div class="sechead">
+    <div class="eyebrow">01 · Карта переходов</div>
+    <h2>Куда человек попадает на самом деле</h2>
+    <p class="lede">Слева — момент времени и кто действует. Красной рамкой обведены узлы, где путь ломается; номер дефекта ведёт в раздел 04.</p>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Система</div><div class="when">конец встречи<br>+15 минут</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">сервер</div>
+        <div class="what">Статус сам становится «completed»</div>
+        <div class="note">Никто ничего не сказал — время просто прошло. Отсюда поле <code>outcomeRecordedAt</code>: оно отличает слово человека от догадки системы.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">вечером,<br>в приложении</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Дашборд · Сегодня</div>
+        <div class="what">Карточка встречи: «Была» / «Не пришли»</div>
+        <div class="note">Развилка работает: до ответа — два действия, после — статус и следующий шаг.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Дашборд · после отметки</div>
+        <div class="what">«Заметка» · «Запис…»</div>
+        <div class="note">Подпись «Записать снова» не помещается и обрезается на полуслове.</div>
+        <div class="tags"><a class="chip" href="#d1">Д1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Экран встречи</div>
+        <div class="what">«Б…» «Не…» «Пе…» + шесть кнопок внизу</div>
+        <div class="note">Три подписи обрезаны иконками; нижняя панель предлагает подключиться, перенести и отменить встречу, которая уже отмечена как прошедшая.</div>
+        <div class="tags"><a class="chip" href="#d2">Д2</a><a class="chip" href="#d3">Д3</a><a class="chip" href="#d4">Д4</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">сразу после<br>«Была»</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Экран новой записи</div>
+        <div class="what">Календарь с нуля</div>
+        <div class="note">«Записать снова» открывает общий выбор даты и часа. Ни «тот же час через неделю», ни «регулярно на срок» здесь нет — хотя и то и другое уже написано и работает в карточке клиента.</div>
+        <div class="tags"><a class="chip" href="#d5">Д5</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Карточка клиента</div>
+        <div class="what">«Тот же час» — неделя или срок</div>
+        <div class="note">Здесь оба варианта есть. Проблема не в том, что их нет, а в том, что они спрятаны не на том экране.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Система</div><div class="when">запись<br>создана</div></div>
+    <div class="lane-body">
+      <div class="node bad msg">
+        <div class="where">Клиенту</div>
+        <div class="what">«Подтверждаю запись…» ИЛИ «Вы записаны»</div>
+        <div class="note">Два разных текста об одном событии: какой придёт — зависит от того, каким путём запись завели.</div>
+        <div class="tags"><a class="chip" href="#d10">Д10</a></div>
+      </div>
+      <div class="arrow">×2</div>
+      <div class="node bad msg">
+        <div class="where">Тот же клиент</div>
+        <div class="what">То же сообщение ещё раз</div>
+        <div class="note">Если заведены и Telegram, и MAX — уходит в оба. То же и специалисту: отсюда «два сообщения о записи».</div>
+        <div class="tags"><a class="chip" href="#d9">Д9</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad msg">
+        <div class="where">В MAX</div>
+        <div class="what">Адрес голым текстом</div>
+        <div class="note">Три пути отдают в MAX уже расплющенный текст, и прятать ссылку в кнопку становится не из чего.</div>
+        <div class="tags"><a class="chip" href="#d11">Д11</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">нажал ссылку<br>в сообщении</div></div>
+    <div class="lane-body">
+      <div class="node msg">
+        <div class="where">Сообщение</div>
+        <div class="what">«Подтвердить, перенести или отменить встречу можно здесь»</div>
+        <div class="note">Обещаны три действия.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Веб · страница записи</div>
+        <div class="what">«Когда вам удобнее?»</div>
+        <div class="note">Страница НОВОЙ записи. Подтверждения на ней нет вовсе, переноса нет, отмены нет. Уже назначенная встреча показана мелкой плашкой сверху — и только у известного клиента.</div>
+        <div class="tags"><a class="chip" href="#d6">Д6</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Веб · «Мои встречи»</div>
+        <div class="what">Перенести · Отменить</div>
+        <div class="note">Единственная страница, где встреча показана как встреча. Кнопки «Подтвердить» нет ни одной, а «Перенести» снова уводит на страницу новой записи.</div>
+        <div class="tags"><a class="chip" href="#d8">Д8</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Система</div><div class="when">за 24 часа<br>и за час</div></div>
+    <div class="lane-body">
+      <div class="node msg">
+        <div class="where">Напоминание</div>
+        <div class="what">Кнопка «Подтвердить»</div>
+        <div class="note">Работает по одноразовому подписанному адресу. Это единственное место во всём продукте, где клиент может подтвердить встречу.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Кнопка «Перенести»</div>
+        <div class="what">Страница новой записи</div>
+        <div class="note">Страница переноса существует и умеет переносить конкретную встречу — но кнопка ведёт мимо неё.</div>
+        <div class="tags"><a class="chip" href="#d7">Д7</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">+2 часа,<br>+неделя</div></div>
+    <div class="lane-body">
+      <div class="node msg">
+        <div class="where">Каскад</div>
+        <div class="what">«Спасибо за встречу» и через неделю — приглашение</div>
+        <div class="note">Уже проверяет, нет ли у человека следующей записи, и молчит, если есть.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">×2</div>
+      <div class="node bad">
+        <div class="where">Каскад · доставка</div>
+        <div class="what">Оба канала сразу</div>
+        <div class="note">Та же удвоенная отправка, что и при записи.</div>
+        <div class="tags"><a class="chip" href="#d9">Д9</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="frames">
+  <div class="sechead">
+    <div class="eyebrow">02 · Каркасы экранов</div>
+    <h2>Как сейчас и как предлагаю</h2>
+    <p class="lede">Каркас, а не дизайн: палитра, шрифты и стиль ПРАКТИКИ не меняются. Меняется только то, какие действия на экране есть, в каком они виде и когда показываются.</p>
+  </div>
+
+  <div class="stack g48">
+
+    <!-- W1 -->
+    <div class="stack g16">
+      <h3>К1 · Дашборд, карточка отмеченной встречи</h3>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">Сейчас · скрин 5</div>
+          <div class="wf">
+            <div class="wf-status"><span>Сегодня</span><span>13:00</span></div>
+            <div class="wf-card">
+              <div class="wf-row"><div class="wf-av"></div><div class="stack g8" style="flex:1"><div class="wf-t b">Елисей М.</div><div class="wf-row"><span class="wf-pill">видео</span><span class="wf-pill">Была</span></div></div></div>
+              <div class="wf-row">
+                <div class="wf-btn">Заметка</div>
+                <div class="wf-btn pri cut">Запис…</div>
+              </div>
+              <div class="wf-meta">Оплата не отмечена · Отметить</div>
+            </div>
+          </div>
+          <div class="wf-note">Подпись обрезана на полуслове: «Запис…» выглядит осмысленной, не будучи ею.</div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">Предлагаю</div>
+          <div class="wf">
+            <div class="wf-status"><span>Сегодня</span><span>13:00</span></div>
+            <div class="wf-card">
+              <div class="wf-row"><div class="wf-av"></div><div class="stack g8" style="flex:1"><div class="wf-t b">Елисей М.</div><div class="wf-row"><span class="wf-pill">видео</span><span class="wf-pill">Была</span></div></div></div>
+              <div class="wf-row">
+                <div class="wf-btn">Заметка</div>
+                <div class="wf-btn pri">Записать</div>
+              </div>
+              <div class="wf-meta">Оплата не отмечена · Отметить</div>
+            </div>
+          </div>
+          <div class="wf-note">Два изменения. Первое: подпись — одно слово, которое влезает при любой ширине. Второе: кнопка перестаёт быть обещанием, которое экран не может сдержать, — измеряю ширину и не даю собрать ряд, где подпись не помещается целиком.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W2 -->
+    <div class="stack g16">
+      <h3>К2 · Экран встречи, которая уже отмечена «Была»</h3>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">Сейчас · скрин 2</div>
+          <div class="wf">
+            <div class="wf-status"><span>10 сентября</span><span>Была</span></div>
+            <div class="wf-card">
+              <div class="wf-t b" style="font-size:20px">13:00 <span class="wf-meta">50 мин</span></div>
+              <div class="wf-row"><div class="wf-av"></div><div class="wf-line m"></div></div>
+              <div class="wf-row">
+                <div class="wf-btn pri cut">Б…</div>
+                <div class="wf-btn cut">Не…</div>
+                <div class="wf-btn cut">Пе…</div>
+              </div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Подключиться</div><div class="wf-btn" style="flex:none;width:34px">✉</div><div class="wf-btn" style="flex:none;width:34px">✎</div></div>
+            <div class="wf-row"><div class="wf-btn">Оплачено</div></div>
+            <div class="wf-row"><div class="wf-btn">Перенести</div><div class="wf-btn danger">Отменить</div></div>
+          </div>
+          <div class="wf-note">Встреча прошла и отмечена — а экран предлагает к ней подключиться, перенести её и отменить. И «Оплачено» остаётся нажимаемой кнопкой, хотя отмечать больше нечего.</div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">Предлагаю</div>
+          <div class="wf">
+            <div class="wf-status"><span>10 сентября</span><span>Была</span></div>
+            <div class="wf-card">
+              <div class="wf-t b" style="font-size:20px">13:00 <span class="wf-meta">50 мин</span></div>
+              <div class="wf-row"><div class="wf-av"></div><div class="wf-line m"></div></div>
+              <div class="wf-row rw">
+                <span class="wf-pill">Была · отмечено вами</span>
+                <span class="wf-meta">Изменить</span>
+              </div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Записать снова</div></div>
+            <div class="wf-row"><div class="wf-btn">Заметка</div><div class="wf-btn">Написать</div></div>
+            <div class="wf-row"><div class="wf-btn off">Оплачено 10.09</div></div>
+          </div>
+          <div class="wf-note">Прошедшая встреча предлагает только то, что с ней ещё можно сделать: записать снова, дописать заметку, написать клиенту. Подключение, перенос и отмена уходят — их нельзя сделать с тем, что уже произошло. Отметка исхода не исчезает совсем: «Изменить» открывает её, если специалист ошибся.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W2b -->
+    <div class="stack g16">
+      <h3>К3 · Тот же экран, встреча ещё впереди</h3>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">Сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>Завтра</span><span>Ожидание</span></div>
+            <div class="wf-card">
+              <div class="wf-t b" style="font-size:20px">14:00 <span class="wf-meta">50 мин</span></div>
+              <div class="wf-row"><div class="wf-av"></div><div class="wf-line m"></div></div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Подключиться</div><div class="wf-btn" style="flex:none;width:34px">✉</div><div class="wf-btn" style="flex:none;width:34px">✎</div></div>
+            <div class="wf-row"><div class="wf-btn">Оплата</div></div>
+            <div class="wf-row"><div class="wf-btn">Перенести</div><div class="wf-btn danger">Отменить</div></div>
+          </div>
+          <div class="wf-note">Ровно тот же набор, что и у прошедшей. Экран не различает будущее и прошлое вовсе.</div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">Предлагаю</div>
+          <div class="wf">
+            <div class="wf-status"><span>Завтра</span><span>Ожидание</span></div>
+            <div class="wf-card">
+              <div class="wf-t b" style="font-size:20px">14:00 <span class="wf-meta">50 мин</span></div>
+              <div class="wf-row"><div class="wf-av"></div><div class="wf-line m"></div></div>
+              <div class="wf-row rw"><span class="wf-pill gold">Клиент ещё не подтвердил</span></div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Подключиться</div></div>
+            <div class="wf-row"><div class="wf-btn">Написать</div><div class="wf-btn">Заметка</div></div>
+            <div class="wf-row"><div class="wf-btn pri">Отметить оплату</div></div>
+            <div class="wf-row"><div class="wf-btn">Перенести</div><div class="wf-btn danger">Отменить</div></div>
+          </div>
+          <div class="wf-note">Здесь весь набор уместен. Оплата называет действие, а не состояние: пока не отмечена — «Отметить оплату», после — серая надпись с датой, нажимать нечего.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W3 -->
+    <div class="stack g16">
+      <h3>К4 · «Записать снова» — развилка по прошедшей встрече</h3>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">Сейчас</div>
+          <div class="wf">
+            <div class="wf-h">Новая запись</div>
+            <div class="wf-sub">Елисей М.</div>
+            <div class="wf-card">
+              <div class="wf-row rw"><span class="wf-pill">Пн</span><span class="wf-pill">Вт</span><span class="wf-pill">Ср</span><span class="wf-pill">Чт</span><span class="wf-pill">Пт</span></div>
+              <div class="wf-row rw"><span class="wf-pill">10:00</span><span class="wf-pill">11:00</span><span class="wf-pill">14:00</span><span class="wf-pill">15:00</span></div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Записать</div></div>
+          </div>
+          <div class="wf-note">Календарь с нуля. Про то, что клиент только что был у вас в 13:00 по средам, экран не знает ничего.</div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">Предлагаю</div>
+          <div class="wf">
+            <div class="wf-h">Записать снова</div>
+            <div class="wf-sub">Елисей М. · был сегодня в 13:00</div>
+            <div class="wf-card">
+              <div class="wf-t b">Тот же час через неделю</div>
+              <div class="wf-meta">Среда, 17 сентября, 13:00 — час свободен</div>
+            </div>
+            <div class="wf-card">
+              <div class="wf-t b">Тот же час на срок</div>
+              <div class="wf-meta">Занять среды 13:00 на несколько недель вперёд</div>
+              <div class="wf-row rw"><span class="wf-pill">4 недели</span><span class="wf-pill">8 недель</span><span class="wf-pill">12 недель</span><span class="wf-pill gold">Своё число</span></div>
+              <div class="wf-meta">«Своё число» — поле ввода: от 2 до 26 недель.</div>
+            </div>
+            <div class="wf-card">
+              <div class="wf-t b">Выбрать другое время</div>
+              <div class="wf-meta">Обычный календарь</div>
+            </div>
+          </div>
+          <div class="wf-note">Три варианта, которые вы назвали. Ядро для них уже написано и работает в карточке клиента — здесь оно только становится видимым в том месте, где о следующей записи и думают. Занятые часы пропускаются с указанием причины, а не молча. <b>Правка от 10.09:</b> 4, 8 и 12 недель — это подсказки, а не весь выбор; рядом поле для своего числа, потому что «до Нового года» и «до отпуска» в три кнопки не укладываются.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W4 -->
+    <div class="stack g16">
+      <h3>К5 · Сообщение клиенту о записи</h3>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">Сейчас · скрин 4</div>
+          <div class="wf">
+            <div class="wf-status"><span>ПРАКТИКА</span><span>13:04</span></div>
+            <div class="wf-msg">
+              <div class="l">Елисей, здравствуйте!</div>
+              <div class="l">Подтверждаю запись на консультацию к специалисту Мартынов Е.</div>
+              <div class="l"><b>11 сентября 2026 г. в 14:00</b><br>Формат: <b>онлайн-консультация</b></div>
+              <div class="l">Подтвердить, перенести или отменить встречу можно здесь:</div>
+              <div class="url">https://cmpas.ru/bot/book/cmf3k9x02000j…?c=eyJjIjoi…</div>
+            </div>
+            <div class="wf-msg">
+              <div class="l">Елисей, здравствуйте!</div>
+              <div class="l">Подтверждаю запись… <span class="wf-meta">(то же сообщение второй раз — другой канал)</span></div>
+            </div>
+          </div>
+          <div class="wf-note">Адрес голым текстом на полторы строки, обещание трёх действий — и то же самое письмо дважды.</div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">Предлагаю</div>
+          <div class="wf">
+            <div class="wf-status"><span>ПРАКТИКА</span><span>13:04</span></div>
+            <div class="wf-msg">
+              <div class="l">Елисей, здравствуйте!</div>
+              <div class="l">Подтверждаю запись на консультацию к специалисту Мартынов Е.</div>
+              <div class="l"><b>11 сентября 2026 г. в 14:00</b><br>Формат: <b>онлайн-консультация</b></div>
+              <div class="l">Посмотреть встречу и управлять ею — <span class="anchor">здесь</span>.</div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Подтверждаю</div></div>
+            <div class="wf-row"><div class="wf-btn">Перенести</div><div class="wf-btn danger">Отменить</div></div>
+          </div>
+          <div class="wf-note">Одно сообщение в один канал. Ссылка за словом и в Telegram, и в MAX — в MAX кнопкой, потому что разметки там нет. Текст один на все пути записи, а не два разных. <b>Правка от 10.09:</b> три кнопки, а не две, — ровно те три действия, которые обещает строка над ними. Отмена отдельным рядом и не рядом с подтверждением, чтобы не промахнуться пальцем.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W5 -->
+    <div class="stack g16">
+      <h3>К6 · Страница, куда ведёт ссылка</h3>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">Сейчас · скрин 3</div>
+          <div class="wf">
+            <div class="wf-sub">Мартынов Е.</div>
+            <div class="wf-h">Когда вам удобнее?</div>
+            <div class="wf-sub">Подберу ближайшие варианты. Это ни к чему не обязывает.</div>
+            <div class="wf-card">
+              <div class="wf-t b">Ваши предстоящие записи</div>
+              <div class="wf-row"><div class="stack g8" style="flex:1"><div class="wf-t">11 сен в 14:00</div><div class="wf-meta">Онлайн</div></div><span class="wf-pill">Ожид.</span></div>
+            </div>
+            <div class="wf-card">
+              <div class="wf-row rw"><span class="wf-pill">Утро</span><span class="wf-pill">День</span><span class="wf-pill">Вечер</span></div>
+              <div class="wf-row rw"><span class="wf-pill">Чт 10:00</span><span class="wf-pill">Чт 15:00</span><span class="wf-pill">Пт 11:00</span></div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Записаться</div></div>
+          </div>
+          <div class="wf-note">Человек шёл подтвердить встречу, а попал на запись новой. Его собственная встреча — мелкой плашкой, и нажатие на неё уводит на третью страницу.</div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">Предлагаю</div>
+          <div class="wf">
+            <div class="wf-sub">Мартынов Е.</div>
+            <div class="wf-h">Ваша встреча</div>
+            <div class="wf-card">
+              <div class="wf-t b" style="font-size:15px">Пятница, 11 сентября, 14:00</div>
+              <div class="wf-meta">Онлайн-консультация · 50 минут</div>
+              <div class="wf-row rw"><span class="wf-pill gold">Ждём вашего подтверждения</span></div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Подтверждаю</div></div>
+            <div class="wf-row"><div class="wf-btn">Перенести</div><div class="wf-btn danger">Отменить</div></div>
+            <div class="wf-note" style="border:none;padding:0;margin-top:2px">Ниже, отдельным блоком:</div>
+            <div class="wf-card">
+              <div class="wf-t b">Записаться ещё раз</div>
+              <div class="wf-meta">Тот же час через неделю · выбрать другое время</div>
+            </div>
+          </div>
+          <div class="wf-note">Ссылка ведёт на встречу, а не на календарь. Три обещанных действия стоят первыми и работают тут же. Новая запись остаётся доступной — но ниже, отдельно, и не выдаёт себя за подтверждение.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="texts">
+  <div class="sechead">
+    <div class="eyebrow">03 · Тексты и ссылки</div>
+    <h2>Что человек читает и куда его ведут</h2>
+    <p class="lede">Все автосообщения клиенту, с проверкой: что обещает текст и что на самом деле открывается по ссылке.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:22%">Когда</th><th style="width:30%">Что читает человек</th><th style="width:26%">Куда ведёт</th><th style="width:22%">Что не так</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Запись создана</b><br><span class="mono">session-notice.ts</span></td>
+          <td>«Подтверждаю запись… Подтвердить, перенести или отменить встречу можно <u>здесь</u>»</td>
+          <td>Страница новой записи «Когда вам удобнее?»</td>
+          <td>Ни одного из трёх обещанных действий на странице нет. <a class="chip" href="#d6">Д6</a></td>
+        </tr>
+        <tr>
+          <td><b>Запись создана</b> · путь самозаписи<br><span class="mono">bot/actions.ts</span></td>
+          <td>«<b>Вы записаны</b> — Специалист / Дата / Время / Формат»</td>
+          <td>Ссылки нет вовсе</td>
+          <td>Другой текст об одном и том же событии, и без единого дальнейшего шага. <a class="chip" href="#d10">Д10</a></td>
+        </tr>
+        <tr>
+          <td><b>За 24 часа и за час</b><br><span class="mono">cron/reminders.ts</span></td>
+          <td>Напоминание, кнопки «Подтвердить», «Перенести», «Отменить»</td>
+          <td>«Подтвердить» и «Отменить» — одноразовый подписанный адрес, работает.<br>«Перенести» — страница новой записи.</td>
+          <td>Перенос ведёт мимо страницы переноса, которая уже существует. <a class="chip" href="#d7">Д7</a></td>
+        </tr>
+        <tr>
+          <td><b>Через 2 часа после встречи</b><br><span class="mono">post-session-cascade.ts</span></td>
+          <td>«Спасибо за встречу…»</td>
+          <td>Ссылка записи</td>
+          <td>Текст верный, но уходит в оба канала сразу. <a class="chip" href="#d9">Д9</a></td>
+        </tr>
+        <tr>
+          <td><b>Через неделю без записи</b><br><span class="mono">post-session-cascade.ts</span></td>
+          <td>«Ваша ссылка всегда здесь»</td>
+          <td>Ссылка записи — здесь это уместно</td>
+          <td>Только удвоение канала. <a class="chip" href="#d9">Д9</a></td>
+        </tr>
+        <tr>
+          <td><b>Знакомство с клиентом</b><br><span class="mono">client-onboarding.ts</span></td>
+          <td>«Управлять записями можно здесь: <span class="mono" style="color:var(--alarm)">https://cmpas.ru/bot/book/…</span>»</td>
+          <td>Страница новой записи</td>
+          <td>В MAX адрес остаётся голым: текст расплющен до отправки, и прятать ссылку в кнопку уже не из чего. <a class="chip" href="#d11">Д11</a></td>
+        </tr>
+        <tr>
+          <td><b>Утренняя сводка</b><br><span class="mono">cron/digest.ts</span></td>
+          <td>Список встреч на день</td>
+          <td>В MAX ссылки теряются полностью</td>
+          <td>Разметка вырезается вместе с адресом — остаётся подпись, ведущая в никуда. <a class="chip" href="#d11">Д11</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="defects">
+  <div class="sechead">
+    <div class="eyebrow">04 · Дефекты</div>
+    <h2>Двенадцать мест, названных адресом</h2>
+    <p class="lede">Всё, что вы показали на скринах, плюс то, что нашлось рядом при разборе. Причина — не догадка: каждая проверена по коду.</p>
+  </div>
+  <div class="defects">
+
+    <div class="def" id="d1"><div class="def-id">Д1</div><div class="def-b">
+      <div class="t">«Записать снова» обрезается до «Запис…»</div>
+      <div class="why">Кнопке в карточке достаётся около 80 точек ширины, подписи при 14 пунктах нужно около 110. Уменьшение шрифта, которое я добавил, доходит до нижней границы в 11 пунктов и дальше ставит многоточие — то есть спасает короткие подписи и не спасает длинные. Лечится подписью в одно слово и запретом собирать ряд, в котором подпись не помещается.</div>
+      <div class="src"><span class="mono">DashboardScreen.kt:560</span><span class="mono">CompasControls.kt:66</span><span>скрин 5</span></div>
+    </div></div>
+
+    <div class="def" id="d2"><div class="def-id">Д2</div><div class="def-b">
+      <div class="t">«Была / Не пришли / Перенесли» обрезаны до «Б… Не… Пе…»</div>
+      <div class="why">Три кнопки в ряду — но, в отличие от карточки дашборда, не компактные: у каждой иконка 18 точек, отступ 8 и поля по 18 с боков. Шестьдесят две точки обвеса на кнопку, ширина экрана та же. Место отнимают не буквы.</div>
+      <div class="src"><span class="mono">SessionDetailScreen.kt:394–421</span><span>скрин 2</span></div>
+    </div></div>
+
+    <div class="def" id="d3"><div class="def-id">Д3</div><div class="def-b">
+      <div class="t">Прошедшей встрече предлагают подключиться, перенести и отменить</div>
+      <div class="why">Нижняя панель экрана встречи не смотрит ни на статус, ни на дату — в этом блоке нет ни одного условия. Шесть кнопок показываются одинаково и завтрашней встрече, и той, что вы час назад отметили как состоявшуюся.</div>
+      <div class="src"><span class="mono">SessionDetailScreen.kt:198–255</span><span>скрин 2</span></div>
+    </div></div>
+
+    <div class="def" id="d4"><div class="def-id">Д4</div><div class="def-b">
+      <div class="t">«Оплачено» остаётся нажимаемой кнопкой</div>
+      <div class="why">Подпись меняется с «Оплата» на «Оплачено», но кнопка живая и открывает тот же лист. И «Оплата» — это состояние, а не действие: кнопка должна называть то, что произойдёт.</div>
+      <div class="src"><span class="mono">SessionDetailScreen.kt:235–241</span></div>
+    </div></div>
+
+    <div class="def" id="d5"><div class="def-id">Д5</div><div class="def-b">
+      <div class="t">После «Была» нет ни «через неделю», ни «на срок»</div>
+      <div class="why">«Записать снова» открывает общий экран выбора даты. Оба нужных варианта уже написаны, работают и покрыты тестами — но вызываются только из карточки клиента, куда после встречи никто не заходит.</div>
+      <div class="src"><span class="mono">CompasNavHost.kt:83</span><span class="mono">repeat-slot.ts</span><span class="mono">ClientDetailScreen.kt:766</span></div>
+    </div></div>
+
+    <div class="def" id="d6"><div class="def-id">Д6</div><div class="def-b">
+      <div class="t">Ссылка «подтвердить» ведёт на страницу новой записи</div>
+      <div class="why">Текст обещает подтвердить, перенести или отменить. Открывается «Когда вам удобнее?» — экран подбора нового времени. Подтверждения на нём нет вовсе; уже назначенная встреча показана мелкой плашкой, и то лишь если система узнала клиента.</div>
+      <div class="src"><span class="mono">client-workflow.ts:477</span><span class="mono">BookingPageClient.tsx:769</span><span>скрины 3 и 4</span></div>
+    </div></div>
+
+    <div class="def" id="d7"><div class="def-id">Д7</div><div class="def-b">
+      <div class="t">«Перенести» в напоминании ведёт туда же</div>
+      <div class="why">Кнопка получает обычную ссылку записи вместо адреса переноса конкретной встречи. Страница переноса при этом существует и умеет ровно то, что нужно: <span class="mono">/client/reschedule/&lt;id&gt;</span>.</div>
+      <div class="src"><span class="mono">cron/reminders.ts:199</span></div>
+    </div></div>
+
+    <div class="def" id="d8"><div class="def-id">Д8</div><div class="def-b">
+      <div class="t">В «Моих встречах» нельзя подтвердить</div>
+      <div class="why">Единственная страница, где встреча показана как встреча, знает только «Перенести» и «Отменить». Подтверждение живёт исключительно в кнопке напоминания — то есть до напоминания клиент подтвердить не может ничем. А «Перенести» и отсюда уводит на новую запись.</div>
+      <div class="src"><span class="mono">bot/client/page.tsx:313–333</span></div>
+    </div></div>
+
+    <div class="def" id="d9"><div class="def-id">Д9</div><div class="def-b">
+      <div class="t">Два сообщения на одну запись</div>
+      <div class="why">Отправка шлёт <b>и</b> в Telegram, <b>и</b> в MAX: у кого заведены оба канала — получает два одинаковых письма. То же и специалисту. Третий путь записи, наоборот, выбирает один канал. Три пути, два несовпадающих правила — это и есть «почему по 2 на запись».</div>
+      <div class="src"><span class="mono">bot/actions.ts:55–66</span><span class="mono">post-session-cascade.ts:55–58</span><span class="mono">session-notice.ts:58–64</span><span>скрин 4</span></div>
+    </div></div>
+
+    <div class="def" id="d10"><div class="def-id">Д10</div><div class="def-b">
+      <div class="t">Два разных текста об одном событии</div>
+      <div class="why">«Подтверждаю запись на консультацию…» и «Вы записаны» — одно и то же событие, разные слова и разный состав. Какой текст получит человек, зависит от того, кто нажал кнопку: он сам на странице записи или специалист в приложении.</div>
+      <div class="src"><span class="mono">client-workflow.ts:430</span><span class="mono">bot/actions.ts:383</span></div>
+    </div></div>
+
+    <div class="def" id="d11"><div class="def-id">Д11</div><div class="def-b">
+      <div class="t">В MAX ссылка снова голая</div>
+      <div class="why">Отправка в MAX вынимает ссылки в кнопки — но только из размеченного текста. Три пути отдают ей текст, уже расплющенный до «подпись: адрес», и вынимать нечего. В утренней сводке разметка и вовсе вырезается вместе с адресом.</div>
+      <div class="src"><span class="mono">format.ts:103</span><span class="mono">client-onboarding.ts:139</span><span class="mono">onboarding/route.ts:134</span><span class="mono">cron/digest.ts:14</span></div>
+    </div></div>
+
+    <div class="def" id="d12"><div class="def-id">Д12</div><div class="def-b">
+      <div class="t">«Выйти» в кабинете не выходит</div>
+      <div class="why">Обычная ссылка на главную: сессия остаётся живой. Названо в прошлый раз, не исправлено — включаю в работу, чтобы не потерялось снова.</div>
+      <div class="src"><span class="mono">diary/layout.tsx:86</span></div>
+    </div></div>
+
+    <div class="def" id="d13"><div class="def-id fixed">✓</div><div class="def-b">
+      <div class="t">«15 июня» во втором сообщении — закрыто 10.09</div>
+      <div class="why">Запрос выбирал самую раннюю встречу за всю историю клиента: без условия на дату, в четырёх местах сразу. Для нового клиента с единственной встречей это выглядело правильным, для постоянного всегда называло трёхмесячную давность. Теперь один общий запрос с условием и на день, и на время.</div>
+      <div class="src"><span class="mono">practice/upcoming-session.ts</span><span>выложено</span></div>
+    </div></div>
+
+  </div>
+</section>
+
+<section id="forks">
+  <div class="sechead">
+    <div class="eyebrow">05 · Развилки</div>
+    <h2>Четыре решения за вами</h2>
+    <p class="lede">Остальное — техника, и её я беру на себя. Здесь же решение продуктовое: что человек видит и на что мы его подписываем. Зелёным помечен мой вариант — скажите «согласен» или назовите другой.</p>
+  </div>
+
+  <div class="stack g16">
+
+    <div class="q">
+      <div class="qn">Развилка 1 · три варианта записи</div>
+      <div class="qt">Где нужны «через неделю», «регулярно на срок» и «просто выбрать время»?</div>
+      <div class="opts">
+        <div class="opt rec"><div class="box"></div><div class="lbl"><b>Специалисту — все три; клиенту — два</b><span class="rec-tag">мой вариант</span><span class="sub">Специалист после «Была» получает все три. Клиенту на его странице даю «тот же час через неделю» и «выбрать другое время», а «регулярно на срок» — нет: занимая ваши среды на три месяца вперёд, клиент распоряжается вашим расписанием. Такое решение принимает специалист.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>Все три и специалисту, и клиенту</b><span class="sub">Клиент может занять серию сам. Быстрее для постоянных, но требует ограничения по числу недель и, возможно, вашего подтверждения.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>Только специалисту</b><span class="sub">Клиентская страница остаётся как есть — одна запись за раз.</span></div></div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 2 · каналы</div>
+      <div class="qt">Если у человека заведены и Telegram, и MAX — куда слать?</div>
+      <div class="opts">
+        <div class="opt rec"><div class="box"></div><div class="lbl"><b>В один, основной</b><span class="rec-tag">мой вариант</span><span class="sub">Основным считается тот, через который человек пришёл последним; в карточке клиента это видно и переключается. Одно событие — одно сообщение, всегда.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>Всегда Telegram, MAX — только если Telegram нет</b><span class="sub">Проще и предсказуемее, но у человека, живущего в MAX, письма уходят в мессенджер, который он не открывает.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>В оба — как сейчас</b><span class="sub">Тогда дублирование остаётся, и его надо объяснять человеку, а не чинить.</span></div></div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 3 · куда ведёт ссылка</div>
+      <div class="qt">Делаем ли отдельную страницу встречи?</div>
+      <div class="opts">
+        <div class="opt rec"><div class="box"></div><div class="lbl"><b>Да — все ссылки о встрече ведут на встречу</b><span class="rec-tag">мой вариант</span><span class="sub">Одна страница на встречу: дата, формат, состояние и три действия. Страница новой записи остаётся собой и никого больше не встречает вместо подтверждения. Ссылки, разосланные раньше, продолжают работать — старый адрес показывает встречу, если она в письме была.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>Нет — достроить подтверждение прямо на странице записи</b><span class="sub">Меньше работы, но страница начинает отвечать сразу на два вопроса и от этого становится хуже в обоих.</span></div></div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 4 · порядок</div>
+      <div class="qt">Что делаем первым?</div>
+      <div class="opts">
+        <div class="opt rec"><div class="box"></div><div class="lbl"><b>Сначала приложение, потом сообщения, потом веб</b><span class="rec-tag">мой вариант</span><span class="sub">Обрезанные подписи и кнопки, которые не должны показываться, вы видите каждый день. Это одна сборка и один день. Дальше — удвоенные сообщения и ссылки, потом страница встречи.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>Сначала сообщения</b><span class="sub">Двойные письма и голые адреса видит клиент, а не вы, — и это дороже для репутации практики.</span></div></div>
+        <div class="opt"><div class="box"></div><div class="lbl"><b>Всё одним заходом</b><span class="sub">Дольше до первой выкладки и труднее проверить живьём по частям.</span></div></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sechead">
+    <div class="eyebrow">06 · Порядок работ</div>
+    <h2>Что я сделаю после «делай»</h2>
+    <p class="lede">Порядок — по варианту из развилки 4; если выберете другой, поменяю местами. Каждый шаг закрывается тестом, который падал бы на сегодняшнем поведении.</p>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="b"><div class="t">Подписи, которые влезают везде</div><div class="d">Ряд кнопок перестаёт быть обещанием, которое экран не может сдержать: подписи короче, иконки уходят там, где ряд тесный, и есть проверка, которая падает, если подпись не помещается при узком экране. Закрывает Д1 и Д2.</div></div></div>
+    <div class="step"><div class="n">02</div><div class="b"><div class="t">Экран встречи различает прошлое и будущее</div><div class="d">Прошедшей встрече — записать снова, заметка, написать. Будущей — весь нынешний набор. Оплата называет действие и гаснет, когда отмечена. Закрывает Д3 и Д4.</div></div></div>
+    <div class="step"><div class="n">03</div><div class="b"><div class="t">Развилка «Записать снова» с тремя вариантами</div><div class="d">Существующее ядро повторной записи выводится на экран после «Была» — в приложении и в мобильном вебе одинаково. Закрывает Д5.</div></div></div>
+    <div class="step"><div class="n">04</div><div class="b"><div class="t">Одно событие — одно сообщение</div><div class="d">Единый выбор канала для всех путей и единый текст о записи вместо двух. Закрывает Д9 и Д10.</div></div></div>
+    <div class="step"><div class="n">05</div><div class="b"><div class="t">Ссылка за словом во всех каналах</div><div class="d">В MAX уходит размеченный текст, а не расплющенный, — тогда адрес прячется в кнопку. Утренняя сводка перестаёт терять ссылки. Закрывает Д11.</div></div></div>
+    <div class="step"><div class="n">06</div><div class="b"><div class="t">Страница встречи</div><div class="d">Все ссылки о встрече ведут на неё; подтверждение, перенос и отмена работают на месте. Перенос из напоминания — на страницу переноса. «Мои встречи» умеет подтверждать. Закрывает Д6, Д7, Д8.</div></div></div>
+    <div class="step"><div class="n">07</div><div class="b"><div class="t">Выход из кабинета</div><div class="d">Закрывает Д12 — мелочь, но названная и не сделанная.</div></div></div>
+    <div class="step"><div class="n">08</div><div class="b"><div class="t">Проход по всему пути живьём</div><div class="d">Тот же сценарий, что вы проходили сами: встреча на сегодня, отметка, следующая запись, сообщение, переход по ссылке — в приложении, в вебе с телефона и с компьютера. С отчётом, что именно проверено и на какой сборке.</div></div></div>
+  </div>
+</section>
+
+<footer>
+  Разбор сделан по коду на 10.09.2026: экраны приложения, страницы веба, сборщики сообщений и рассылки. Никаких правок в код по этой карте ещё не внесено.
+</footer>
+
+</div>

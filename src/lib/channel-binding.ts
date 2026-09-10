@@ -228,11 +228,15 @@ export async function consumeClientChannelInvite(params: {
         if (fresh.expiresAt <= new Date()) throw new Error('INVITE_EXPIRED');
         if (fresh.channel !== 'auto' && fresh.channel !== params.channel) throw new Error('INVITE_CHANNEL_MISMATCH');
 
+        // Привязанный канал становится ОСНОВНЫМ. «Пришёл последним» — это и
+        // есть здесь: человек только что прошёл по приглашению именно через
+        // этот мессенджер, значит в нём его и искать. Раньше выбора не было
+        // вовсе — писали в оба сразу, и одно событие приходило дважды.
         const client = await tx.diaryClient.update({
             where: { id: fresh.clientId },
             data: params.channel === 'telegram'
-                ? { telegramChatId: chatId }
-                : { maxChatId: chatId },
+                ? { telegramChatId: chatId, preferredChannel: 'telegram' }
+                : { maxChatId: chatId, preferredChannel: 'max' },
             select: { id: true, name: true, psychologistId: true },
         });
 
@@ -350,7 +354,11 @@ export async function revokeClientChannel(params: {
     await db.$transaction(async tx => {
         await tx.diaryClient.update({
             where: { id: params.clientId },
-            data: params.channel === 'telegram' ? { telegramChatId: null } : { maxChatId: null },
+            // Отвязали основной канал — основного больше нет: иначе письма
+            // уходили бы в мессенджер, из которого человек ушёл.
+            data: params.channel === 'telegram'
+                ? { telegramChatId: null, preferredChannel: null }
+                : { maxChatId: null, preferredChannel: null },
         });
         if (params.channel === 'telegram' && client.telegramChatId) {
             await tx.telegramClient.updateMany({

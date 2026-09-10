@@ -3,9 +3,7 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { autoSyncSessionToCalendars } from '@/lib/calendar/auto-sync';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
-import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
+import { notifyClientAboutSession } from '@/lib/practice/session-notice';
 import { createNotification } from '@/lib/notifications';
 import { settlePastSessionsForPsychologist } from '@/lib/session-maintenance';
 import { formatSession, toDatabaseType } from '@/lib/mobile-sessions';
@@ -142,22 +140,21 @@ export async function POST(req: NextRequest) {
 
         autoSyncSessionToCalendars(auth.userId, session as any).catch(console.error);
 
+        // ОДИН СБОРЩИК СООБЩЕНИЯ О ЗАПИСИ НА ВСЕ ПУТИ.
+        //
+        // Здесь лежала третья копия того же письма: свой вызов сборщика, своя
+        // отправка, свой выбор канала (max вперёд Telegram — не так, как в
+        // двух других местах) и приписка «подтвердите встречу в сообщении-
+        // напоминании». Приписка и была признанием: подтвердить встречу
+        // человеку было нечем, кроме напоминания за сутки. Теперь под
+        // сообщением три кнопки, и приписка ни к чему.
         let noticeStatus = 'none';
         let onlineSessionLink: string | null = null;
         try {
             const psychologist = await db.user.findUnique({ where: { id: auth.userId }, include: { psychologistSettings: true } });
-            const client = session.client as any;
-            const channel = client.maxChatId ? 'max' : client.telegramChatId ? 'telegram' : null;
             onlineSessionLink = psychologist?.psychologistSettings?.onlineSessionLink || null;
-            const deliveries = sessionsCount === 1 ? await createAutoDocumentDeliveries({ psychologistId: auth.userId, clientId, sessionId: session.id, trigger: 'first_session', channel: channel || 'manual', recipientContact: client.maxChatId || client.telegramChatId || null }) : [];
-            const psychologistName = psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист';
-            const bookingLink = clientBookingLink(auth.userId, clientId);
-            const onlineLink = session.format === 'online' ? onlineSessionLink : null;
-            const paymentText = await getPaymentInstruction(auth.userId, session.id, clientId);
-            const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: session.date, time: session.time, format: session.format, onlineLink, documentLinks: deliveries.map((delivery: any) => ({ title: delivery.title, link: delivery.link })), paymentText, bookingLink });
-            const message = `${text}\n\nПожалуйста, подтвердите встречу в сообщении-напоминании.`;
-            if (channel === 'max') { await sendMaxMessage(client.maxChatId, message); noticeStatus = 'max_sent'; }
-            else if (channel === 'telegram') { await sendTelegramMessage(client.telegramChatId, message, { parse_mode: 'HTML' }); noticeStatus = 'telegram_sent'; }
+            const notice = await notifyClientAboutSession(auth.userId, session.id, sessionsCount === 1);
+            noticeStatus = notice.status === 'sent' ? `${notice.channel}_sent` : notice.status;
         } catch (notifyError) {
             console.error('[mobile/sessions POST] client notice failed:', notifyError);
             noticeStatus = 'failed';

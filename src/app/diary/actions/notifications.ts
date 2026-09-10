@@ -98,29 +98,21 @@ export async function testNotification(type: string) {
 
         message = `[ТЕСТ] ${message}`;
 
-        const errors: string[] = [];
+        // Одно сообщение — один канал. Раньше писали и в Telegram, и в MAX:
+        // человек с обоими мессенджерами получал каждое письмо дважды.
+        const { deliverMessage } = await import('@/lib/messaging/deliver');
+        const delivery = await deliverMessage(
+            { telegramChatId: tgId, maxChatId: maxId, preferredChannel: null },
+            message,
+        );
 
-        if (tgId) {
-            try {
-                const { Telegraf } = await import('telegraf');
-                const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
-                await bot.telegram.sendMessage(tgId, message, { parse_mode: 'HTML' });
-            } catch (e: any) {
-                errors.push(`Telegram: ${e.message}`);
-            }
-        }
-
-        if (maxId) {
-            try {
-                const { sendMaxMessage } = await import('@/lib/max-bot');
-                await sendMaxMessage(maxId, message);
-            } catch (e: any) {
-                errors.push(`MAX: ${e.message}`);
-            }
-        }
-
-        if (errors.length && errors.length === [tgId, maxId].filter(Boolean).length) {
-            return { success: false, error: errors.join('; ') };
+        if (!delivery.sent) {
+            return {
+                success: false,
+                error: delivery.channel
+                    ? `Не удалось отправить в ${delivery.channel === 'max' ? 'MAX' : 'Telegram'}`
+                    : 'У клиента не привязан мессенджер',
+            };
         }
 
         return { success: true };

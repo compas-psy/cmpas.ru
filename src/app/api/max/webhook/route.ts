@@ -66,7 +66,10 @@ async function handleClientInvite(update: MaxWebhookUpdate) {
         });
         for (const message of queued) {
             try {
-                await sendMaxMessage(userId, message.text.replace(/<[^>]+>/g, ''));
+                // Разметку вырезать нельзя: вместе с ней пропадали АДРЕСА
+                // ссылок, и человек получал подпись, ведущую в никуда.
+                // sendMaxMessage сама переводит текст и прячет ссылки в кнопки.
+                await sendMaxMessage(userId, message.text);
                 await db.scheduledClientMessage.update({
                     where: { id: message.id },
                     data: { status: 'sent', sentAt: new Date() },

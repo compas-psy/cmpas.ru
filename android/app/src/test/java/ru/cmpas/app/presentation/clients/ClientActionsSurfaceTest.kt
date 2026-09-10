@@ -42,15 +42,19 @@ class ClientActionsSurfaceTest {
 
     @Test
     fun `основное действие внизу называется Записать сессию`() {
+        // Подпись проверяется как подпись, а не как способ её передать: с
+        // 10.09.2026 нижний ряд собирается FittingActionRow (подпись — первый
+        // аргумент RowAction), потому что «Записать сессию» с иконкой требует
+        // около 190 точек, а в половину узкого экрана их 156.
         val body = code(screen)
-        assertTrue(body.contains("text = \"Записать сессию\""))
-        assertFalse("прежней подписи не осталось", body.contains("text = \"Добавить запись\""))
+        assertTrue(body.contains("\"Записать сессию\""))
+        assertFalse("прежней подписи не осталось", body.contains("\"Добавить запись\""))
     }
 
     @Test
     fun `запись создаётся для этого клиента в существующей форме`() {
         val body = code(screen)
-        assertTrue("кнопка передаёт клиента", body.contains("onClick = { onScheduleClick(clientId) }"))
+        assertTrue("кнопка передаёт клиента", body.contains("onScheduleClick(clientId)"))
 
         val nav = code(navHost)
         assertTrue(
@@ -78,11 +82,11 @@ class ClientActionsSurfaceTest {
     @Test
     fun `привязанному клиенту предлагают Написать, непривязанному — Пригласить`() {
         val body = code(screen)
-        val sticky = body.substringAfter("text = \"Записать сессию\"").substringBefore("when (sheet)")
+        val sticky = body.substringAfter("\"Записать сессию\"").substringBefore("when (sheet)")
 
         assertTrue("ветка по привязке", sticky.contains("if (bound)"))
-        assertTrue(sticky.contains("text = \"Написать\""))
-        assertTrue(sticky.contains("text = \"Пригласить\""))
+        assertTrue(sticky.contains("\"Написать\""))
+        assertTrue(sticky.contains("\"Пригласить\""))
         assertTrue("написать — существующая шторка сообщения", sticky.contains("sheet = ClientSheet.MESSAGE"))
         assertTrue("пригласить — существующая шторка приглашения", sticky.contains("sheet = ClientSheet.INVITE"))
     }

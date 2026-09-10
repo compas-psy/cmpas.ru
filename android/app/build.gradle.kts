@@ -49,8 +49,8 @@ android {
         // Правило CLAUDE.md «versionCode не растёт от правок сборки,
         // подписи, разрешений или имён» здесь не применимо: изменилось
         // поведение продукта, а не способ его доставки.
-        versionCode = 15
-        versionName = "1.1.7"
+        versionCode = 16
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

@@ -31,7 +31,13 @@ import ru.cmpas.app.presentation.comms.InviteSheet
 import ru.cmpas.app.presentation.comms.SendDocumentSheet
 import ru.cmpas.app.presentation.comms.SendMessageSheet
 import ru.cmpas.app.presentation.comms.asDocumentTemplate
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
 import ru.cmpas.app.presentation.components.*
+import ru.cmpas.app.presentation.util.MAX_REPEAT_WEEKS
+import ru.cmpas.app.presentation.util.REPEAT_WEEK_PRESETS
+import ru.cmpas.app.presentation.util.parseOwnWeeks
 import ru.cmpas.app.presentation.navigation.ScreenFocus
 import ru.cmpas.app.presentation.theme.*
 import java.time.LocalDate
@@ -273,37 +279,30 @@ fun ClientDetailScreen(
         }
 
         if (client != null) {
-            Row(
+            Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                     .background(CompasBg.copy(alpha = 0.94f)).navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                PrimaryButton(
-                    text = "Записать сессию",
-                    icon = Icons.Outlined.CalendarMonth,
-                    onClick = { onScheduleClick(clientId) },
-                    modifier = Modifier.weight(1f),
-                )
+                // «Записать сессию» с иконкой занимает около 190 точек — в
+                // половину узкого экрана это не помещается. Ряд собирается по
+                // настоящей ширине: на широком экране обе кнопки рядом, на
+                // узком — одна под другой, и подпись цела в обоих случаях.
+                //
                 // Второе действие зависит от того, есть ли с клиентом связь.
                 // Спрашиваем сервер (hasMessenger), а не гадаем по телефону
                 // или почте: «Написать» непривязанному клиенту — это кнопка,
                 // которой некуда писать.
-                if (bound) {
-                    GhostButton(
-                        text = "Написать",
-                        icon = Icons.Outlined.Send,
-                        onClick = { sheet = ClientSheet.MESSAGE },
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    GhostButton(
-                        text = "Пригласить",
-                        icon = Icons.Outlined.PersonAdd,
-                        onClick = { inviteChannel = "auto"; sheet = ClientSheet.INVITE },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                FittingActionRow(
+                    actions = listOf(
+                        RowAction("Записать сессию", { onScheduleClick(clientId) }, icon = Icons.Outlined.CalendarMonth, primary = true),
+                        if (bound) {
+                            RowAction("Написать", { sheet = ClientSheet.MESSAGE }, icon = Icons.Outlined.Send)
+                        } else {
+                            RowAction("Пригласить", { inviteChannel = "auto"; sheet = ClientSheet.INVITE }, icon = Icons.Outlined.PersonAdd)
+                        },
+                    ),
+                )
             }
         }
 
@@ -758,6 +757,8 @@ private fun RepeatSlotCard(
     // Повторять нечего, пока не было ни одной встречи: час берётся из неё.
     if (reference == null) return
 
+    var ownWeeks by rememberSaveable { mutableStateOf("") }
+
     GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(22.dp), tint = CompasAccent)
@@ -773,16 +774,42 @@ private fun RepeatSlotCard(
         }
 
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(1 to "Неделя", 4 to "Месяц", 8 to "8 недель", 12 to "Квартал").forEach { (weeks, label) ->
-                GhostButton(
-                    text = if (busyWeeks == weeks) "…" else label,
-                    modifier = Modifier.weight(1f),
-                    enabled = busyWeeks == null,
-                    compact = true,
-                    onClick = { onRepeat(weeks) },
-                )
-            }
+        // Четыре кнопки — подсказки, а не весь выбор. Учредитель 10.09.2026:
+        // «по неделям нужно более гибко, например, 4, 8, 12, предложить своё».
+        FittingActionRow(
+            compact = true,
+            enabled = busyWeeks == null,
+            actions = REPEAT_WEEK_PRESETS.map { (weeks, label) ->
+                RowAction(if (busyWeeks == weeks) "…" else label, { onRepeat(weeks) })
+            },
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = ownWeeks,
+                onValueChange = { text -> ownWeeks = text.filter { it.isDigit() }.take(2) },
+                label = { Text("Свой срок") },
+                suffix = { Text("нед.") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.width(150.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            PrimaryButton(
+                text = "Занять",
+                modifier = Modifier.weight(1f),
+                compact = true,
+                enabled = busyWeeks == null && parseOwnWeeks(ownWeeks) != null,
+                onClick = { parseOwnWeeks(ownWeeks)?.let(onRepeat) },
+            )
+        }
+        if (ownWeeks.isNotBlank() && parseOwnWeeks(ownWeeks) == null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "От 1 до $MAX_REPEAT_WEEKS недель — дальше планировать одним нажатием слишком дорого ошибаться.",
+                style = tMeta,
+                color = CompasDestructive,
+            )
         }
 
         if (outcome != null) {

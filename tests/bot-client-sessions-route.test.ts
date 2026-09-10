@@ -27,6 +27,10 @@ vi.mock('@/lib/client-workflow', () => ({
         `token:${psychologistId}:${clientId}:${sessionId}:${action}:${expiresAt}`,
     sessionActionTokenExpiry: (date: Date) => date.getTime() + 48 * 60 * 60 * 1000,
     resolveSignedPersonalClientToken: (...args: unknown[]) => resolveSignedPersonalClientToken(...args),
+    // Адреса трёх действий по встрече (sessionActionLinks) собираются от
+    // публичного адреса — маршрут раздаёт теперь не только токен отмены, но
+    // и ссылки «подтвердить» и «перенести».
+    publicBaseUrl: () => 'https://cmpas.ru',
 }));
 
 const verifyTelegramWebAppInitData = vi.hoisted(() => vi.fn());

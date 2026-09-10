@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { safeReturnPath, DEFAULT_RETURN_PATH } from '@/lib/auth/return-path';
-import { auth } from '@/auth';
+import { auth, signOut } from '@/auth';
 import { db } from '@/lib/db';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -77,14 +77,31 @@ function SidebarContent({
                     <TrialCard daysLeft={daysLeft} totalDays={30} />
                 )}
 
+                {/* «ВЫЙТИ» ДОЛЖНО ВЫХОДИТЬ.
+                    Здесь стояла обычная ссылка на главную: человек нажимал
+                    «Выйти», видел лендинг и считал, что вышел, — а сессия
+                    оставалась живой, и любой, кто откроет /diary на том же
+                    устройстве, попадал в его практику. На общем компьютере
+                    это не мелочь: в карточках клиентов лежат персональные
+                    данные, за которые специалист отвечает как оператор.
+
+                    Форма, а не ссылка: выход меняет состояние, и делать это
+                    переходом по адресу нельзя. */}
                 <div className="px-4 pb-4 pt-2 border-t border-sidebar-border">
-                    <Link
-                        href="/"
-                        className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-white/50 hover:bg-white/5 hover:text-white/80 transition-all text-[14px] font-medium"
+                    <form
+                        action={async () => {
+                            'use server';
+                            await signOut({ redirectTo: '/' });
+                        }}
                     >
-                        <LogOut className="w-[18px] h-[18px]" />
-                        <span>Выйти</span>
-                    </Link>
+                        <button
+                            type="submit"
+                            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-white/50 hover:bg-white/5 hover:text-white/80 transition-all text-[14px] font-medium"
+                        >
+                            <LogOut className="w-[18px] h-[18px]" />
+                            <span>Выйти</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

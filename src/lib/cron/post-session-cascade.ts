@@ -30,8 +30,7 @@
 
 import { db } from '@/lib/db';
 import { messageLink } from '@/lib/messaging/format';
-import { sendTelegramMessage } from '../telegram';
-import { sendMaxMessage } from '../max';
+import { deliverMessage } from '@/lib/messaging/deliver';
 import { clientBookingLink } from '../client-workflow';
 import { getPsychologistBookingUrl } from '../booking/slug';
 import { getSuggestedTimes } from '@/app/bot/actions';
@@ -51,10 +50,21 @@ function clientChannels(client: any): { telegram: string | null; max: string | n
     return { telegram: telegramTarget, max: maxId };
 }
 
+/**
+ * Одно письмо — один канал.
+ *
+ * Было «if (telegram) … if (max) …»: клиент с обоими мессенджерами получал
+ * каждое письмо каскада дважды. Проверка на совпадение идентификаторов рядом
+ * это не спасала — она ловила только буквально одинаковые строки, а
+ * telegramChatId и maxChatId никогда не совпадают.
+ */
 async function sendToClient(client: any, text: string): Promise<void> {
     const { telegram, max } = clientChannels(client);
-    if (telegram) await sendTelegramMessage(telegram, text).catch(console.error);
-    if (max) await sendMaxMessage(max, text).catch(console.error);
+    await deliverMessage({
+        telegramChatId: telegram,
+        maxChatId: max,
+        preferredChannel: client?.preferredChannel ?? null,
+    }, text);
 }
 
 /**

@@ -27,6 +27,7 @@ import ru.cmpas.app.presentation.dashboard.DashboardScreen
 import ru.cmpas.app.presentation.legal.LegalGateOverlay
 import ru.cmpas.app.presentation.notes.NotesScreen
 import ru.cmpas.app.presentation.notes.PostSessionNoteScreen
+import ru.cmpas.app.presentation.rebook.RebookScreen
 import ru.cmpas.app.presentation.schedule.ScheduleScreen
 import ru.cmpas.app.presentation.session.SessionDetailScreen
 import ru.cmpas.app.presentation.settings.AddressesScreen
@@ -80,7 +81,7 @@ fun CompasNavHost(
                     // Тот же экран создания записи, но с уже выбранным
                     // клиентом: после встречи вопрос «когда следующая», а не
                     // «кого выбрать».
-                    onRebookClient = { clientId -> navController.navigate(Screen.QuickAction.createRoute("new-session", clientId)) },
+                    onRebookClient = { clientId -> navController.navigate(Screen.Rebook.createRoute(clientId)) },
                     onCreateClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
                     onScheduleClick = { navController.navigate(Screen.Schedule.route) },
                     // Задача 23: пункт «требует внимания» ведёт прямо в
@@ -141,6 +142,19 @@ fun CompasNavHost(
                 )
             }
             composable(
+                Screen.Rebook.route,
+                arguments = listOf(navArgument("clientId") { type = NavType.StringType }),
+            ) {
+                val clientId = it.arguments?.getString("clientId") ?: ""
+                RebookScreen(
+                    clientId = clientId,
+                    onBack = { navController.popBackStack() },
+                    onPickAnotherTime = { id ->
+                        navController.navigate(Screen.QuickAction.createRoute("new-session", id))
+                    },
+                )
+            }
+            composable(
                 Screen.PostSessionNote.route,
                 arguments = listOf(navArgument("sessionId") { type = NavType.StringType }),
             ) {
@@ -163,6 +177,7 @@ fun CompasNavHost(
                     onClientClick = { id -> navController.navigate(Screen.ClientDetail.createRoute(id)) },
                     onNoteClick = { id -> navController.navigate(Screen.PostSessionNote.createRoute(id)) },
                     onQuickAction = { type -> navController.navigate(Screen.QuickAction.createRoute(type)) },
+                    onRebookClient = { clientId -> navController.navigate(Screen.Rebook.createRoute(clientId)) },
                     focus = ScreenFocus.from(it.arguments?.getString("focus")),
                 )
             }
