@@ -135,4 +135,44 @@ class ButtonRowFitTest {
     fun `подпись «Записать снова» на карточке дня больше не встречается`() {
         assertFalse(source("dashboard/DashboardScreen.kt").contains("\"Записать снова\""))
     }
+
+    // ── Ряд не ломает внутренние размеры ──
+
+    /** Текст без комментариев: объяснение «здесь нет X» — не использование X. */
+    private fun code(source: String) = source
+        .lines()
+        .filterNot { it.trimStart().startsWith("//") || it.trimStart().startsWith("*") || it.trimStart().startsWith("/*") }
+        .joinToString("\n")
+
+    @Test
+    fun `ряд не построен на SubcomposeLayout`() {
+        // ЖИВОЙ СЛУЧАЙ, 10.09.2026. Версия 1.2.0 не запускалась вовсе:
+        // приложение открывалось пустым и падало, как только приходили данные
+        // и рисовалась первая карточка встречи.
+        //
+        // Первая редакция ряда брала ширину через BoxWithConstraints, а он
+        // построен на SubcomposeLayout — тот при запросе ВНУТРЕННИХ размеров
+        // бросает исключение. Карточка встречи лежит внутри
+        // Row(Modifier.height(IntrinsicSize.Min)), то есть её высоту как раз
+        // спрашивают. Спросили — упало.
+        //
+        // Проверка держит причину, а не приём: пока ряда нет на
+        // SubcomposeLayout, этот отказ вернуться не может.
+        val row = code(source("components/ActionRow.kt"))
+
+        assertFalse("BoxWithConstraints не поддерживает внутренние размеры", row.contains("BoxWithConstraints"))
+        assertFalse(row.contains("SubcomposeLayout"))
+        assertTrue("ширина берётся обычным обмером", row.contains("onSizeChanged"))
+    }
+
+    @Test
+    fun `карточка дня по-прежнему просит внутренние размеры`() {
+        // Половина причины живёт здесь: если этот Row однажды перестанет
+        // спрашивать высоту, проверка выше потеряет смысл — и об этом надо
+        // узнать, а не тихо ослабить защиту.
+        assertTrue(
+            "полоса времени и нить тянутся по высоте карточки",
+            code(source("dashboard/DashboardScreen.kt")).contains("height(IntrinsicSize.Min)"),
+        )
+    }
 }
