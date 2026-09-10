@@ -34,7 +34,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 async function handleClientInvite(body: any): Promise<boolean> {
     const { bot } = await import('@/lib/telegram-bot');
     const { db } = await import('@/lib/db');
-    const { consumeClientChannelInvite } = await import('@/lib/channel-binding');
+    const { consumeClientChannelInvite, channelInviteFailureMessage } = await import('@/lib/channel-binding');
     const { extractFirstName } = await import('@/lib/person-name');
 
     const text = body.message?.text as string | undefined;
@@ -61,11 +61,7 @@ async function handleClientInvite(body: any): Promise<boolean> {
         });
     } catch (error) {
         const code = error instanceof Error ? error.message : '';
-        const message = code === 'INVITE_ALREADY_USED'
-            ? 'Эта ссылка уже использована. Попросите специалиста отправить новую.'
-            : code === 'INVITE_EXPIRED'
-                ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
-                : 'Не удалось подключить уведомления. Попросите специалиста отправить новую ссылку.';
+        const message = channelInviteFailureMessage(code);
         await withTimeout(bot.telegram.sendMessage(chatId, message), 6000).catch(e => console.error('[telegram-webhook] failure notice send failed:', e instanceof Error ? e.message : e));
         return true;
     }

@@ -3,7 +3,7 @@ import { message } from 'telegraf/filters';
 import type { Agent } from 'http';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
-import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { consumeClientChannelInvite, channelInviteFailureMessage } from '@/lib/channel-binding';
 import { createNotification } from '@/lib/notifications';
 import { telegramSendAgent } from '@/lib/telegram-proxy';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
@@ -256,12 +256,7 @@ export function setupBot() {
                 return;
             } catch (e) {
                 const code = e instanceof Error ? e.message : '';
-                const message = code === 'INVITE_ALREADY_USED'
-                    ? 'Эта ссылка уже была использована. Попросите специалиста отправить новую.'
-                    : code === 'INVITE_EXPIRED'
-                        ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
-                        : 'Ссылка недействительна. Попросите специалиста отправить новую.';
-                await ctx.reply(message);
+                await ctx.reply(channelInviteFailureMessage(code));
                 return;
             }
         }
