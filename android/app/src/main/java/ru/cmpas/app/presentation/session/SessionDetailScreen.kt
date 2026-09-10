@@ -607,6 +607,18 @@ private fun PaymentSheet(
         SheetHead("Оплата", clientName)
         Spacer(Modifier.height(6.dp))
         Text(paymentStatusLabel(status), style = tBody2)
+        Spacer(Modifier.height(6.dp))
+        // ЧТО ЭТА КНОПКА ВООБЩЕ ДЕЛАЕТ.
+        //
+        // «Оплата» стояла на карточке без единого слова о том, чем она
+        // является: приёмом денег или отметкой о них. Учредитель на живой
+        // сессии спросил ровно это. Слова те же, что в вебе
+        // (SessionModal.tsx) — расходиться этим двум местам нельзя.
+        Text(
+            "ПРАКТИКА только фиксирует отметку. Деньги принимает специалист вне сервиса.",
+            style = tMeta,
+            color = CompasMutedFg,
+        )
         Spacer(Modifier.height(14.dp))
 
         PrimaryButton(

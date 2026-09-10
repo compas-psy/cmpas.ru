@@ -75,5 +75,8 @@ export function formatSession(s: any, onlineSessionLink: string | null = null) {
         notes: typeof s.notes === 'string' ? s.notes : notesPlain,
         notesPlain,
         structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
+        // Момент, когда исход назвал специалист. null — значит статус мог
+        // проставить сервер сам, и спросить ещё стоит.
+        outcomeRecordedAt: s.outcomeRecordedAt instanceof Date ? s.outcomeRecordedAt.toISOString() : (s.outcomeRecordedAt ?? null),
     };
 }

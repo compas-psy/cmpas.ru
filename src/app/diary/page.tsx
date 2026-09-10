@@ -28,6 +28,13 @@ type Session = {
     structuredNotes: any;
     privateNotes: any;
     clientSummary: string | null;
+    /**
+     * Когда исход назвал специалист. По статусу это не определить: сервер сам
+     * переводит confirmed в completed через 15 минут после конца встречи
+     * (settlePastSessionsForPsychologist), и «completed» значит то ли
+     * «специалист сказал», то ли «время прошло, и мы предположили».
+     */
+    outcomeRecordedAt?: string | Date | null;
     client: { id: string; name: string; questionnaire?: { data: any } | null; consentDate?: string | null };
 };
 
@@ -138,7 +145,7 @@ export default function DiaryCalendarPage() {
     const [editingSession, setEditingSession] = useState<Session | null>(null);
     const [settings, setSettings] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date }>({});
+    const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date; client?: { id: string; name: string } }>({});
     const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
     const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
     const [authName, setAuthName] = useState('');
@@ -264,6 +271,20 @@ export default function DiaryCalendarPage() {
     };
 
     // O-260829 §5.4: вечерняя отметка специалиста ("была"/"не пришёл").
+    /**
+     * «Записать снова» после состоявшейся встречи: та же форма записи, что и
+     * везде (второй её не заводим), но клиент уже подставлен, а календарь
+     * открыт на том же дне недели через неделю — самый частый следующий шаг
+     * в регулярной работе. Время специалист выбирает из своих же слотов.
+     */
+    const openRebook = (s: Session, clientName: string) => {
+        const nextWeek = new Date(s.date);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        setEditingSession(null);
+        setNewSessionDefaults({ date: nextWeek, client: { id: s.clientId, name: clientName } });
+        setShowNewSession(true);
+    };
+
     const handleMarkOutcome = async (id: string, outcome: 'completed' | 'no_show') => {
         try {
             const { markSessionOutcome } = await import('./actions/sessions');
@@ -727,7 +748,14 @@ export default function DiaryCalendarPage() {
                                     // 'completed' — специалист должен суметь поправить это на "не пришёл"
                                     // задним числом, а не только пока сессия formally 'confirmed'.
                                     const sessionEndStr = s.endTime || s.time;
-                                    const awaitingOutcome = sessionEndStr <= currentTimeStr && s.status !== 'cancelled' && s.status !== 'no_show';
+                                    // Исход НАЗВАН человеком — это не то же самое, что статус
+                                    // completed: его в 15 минут после конца встречи проставляет
+                                    // сервер сам. no_show сервер не ставит никогда, поэтому он
+                                    // всегда названный (а у записей, сделанных до появления
+                                    // outcomeRecordedAt, поля просто нет).
+                                    const outcomeNamed = s.status === 'no_show' || !!s.outcomeRecordedAt;
+                                    const sessionPassed = sessionEndStr <= currentTimeStr;
+                                    const awaitingOutcome = sessionPassed && s.status !== 'cancelled' && !outcomeNamed;
 
                                     return (
                                         <div key={s.id} onClick={() => openSession(s)}
@@ -759,22 +787,58 @@ export default function DiaryCalendarPage() {
                                                     <span>{s.duration} мин</span>
                                                     {noConsent && <span className="px-1 py-0.5 rounded text-[9px] font-bold text-red-600 bg-red-50 ml-1">Нет согласия</span>}
                                                 </div>
+                                                {/* РАЗВИЛКА, А НЕ ТРИ КНОПКИ СРАЗУ — и ровно та же,
+                                                    что в приложении (DashboardScreen.ScheduleRow).
+                                                    Мобильный веб у нас и есть версия для iPhone,
+                                                    поэтому расходиться этим двум местам нельзя.
+
+                                                    Сначала один вопрос: состоялась ли встреча.
+                                                    Всё остальное осмысленно только после ответа —
+                                                    заметка пишется о состоявшейся, следующая
+                                                    запись назначается после состоявшейся, причина
+                                                    и перенос нужны только несостоявшейся. После
+                                                    ответа кнопки уходят, и остаётся подпись со
+                                                    статусом справа. */}
                                                 {awaitingOutcome && (
                                                     <div className="flex items-center gap-1.5 flex-wrap mt-2" onClick={(e) => e.stopPropagation()}>
                                                         <button
                                                             onClick={() => handleMarkOutcome(s.id, 'completed')}
                                                             className="px-2 py-1 rounded-lg text-[11px] font-bold bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors">
-                                                            Была/Был
+                                                            Была
                                                         </button>
-                                                        {/* Нейтральный, не тревожный цвет — не пришедший клиент не "ошибка" (O-260829). */}
+                                                        {/* Нейтральный, не тревожный цвет — не пришедший клиент не "ошибка" (O-260829).
+                                                            Безличная форма: гадать пол клиента ради грамматики здесь ни к чему. */}
                                                         <button
                                                             onClick={() => handleMarkOutcome(s.id, 'no_show')}
                                                             className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-muted-foreground border border-sage-200 transition-colors">
-                                                            Не пришла/Не пришёл
+                                                            Не пришли
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {!awaitingOutcome && sessionPassed && s.status === 'completed' && outcomeNamed && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap mt-2" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => openSession(s)}
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-forest-700 border border-sage-200 transition-colors">
+                                                            Заметка
+                                                        </button>
+                                                        <button
+                                                            onClick={() => openRebook(s, cn)}
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors">
+                                                            Записать снова
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {s.status === 'no_show' && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap mt-2" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => openSession(s)}
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-forest-700 border border-sage-200 transition-colors">
+                                                            Причина
                                                         </button>
                                                         <button
                                                             onClick={() => setRescheduleTarget(s)}
-                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-forest-700 border border-sage-200 transition-colors">
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-bold bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors">
                                                             Перенести
                                                         </button>
                                                     </div>
@@ -917,6 +981,7 @@ export default function DiaryCalendarPage() {
                 onClose={() => { setShowNewSession(false); setEditingSession(null); }}
                 onSave={handleSessionSave}
                 initialDate={newSessionDefaults.date}
+                initialClient={newSessionDefaults.client}
                 editSession={editingSession}
                 clients={clients}
             />

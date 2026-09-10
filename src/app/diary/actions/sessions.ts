@@ -283,7 +283,12 @@ export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_
     const now = new Date();
     const session = await db.diarySession.update({
         where: { id },
-        data: { status: outcome },
+        // outcomeRecordedAt отделяет «человек сказал» от «система
+        // предположила»: тот же status='completed' сервер ставит сам через
+        // 15 минут после конца сессии. Без этой отметки карточка не знает,
+        // отвечен ли вопрос «состоялась ли встреча», и показывает выбор
+        // человеку, который его уже сделал.
+        data: { status: outcome, outcomeRecordedAt: now } as never,
     });
 
     // O-260829 §7: session_outcome_marked — факт вечерней отметки, без

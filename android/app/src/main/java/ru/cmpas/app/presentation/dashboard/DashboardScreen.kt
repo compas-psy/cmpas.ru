@@ -40,7 +40,7 @@ import ru.cmpas.app.presentation.notifications.NotificationCenterSheet
 import ru.cmpas.app.presentation.theme.*
 import ru.cmpas.app.presentation.util.PersonName
 import ru.cmpas.app.presentation.util.SessionMoment
-import ru.cmpas.app.presentation.util.canRecordSessionOutcome
+import ru.cmpas.app.presentation.util.shouldAskSessionOutcome
 import java.time.Duration
 import java.time.LocalTime
 
@@ -61,6 +61,11 @@ fun DashboardScreen(
     // второго редактора записи и второй формы клиента не заводится.
     onCreateSession: () -> Unit = {},
     onCreateClient: () -> Unit = {},
+    // Развилка после «Была»: записать этого же клиента снова. Тот же экран
+    // создания записи, что и onCreateSession, но с уже выбранным клиентом —
+    // после встречи специалист думает про «когда следующая», а не про «кого
+    // выбрать».
+    onRebookClient: (String) -> Unit = {},
     // Задача 24: шаг «Расписание» ведёт в уже существующий экран расписания.
     onScheduleClick: () -> Unit = {},
     // Задача 23 §2: «требует внимания» ведёт к действию, а не к объекту.
@@ -234,6 +239,12 @@ fun DashboardScreen(
                         onPaid = { viewModel.markPaid(s.id) },
                         onComplete = { viewModel.markSessionOutcome(s.id, SessionStatus.COMPLETED) },
                         onNoShow = { viewModel.markSessionOutcome(s.id, SessionStatus.NO_SHOW) },
+                        // Развилка ведёт в УЖЕ существующие экраны: второго
+                        // редактора записи и второй формы переноса не
+                        // заводится (то же правило, что у onCreateSession).
+                        onRebook = { onRebookClient(s.clientId) },
+                        onReason = { onSessionClick(s.id) },
+                        onReschedule = { onSessionClick(s.id) },
                     )
                 }
             }
@@ -456,13 +467,22 @@ private fun ScheduleRow(
     onPaid: () -> Unit,
     onComplete: () -> Unit,
     onNoShow: () -> Unit,
+    /** Развилка «была»: записать этого же клиента снова. */
+    onRebook: () -> Unit,
+    /** Развилка «не пришли»: назвать причину и перенести. */
+    onReason: () -> Unit,
+    onReschedule: () -> Unit,
 ) {
     val dur = durationMin(s)
     val passed = s.status == SessionStatus.COMPLETED
-    // Тот же вечерний список, тот же критерий, что и на экране деталей
-    // сессии (canRecordSessionOutcome) — специалист должен суметь пройти
-    // весь сегодняшний день здесь, не открывая каждую запись по отдельности.
-    val canRecordOutcome = canRecordSessionOutcome(s.date, s.status)
+    // Исход назван человеком — не выведен из статуса. Сервер сам ставит
+    // COMPLETED через 15 минут после конца встречи, поэтому по статусу
+    // «специалист сказал» и «система предположила» неразличимы.
+    val outcomeNamed = !s.outcomeRecordedAt.isNullOrBlank()
+    // Специалист должен суметь пройти весь сегодняшний день здесь, не
+    // открывая каждую запись по отдельности, — но только те, по которым
+    // ответа ещё не было.
+    val canRecordOutcome = shouldAskSessionOutcome(s.date, s.status, s.outcomeRecordedAt)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Column(Modifier.width(46.dp), horizontalAlignment = Alignment.End) {
             Text(s.startTime, style = tBody.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = CompasFg)
@@ -484,58 +504,87 @@ private fun ScheduleRow(
                     Spacer(Modifier.height(3.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         FmtChip(if (s.format == SessionFormat.ONLINE) "video" else "offline")
-                        if (passed) TinyBadge("Прошла")
+                        // ОТМЕЧЕННАЯ ВСТРЕЧА ГОВОРИТ О СЕБЕ СТАТУСОМ, А НЕ
+                        // КНОПКАМИ. Пока не отмечена — «Прошла»; после
+                        // отметки на том же месте стоит «Была» или «Не
+                        // пришли», а кнопки выбора исчезают: выбор сделан,
+                        // предлагать его снова незачем.
+                        when {
+                            s.status == SessionStatus.COMPLETED && outcomeNamed -> TinyBadge("Была")
+                            // NO_SHOW сервер не ставит никогда — это всегда
+                            // сказанное специалистом слово.
+                            s.status == SessionStatus.NO_SHOW -> TinyBadge("Не пришли")
+                            passed -> TinyBadge("Прошла")
+                        }
                         if (s.paymentStatus == PaymentStatus.PAID) TinyBadge("Оплачено")
                     }
                 }
                 Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = CompasMutedFg)
             }
-            if (passed) {
+
+            // РАЗВИЛКА, А НЕ ЧЕТЫРЕ КНОПКИ СРАЗУ.
+            //
+            // Раньше на карточке одновременно жили «Заметка», «Оплачено»,
+            // «Была» и «Не пришли». Четыре равноправных действия там, где
+            // человеку нужно сделать одно: сначала сказать, состоялась ли
+            // встреча. Остальное осмысленно ТОЛЬКО после этого ответа —
+            // заметка пишется о состоявшейся встрече, следующая запись
+            // назначается после состоявшейся, причина и перенос нужны
+            // только несостоявшейся.
+            //
+            // Отсюда три состояния вместо одного нагромождения.
+            if (canRecordOutcome) {
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostButton(
-                        text = "Заметка",
-                        icon = Icons.Outlined.EditNote,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNote,
-                    )
-                    if (s.paymentStatus == PaymentStatus.PAID) {
-                        GhostButton(
-                            text = "Оплачено",
-                            icon = Icons.Outlined.CheckCircle,
-                            modifier = Modifier.weight(1f),
-                            onClick = onClick,
-                        )
-                    } else {
-                        GhostButton(
-                            text = if (isUpdatingPayment) "Отмечаем…" else "Оплачено",
-                            icon = Icons.Outlined.Payments,
-                            modifier = Modifier.weight(1f),
-                            onClick = onPaid,
-                        )
-                    }
-                }
-            }
-            if (canRecordOutcome) {
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PrimaryButton(
-                        text = "Была",
-                        icon = Icons.Outlined.CheckCircle,
+                        text = if (isUpdatingOutcome) "Отмечаем…" else "Была",
                         modifier = Modifier.weight(1f),
                         enabled = !isUpdatingOutcome,
+                        compact = true,
                         onClick = onComplete,
                     )
                     // Безличная форма, как и в SessionHero: гадать пол
                     // клиента ради грамматики здесь ни к чему.
                     GhostButton(
-                        text = if (isUpdatingOutcome) "Отмечаем…" else "Не пришли",
-                        icon = Icons.Outlined.PersonOff,
+                        text = "Не пришли",
                         modifier = Modifier.weight(1f),
                         enabled = !isUpdatingOutcome,
+                        compact = true,
                         onClick = onNoShow,
                     )
                 }
+            } else if (passed && outcomeNamed) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton(text = "Заметка", modifier = Modifier.weight(1f), compact = true, onClick = onNote)
+                    PrimaryButton(text = "Записать снова", modifier = Modifier.weight(1f), compact = true, onClick = onRebook)
+                }
+            } else if (s.status == SessionStatus.NO_SHOW) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton(text = "Причина", modifier = Modifier.weight(1f), compact = true, onClick = onReason)
+                    PrimaryButton(text = "Перенести", modifier = Modifier.weight(1f), compact = true, onClick = onReschedule)
+                }
+            }
+
+            // ОПЛАТА — НЕ БЛОКЕР И НЕ РАВНАЯ КНОПКА.
+            //
+            // Она стояла наравне с «Была» и «Не пришли», хотя вопрос оплаты
+            // возникает ДО встречи и никак не мешает её провести. Учредитель
+            // прямо сказал: не должна быть блокером. Теперь это тихая
+            // строка под действиями — заметная, когда нужна, и не спорящая
+            // с главным вопросом карточки.
+            if (passed && s.paymentStatus != PaymentStatus.PAID) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (isUpdatingPayment) "Отмечаем оплату…" else "Оплата не отмечена · Отметить",
+                    style = tMeta,
+                    color = Forest700,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .clickable(enabled = !isUpdatingPayment, onClick = onPaid)
+                        .padding(vertical = 4.dp),
+                )
             }
         }
     }
