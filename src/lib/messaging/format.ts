@@ -81,6 +81,45 @@ export function onlineLinkLine(url: string | null | undefined, mode: MessageMode
 }
 
 /**
+ * Ссылки из сообщения — в кнопки MAX.
+ *
+ * У MAX НЕТ разметки, но ЕСТЬ кнопки со ссылкой. htmlToPlain разворачивал
+ * якорь в «подпись: адрес» — и в MAX адрес снова оказывался голым, на
+ * полторы строки. Учредитель это и увидел: «ссылка опять не за словом».
+ *
+ * Кнопка решает ровно это: подпись видна, адрес спрятан. Поэтому ссылки
+ * вынимаются ИЗ текста и уезжают кнопками, а в тексте на их месте остаётся
+ * подпись — чтобы предложение не разъехалось.
+ *
+ * Строка, которая после подстановки состоит ровно из подписи, убирается:
+ * иначе человек видел бы «Выбрать время» текстом и «Выбрать время» кнопкой
+ * подряд. Ссылка посреди фразы так не убирается — там подпись несёт смысл.
+ */
+export type ExtractedLink = { label: string; url: string };
+
+export function extractLinksForButtons(text: string): { text: string; links: ExtractedLink[] } {
+    const links: ExtractedLink[] = [];
+
+    let out = text.replace(/<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/gi, (_all, url: string, label: string) => {
+        const clean = label.trim();
+        const shown = clean && clean !== url ? clean : 'Открыть';
+        // Один и тот же адрес не должен дать две одинаковые кнопки.
+        if (!links.some(l => l.url === url)) links.push({ label: shown, url });
+        return shown;
+    });
+
+    for (const link of links) {
+        // Только целая строка — и только если она ровно подпись.
+        out = out
+            .split('\n')
+            .filter(line => line.trim() !== link.label)
+            .join('\n');
+    }
+
+    return { text: out.replace(/\n{3,}/g, '\n\n').trim(), links };
+}
+
+/**
  * Разметка Telegram → простой текст для MAX.
  *
  * MAX не понимает HTML: `<a href="…">Выбрать время</a>` приехал бы клиенту

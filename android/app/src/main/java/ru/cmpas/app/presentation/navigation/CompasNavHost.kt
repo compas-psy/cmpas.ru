@@ -77,6 +77,10 @@ fun CompasNavHost(
                     // Задача 20 §2: те же самые адреса создания, что у
                     // календаря и списка клиентов, — не вторые формы.
                     onCreateSession = { navController.navigate(Screen.QuickAction.createRoute("new-session")) },
+                    // Тот же экран создания записи, но с уже выбранным
+                    // клиентом: после встречи вопрос «когда следующая», а не
+                    // «кого выбрать».
+                    onRebookClient = { clientId -> navController.navigate(Screen.QuickAction.createRoute("new-session", clientId)) },
                     onCreateClient = { navController.navigate(Screen.QuickAction.createRoute("new-client")) },
                     onScheduleClick = { navController.navigate(Screen.Schedule.route) },
                     // Задача 23: пункт «требует внимания» ведёт прямо в

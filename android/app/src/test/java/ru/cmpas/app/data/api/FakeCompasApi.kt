@@ -43,6 +43,7 @@ open class FakeCompasApi(
     override suspend fun updateClient(id: String, body: UpdateClientRequest): Response<Client> = notStubbed("updateClient")
     override suspend fun sendMessage(id: String, body: SendMessageRequest): Response<SendMessageResponse> = notStubbed("sendMessage")
     override suspend fun createInviteLink(id: String, body: InviteRequest): Response<InviteResponse> = notStubbed("createInviteLink")
+    override suspend fun repeatClientSlot(id: String, body: RepeatSlotRequest): Response<RepeatSlotResponse> = notStubbed("repeatClientSlot")
     override suspend fun getClientChannels(id: String): Response<ClientChannelStatus> = notStubbed("getClientChannels")
     override suspend fun createClientChannelInvite(id: String, body: InviteRequest): Response<InviteResponse> = notStubbed("createClientChannelInvite")
     override suspend fun revokeClientChannel(id: String, body: ChannelRequest): Response<Unit> = notStubbed("revokeClientChannel")

@@ -78,6 +78,9 @@ interface CompasApi {
     @POST("clients/{id}/invite")
     suspend fun createInviteLink(@Path("id") id: String, @Body body: InviteRequest): Response<InviteResponse>
 
+    @POST("clients/{id}/repeat-slot")
+    suspend fun repeatClientSlot(@Path("id") id: String, @Body body: RepeatSlotRequest): Response<RepeatSlotResponse>
+
     @GET("clients/{id}/channels")
     suspend fun getClientChannels(@Path("id") id: String): Response<ClientChannelStatus>
 
@@ -276,6 +279,30 @@ data class SendMessageRequest(val type: String, val text: String? = null, val se
 
 @kotlinx.serialization.Serializable
 data class InviteRequest(val channel: String = "auto")
+
+/**
+ * «Тот же час через неделю» — weeks = 1, «занять слот на срок» — weeks = N.
+ * Одно действие с разным числом недель, поэтому и запрос один.
+ */
+@kotlinx.serialization.Serializable
+data class RepeatSlotRequest(val weeks: Int)
+
+@kotlinx.serialization.Serializable
+data class RepeatSlotBooked(val date: String, val time: String, val sessionId: String)
+
+/** reason — слова самого ядра записи: «время занято», «максимум записей на день». */
+@kotlinx.serialization.Serializable
+data class RepeatSlotSkipped(val date: String, val time: String, val reason: String)
+
+/**
+ * Отчёт поимённый, а не «получилось/не получилось»: занятая третья неделя не
+ * отменяет первых двух, и специалист должен видеть, какая дата выпала.
+ */
+@kotlinx.serialization.Serializable
+data class RepeatSlotResponse(
+    val booked: List<RepeatSlotBooked> = emptyList(),
+    val skipped: List<RepeatSlotSkipped> = emptyList(),
+)
 
 @kotlinx.serialization.Serializable
 data class ResendReminderRequest(val kind: String)

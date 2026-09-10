@@ -58,4 +58,45 @@ class SessionOutcomeVisibilityTest {
     fun `нечитаемая дата — кнопки не видны`() {
         assertFalse(canRecordSessionOutcome("не дата", SessionStatus.CONFIRMED, today))
     }
+
+    // ВОПРОС ЗАДАЁТСЯ ОДИН РАЗ.
+    //
+    // В списке дня после ответа кнопки уходят, и на их месте остаётся
+    // подпись со статусом. Отличить «специалист сказал» от «сервер
+    // предположил» по статусу нельзя: settlePastSessionsForPsychologist сам
+    // переводит CONFIRMED в COMPLETED через 15 минут после конца встречи.
+    // Поэтому решает outcomeRecordedAt, а не статус.
+
+    @Test
+    fun `исход ещё не назван — спрашиваем`() {
+        assertTrue(shouldAskSessionOutcome("2026-08-29", SessionStatus.COMPLETED, null, today))
+    }
+
+    @Test
+    fun `COMPLETED проставлен сервером — всё ещё спрашиваем`() {
+        // Ровно тот случай, ради которого поле и заведено.
+        assertTrue(shouldAskSessionOutcome("2026-08-28", SessionStatus.COMPLETED, "", today))
+    }
+
+    @Test
+    fun `исход назван — больше не спрашиваем`() {
+        assertFalse(shouldAskSessionOutcome("2026-08-29", SessionStatus.COMPLETED, "2026-08-29T19:05:00.000Z", today))
+    }
+
+    @Test
+    fun `названный NO_SHOW тоже не переспрашивается`() {
+        assertFalse(shouldAskSessionOutcome("2026-08-29", SessionStatus.NO_SHOW, "2026-08-29T19:05:00.000Z", today))
+    }
+
+    @Test
+    fun `завтрашняя сессия не спрашивается, даже если исход не назван`() {
+        assertFalse(shouldAskSessionOutcome("2026-08-30", SessionStatus.CONFIRMED, null, today))
+    }
+
+    @Test
+    fun `экран деталей исход уточнить по-прежнему даёт`() {
+        // shouldAskSessionOutcome() — правило списка. Дверь для исправления
+        // задним числом держит canRecordSessionOutcome(), и она открыта.
+        assertTrue(canRecordSessionOutcome("2026-08-29", SessionStatus.COMPLETED, today))
+    }
 }

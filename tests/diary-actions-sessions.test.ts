@@ -80,7 +80,10 @@ describe('markSessionOutcome (§5.4 вечерняя отметка специа
 
         expect(diarySessionUpdate).toHaveBeenCalledWith({
             where: { id: 'session_1' },
-            data: { status: 'completed' },
+            // Вместе со статусом пишется момент ответа: сервер сам ставит
+            // completed через 15 минут после конца встречи, и по статусу
+            // «специалист сказал» от «мы предположили» не отличить.
+            data: { status: 'completed', outcomeRecordedAt: expect.any(Date) },
         });
         expect(result.status).toBe('completed');
         expect(revalidatePath).toHaveBeenCalledWith('/diary');

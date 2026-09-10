@@ -78,6 +78,10 @@ fun ClientDetailScreen(
     val sessions = uiState.sessions.sortedByDescending { "${it.date}T${it.startTime}" }
     val upcoming = sessions.filter { it.isFutureOrToday() }.minByOrNull { "${it.date}T${it.startTime}" }
     val history = sessions.filterNot { it.isFutureOrToday() }.take(12)
+    // Опорная встреча для ПОДПИСИ на карточке «Тот же час». Настоящий выбор
+    // делает сервер (repeat-slot.ts) по тому же правилу: ближайшая будущая,
+    // иначе последняя прошедшая.
+    val repeatReference = upcoming ?: sessions.firstOrNull { it.status != SessionStatus.CANCELLED }
     val bound = detail?.hasMessenger == true
 
     // Пришли из «требует внимания» по отсутствию согласия — открывается ровно
@@ -178,6 +182,18 @@ fun ClientDetailScreen(
                             }
                         }
                         1 -> {
+                            // Тот же час — первым делом: в регулярной работе это
+                            // самое частое действие в карточке, а не редкое.
+                            item {
+                                RepeatSlotCard(
+                                    reference = repeatReference,
+                                    busyWeeks = uiState.repeatingWeeks,
+                                    outcome = uiState.repeatOutcome,
+                                    error = uiState.repeatError,
+                                    onRepeat = { weeks -> viewModel.repeatSlot(clientId, weeks) },
+                                    onDismissResult = viewModel::clearRepeatResult,
+                                )
+                            }
                             item { Eyebrow("Предстоящие") }
                             val future = sessions.filter { it.isFutureOrToday() }.sortedBy { "${it.date}T${it.startTime}" }
                             if (future.isEmpty()) item { EmptyCard("Нет предстоящих записей", Icons.Outlined.EventAvailable) }
@@ -709,6 +725,104 @@ private fun DocumentRow(title: String, onClick: () -> Unit) {
             Icon(Icons.Outlined.Send, null, Modifier.size(18.dp), tint = Forest700)
         }
     }
+}
+
+/**
+ * ТОТ ЖЕ ЧАС — ЧЕРЕЗ НЕДЕЛЮ ИЛИ НА СРОК.
+ *
+ * Учредитель на живой сессии: «в карточке клиента нет возможности записать
+ * клиента на тот же слот через неделю или занять слот на определённый срок».
+ * Регулярная работа устроена именно так — клиент ходит по вторникам в 14:00,
+ * и это не решается заново каждую неделю.
+ *
+ * «Через неделю» и «на срок» — одно и то же с разным числом недель, поэтому
+ * здесь один ряд кнопок, а не два разных пути.
+ *
+ * Итог показывается поимённо: если какая-то неделя занята, остальные всё
+ * равно записаны, и видно, какая дата выпала. «Готово» вместо этого скрывало
+ * бы от специалиста дыру в его же расписании.
+ *
+ * Те же слова и тот же порядок, что в вебе (RepeatSlotPanel): у нас пока нет
+ * версии для iOS, мобильный веб — это она, и расходиться этим двум местам
+ * нельзя.
+ */
+@Composable
+private fun RepeatSlotCard(
+    reference: Session?,
+    busyWeeks: Int?,
+    outcome: RepeatSlotOutcome?,
+    error: String?,
+    onRepeat: (Int) -> Unit,
+    onDismissResult: () -> Unit,
+) {
+    // Повторять нечего, пока не было ни одной встречи: час берётся из неё.
+    if (reference == null) return
+
+    GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(22.dp), tint = CompasAccent)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Тот же час", style = tBody, color = CompasFg, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${weekdayOf(reference.date)}, ${reference.startTime} — как ${formatSessionDate(reference.date)}",
+                    style = tMeta,
+                    color = CompasMutedFg,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(1 to "Неделя", 4 to "Месяц", 8 to "8 недель", 12 to "Квартал").forEach { (weeks, label) ->
+                GhostButton(
+                    text = if (busyWeeks == weeks) "…" else label,
+                    modifier = Modifier.weight(1f),
+                    enabled = busyWeeks == null,
+                    compact = true,
+                    onClick = { onRepeat(weeks) },
+                )
+            }
+        }
+
+        if (outcome != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (outcome.bookedDates.isEmpty()) "Ни одна неделя не занята"
+                else "Записано: ${outcome.bookedDates.size}",
+                style = tBody2,
+                color = CompasFg,
+            )
+            outcome.skipped.forEach { (date, reason) ->
+                Text("${formatSessionDate(date)} — $reason", style = tMeta, color = CompasMutedFg)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Понятно",
+                style = tMeta,
+                color = Forest700,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .clickable(onClick = onDismissResult)
+                    .padding(vertical = 4.dp, horizontal = 2.dp),
+            )
+        }
+
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(error, style = tMeta, color = CompasDestructive)
+        }
+
+        Spacer(Modifier.height(8.dp))
+        // Клиенту уходит одно сообщение — про ближайшую встречу. Двенадцать
+        // сообщений о занятом квартале ему ни к чему.
+        Text("Клиент получит уведомление только о ближайшей встрече.", style = tMeta, color = CompasMutedFg)
+    }
+}
+
+private fun weekdayOf(raw: String): String {
+    val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return ""
+    return date.dayOfWeek.getDisplayName(TextStyle.FULL_STANDALONE, Locale("ru")).replaceFirstChar { it.uppercase() }
 }
 
 @Composable

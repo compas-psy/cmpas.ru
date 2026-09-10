@@ -22,6 +22,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.cmpas.app.presentation.theme.*
 
+/**
+ * `compact` — для кнопок ВНУТРИ карточки, а не под ней.
+ *
+ * Карточка в списке узкая: её ужимают полоса времени слева, отступы самой
+ * карточки и второй кнопки. На подпись оставалось около 48dp при нужных 85,
+ * и получалось «Не п…», «Опла…», «Заме…». Учредитель справедливо назвал это
+ * неприемлемым: обрезанная подпись выглядит осмысленной, не будучи ею.
+ *
+ * Место отнимали не буквы, а обвес: иконка 18dp, отступ 8dp рядом с ней и
+ * по 18dp с боков. Компактный вид убирает иконку и ужимает поля — подпись
+ * помещается целиком, и обрезать больше нечего.
+ */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -29,25 +41,33 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    compact: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
             .pressScale(interaction)
-            .height(52.dp)
+            .height(if (compact) 44.dp else 52.dp)
             .shadow(12.dp, RoundedCornerShape(16.dp), spotColor = Forest900.copy(alpha = 0.30f))
             .clip(RoundedCornerShape(16.dp))
             .background(Brush.linearGradient(listOf(Forest700, Forest900)))
             .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = if (compact) 12.dp else 18.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) {
+        if (icon != null && !compact) {
             Icon(icon, null, Modifier.size(18.dp), tint = Color.White)
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, color = Color.White, fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(
+            text,
+            color = Color.White,
+            fontSize = if (compact) 14.sp else 15.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -59,6 +79,8 @@ fun GhostButton(
     icon: ImageVector? = null,
     danger: Boolean = false,
     enabled: Boolean = true,
+    /** См. PrimaryButton: внутри карточки места на иконку и широкие поля нет. */
+    compact: Boolean = false,
 ) {
     val foreground = when {
         !enabled -> CompasMutedFg
@@ -66,19 +88,20 @@ fun GhostButton(
         else -> Forest800
     }
     val interaction = remember { MutableInteractionSource() }
+    val showIcon = icon != null && !compact
     Row(
         modifier
             .pressScale(interaction)
-            .height(52.dp)
+            .height(if (compact) 44.dp else 52.dp)
             .glass(radius = 16.dp)
             .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = if (text == null) 0.dp else 18.dp),
+            .padding(horizontal = if (text == null) 0.dp else if (compact) 12.dp else 18.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = foreground)
+        if (showIcon) Icon(icon!!, null, Modifier.size(18.dp), tint = foreground)
         if (text != null) {
-            if (icon != null) Spacer(Modifier.width(8.dp))
+            if (showIcon) Spacer(Modifier.width(8.dp))
             // Многоточие, а не обрез посреди слова: если подпись всё же не
             // помещается, человек должен это видеть. Задача 28 нашла на
             // экране кабинетов «Сделать» вместо «Сделать основным» — обрез
@@ -86,7 +109,7 @@ fun GhostButton(
             Text(
                 text,
                 color = foreground,
-                fontSize = 15.sp,
+                fontSize = if (compact) 14.sp else 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

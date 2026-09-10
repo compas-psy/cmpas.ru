@@ -46,3 +46,29 @@ fun canRecordSessionOutcome(date: String, status: SessionStatus, today: LocalDat
     val sessionDate = runCatching { LocalDate.parse(date) }.getOrNull() ?: return false
     return !sessionDate.isAfter(today)
 }
+
+/**
+ * Стоит ли ЕЩЁ СПРАШИВАТЬ про исход — то есть показывать «Была»/«Не пришли»
+ * в списке дня.
+ *
+ * Отличие от [canRecordSessionOutcome] одно, и оно важное: здесь учитывается
+ * [outcomeRecordedAt] — момент, когда исход назвал человек. Статус на это не
+ * годится: сервер сам переводит CONFIRMED в COMPLETED через 15 минут после
+ * конца встречи, и «COMPLETED» значит то ли «специалист сказал: была», то ли
+ * «время прошло, и мы предположили». Пока исход не назван — спрашиваем;
+ * назван — на месте кнопок остаётся подпись со статусом, и список дня
+ * показывает, что уже сделано, а что нет.
+ *
+ * Экран деталей сессии этой функцией не пользуется намеренно: там исход
+ * можно и уточнить задним числом, и [canRecordSessionOutcome] по-прежнему
+ * держит эту дверь открытой.
+ */
+fun shouldAskSessionOutcome(
+    date: String,
+    status: SessionStatus,
+    outcomeRecordedAt: String?,
+    today: LocalDate = LocalDate.now(),
+): Boolean {
+    if (!outcomeRecordedAt.isNullOrBlank()) return false
+    return canRecordSessionOutcome(date, status, today)
+}

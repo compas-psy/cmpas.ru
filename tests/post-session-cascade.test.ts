@@ -100,6 +100,10 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
         userFindUnique.mockResolvedValue({ name: 'Анна Волкова', psychologistSettings: null });
         getSuggestedTimes.mockResolvedValue([{ date: '2026-09-20', time: '18:00', format: 'online', addressId: null }]);
         sendTelegramMessage.mockResolvedValue(true);
+        // Базовое состояние блока: будущей записи нет. clearAllMocks чистит
+        // вызовы, но НЕ реализации — без этой строки значение, заданное в
+        // одном тесте, протекало бы в следующий.
+        diarySessionFindFirst.mockResolvedValue(null);
     });
 
     it('сессия завершилась 3 часа назад и не отмечена — сообщение уходит', async () => {
@@ -110,6 +114,25 @@ describe('processNextBookingNudge (O-260829 §5.4)', () => {
 
         expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
         expect(sendTelegramMessage.mock.calls[0][1]).toMatch(/Спасибо за встречу/);
+        expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { nextBookingNudgeSent: true } });
+    });
+
+    /**
+     * ЖИВОЙ СЛУЧАЙ 09.09.2026. Клиент был записан на 16 сентября, а через два
+     * часа после встречи получил «вот ближайшее время, выбрать время».
+     *
+     * Проверка будущей записи в коде БЫЛА — но только в недельном письме, и
+     * двухчасовое её не делало вовсе. Человеку, у которого встреча уже
+     * назначена, такое письмо говорит одно: система его не помнит.
+     */
+    it('у клиента уже есть будущая запись — сообщение НЕ уходит, но флаг закрывается', async () => {
+        const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+        diarySessionFindMany.mockResolvedValue([baseSession({ date: threeHoursAgo, time: '00:00', endTime: timeStrOf(threeHoursAgo) })]);
+        diarySessionFindFirst.mockResolvedValue({ id: 'future_session' });
+
+        await processNextBookingNudge();
+
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
         expect(diarySessionUpdate).toHaveBeenCalledWith({ where: { id: 'session_1' }, data: { nextBookingNudgeSent: true } });
     });
 

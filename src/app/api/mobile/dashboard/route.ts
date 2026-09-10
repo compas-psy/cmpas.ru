@@ -45,6 +45,9 @@ function formatSession(s: any, paymentById: Map<string, string>, onlineLink: str
         notes: typeof s.notes === 'string' ? s.notes : null,
         notesPlain: typeof s.clientSummary === 'string' ? s.clientSummary : typeof s.notes === 'string' ? s.notes : null,
         structuredNotes: Array.isArray(s.structuredNotes) ? s.structuredNotes : null,
+        // См. mobile-sessions.ts: отличает названный исход от проставленного
+        // сервером через settlePastSessionsForPsychologist.
+        outcomeRecordedAt: s.outcomeRecordedAt instanceof Date ? s.outcomeRecordedAt.toISOString() : (s.outcomeRecordedAt ?? null),
     };
 }
 

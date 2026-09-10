@@ -120,9 +120,21 @@ async function findInvite(rawToken: string) {
     );
 }
 
+/**
+ * Почему ссылка не открылась — словом, а не пустотой.
+ *
+ * Раньше функция на все три случая отвечала null, а страница звала
+ * notFound(). Клиент видел «Страница не найдена» — то же самое, что при
+ * опечатке в адресе, хотя ссылка была настоящей и просто уже сработала.
+ * Человек в этот момент не знает ни что случилось, ни что делать.
+ */
+export type PublicInviteProblem = 'not_found' | 'used' | 'expired';
+
 export async function getPublicChannelInvite(rawToken: string) {
     const invite = await findInvite(rawToken);
-    if (!invite || invite.usedAt || invite.expiresAt <= new Date()) return null;
+    if (!invite) return { problem: 'not_found' as PublicInviteProblem };
+    if (invite.usedAt) return { problem: 'used' as PublicInviteProblem };
+    if (invite.expiresAt <= new Date()) return { problem: 'expired' as PublicInviteProblem };
 
     const [client, psychologist] = await Promise.all([
         db.diaryClient.findUnique({ where: { id: invite.clientId }, select: { name: true } }),
@@ -131,11 +143,12 @@ export async function getPublicChannelInvite(rawToken: string) {
             select: { name: true, psychologistSettings: { select: { fullName: true } } },
         }),
     ]);
-    if (!client) return null;
+    if (!client) return { problem: 'not_found' as PublicInviteProblem };
 
     const channel = invite.channel as ChannelInvitePreference;
     const normalized = normalizeRawToken(rawToken);
     return {
+        problem: null,
         clientName: client.name,
         psychologistName: psychologist?.psychologistSettings?.fullName || psychologist?.name || 'специалист',
         channel,
@@ -145,6 +158,30 @@ export async function getPublicChannelInvite(rawToken: string) {
         },
         expiresAt: invite.expiresAt,
     };
+}
+
+/**
+ * Что сказать человеку, когда привязка не удалась.
+ *
+ * Слова живут ЗДЕСЬ, а не в четырёх обработчиках — их ровно столько: два
+ * бота, вебхук Telegram и вход по Telegram Login. Раньше лесенка условий
+ * была скопирована в каждый, и новая причина отказа неизбежно доехала бы
+ * только до части из них.
+ */
+export function channelInviteFailureMessage(code: string): string {
+    switch (code) {
+        case 'INVITE_SELF_BINDING':
+            // Не ошибка пользователя: специалист проверял, работает ли то,
+            // что он отправил клиенту. Поэтому и тон другой, и главное
+            // сказано прямо — ссылка цела.
+            return 'Это ваша собственная ссылка для клиента — по ней подключается он, а не вы. Отправьте её клиенту: она осталась действующей.';
+        case 'INVITE_ALREADY_USED':
+            return 'Эта ссылка уже использована. Попросите специалиста отправить новую.';
+        case 'INVITE_EXPIRED':
+            return 'Срок действия ссылки истёк. Попросите специалиста отправить новую.';
+        default:
+            return 'Ссылка недействительна. Попросите специалиста отправить новую.';
+    }
 }
 
 export async function consumeClientChannelInvite(params: {
@@ -161,6 +198,29 @@ export async function consumeClientChannelInvite(params: {
     if (invite.expiresAt <= new Date()) throw new Error('INVITE_EXPIRED');
 
     const chatId = params.providerChatId || params.providerUserId;
+
+    // САМ СПЕЦИАЛИСТ ПО СВОЕЙ ЖЕ ССЫЛКЕ — НЕ КЛИЕНТ.
+    //
+    // 09.09.2026: учредитель открыл ссылку-приглашение, чтобы проверить, что
+    // она работает. Проверки «кто открыл» не было, и произошло ровно то, что
+    // и должно было: его аккаунт мессенджера записался клиенту в карточку,
+    // токен погас, настоящий клиент по той же ссылке получил «страница не
+    // найдена», а наутро уведомление ДЛЯ КЛИЕНТА пришло специалисту.
+    //
+    // Открыть свою ссылку, чтобы посмотреть, — нормальное человеческое
+    // действие, а не ошибка пользователя. Значит защищать должен код.
+    //
+    // Токен при этом НЕ гасится: он выдан клиенту и обязан продолжать
+    // работать. Гасить его здесь значило бы наказать клиента за то, что
+    // специалист заглянул в собственную ссылку.
+    const issuer = await db.user.findUnique({
+        where: { id: invite.psychologistId },
+        select: { telegramChatId: true, maxChatId: true },
+    });
+    const issuerId = params.channel === 'telegram' ? issuer?.telegramChatId : issuer?.maxChatId;
+    if (issuerId && (issuerId === chatId || issuerId === params.providerUserId)) {
+        throw new Error('INVITE_SELF_BINDING');
+    }
 
     const result = await db.$transaction(async tx => {
         const fresh = await tx.clientInviteToken.findUnique({ where: { id: invite.id } });

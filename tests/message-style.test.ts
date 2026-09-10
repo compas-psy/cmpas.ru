@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
-import { htmlToPlain } from '@/lib/messaging/format';
+import { htmlToPlain, extractLinksForButtons } from '@/lib/messaging/format';
 import path from 'path';
 
 /** Файлы, которые сочиняют текст, уходящий человеку. */
@@ -167,5 +167,53 @@ describe('перевод разметки для MAX', () => {
 
     it('обычный текст не портится', () => {
         expect(htmlToPlain('Сессия начнётся через 1 час, в 18:00.')).toBe('Сессия начнётся через 1 час, в 18:00.');
+    });
+});
+
+/**
+ * В МАКСе ссылка должна быть КНОПКОЙ, а не адресом в тексте.
+ *
+ * htmlToPlain разворачивал якорь в «подпись: адрес» — лучшее, что можно
+ * сделать голым текстом, но учредитель увидел в МАКСе ровно то, чего мы
+ * избегали: «Выбрать время: https://cmpas.ru/u/martynov-ilya?c=st1_…» на
+ * четыре строки.
+ *
+ * У МАКСа нет разметки, но есть кнопки со ссылкой. Значит правильный ответ
+ * не в тексте, а в кнопке.
+ */
+describe('ссылки для МАКСа уезжают кнопками', () => {
+    it('ссылка отдельной строкой становится кнопкой, а строка уходит', () => {
+        const { text, links } = extractLinksForButtons(
+            'Спасибо за встречу.\n<a href="https://cmpas.ru/u/anna?c=tok">Выбрать время</a>',
+        );
+        expect(links).toEqual([{ label: 'Выбрать время', url: 'https://cmpas.ru/u/anna?c=tok' }]);
+        // Ни адреса, ни осиротевшей подписи-дубля.
+        expect(text).toBe('Спасибо за встречу.');
+    });
+
+    it('ссылка посреди фразы оставляет подпись на месте — иначе фраза разъедется', () => {
+        const { text, links } = extractLinksForButtons(
+            'Записаться можно <a href="https://cmpas.ru/u/anna">здесь</a> в любое время.',
+        );
+        expect(text).toBe('Записаться можно здесь в любое время.');
+        expect(links).toHaveLength(1);
+    });
+
+    it('один адрес — одна кнопка, даже если он встретился дважды', () => {
+        const { links } = extractLinksForButtons(
+            '<a href="https://cmpas.ru/x">Тут</a> и ещё раз <a href="https://cmpas.ru/x">Тут</a>',
+        );
+        expect(links).toHaveLength(1);
+    });
+
+    it('без ссылок текст не трогается', () => {
+        const { text, links } = extractLinksForButtons('Просто напоминание о встрече.');
+        expect(text).toBe('Просто напоминание о встрече.');
+        expect(links).toEqual([]);
+    });
+
+    it('якорь без подписи получает нейтральную — пустых кнопок не бывает', () => {
+        const { links } = extractLinksForButtons('<a href="https://cmpas.ru/x">https://cmpas.ru/x</a>');
+        expect(links[0].label).toBe('Открыть');
     });
 });

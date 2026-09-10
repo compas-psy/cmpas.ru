@@ -16,6 +16,7 @@ import ru.cmpas.app.data.analytics.InviteChannel
 import ru.cmpas.app.data.api.ChannelRequest
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.InviteRequest
+import ru.cmpas.app.data.api.RepeatSlotRequest
 import ru.cmpas.app.data.api.SendMessageRequest
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientChannelStatus
@@ -206,6 +207,50 @@ class ClientDetailViewModel @Inject constructor(
         _uiState.update { it.copy(inviteResponse = null, inviteError = null, channelStatus = null, isCreatingInvite = false) }
     }
 
+    /**
+     * ТОТ ЖЕ ЧАС — ЧЕРЕЗ НЕДЕЛЮ ИЛИ НА СРОК.
+     *
+     * Клиент ходит по вторникам в 14:00, и это не решается заново каждую
+     * неделю. Раньше, чтобы занять тот же час, специалист открывал форму
+     * записи, выбирал клиента, листал календарь и искал время — всё то, что
+     * уже известно из прошлой встречи.
+     *
+     * Час выбирает сервер по той же прошлой встрече, и он же проверяет
+     * занятость: «занять на квартал» не должно ставить встречу поверх чужой.
+     * Поэтому и ответ — поимённый отчёт, а не «готово».
+     */
+    fun repeatSlot(clientId: String, weeks: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(repeatingWeeks = weeks, repeatError = null, repeatOutcome = null) }
+            try {
+                val response = api.repeatClientSlot(clientId, RepeatSlotRequest(weeks))
+                val body = response.body()
+                if (!response.isSuccessful || body == null) {
+                    _uiState.update { it.copy(repeatError = "Не удалось занять время") }
+                    return@launch
+                }
+                _uiState.update {
+                    it.copy(repeatOutcome = RepeatSlotOutcome(
+                        bookedDates = body.booked.map { item -> item.date },
+                        skipped = body.skipped.map { item -> item.date to item.reason },
+                    ))
+                }
+                if (body.booked.isNotEmpty()) {
+                    PracticeRefreshBus.notifyChanged()
+                    loadClient(clientId, showLoader = false)
+                }
+            } catch (error: Exception) {
+                _uiState.update { it.copy(repeatError = error.localizedMessage ?: "Не удалось занять время") }
+            } finally {
+                _uiState.update { it.copy(repeatingWeeks = null) }
+            }
+        }
+    }
+
+    fun clearRepeatResult() {
+        _uiState.update { it.copy(repeatOutcome = null, repeatError = null) }
+    }
+
     private fun ClientDetail.toClient() = Client(
         id = id,
         name = name,
@@ -226,6 +271,12 @@ sealed class MessageResult {
     data class Error(val message: String) : MessageResult()
 }
 
+/** Итог «того же часа»: что записано и что выпало, поимённо. */
+data class RepeatSlotOutcome(
+    val bookedDates: List<String>,
+    val skipped: List<Pair<String, String>>,
+)
+
 data class ClientDetailUiState(
     val isLoading: Boolean = false,
     val client: Client? = null,
@@ -243,4 +294,8 @@ data class ClientDetailUiState(
     val channelStatus: ClientChannelStatus? = null,
     val isUpdatingChannel: Boolean = false,
     val channelActionError: String? = null,
+    /** Сколько недель сейчас занимается — им же подсвечивается нажатая кнопка. */
+    val repeatingWeeks: Int? = null,
+    val repeatOutcome: RepeatSlotOutcome? = null,
+    val repeatError: String? = null,
 )

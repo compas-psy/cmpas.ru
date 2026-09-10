@@ -57,6 +57,31 @@ async function sendToClient(client: any, text: string): Promise<void> {
     if (max) await sendMaxMessage(max, text).catch(console.error);
 }
 
+/**
+ * Есть ли у клиента ЕЩЁ ОДНА встреча впереди.
+ *
+ * Проверка была написана для недельного письма и там же и осталась, а
+ * двухчасовое её не делало вовсе. 09.09.2026 это выстрелило: клиент был
+ * записан на 16 сентября, а через два часа после встречи получил «вот
+ * ближайшее время, выбрать время». Человеку, у которого встреча уже
+ * назначена, такое письмо говорит одно: система его не помнит.
+ *
+ * Теперь оба письма спрашивают одно и то же и в одном месте.
+ */
+async function hasFutureBooking(session: { id: string; clientId: string | null; psychologistId: string; date: Date }): Promise<boolean> {
+    if (!session.clientId) return false;
+    const booking = await db.diarySession.findFirst({
+        where: {
+            clientId: session.clientId,
+            psychologistId: session.psychologistId,
+            status: { in: ['pending', 'confirmed'] },
+            date: { gt: session.date },
+        } as any,
+        select: { id: true },
+    });
+    return Boolean(booking);
+}
+
 /** Тот же расчёт конца сессии, что уже используется в processPostSessionNudge
  * (src/lib/cron/post-session.ts) — не изобретаем новый способ сложить
  * DiarySession.date (календарная дата) и time/endTime (строка "18:00"). */
@@ -122,6 +147,17 @@ export async function processNextBookingNudge(): Promise<void> {
                 // Слишком старая (заведена до этого релиза либо cron не
                 // работал слишком долго) — не шлём задним числом, просто
                 // закрываем как обработанную.
+                await db.diarySession.update({
+                    where: { id: session.id },
+                    data: { nextBookingNudgeSent: true } as any,
+                });
+                continue;
+            }
+
+            // Уже записан — звать записываться незачем. Молчание здесь
+            // честнее любого текста: напоминание о встрече придёт своим
+            // чередом, отдельным сообщением и в своё время.
+            if (await hasFutureBooking(session)) {
                 await db.diarySession.update({
                     where: { id: session.id },
                     data: { nextBookingNudgeSent: true } as any,
@@ -222,17 +258,7 @@ export async function processWeeklyFollowup(): Promise<void> {
                 continue;
             }
 
-            const futureBooking = await db.diarySession.findFirst({
-                where: {
-                    clientId: session.clientId,
-                    psychologistId: session.psychologistId,
-                    status: { in: ['pending', 'confirmed'] },
-                    date: { gt: session.date },
-                } as any,
-                select: { id: true },
-            });
-
-            if (!futureBooking) {
+            if (!(await hasFutureBooking(session))) {
                 const client = session.client;
                 if (client) {
                     const bookingBase = await getPsychologistBookingUrl(session.psychologistId).catch(() => undefined);

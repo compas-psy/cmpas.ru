@@ -4,13 +4,12 @@ import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { autoSyncSessionToCalendars, autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
-import { buildSessionClientMessage, clientBookingLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 import { notifyWaitlistOnFreedSlot } from '@/lib/waitlist-notify';
 import { track } from '@/lib/analytics/track';
 import { requireOwnedSession, requireOwnedClient } from '@/lib/practice/ownership';
 import { createManualPracticeSession, reschedulePracticeBooking, BookingConflictError } from '@/lib/practice/booking/booking';
+import { repeatClientSlot, NoReferenceSessionError, MAX_REPEAT_WEEKS } from '@/lib/practice/booking/repeat-slot';
+import { notifyClientAboutSession } from '@/lib/practice/session-notice';
 
 async function getPsychologistId() {
     const session = await auth();
@@ -47,65 +46,12 @@ export async function getSessionsByDate(date: Date) {
     });
 }
 
-async function createClientNoticeForSession(psychologistId: string, sessionId: string, isFirstSession: boolean) {
-    const full = await db.diarySession.findFirst({
-        where: { id: sessionId, psychologistId },
-        include: {
-            client: true,
-            psychologist: { include: { psychologistSettings: true } },
-        },
-    });
-
-    if (!full) return { status: 'not_found' as const };
-
-    const channel = full.client.telegramChatId ? 'telegram' : (full.client as any).maxChatId ? 'max' : 'manual';
-    const recipientContact = full.client.telegramChatId || (full.client as any).maxChatId || full.client.phone || full.client.email || null;
-    const deliveries = isFirstSession ? await createAutoDocumentDeliveries({
-        psychologistId,
-        clientId: full.clientId,
-        sessionId: full.id,
-        trigger: 'first_session',
-        channel,
-        recipientContact,
-    }) : [];
-
-    const psyName = full.psychologist.psychologistSettings?.fullName || full.psychologist.name || 'специалист';
-    const bookingLink = clientBookingLink(psychologistId, full.clientId);
-    const onlineLink = full.format === 'online' ? full.psychologist.psychologistSettings?.onlineSessionLink : null;
-    const paymentText = await getPaymentInstruction(psychologistId, full.id, full.clientId);
-    const text = buildSessionClientMessage({
-        clientName: full.client.name,
-        psychologistName: psyName,
-        date: full.date,
-        time: full.time,
-        format: full.format,
-        onlineLink,
-        documentLinks: deliveries.map(d => ({ title: d.title, link: d.link })),
-        paymentText,
-        bookingLink,
-    });
-
-    let sentTo: string | null = null;
-    try {
-        if (full.client.telegramChatId) {
-            await sendTelegramMessage(full.client.telegramChatId, text, { parse_mode: 'HTML' });
-            sentTo = 'telegram';
-        } else if ((full.client as any).maxChatId) {
-            await sendMaxMessage((full.client as any).maxChatId, text);
-            sentTo = 'max';
-        }
-    } catch (error) {
-        console.error('client notice send failed:', error);
-    }
-
-    return {
-        status: sentTo ? 'sent' as const : 'manual' as const,
-        channel: sentTo,
-        text,
-        bookingLink,
-        documentLinks: deliveries.map(d => ({ title: d.title, link: d.link, deliveryId: d.deliveryId })),
-    };
-}
+/**
+ * Текст и отправка переехали в src/lib/practice/session-notice.ts: тем же
+ * сообщением теперь пользуются мобильный маршрут и повтор часа, а расходиться
+ * трём копиям одного письма было нельзя.
+ */
+const createClientNoticeForSession = notifyClientAboutSession;
 
 export async function createSession(data: {
     clientId: string;
@@ -168,6 +114,66 @@ export async function createSession(data: {
     }
 
     return { ...session, notice } as any;
+}
+
+/**
+ * «Тот же час через неделю» и «занять слот на срок» — одно действие с разным
+ * числом недель (см. src/lib/practice/booking/repeat-slot.ts).
+ *
+ * Клиенту уходит ОДНО сообщение — про ближайшую встречу, а не двенадцать про
+ * каждую. Занять час на квартал вперёд — это решение специалиста о своём
+ * расписании; заваливать этим человека в мессенджере незачем, а про
+ * ближайшую встречу он знать должен, как и при обычной записи.
+ */
+export async function repeatSessionSlot(clientId: string, weeks: number) {
+    const psychologistId = await getPsychologistId();
+    await requireOwnedClient(psychologistId, clientId);
+
+    let result;
+    try {
+        result = await repeatClientSlot({ psychologistId, clientId, weeks });
+    } catch (error) {
+        if (error instanceof NoReferenceSessionError) throw new Error(error.message);
+        throw error;
+    }
+
+    if (result.booked.length > 0) {
+        const totalSessions = await db.diarySession.count({ where: { clientId } });
+        const nextSession = await db.diarySession.findFirst({
+            where: { clientId, date: { gte: new Date() }, status: { in: ['confirmed', 'pending'] } },
+            orderBy: { date: 'asc' },
+        });
+        await db.diaryClient.update({
+            where: { id: clientId },
+            data: { totalSessions, nextSessionDate: nextSession?.date || null },
+        });
+
+        for (const item of result.booked) {
+            const full = await db.diarySession.findUnique({
+                where: { id: item.sessionId },
+                include: { client: { select: { name: true } } },
+            });
+            if (full) autoSyncSessionToCalendars(psychologistId, full).catch(console.error);
+        }
+
+        try {
+            await createClientNoticeForSession(psychologistId, result.booked[0].sessionId, totalSessions === 1);
+        } catch (error) {
+            console.error('repeatSessionSlot notice failed:', error);
+        }
+    }
+
+    await track(db, {
+        event: 'session_slot_repeated',
+        product: 'practice',
+        accountId: psychologistId,
+        // Без ПД: только числа. Кто именно и на какой час — в базе, не в аналитике.
+        props: { weeks_requested: Math.min(weeks, MAX_REPEAT_WEEKS), booked: result.booked.length, skipped: result.skipped.length },
+    }).catch(() => undefined);
+
+    revalidatePath('/diary');
+    revalidatePath('/diary/clients');
+    return result;
 }
 
 export async function updateSession(id: string, data: {
@@ -283,7 +289,12 @@ export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_
     const now = new Date();
     const session = await db.diarySession.update({
         where: { id },
-        data: { status: outcome },
+        // outcomeRecordedAt отделяет «человек сказал» от «система
+        // предположила»: тот же status='completed' сервер ставит сам через
+        // 15 минут после конца сессии. Без этой отметки карточка не знает,
+        // отвечен ли вопрос «состоялась ли встреча», и показывает выбор
+        // человеку, который его уже сделал.
+        data: { status: outcome, outcomeRecordedAt: now } as never,
     });
 
     // O-260829 §7: session_outcome_marked — факт вечерней отметки, без

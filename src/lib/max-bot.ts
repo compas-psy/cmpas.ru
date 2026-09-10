@@ -17,11 +17,11 @@ import { format } from 'date-fns';
 import { createNotification } from '@/lib/notifications';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
-import { consumeClientChannelInvite } from '@/lib/channel-binding';
+import { consumeClientChannelInvite, channelInviteFailureMessage } from '@/lib/channel-binding';
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
-import { htmlToPlain } from '@/lib/messaging/format';
+import { htmlToPlain, extractLinksForButtons } from '@/lib/messaging/format';
 
 const MAX_API = 'https://platform-api2.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -119,15 +119,31 @@ export async function sendMaxMessage(
     buttons?: { text: string; url?: string; payload?: string }[][]
 ) {
     const uid = String(userId).replace(MAX_PREFIX, '');
+
     // MAX не понимает разметку Telegram. Перевод стоит ЗДЕСЬ, на единственной
     // двери в MAX: забыть его в отдельном сообщении невозможно, потому что
     // мимо этой функции в MAX ничего не уходит.
-    const body: Record<string, unknown> = { text: htmlToPlain(text) };
-    if (buttons?.length) {
+    //
+    // Ссылки при этом не расплющиваются в адрес, а уезжают КНОПКАМИ: у MAX
+    // нет разметки, но кнопки со ссылкой есть. Прежний перевод давал
+    // «Выбрать время: https://…» — и учредитель справедливо сказал, что
+    // ссылка снова не за словом.
+    const extracted = extractLinksForButtons(text);
+    const body: Record<string, unknown> = { text: htmlToPlain(extracted.text) };
+
+    // Кнопки вызывающего идут первыми: они — про действие («Записаться»,
+    // «Отменить»), а вынутые ссылки лишь сопровождают текст.
+    type MaxButton = { text: string; url?: string; payload?: string };
+    const rows: MaxButton[][] = [
+        ...(buttons ?? []),
+        ...extracted.links.map(l => [{ text: l.label, url: l.url } as MaxButton]),
+    ];
+
+    if (rows.length) {
         body.attachments = [{
             type: 'inline_keyboard',
             payload: {
-                buttons: buttons.map(row => row.map(b => b.url
+                buttons: rows.map(row => row.map(b => b.url
                     ? { type: 'link', text: b.text, url: b.url }
                     : { type: 'callback', text: b.text, payload: b.payload }
                 ))
@@ -205,12 +221,7 @@ async function handleStart(userId: number, payload: string | undefined) {
             return;
         } catch (e) {
             const code = e instanceof Error ? e.message : '';
-            const message = code === 'INVITE_ALREADY_USED'
-                ? 'Эта ссылка уже была использована. Попросите специалиста отправить новую.'
-                : code === 'INVITE_EXPIRED'
-                    ? 'Срок действия ссылки истёк. Попросите специалиста отправить новую.'
-                    : 'Ссылка недействительна. Попросите специалиста отправить новую.';
-            return sendMaxMessage(userId, message);
+            return sendMaxMessage(userId, channelInviteFailureMessage(code));
         }
     }
 

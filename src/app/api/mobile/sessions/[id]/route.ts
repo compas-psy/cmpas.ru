@@ -166,7 +166,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }
 
         const updateData: Record<string, unknown> = {};
-        if (body.status) updateData.status = body.status.toLowerCase();
+        if (body.status) {
+            const next = body.status.toLowerCase();
+            updateData.status = next;
+            // Отметка «это сказал человек», а не «так решил сервер».
+            // settlePastSessionsForPsychologist сам переводит CONFIRMED в
+            // completed через 15 минут после конца встречи, и по статусу
+            // отличить названный исход от предположенного невозможно. Список
+            // «Сегодня» на этом различии и держится: пока исход не назван —
+            // кнопки, после — только подпись со статусом.
+            if (next === 'completed' || next === 'no_show') updateData.outcomeRecordedAt = new Date();
+        }
         Object.assign(updateData, notePatch(body));
         if (body.status?.toLowerCase() === 'cancelled') autoDeleteSessionFromCalendars(auth.userId, id).catch(console.error);
 

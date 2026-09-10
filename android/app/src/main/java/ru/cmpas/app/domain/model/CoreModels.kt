@@ -113,6 +113,12 @@ data class Session(
     val previousNotesSummary: String? = null,
     val isRecurring: Boolean = false,
     val cadenceLabel: String? = null,
+    /**
+     * Когда исход встречи назвал специалист. null — статус мог проставить
+     * сервер сам (settlePastSessionsForPsychologist через 15 минут после
+     * конца встречи), и спросить всё ещё стоит.
+     */
+    val outcomeRecordedAt: String? = null,
 )
 
 @Serializable
