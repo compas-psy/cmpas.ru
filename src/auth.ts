@@ -2,6 +2,7 @@ import NextAuth from "next-auth"
 import Yandex from "next-auth/providers/yandex"
 import Nodemailer from "next-auth/providers/nodemailer"
 import { PrismaAdapter } from "@auth/prisma-adapter"
+import { findUserByEmailInsensitive, insensitiveEmailWhere } from "@/lib/auth/email-identity"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { html, text } from "@/lib/email-template"
@@ -37,7 +38,21 @@ if (!process.env.AUTH_SECRET) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    adapter: PrismaAdapter(db),
+    adapter: {
+        ...PrismaAdapter(db),
+        // ПОИСК ЧЕЛОВЕКА ПО ПОЧТЕ — БЕЗ УЧЁТА РЕГИСТРА.
+        //
+        // Штатный getUserByEmail адаптера зовёт findUnique по точному
+        // совпадению. Именно через него проходят обе развилки, где решается
+        // «это тот же человек или новый»: связывание аккаунта при входе
+        // через СИМПАС (allowDangerousEmailAccountLinking) и вход по ссылке
+        // на почту.
+        //
+        // Почему это не косметика — см. src/lib/auth/email-identity.ts:
+        // `Ivan@ya.ru` у нас и `ivan@ya.ru` из СИМПАС давали не отказ, а
+        // ВТОРОГО пользователя с пустой практикой. Молча.
+        getUserByEmail: (email: string) => findUserByEmailInsensitive(email) as never,
+    },
     session: {
         strategy: "database",
     },
@@ -67,8 +82,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             from: process.env.EMAIL_FROM || "noreply@cmpas.ru",
             sendVerificationRequest: async ({ identifier: email, url, provider }) => {
                 // Check if user already exists with this email AND has OAuth account
-                const existingUser = await db.user.findUnique({
-                    where: { email },
+                // Тот же поиск без учёта регистра, что и в адаптере: иначе
+                // экран сказал бы «такого нет» человеку, который у нас есть.
+                const existingUser = await db.user.findFirst({
+                    where: insensitiveEmailWhere(email),
+                    orderBy: { createdAt: 'asc' },
                     select: {
                         id: true,
                         emailVerified: true,

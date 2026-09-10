@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
+import { simpasIdAccountUrl } from "@/lib/auth/simpasid"
 
 export async function GET() {
     try {
@@ -23,6 +24,11 @@ export async function GET() {
             name: user.name,
             email: user.email,
             psychologistSettings: user.psychologistSettings,
+            // Адрес личного кабинета СИМПАС считается на сервере: страница
+            // профиля — клиентская, а SIMPASID_ISSUER в браузер не уезжает и
+            // уезжать не должен. null означает «единый вход не настроен» —
+            // тогда ссылки на экране просто нет.
+            accountUrl: simpasIdAccountUrl(),
         })
     } catch (error) {
         console.error("Profile read error:", error)

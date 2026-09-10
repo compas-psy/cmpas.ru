@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { isAccountProvider, providerDisplayName } from "@/lib/auth/simpasid"
+import { insensitiveEmailWhere } from "@/lib/auth/email-identity"
 
 export async function POST(request: NextRequest) {
     try {
@@ -16,9 +17,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
         }
 
-        // Check if user exists with this email
-        const existingUser = await db.user.findUnique({
-            where: { email: email.toLowerCase() },
+        // Поиск без учёта регистра — тот же, что в адаптере входа.
+        //
+        // Здесь стояло `email.toLowerCase()` при точном сравнении: вход
+        // приводился к нижнему регистру, а ЗАПИСАННОЕ — нет. То есть человек
+        // с адресом `Ivan@ya.ru` в базе не находился никогда, каким бы
+        // регистром он его ни набрал, и экран отвечал «такого нет» тому, кто
+        // у нас есть.
+        const existingUser = await db.user.findFirst({
+            where: insensitiveEmailWhere(email),
+            orderBy: { createdAt: 'asc' },
             select: {
                 id: true,
                 emailVerified: true,
