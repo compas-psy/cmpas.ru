@@ -90,7 +90,7 @@ class SessionActionsTest {
     }
 
     @Test
-    fun `отменённой встречи больше нет: ни переноса, ни оплаты`() {
+    fun `отменённой встречи больше нет — ни переноса, ни оплаты`() {
         val actions = sessionActions(session(date = today.plusDays(1), status = SessionStatus.CANCELLED), today)
         assertEquals(listOf(SessionAction.REBOOK, SessionAction.MESSAGE), actions)
     }
