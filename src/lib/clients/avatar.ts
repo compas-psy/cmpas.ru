@@ -111,16 +111,50 @@ export type Fetcher = typeof fetch;
  * Аватарка — украшение: лучше быстро показать инициалы, чем долго ждать
  * фотографию.
  */
-export const MESSENGER_TIMEOUT_MS = 4000;
+/**
+ * ЧЕТЫРЁХ СЕКУНД НЕ ХВАТИЛО, И ЭТО ВИДНО В ЖУРНАЛЕ БОЕВОГО СЕРВЕРА.
+ *
+ * У клиента с ЖИВОЙ фотографией маршрут писал:
+ *   tg_photos_unreachable дорога 2/2 photos=нет ответа
+ * то есть первая дорога (туннель) не ответила вовсе, и запрос свалился на
+ * прямую, которой с этого сервера нет. При этом тот же запрос тем же
+ * туннелем, но со сроком в 20 секунд, приносит total_count:1 — фотография
+ * есть, за ней просто не дождались.
+ *
+ * Восемь секунд — компромисс, а не «побольше на всякий случай». Кружок
+ * ленивый: браузер просит только те, что видно, а удачный ответ живёт в
+ * кэше шесть часов, то есть ждать приходится один раз. Аватарка, которая
+ * не появляется НИКОГДА, хуже аватарки, которая появилась через шесть
+ * секунд.
+ *
+ * Верхняя граница всё равно нужна: у мёртвого туннеля запрос без своего
+ * срока однажды подвесил отправку сообщений на ~500 секунд.
+ */
+export const MESSENGER_TIMEOUT_MS = 8000;
+
+/**
+ * Почему запрос не удался — словом, а не молчанием.
+ *
+ * Раньше здесь стоял пустой catch, и «истёк срок» было неотличимо от
+ * «дорога сломалась»: в журнал шло одинаковое «нет ответа». Из-за этого
+ * пришлось отдельно ходить на сервер и мерить руками. Причина обязана
+ * называть себя.
+ *
+ * Наружу идёт ИМЯ ошибки, а не текст: текст может нести адрес запроса, а в
+ * адресе Telegram ключ бота стоит целиком.
+ */
+export type TimedResponse = { res: Response | null; why?: string };
 
 /** Запрос со сроком. Истёк — это «аватарки нет», а не исключение наружу. */
-async function withTimeout(fetcher: Fetcher, url: string, init?: RequestInit): Promise<Response | null> {
+async function withTimeout(fetcher: Fetcher, url: string, init?: RequestInit): Promise<TimedResponse> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), MESSENGER_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, MESSENGER_TIMEOUT_MS);
     try {
-        return await fetcher(url, { ...(init ?? {}), signal: controller.signal });
-    } catch {
-        return null;
+        return { res: await fetcher(url, { ...(init ?? {}), signal: controller.signal }) };
+    } catch (e) {
+        const name = (e as Error)?.name ?? 'неизвестно';
+        return { res: null, why: timedOut ? `истёк срок ${MESSENGER_TIMEOUT_MS}мс` : `сбой ${name}` };
     } finally {
         clearTimeout(timer);
     }
@@ -132,7 +166,7 @@ async function withTimeout(fetcher: Fetcher, url: string, init?: RequestInit): P
  */
 export async function downloadImage(url: string, fetcher: Fetcher = fetch): Promise<AvatarImage | null> {
     try {
-        const res = await withTimeout(fetcher, url);
+        const { res } = await withTimeout(fetcher, url);
         if (!res || !res.ok) return null;
         const contentType = safeImageContentType(res.headers.get('content-type'));
         if (!contentType) return null;
@@ -218,8 +252,8 @@ export async function tryTelegramAvatar(
         // числа и коды ответа.
         const seen: string[] = [];
 
-        const photosRes = await withTimeout(fetcher, `${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
-        if (!photosRes) return { image: null, miss: 'tg_photos_unreachable', detail: 'photos=нет ответа' };
+        const { res: photosRes, why: photosWhy } = await withTimeout(fetcher, `${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
+        if (!photosRes) return { image: null, miss: 'tg_photos_unreachable', detail: `photos=${photosWhy ?? 'нет ответа'}` };
         if (!photosRes.ok) return { image: null, miss: 'tg_photos_unreachable', detail: `photos=HTTP ${photosRes.status}` };
         const photos = await photosRes.json();
         seen.push(`photos=${photos?.result?.total_count ?? '?'}`);
@@ -245,12 +279,12 @@ export async function tryTelegramAvatar(
         // Если и она вернёт пусто — значит фотографии для нас правда нет, и
         // причина tg_no_photos станет наконец точной.
         if (!fileId) {
-            const chatRes = await withTimeout(fetcher, `${api}/getChat?chat_id=${encodeURIComponent(userId)}`);
+            const { res: chatRes, why: chatWhy } = await withTimeout(fetcher, `${api}/getChat?chat_id=${encodeURIComponent(userId)}`);
             // ОТКАЗ ВТОРОЙ РУЧКИ — ЭТО НЕ «ФОТОГРАФИИ НЕТ». Раньше он молча
             // сливался с пустым ответом, и обе беды выглядели в журнале
             // одинаково. Так уже было с общим «empty», и урок тот же:
             // причина обязана называть, на чём именно сорвалось.
-            if (!chatRes) return { image: null, miss: 'tg_chat_unreachable', detail: `${seen.join(' ')} chat=нет ответа` };
+            if (!chatRes) return { image: null, miss: 'tg_chat_unreachable', detail: `${seen.join(' ')} chat=${chatWhy ?? 'нет ответа'}` };
             if (!chatRes.ok) return { image: null, miss: 'tg_chat_unreachable', detail: `${seen.join(' ')} chat=HTTP ${chatRes.status}` };
             const chat = await chatRes.json();
             const photo = chat?.result?.photo;
@@ -263,8 +297,8 @@ export async function tryTelegramAvatar(
 
         if (!fileId) return { image: null, miss: 'tg_no_photos', detail: seen.join(' ') };
 
-        const fileRes = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(fileId)}`);
-        if (!fileRes || !fileRes.ok) return { image: null, miss: 'tg_file_unreachable' };
+        const { res: fileRes, why: fileWhy } = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(fileId)}`);
+        if (!fileRes || !fileRes.ok) return { image: null, miss: 'tg_file_unreachable', detail: `${seen.join(' ')} file=${fileWhy ?? `HTTP ${fileRes?.status}`}` };
         const file = await fileRes.json();
         const path = file?.result?.file_path;
         if (typeof path !== 'string' || !path) return { image: null, miss: 'tg_file_unreachable' };
@@ -320,7 +354,7 @@ export async function resolveMaxDialogId(
     for (let page = 0; page < MAX_DIALOG_SCAN_PAGES; page++) {
         const query = new URLSearchParams({ count: String(MAX_DIALOG_PAGE_SIZE) });
         if (marker) query.set('marker', marker);
-        const res = await withTimeout(fetcher, `${config.apiRoot}/chats?${query.toString()}`, {
+        const { res } = await withTimeout(fetcher, `${config.apiRoot}/chats?${query.toString()}`, {
             headers: { Authorization: config.token },
         });
         if (!res || !res.ok) return null;
@@ -355,7 +389,7 @@ export async function fetchMaxAvatar(
     fetcher: Fetcher = fetch,
 ): Promise<AvatarImage | null> {
     try {
-        const res = await withTimeout(fetcher, `${config.apiRoot}/chats/${encodeURIComponent(dialogId)}`, {
+        const { res } = await withTimeout(fetcher, `${config.apiRoot}/chats/${encodeURIComponent(dialogId)}`, {
             headers: { Authorization: config.token },
         });
         if (!res || !res.ok) return null;
