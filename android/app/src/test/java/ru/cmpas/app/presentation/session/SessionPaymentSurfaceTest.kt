@@ -42,10 +42,15 @@ class SessionPaymentSurfaceTest {
     @Test
     fun `на карточке сессии есть чем отметить оплату`() {
         val body = code(screen)
-        assertTrue("кнопка", body.contains("onClick = { showPayment = true }"))
+        assertTrue("кнопка", body.contains("showPayment = true"))
         assertTrue("шторка", body.contains("PaymentSheet("))
         assertTrue(body.contains("text = \"Отметить оплаченной\""))
         assertTrue(body.contains("PaymentStatus.PAID"))
+        // Правка 10.09.2026: кнопка называет ДЕЙСТВИЕ, пока оно возможно, и
+        // гаснет, когда сделано. Прежнее «Оплачено» на живой кнопке
+        // предлагало отметить то, что уже отмечено.
+        assertTrue("кнопка называет действие", body.contains("\"Отметить оплату\""))
+        assertTrue("и гаснет после отметки", body.contains("enabled = !paid"))
     }
 
     @Test
