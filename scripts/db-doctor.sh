@@ -645,31 +645,53 @@ if [ -z "$max_uid" ] || [ -z "$max_token" ]; then
 else
   docker exec -e MAX_TOKEN="$max_token" -e MAX_UID="$max_uid" cmpas-app node -e '
     const wanted = String(process.env.MAX_UID).replace(/^max_/, "");
+    const root = "https://platform-api2.max.ru";
+    const head = { Authorization: process.env.MAX_TOKEN };
+    const ask = (path) => fetch(`${root}${path}`, { headers: head, signal: AbortSignal.timeout(12000) });
+
+    // Форма ответа печатается КЛЮЧАМИ, без значений: «чатов 0» одинаково
+    // выглядит и когда их правда нет, и когда список лежит под другим
+    // именем, чем ждёт разбор. Ключи это различают и ничего не выдают.
+    const shape = (v) => Array.isArray(v) ? `массив(${v.length})` : (v && typeof v === "object" ? `объект{${Object.keys(v).join(",")}}` : typeof v);
+
     (async () => {
-      const started = Date.now();
       try {
-        const res = await fetch("https://platform-api2.max.ru/chats?count=100", {
-          headers: { Authorization: process.env.MAX_TOKEN },
-          signal: AbortSignal.timeout(12000),
-        });
-        const took = ((Date.now() - started) / 1000).toFixed(1);
-        if (!res.ok) { console.log(`HTTP ${res.status} за ${took}с — список чатов не отдан`); return; }
-        const body = await res.json();
-        const chats = body?.chats ?? [];
-        const dialogs = chats.filter((c) => c?.type === "dialog");
-        const found = dialogs.some((c) => String(c?.dialog_with_user?.user_id ?? "") === wanted);
-        const withAvatar = dialogs.filter((c) => c?.dialog_with_user?.avatar_url).length;
-        console.log(`HTTP 200 за ${took}с: чатов ${chats.length}, из них диалогов ${dialogs.length}, с аватаркой ${withAvatar}`);
-        console.log(`диалог с искомым человеком: ${found ? "НАЙДЕН" : "не найден на первой странице"}`);
-        console.log(`ещё страницы: ${body?.marker ? "есть" : "нет"}`);
-      } catch (e) {
-        console.log(`НЕТ ХОДА (${e.name}) за ${((Date.now() - started) / 1000).toFixed(1)}с`);
-      }
+        const me = await ask("/me");
+        console.log(`/me -> HTTP ${me.status}` + (me.ok ? " (ключ бота принят)" : " (ключ бота НЕ принят)"));
+      } catch (e) { console.log(`/me -> НЕТ ХОДА (${e.name})`); }
+
+      try {
+        const res = await ask("/chats?count=100");
+        if (!res.ok) { console.log(`/chats -> HTTP ${res.status}: список не отдан`); }
+        else {
+          const body = await res.json();
+          console.log(`/chats -> HTTP 200, тело: ${shape(body)}`);
+          const chats = body?.chats ?? [];
+          const dialogs = chats.filter((c) => c?.type === "dialog");
+          const types = [...new Set(chats.map((c) => c?.type ?? "(без типа)"))].join(",") || "(нет)";
+          console.log(`  чатов ${chats.length}, типы: ${types}, диалогов ${dialogs.length}`);
+          console.log(`  диалог с искомым: ${dialogs.some((c) => String(c?.dialog_with_user?.user_id ?? "") === wanted) ? "НАЙДЕН" : "нет"}`);
+          console.log(`  ещё страницы: ${body?.marker ? "есть" : "нет"}`);
+        }
+      } catch (e) { console.log(`/chats -> НЕТ ХОДА (${e.name})`); }
+
+      // А нужен ли вообще поиск диалога. Если MAX принимает user_id прямо в
+      // /chats/{id}, то листать список незачем — и вся ветка max-user лишняя.
+      try {
+        const res = await ask(`/chats/${wanted}`);
+        console.log(`/chats/<user_id> -> HTTP ${res.status}`);
+        if (res.ok) {
+          const body = await res.json();
+          console.log(`  тело: ${shape(body)}`);
+          console.log(`  аватарка в dialog_with_user: ${body?.dialog_with_user?.avatar_url ? "ЕСТЬ" : "нет"}`);
+        }
+      } catch (e) { console.log(`/chats/<user_id> -> НЕТ ХОДА (${e.name})`); }
     })();
-  ' 2>&1 | head -5
-  echo "--- HTTP не 200 или НЕТ ХОДА = дело в нашей дороге до MAX, а не в отсутствии диалога"
-  echo "--- диалогов 0 при HTTP 200 = боту в MAX никто не писал, спрашивать нечего"
-  echo "--- диалог НАЙДЕН, а маршрут пишет max_no_dialog = поломка в разборе, чинить код"
+  ' 2>&1 | head -12
+  echo "--- /me не 200 = ключ бота негоден, всё остальное ниже бессмысленно"
+  echo "--- чатов 0 при HTTP 200 и верном ключе = боту в MAX никто не писал"
+  echo "--- тело не объект{chats,marker} = MAX отвечает иначе, чем ждёт разбор, чинить код"
+  echo "--- /chats/<user_id> отдал аватарку = поиск диалога не нужен вовсе, упростить"
 fi
 
 echo "### Аватарки: какую дорогу выберет код (флаг telegram_vpn_proxy)"

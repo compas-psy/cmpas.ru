@@ -198,16 +198,47 @@ export async function tryTelegramAvatar(
 ): Promise<AvatarAttempt> {
     const api = `${config.apiRoot}/bot${config.token}`;
     try {
+        let fileId: string | null = null;
+
         const photosRes = await withTimeout(fetcher, `${api}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`);
         if (!photosRes || !photosRes.ok) return { image: null, miss: 'tg_photos_unreachable' };
         const photos = await photosRes.json();
-        // Пусто — это норма: человек закрыл фото настройками приватности.
         const sizes: Array<{ file_id?: string; width?: number }> = photos?.result?.photos?.[0] ?? [];
-        if (!Array.isArray(sizes) || sizes.length === 0) return { image: null, miss: 'tg_no_photos' };
-        const smallest = [...sizes].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0];
-        if (!smallest?.file_id) return { image: null, miss: 'tg_no_photos' };
+        if (Array.isArray(sizes) && sizes.length > 0) {
+            const smallest = [...sizes].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0];
+            fileId = smallest?.file_id ?? null;
+        }
 
-        const fileRes = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(smallest.file_id)}`);
+        // ВТОРАЯ ДОРОГА, КОГДА ПЕРВАЯ ВЕРНУЛА ПУСТО.
+        //
+        // getUserProfilePhotos отдаёт «фотографий 0» не только тогда, когда
+        // фотографии нет. Учредитель показал карточку клиента с живой
+        // фотографией — а журнал на том же клиенте писал tg_no_photos.
+        // Значит «пусто» тут означает «этому боту не показали», а не
+        // «у человека нет».
+        //
+        // getChat — ДРУГАЯ ручка с другим устройством: она отдаёт не список
+        // фотографий пользователя, а сам чат, и фотография в нём лежит
+        // отдельным полем photo. Спросить её стоит ровно тогда, когда первая
+        // ответила пусто: лишнего запроса в удачном случае нет.
+        //
+        // Если и она вернёт пусто — значит фотографии для нас правда нет, и
+        // причина tg_no_photos станет наконец точной.
+        if (!fileId) {
+            const chatRes = await withTimeout(fetcher, `${api}/getChat?chat_id=${encodeURIComponent(userId)}`);
+            if (chatRes && chatRes.ok) {
+                const chat = await chatRes.json();
+                const photo = chat?.result?.photo;
+                // small — потому что кружок маленький, а большой файл тут
+                // только дольше качать.
+                const id = photo?.small_file_id ?? photo?.big_file_id;
+                if (typeof id === 'string' && id) fileId = id;
+            }
+        }
+
+        if (!fileId) return { image: null, miss: 'tg_no_photos' };
+
+        const fileRes = await withTimeout(fetcher, `${api}/getFile?file_id=${encodeURIComponent(fileId)}`);
         if (!fileRes || !fileRes.ok) return { image: null, miss: 'tg_file_unreachable' };
         const file = await fileRes.json();
         const path = file?.result?.file_path;
