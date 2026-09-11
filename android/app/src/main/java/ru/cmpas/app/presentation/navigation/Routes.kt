@@ -6,6 +6,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
+
+    /**
+     * Первое подключение ПРАКТИКИ: акцепт Особых условий сервиса.
+     *
+     * Стоит между входом и кабинетом. Если принимать нечего — а сегодня
+     * нечего у всех, кто вошёл прежними способами, — экран пропускает
+     * человека дальше, ничего не показав.
+     */
+    data object ServiceConnect : Screen("service-connect")
     data object Dashboard : Screen("dashboard")
     data object Calendar : Screen("calendar")
     data object Clients : Screen("clients")

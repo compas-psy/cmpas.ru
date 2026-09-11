@@ -23,8 +23,22 @@ describe('canonical legal document codes and required sets', () => {
         expect(INFORMATIONAL_ONLY_TYPES).toContain('PRIVACY');
     });
 
-    it('TERMS, PROFESSIONAL and PRACTICE are three separate required documents, not one merged acceptance', () => {
-        expect(ACCOUNT_REQUIRED_TYPES).toEqual(['TERMS']);
+    it('продукт не собирает акцепт центральных документов — их принимают в СИМПАС', () => {
+        // До 11.09.2026 здесь стояло ['TERMS'], и это было верно ТОГДА:
+        // своего единого входа не было, принять Соглашение человеку было
+        // больше негде. Сейчас оно принимается в СИМПАС кнопкой входа, а
+        // наш барьер собирал ВТОРУЮ запись о том же факте — с другим
+        // временем, другим источником и без отпечатка текста, потому что
+        // нашей страницы нет в реестре документов Экосистемы.
+        //
+        // Проверка переставлена намеренно и с причиной, а не ослаблена:
+        // непустой список здесь снова означал бы акцепт, которого продукту
+        // иметь нельзя (14_LEGAL_PRODUCTS_UNIFIED.md §1, §2.1).
+        expect(ACCOUNT_REQUIRED_TYPES).toEqual([]);
+
+        // А эти два — документы о САМОМ сервисе и о роли, и принимаются
+        // они по-прежнему: первый при подключении ПРАКТИКИ, второй при
+        // активации профессионального профиля.
         expect(PROFESSIONAL_REQUIRED_TYPES).toEqual(['PROFESSIONAL']);
         expect(PRACTICE_REQUIRED_TYPES).toEqual(['PRACTICE']);
     });
