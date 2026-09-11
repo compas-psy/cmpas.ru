@@ -153,6 +153,87 @@ export async function sendMaxMessage(
     return maxApi('/messages', body, { user_id: uid });
 }
 
+/**
+ * КАРТИНКА В MAX — для кода оплаты.
+ *
+ * У MAX нет «отправить файл вместе с сообщением»: картинка сначала
+ * загружается отдельным запросом, и только потом её удостоверение
+ * прикладывается к сообщению. Порядок такой (проверено по официальному
+ * SDK @maxhub/max-bot-api, dist/helpers/upload/upload.js):
+ *
+ *   1. POST /uploads?type=image → { url, token? }
+ *   2. POST <url> multipart, поле называется ровно `data`
+ *   3. ответ второго запроса И ЕСТЬ полезная нагрузка вложения:
+ *      { photos: { <ключ>: { token } } }
+ *   4. POST /messages?user_id=… с attachments: [{ type: 'image', payload }]
+ *
+ * Отправляется телом запроса, а не публичным адресом, по той же причине,
+ * что и в Telegram (src/lib/telegram.ts): адрес пришлось бы открыть наружу,
+ * то есть выложить ссылку оплаты конкретного специалиста всем.
+ *
+ * Возвращает false вместо исключения: код оплаты — не единственный способ
+ * заплатить, ссылка ушла текстом рядом, и неудача здесь не должна ронять
+ * отправку сообщения целиком.
+ */
+export async function sendMaxPhoto(
+    userId: string | number,
+    photo: Buffer,
+    caption?: string,
+): Promise<boolean> {
+    if (!MAX_TOKEN) {
+        console.warn('[MAX] Отсутствует MAX_BOT_TOKEN, отправка картинки пропущена.');
+        return false;
+    }
+    const uid = String(userId).replace(MAX_PREFIX, '');
+
+    try {
+        const slot = await maxApi('/uploads', {}, { type: 'image' }) as { url?: string; token?: string } | null;
+        if (!slot?.url) {
+            console.error('[MAX] Не получено место для загрузки картинки');
+            return false;
+        }
+
+        const form = new FormData();
+        form.append('data', new Blob([new Uint8Array(photo)], { type: 'image/png' }), 'qr.png');
+        const uploadRes = await fetch(slot.url, { method: 'POST', body: form });
+        if (!uploadRes.ok) {
+            console.error('[MAX] Ошибка загрузки картинки:', await uploadRes.text());
+            return false;
+        }
+        const uploaded = await uploadRes.json().catch(() => null) as { photos?: Record<string, { token: string }> } | null;
+
+        // Удостоверение картинки приходит одним из двух способов: либо в
+        // ответе загрузки (photos), либо вместе с местом для загрузки
+        // (token). Второй путь у MAX используется для потоковой загрузки;
+        // берём тот, который реально пришёл.
+        const payload = uploaded?.photos
+            ? { photos: uploaded.photos }
+            : slot.token ? { token: slot.token } : null;
+        if (!payload) {
+            console.error('[MAX] Картинка загружена, но удостоверения в ответе нет');
+            return false;
+        }
+
+        // Вложение появляется у MAX не мгновенно: сразу после загрузки
+        // отправка отвечает «attachment.not.ready». Официальный SDK на этот
+        // случай повторяет попытку, и мы тоже — три раза по полторы секунды.
+        // Без этого код оплаты терялся бы ровно в самом частом случае.
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const result = await maxApi('/messages', {
+                text: caption || '',
+                attachments: [{ type: 'image', payload }],
+            }, { user_id: uid });
+            if (result && (result as { success?: boolean }).success !== false) return true;
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+        console.error('[MAX] Картинка не ушла: вложение так и не стало готовым');
+        return false;
+    } catch (error) {
+        console.error('[MAX] Исключение при отправке картинки:', error);
+        return false;
+    }
+}
+
 export async function registerMaxWebhook() {
     const webhookUrl = `${APP_URL}/api/max/webhook`;
     const secret = process.env.MAX_WEBHOOK_SECRET;

@@ -78,6 +78,9 @@ open class FakeCompasApi(
     override suspend fun getPracticeSettings(): Response<MobilePracticeSettings> = notStubbed("getPracticeSettings")
     override suspend fun updatePracticeSettings(body: MobilePracticeSettingsPatch): Response<MobilePracticeSettings> =
         notStubbed("updatePracticeSettings")
+    override suspend fun getPaymentSettings(): Response<MobilePaymentSettings> = notStubbed("getPaymentSettings")
+    override suspend fun updatePaymentSettings(body: MobilePaymentSettingsPatch): Response<MobilePaymentSettings> =
+        notStubbed("updatePaymentSettings")
     override suspend fun suggestAddresses(body: AddressSuggestQuery): Response<AddressSuggestResponse> =
         notStubbed("suggestAddresses")
     override suspend fun getSpecialistDocuments(): Response<SpecialistDocumentList> = notStubbed("getSpecialistDocuments")

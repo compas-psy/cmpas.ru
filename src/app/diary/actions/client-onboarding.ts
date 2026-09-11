@@ -2,13 +2,12 @@
 
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
-import { sendTelegramPhoto } from '@/lib/telegram';
 import { PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
 import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery, paymentQrForClient } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { timezoneLabel } from '@/lib/practice/timezones';
 import { sendTelegramMessage } from '@/lib/telegram';
-import { deliverMessage } from '@/lib/messaging/deliver';
+import { deliverMessage, deliverPhoto } from '@/lib/messaging/deliver';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
 import { extractFirstName } from '@/lib/person-name';
 import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
@@ -164,9 +163,21 @@ export async function sendClientOnboarding(
         //
         // Не дошёл — не беда и не повод ронять отправку: ссылка ушла текстом
         // рядом, в том же сообщении.
-        if (opts.channel === 'telegram') {
-            const qr = await paymentQrForClient(psychologistId).catch(() => null);
-            if (qr) await sendTelegramPhoto(chatId, qr, PAYMENT_QR_CAPTION).catch(() => false);
+        //
+        // Код уходит В ТОТ ЖЕ КАНАЛ, что и текст, — обоими путями. Раньше
+        // здесь стояло `if (channel === 'telegram')`: у MAX «отправить
+        // картинку» устроено иначе (загрузка, удостоверение, сообщение), и
+        // на это время клиенты в MAX остались вовсе без кода. Разница между
+        // мессенджерами теперь целиком в deliverPhoto.
+        const qr = await paymentQrForClient(psychologistId).catch(() => null);
+        if (qr) {
+            await deliverPhoto(
+                opts.channel === 'telegram'
+                    ? { telegramChatId: chatId, preferredChannel: 'telegram' }
+                    : { maxChatId: chatId, preferredChannel: 'max' },
+                qr,
+                PAYMENT_QR_CAPTION,
+            );
         }
         return { status: 'sent' as const, channel: opts.channel };
     }

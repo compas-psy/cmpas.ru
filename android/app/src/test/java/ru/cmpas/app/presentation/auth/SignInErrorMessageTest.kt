@@ -44,10 +44,18 @@ class SignInErrorMessageTest {
     fun `провайдер не подтвердил вход — предложен второй путь`() {
         val message = LoginViewModel.signInErrorMessage(refusal("invalid_provider_code"))
         assertTrue(message.contains("по почте"))
-        // Одна строка на два места: отказ SDK на устройстве и отказ обмена
-        // на сервере — для человека это одно событие, и разными словами об
-        // одном он решил бы, что бед две.
         assertEquals(LoginViewModel.PROVIDER_REFUSED, message)
+    }
+
+    @Test
+    fun `отказ устройства и отказ сервера различимы`() {
+        // Раньше на оба случая стояла одна фраза, и по снимку экрана нельзя
+        // было сказать, где вход развалился: в SDK провайдера на телефоне
+        // или в обмене кода у СИМПАС. Виноваты в этих случаях разные
+        // стороны, и чинится это по-разному; человеку при этом обе фразы
+        // называют одно и то же действие — войти по почте.
+        assertTrue(LoginViewModel.PROVIDER_REFUSED_ON_DEVICE.contains("по почте"))
+        assertTrue(LoginViewModel.PROVIDER_REFUSED != LoginViewModel.PROVIDER_REFUSED_ON_DEVICE)
     }
 
     @Test

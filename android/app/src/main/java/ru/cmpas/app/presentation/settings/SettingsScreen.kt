@@ -132,6 +132,11 @@ fun SettingsScreen(
                             ?: "Не задана",
                     ) { activeSheet = ProfileSheet.ONLINE_LINK }
                     ThinDivider()
+                    // Оплата клиентом: ссылка, из которой рисуется QR-код, и
+                    // напоминание перед встречей. Интервал выбирает
+                    // специалист — решение учредителя 11.09.2026.
+                    SettingRow(Icons.Outlined.CreditCard, "Оплата клиентом", paymentSubtitle(uiState)) { activeSheet = ProfileSheet.PAYMENT }
+                    ThinDivider()
                     // РАЗДЕЛЫ ПОМЕНЯЛИСЬ МЕСТАМИ ПО СМЫСЛУ.
                     //
                     // «Документы» показывали центральные документы сервиса —
@@ -254,6 +259,7 @@ fun SettingsScreen(
                 onAdsChange = viewModel::setAdsConsent,
                 onSaveName = viewModel::saveName,
                 onSaveOnlineLink = viewModel::saveOnlineSessionLink,
+                onSavePayment = viewModel::savePaymentSettings,
                 onCreateDocument = viewModel::createDocument,
                 onDocumentSavedShown = viewModel::documentSavedShown,
             )
@@ -431,6 +437,7 @@ private fun ProfileInfoSheet(
     onAdsChange: (Boolean) -> Unit,
     onSaveName: (String) -> Unit,
     onSaveOnlineLink: (String) -> Unit,
+    onSavePayment: (String, Boolean, Int) -> Unit,
     onCreateDocument: (String, String, Boolean) -> Unit,
     onDocumentSavedShown: () -> Unit,
 ) {
@@ -456,6 +463,10 @@ private fun ProfileInfoSheet(
         OnlineLinkSheet(state, onClose, onSaveOnlineLink)
         return
     }
+    if (sheet == ProfileSheet.PAYMENT) {
+        PaymentSheet(state, onClose, onSavePayment)
+        return
+    }
 
     val (title, subtitle, body) = when (sheet) {
         ProfileSheet.TELEGRAM -> Triple("Telegram", connectionSubtitle(state.user?.telegramConnected), connectionSheetBody("Telegram", state.user?.telegramConnected))
@@ -465,7 +476,7 @@ private fun ProfileInfoSheet(
         // ими действительно можно распорядиться.
         ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
         ProfileSheet.PROFILE, ProfileSheet.DOCUMENTS, ProfileSheet.DATA,
-        ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK -> Triple("", "", "")
+        ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK, ProfileSheet.PAYMENT -> Triple("", "", "")
     }
     CompasBottomSheet(onClose = onClose) {
         SheetHead(title, subtitle)
@@ -638,6 +649,122 @@ private fun OnlineLinkSheet(state: SettingsUiState, onClose: () -> Unit, onSave:
             modifier = Modifier.fillMaxWidth(),
             icon = Icons.Outlined.Check,
             enabled = !state.isSavingPractice,
+        )
+        Spacer(Modifier.height(8.dp))
+        GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
+    }
+}
+
+/** Часы напоминания — те же, что в веб-кабинете
+ *  (src/lib/messaging/payment-reminder-interval.ts). Часы человеку ничего не
+ *  говорят начиная с «48», поэтому подписи словами. */
+private val REMINDER_OPTIONS = listOf(
+    2 to "за 2 часа",
+    6 to "за 6 часов",
+    12 to "за 12 часов",
+    24 to "за сутки",
+    48 to "за двое суток",
+    72 to "за трое суток",
+)
+
+private fun reminderLabel(hours: Int): String =
+    REMINDER_OPTIONS.firstOrNull { it.first == hours }?.second ?: "за $hours ч"
+
+private fun paymentSubtitle(state: SettingsUiState): String {
+    val payment = state.payment ?: return "Загружаем…"
+    if (payment.paymentLink.isNullOrBlank()) return "Ссылка не задана"
+    if (!payment.paymentReminderEnabled) return "Ссылка задана, напоминание выключено"
+    return "Напоминание ${reminderLabel(payment.paymentReminderHoursBefore)} до встречи"
+}
+
+/**
+ * Оплата клиентом.
+ *
+ * Ссылка (у большинства — статическая ссылка СБП) и напоминание перед
+ * встречей: включено ли и за сколько часов уходит. Из ссылки рисуется
+ * QR-код — отдельной картинки заводить не нужно, клиент наводит камеру.
+ *
+ * Чего здесь нет и быть не может: отметки «оплачено». У ПРАКТИКИ нет связи с
+ * банком специалиста, поступление денег она не видит, и статус оплаты ведёт
+ * он сам. Экран говорит это прямо.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PaymentSheet(state: SettingsUiState, onClose: () -> Unit, onSave: (String, Boolean, Int) -> Unit) {
+    val payment = state.payment
+    var link by rememberSaveable(payment?.paymentLink) { mutableStateOf(payment?.paymentLink.orEmpty()) }
+    var reminder by rememberSaveable(payment?.paymentReminderEnabled) {
+        mutableStateOf(payment?.paymentReminderEnabled ?: false)
+    }
+    var hours by rememberSaveable(payment?.paymentReminderHoursBefore) {
+        mutableStateOf(payment?.paymentReminderHoursBefore ?: 24)
+    }
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Оплата клиентом", "Ссылка и напоминание перед встречей")
+        Spacer(Modifier.height(14.dp))
+        OutlinedTextField(
+            value = link,
+            onValueChange = { link = it },
+            label = { Text("Ссылка на оплату") },
+            placeholder = { Text("https://qr.nspk.ru/…") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Из этой ссылки рисуется QR-код: клиент наводит камеру, а не копирует длинную строку " +
+                "с того же телефона, на котором её читает.",
+            style = tMeta,
+            color = CompasMutedFg,
+        )
+
+        Spacer(Modifier.height(16.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Напоминать об оплате", style = tBody, color = CompasFg)
+                Text("Перед каждой встречей, один раз", style = tMeta, color = CompasMutedFg)
+            }
+            Switch(checked = reminder, onCheckedChange = { reminder = it }, enabled = link.isNotBlank())
+        }
+
+        if (reminder) {
+            Spacer(Modifier.height(12.dp))
+            Text("За сколько до встречи", style = tMeta, color = CompasMutedFg)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                REMINDER_OPTIONS.forEach { (value, label) ->
+                    FilterChip(
+                        selected = hours == value,
+                        onClick = { hours = value },
+                        label = { Text(label) },
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "ПРАКТИКА не принимает оплату и не видит её поступление: связи с вашим банком у неё нет. " +
+                "Отметку об оплате ставите вы. Ночью напоминания не уходят.",
+            style = tMeta,
+            color = CompasMutedFg,
+        )
+        state.error?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = tMeta, color = Red600)
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(
+            text = if (state.isSavingPayment) "Сохраняем…" else "Сохранить",
+            onClick = { onSave(link, reminder, hours) },
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.Check,
+            enabled = !state.isSavingPayment,
         )
         Spacer(Modifier.height(8.dp))
         GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
@@ -939,4 +1066,4 @@ private fun legalUrl(url: String): String {
     }
 }
 
-private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, ONLINE_LINK, DOCUMENTS, DATA, HELP }
+private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, ONLINE_LINK, PAYMENT, DOCUMENTS, DATA, HELP }

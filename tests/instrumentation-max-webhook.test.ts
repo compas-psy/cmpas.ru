@@ -15,6 +15,7 @@ vi.mock('@/lib/cron/digest', () => ({ processMorningDigest: vi.fn(), processWeek
 vi.mock('@/lib/cron/post-session', () => ({ processPostSessionNudge: vi.fn() }));
 vi.mock('@/lib/cron/post-session-cascade', () => ({ processNextBookingNudge: vi.fn(), processWeeklyFollowup: vi.fn() }));
 vi.mock('@/lib/cron/scheduled-messages', () => ({ processScheduledMessages: vi.fn() }));
+vi.mock('@/lib/cron/payment-reminders', () => ({ processPaymentReminders: vi.fn() }));
 vi.mock('@/lib/cron/response-time', () => ({ flushResponseTimeWindow: vi.fn() }));
 vi.mock('@/lib/cron/analytics-retention', () => ({ pruneOldAnalyticsEvents: vi.fn() }));
 vi.mock('./lib/cron/reminders', () => ({ processReminders: vi.fn() }));
@@ -22,6 +23,7 @@ vi.mock('./lib/cron/digest', () => ({ processMorningDigest: vi.fn(), processWeek
 vi.mock('./lib/cron/post-session', () => ({ processPostSessionNudge: vi.fn() }));
 vi.mock('./lib/cron/post-session-cascade', () => ({ processNextBookingNudge: vi.fn(), processWeeklyFollowup: vi.fn() }));
 vi.mock('./lib/cron/scheduled-messages', () => ({ processScheduledMessages: vi.fn() }));
+vi.mock('./lib/cron/payment-reminders', () => ({ processPaymentReminders: vi.fn() }));
 vi.mock('./lib/cron/response-time', () => ({ flushResponseTimeWindow: vi.fn() }));
 vi.mock('./lib/cron/analytics-retention', () => ({ pruneOldAnalyticsEvents: vi.fn() }));
 

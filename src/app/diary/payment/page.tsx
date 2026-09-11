@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CreditCard, Save, AlertCircle } from 'lucide-react';
+import { CreditCard, Save, AlertCircle, BellRing } from 'lucide-react';
 import { toast } from 'sonner';
+import { REMINDER_HOUR_OPTIONS, DEFAULT_REMINDER_HOURS, clampReminderHours } from '@/lib/messaging/payment-reminder-interval';
+import { QUIET_HOURS_LABEL } from '@/lib/messaging/quiet-hours';
 
 type PaymentSettings = {
     id?: string;
@@ -12,6 +14,8 @@ type PaymentSettings = {
     paymentQrUrl: string;
     prepaymentRequired: boolean;
     paymentDueText: string;
+    paymentReminderEnabled: boolean;
+    paymentReminderHoursBefore: number;
 };
 
 export default function DiaryPaymentPage() {
@@ -22,6 +26,8 @@ export default function DiaryPaymentPage() {
         paymentQrUrl: '',
         prepaymentRequired: true,
         paymentDueText: 'до 24:00 дня, предшествующего консультации',
+        paymentReminderEnabled: false,
+        paymentReminderHoursBefore: DEFAULT_REMINDER_HOURS,
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -40,6 +46,8 @@ export default function DiaryPaymentPage() {
                     paymentQrUrl: data.paymentQrUrl || '',
                     prepaymentRequired: data.prepaymentRequired !== false,
                     paymentDueText: data.paymentDueText || '',
+                    paymentReminderEnabled: !!data.paymentReminderEnabled,
+                    paymentReminderHoursBefore: clampReminderHours(data.paymentReminderHoursBefore),
                 });
             }
         } catch (e) {
@@ -62,6 +70,8 @@ export default function DiaryPaymentPage() {
                 paymentQrUrl: settings.paymentQrUrl,
                 prepaymentRequired: settings.prepaymentRequired,
                 paymentDueText: settings.paymentDueText,
+                paymentReminderEnabled: settings.paymentReminderEnabled,
+                paymentReminderHoursBefore: settings.paymentReminderHoursBefore,
             });
             toast.success('Настройки оплаты сохранены');
             loadSettings();
@@ -145,6 +155,50 @@ settings.paymentQrUrl ? `QR-код для оплаты: ${settings.paymentQrUrl}
 ].filter(Boolean).join('\n')}
                     </pre>
                 </div>
+            </section>
+
+            {/* НАПОМИНАНИЕ ОБ ОПЛАТЕ ПЕРЕД ВСТРЕЧЕЙ.
+
+                Решение учредителя 11.09.2026: «отправлять перед первой или
+                последующими сессиями ссылку на оплату нужно. Интервал за
+                сколько до сессии отправлять выбирает психолог».
+
+                Выключено по умолчанию: включать за специалиста рассылку его
+                клиентам нельзя. */}
+            <section className="bg-card border border-border rounded-2xl p-6 shadow-card space-y-5">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center"><BellRing className="w-5 h-5 text-primary" /></div>
+                        <div>
+                            <h2 className="text-lg font-bold text-foreground">Напоминание об оплате</h2>
+                            <p className="text-sm text-muted-foreground">Перед каждой встречей клиент получит эту же инструкцию и QR-код.</p>
+                        </div>
+                    </div>
+                    <label className="flex items-center gap-3 text-sm font-bold text-foreground cursor-pointer">
+                        <input type="checkbox" checked={settings.paymentReminderEnabled} onChange={e => setSettings(s => ({ ...s, paymentReminderEnabled: e.target.checked }))} />
+                        Включить
+                    </label>
+                </div>
+
+                <div>
+                    <label className="block text-[13px] font-semibold text-muted-foreground mb-2">За сколько до встречи</label>
+                    <select
+                        value={settings.paymentReminderHoursBefore}
+                        onChange={e => setSettings(s => ({ ...s, paymentReminderHoursBefore: Number(e.target.value) }))}
+                        disabled={!settings.paymentReminderEnabled}
+                        className="w-full md:w-64 px-4 py-3 border border-border rounded-xl bg-background text-sm outline-none disabled:opacity-50"
+                    >
+                        {REMINDER_HOUR_OPTIONS.map(option => (
+                            <option key={option.hours} value={option.hours}>{option.label}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <p className="text-sm text-muted-foreground leading-6">
+                    Напоминание уходит один раз на встречу — тем же мессенджером, которым вы обычно пишете клиенту.
+                    Ночью не приходит: {QUIET_HOURS_LABEL} по вашему часовому поясу тихо, и напоминание уйдёт первым же дневным проходом.
+                    Встреча, которую вы уже отметили оплаченной, напоминания не получает.
+                </p>
             </section>
         </div>
     );

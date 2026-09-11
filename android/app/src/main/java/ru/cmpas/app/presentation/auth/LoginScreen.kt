@@ -9,8 +9,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -28,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -88,6 +92,11 @@ fun LoginScreen(
     val openLegacyYandex = {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LoginViewModel.LEGACY_YANDEX_URL)))
     }
+    // Юридический документ открывается в браузере: это чужая страница, и
+    // показывать её внутри приложения значило бы выдавать её за свою.
+    val openLink = { url: String ->
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
 
     // НАТИВНЫЙ ВХОД ЯНДЕКСА.
     //
@@ -123,7 +132,7 @@ fun LoginScreen(
                         withContext(Dispatchers.IO) { sdk.getJwt(result.token) }
                     }.getOrNull()
                     if (jwt == null) {
-                        viewModel.onProviderSignInAborted(failed = true)
+                        viewModel.onProviderSignInAborted(failed = true, reason = "Яндекс не отдал подписанный JWT")
                     } else {
                         viewModel.completeProviderJwtSignIn(LoginViewModel.PROVIDER_YANDEX, jwt)
                     }
@@ -131,7 +140,14 @@ fun LoginScreen(
                 // Человек передумал — это не ошибка, и красная строка была
                 // бы обвинением.
                 is YandexAuthResult.Cancelled -> viewModel.onProviderSignInAborted(failed = false)
-                else -> viewModel.onProviderSignInAborted(failed = true)
+                // Сюда попадает YandexAuthResult.Failure. Причина есть
+                // только здесь: дальше она уже потеряна, а без неё отказ
+                // SDK неотличим от отказа сервера.
+                is YandexAuthResult.Failure -> viewModel.onProviderSignInAborted(
+                    failed = true,
+                    reason = "Яндекс отказал: ${result.exception}",
+                )
+                else -> viewModel.onProviderSignInAborted(failed = true, reason = "Яндекс вернул неизвестный исход")
             }
         }
     }
@@ -180,12 +196,18 @@ fun LoginScreen(
                 // личность нельзя — ключ, выданный чужому приложению,
                 // подходит к справочнику профиля так же, как наш.
                 override fun onAuth(accessToken: AccessToken) {
-                    viewModel.onProviderSignInAborted(failed = true)
+                    viewModel.onProviderSignInAborted(
+                        failed = true,
+                        reason = "ВК обменял код сам и вернул ключ доступа — такой вход мы не принимаем",
+                    )
                 }
 
                 override fun onFail(fail: VKIDAuthFail) {
                     // Человек закрыл окно входа — это не ошибка.
-                    viewModel.onProviderSignInAborted(failed = fail !is VKIDAuthFail.Canceled)
+                    viewModel.onProviderSignInAborted(
+                        failed = fail !is VKIDAuthFail.Canceled,
+                        reason = "ВК отказал: ${fail.description}",
+                    )
                 }
             },
             params = VKIDAuthParams {
@@ -201,16 +223,25 @@ fun LoginScreen(
         if (uiState.isAuthenticated) onLoginSuccess()
     }
 
+    // КЛАВИАТУРА НЕ ДОЛЖНА ЗАКРЫВАТЬ ПОЛЕ, В КОТОРОЕ ПЕЧАТАЮТ.
+    //
+    // Экран был одним неподвижным столбцом по центру: клавиатура выезжала
+    // поверх него, и поле почты оказывалось ровно под ней — человек печатал
+    // вслепую. imePadding отдаёт экрану ту высоту, что осталась, а
+    // verticalScroll позволяет до поля доехать; поле в фокусе Compose
+    // подвозит к видимой части сам.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .systemBarsPadding(),
+            .systemBarsPadding()
+            .imePadding(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 32.dp, vertical = 16.dp)
                 .align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -271,6 +302,7 @@ fun LoginScreen(
                         },
                         onLegacyYandex = openLegacyYandex,
                         onFallback = viewModel::openFallback,
+                        onOpenLink = openLink,
                     )
                     LoginStep.CODE -> CodeStep(
                         state = uiState,
@@ -389,6 +421,7 @@ private fun SimpasIdEmailStep(
     onProvider: (String) -> Unit,
     onLegacyYandex: () -> Unit,
     onFallback: () -> Unit,
+    onOpenLink: (String) -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         SimpasIdMark()
@@ -475,6 +508,63 @@ private fun SimpasIdEmailStep(
                 "Другие способы входа",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LegalLinksRow(state.legalLinks, onOpenLink)
+    }
+}
+
+/**
+ * ЮРИДИЧЕСКИЕ ССЫЛКИ — КАК В ВЕБЕ.
+ *
+ * В приложении их не было вовсе: человек заводил учётную запись, не видя ни
+ * Соглашения, ни Политики. В вебе они на экране входа стоят
+ * (src/app/auth/AuthForm.tsx), и расхождение здесь — не «мельче», а хуже:
+ * на телефоне это единственный экран, с которого их можно было бы открыть.
+ *
+ * ЗДЕСЬ НЕ ПРИНИМАЮТ ДОКУМЕНТЫ — ЗДЕСЬ НА НИХ ССЫЛАЮТСЯ. Ровно та же
+ * оговорка, что в вебе: Пользовательское соглашение принимается в СИМПАС при
+ * создании учётной записи, а Политику не принимают вовсе — это
+ * информационный документ оператора, и глагол принятия рядом с ним сам по
+ * себе дефект правовой конструкции.
+ *
+ * Адреса приходят из реестра СИМПАС: номер редакции в сборке означал бы, что
+ * после выхода новой человек читает старый текст, неотличимый на вид от
+ * действующего.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LegalLinksRow(links: LegalLinks, onOpen: (String) -> Unit) {
+    val items = buildList {
+        add("Пользовательское соглашение" to links.terms)
+        add("Политика конфиденциальности" to links.privacy)
+        // Особые условия ПРАКТИКИ появляются, только когда документ есть в
+        // реестре: выдуманного адреса тут быть не может.
+        links.practiceTerms?.let { add("Особые условия ПРАКТИКИ" to it) }
+    }
+
+    FlowRow(
+        horizontalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        items.forEachIndexed { index, (title, url) ->
+            if (index > 0) {
+                Text(
+                    "  ·  ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable { onOpen(url) },
             )
         }
     }
@@ -707,5 +797,23 @@ data class LoginUiState(
     val providerAppIds: Map<String, String> = emptyMap(),
     /** Действующая редакция центрального Соглашения — спрашивается у сервера. */
     val centralTermsVersion: String? = null,
+    /** Адреса документов для строки внизу экрана входа. */
+    val legalLinks: LegalLinks = LegalLinks(),
     val resendPauseSeconds: Int = 0,
+)
+
+/**
+ * Адреса юридических документов — у их владельца, а не у нас.
+ *
+ * Номер редакции в сборке означал бы, что после выхода новой человек читает
+ * старый текст, неотличимый на вид от действующего. Поэтому адреса
+ * спрашиваются у реестра СИМПАС, а до ответа стоят наши собственные
+ * страницы: экран входа не имеет права остаться без ссылок из-за
+ * недоступности стороннего сервиса.
+ */
+data class LegalLinks(
+    val terms: String = "https://cmpas.ru/legal/terms",
+    val privacy: String = "https://cmpas.ru/legal/privacy",
+    /** Особые условия ПРАКТИКИ. null — документа в реестре ещё нет. */
+    val practiceTerms: String? = null,
 )

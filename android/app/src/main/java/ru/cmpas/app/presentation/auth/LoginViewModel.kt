@@ -1,5 +1,6 @@
 package ru.cmpas.app.presentation.auth
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +13,7 @@ import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.MagicLinkRequest
 import ru.cmpas.app.data.api.SimpasIdExchangeRequest
 import ru.cmpas.app.data.datastore.UserPreferences
+import ru.cmpas.simpasid.LegalDocument
 import ru.cmpas.simpasid.Platform
 import ru.cmpas.simpasid.SimpasIdClient
 import ru.cmpas.simpasid.SimpasIdException
@@ -73,6 +75,7 @@ class LoginViewModel @Inject constructor(
                 val methods = simpasId.authMethods(Platform.ANDROID)
                 val documents = simpasId.legalDocuments()
                 val terms = documents.firstOrNull { it.documentCode == CENTRAL_TERMS_CODE }
+                val legalLinks = legalLinksFrom(documents)
                 _uiState.update {
                     it.copy(
                         simpasIdAvailable = methods.email,
@@ -90,6 +93,7 @@ class LoginViewModel @Inject constructor(
                         },
                         providerAppIds = methods.providerAppIds,
                         centralTermsVersion = terms?.version,
+                        legalLinks = legalLinks,
                     )
                 }
             } catch (error: Exception) {
@@ -198,13 +202,26 @@ class LoginViewModel @Inject constructor(
      * была бы обвинением. Поэтому отмена просто возвращает экран в
      * исходное состояние, а отказ провайдера называется общей фразой.
      */
-    fun onProviderSignInAborted(failed: Boolean) {
+    fun onProviderSignInAborted(failed: Boolean, reason: String? = null) {
         // Отказ здесь — это отказ ПРОВАЙДЕРА (не дал токен, не отдал JWT), а
         // не наша поломка. Общая фраза «мы уже чиним» звала бы ждать того,
         // чего не случится: у человека есть рабочий второй путь, и назвать
         // его — единственное полезное, что тут можно сделать.
+        //
+        // ТЕКСТ РАЗНЫЙ ДЛЯ УСТРОЙСТВА И ДЛЯ СЕРВЕРА. Раньше здесь и на
+        // отказе обмена стояла одна фраза, и по снимку экрана нельзя было
+        // сказать, где именно вход развалился: в SDK на телефоне или в
+        // обмене кода у СИМПАС. Это два разных отказа с двумя разными
+        // виновниками, и лечатся они по-разному.
+        //
+        // Причина уходит в журнал устройства, а не на экран: человеку она
+        // ничего не объясняет. Ни токена, ни кода в ней нет — только то,
+        // чем SDK объяснил свой отказ.
+        if (failed && reason != null) {
+            Log.w(LOG_TAG, "Вход через провайдера прерван на устройстве: $reason")
+        }
         val message = if (failed) {
-            PROVIDER_REFUSED
+            PROVIDER_REFUSED_ON_DEVICE
         } else {
             null
         }
@@ -241,6 +258,7 @@ class LoginViewModel @Inject constructor(
                 // Тот же разбор причин, что и на пути с кодом. Разойтись им
                 // нечем: отказы приходят от одной и той же ручки, и человеку
                 // безразлично, чем именно его SDK подтверждал вход.
+                logExchangeFailure(provider, error)
                 _uiState.update {
                     it.copy(isLoading = false, step = LoginStep.EMAIL, error = signInErrorMessage(error))
                 }
@@ -284,11 +302,28 @@ class LoginViewModel @Inject constructor(
                 )
                 adoptSimpasIdSession(tokens.accessToken, tokens.account.id)
             } catch (error: Exception) {
+                logExchangeFailure(provider, error)
                 _uiState.update {
                     it.copy(isLoading = false, step = LoginStep.EMAIL, error = signInErrorMessage(error))
                 }
             }
         }
+    }
+
+    /**
+     * Отказ обмена — в журнал устройства, с кодом и состоянием ответа.
+     *
+     * На экране кода нет и не будет: он ничего не объясняет человеку. Но без
+     * него отказ неотличим от отказа SDK на телефоне, и разбирать поломку
+     * приходится гаданием. Ни токена, ни почты, ни кода из письма здесь нет.
+     */
+    private fun logExchangeFailure(provider: String, error: Throwable) {
+        val simpas = error as? SimpasIdException
+        Log.w(
+            LOG_TAG,
+            "СИМПАС отказал в обмене для $provider: " +
+                "код=${simpas?.code ?: "нет"} статус=${simpas?.status ?: "нет"}",
+        )
     }
 
     /**
@@ -345,6 +380,38 @@ class LoginViewModel @Inject constructor(
     companion object {
         /** Код центрального Пользовательского соглашения в реестре СИМПАС. */
         const val CENTRAL_TERMS_CODE = "cmpas_terms"
+        const val CENTRAL_PRIVACY_CODE = "cmpas_privacy"
+        const val PRACTICE_TERMS_CODE = "cmpas_practice_terms"
+
+        /**
+         * Ссылки на документы для строки внизу экрана входа.
+         *
+         * Те же три документа и те же коды, что в вебе
+         * (src/lib/auth/simpasid-legal.ts): расхождение означало бы, что
+         * человек с телефона и человек из браузера читают разное.
+         *
+         * Каждая ссылка падает на свой запасной вариант отдельно: у
+         * центральных текстов и у Особых условий разные сроки публикации, и
+         * отсутствие одного не должно уносить остальные. Особые условия,
+         * которых в реестре ещё нет, не показываются вовсе — выдуманного
+         * адреса тут быть не может.
+         */
+        fun legalLinksFrom(documents: List<LegalDocument>): LegalLinks {
+            val byCode = documents.associateBy { it.documentCode }
+            val fallback = LegalLinks()
+            return LegalLinks(
+                terms = absoluteLegalUrl(byCode[CENTRAL_TERMS_CODE]?.url) ?: fallback.terms,
+                privacy = absoluteLegalUrl(byCode[CENTRAL_PRIVACY_CODE]?.url) ?: fallback.privacy,
+                practiceTerms = absoluteLegalUrl(byCode[PRACTICE_TERMS_CODE]?.url),
+            )
+        }
+
+        /** Адрес редакции приходит относительным — разворачиваем от издателя. */
+        fun absoluteLegalUrl(url: String?): String? {
+            val value = url?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            if (value.startsWith("http://") || value.startsWith("https://")) return value
+            return BuildConfig.SIMPASID_ISSUER.trimEnd('/') + "/" + value.trimStart('/')
+        }
 
         /**
          * Идентификаторы приложений провайдеров, ЗАШИТЫЕ В СБОРКУ.
@@ -430,6 +497,19 @@ class LoginViewModel @Inject constructor(
          * разными словами об одном он решил бы, что это две разные беды.
          */
         const val PROVIDER_REFUSED = "Провайдер не подтвердил вход. Попробуйте ещё раз или войдите по почте."
+
+        /**
+         * Отказ случился НА УСТРОЙСТВЕ, в SDK провайдера.
+         *
+         * Отдельная фраза нужна не человеку, а разбору: с ней снимок экрана
+         * говорит, где вход развалился, — в приложении провайдера на
+         * телефоне или в обмене кода у СИМПАС. Обе фразы называют одно и то
+         * же действие, потому что действие у человека и правда одно.
+         */
+        const val PROVIDER_REFUSED_ON_DEVICE =
+            "Вход через провайдера не завершился на этом устройстве. Попробуйте ещё раз или войдите по почте."
+
+        private const val LOG_TAG = "LoginViewModel"
 
         /**
          * Отказ единого входа — человеческими словами.

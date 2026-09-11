@@ -17,6 +17,8 @@ import ru.cmpas.app.domain.model.MobileNotificationSettings
 import ru.cmpas.app.domain.model.MobileNotificationSettingsPatch
 import ru.cmpas.app.domain.model.MobileBillingStatus
 import ru.cmpas.app.domain.model.MobileLegalStatus
+import ru.cmpas.app.domain.model.MobilePaymentSettings
+import ru.cmpas.app.domain.model.MobilePaymentSettingsPatch
 import ru.cmpas.app.domain.model.MobilePracticeSettings
 import ru.cmpas.app.domain.model.MobilePracticeSettingsPatch
 import ru.cmpas.app.domain.model.MobileProfilePatch
@@ -89,6 +91,8 @@ class SettingsViewModel @Inject constructor(
                 // остаётся последнее известное, выдуманного нет.
                 val billingResponse = runCatching { api.getBilling() }.getOrNull()
                 val practiceResponse = runCatching { api.getPracticeSettings() }.getOrNull()
+                // Оплата клиентом: ссылка и напоминание перед встречей.
+                val paymentResponse = runCatching { api.getPaymentSettings() }.getOrNull()
                 // Документы САМОГО специалиста — те, что получает клиент.
                 val documentsResponse = runCatching { api.getSpecialistDocuments() }.getOrNull()
                 _uiState.update {
@@ -100,6 +104,7 @@ class SettingsViewModel @Inject constructor(
                         reminders = mergeReminders(remindersResponse, it.reminders),
                         billing = billingResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.billing,
                         practice = practiceResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.practice,
+                        payment = paymentResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.payment,
                         documents = documentsResponse?.takeIf { r -> r.isSuccessful }?.body()?.documents ?: it.documents,
                         error = if (!legalResponse.isSuccessful) "Не удалось загрузить документы" else null,
                     )
@@ -184,6 +189,48 @@ class SettingsViewModel @Inject constructor(
                     "Не удалось сохранить ссылку"
                 }
                 _uiState.update { it.copy(isSavingPractice = false, error = message) }
+            }
+        }
+    }
+
+    /**
+     * Оплата клиентом: ссылка и напоминание перед встречей.
+     *
+     * Из ссылки рисуется QR-код, и оба уходят клиенту — в сообщении при
+     * записи и в напоминании за выбранный срок. Интервал выбирает
+     * специалист: решение учредителя 11.09.2026.
+     *
+     * ПРАКТИКА не связана с банками и поступление денег не видит; отметку об
+     * оплате ставит сам специалист. Экран обязан это говорить, а не намекать
+     * галочкой «оплачено».
+     */
+    fun savePaymentSettings(link: String, reminderEnabled: Boolean, hoursBefore: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingPayment = true, error = null) }
+            try {
+                val response = api.updatePaymentSettings(
+                    MobilePaymentSettingsPatch(
+                        // Ссылка есть — значит оплата настроена: отдельный
+                        // тумблер «включить» на телефоне был бы вторым
+                        // выключателем у одной лампочки.
+                        isEnabled = link.isNotBlank(),
+                        paymentLink = link.trim(),
+                        paymentReminderEnabled = reminderEnabled,
+                        paymentReminderHoursBefore = hoursBefore,
+                    ),
+                )
+                val saved = response.body()
+                if (!response.isSuccessful || saved == null) {
+                    throw IllegalStateException(if (response.code() == 400) "LINK" else "OTHER")
+                }
+                _uiState.update { it.copy(isSavingPayment = false, payment = saved) }
+            } catch (error: Exception) {
+                val message = if (error.message == "LINK") {
+                    "Ссылка должна начинаться с http:// или https://"
+                } else {
+                    "Не удалось сохранить настройки оплаты"
+                }
+                _uiState.update { it.copy(isSavingPayment = false, error = message) }
             }
         }
     }
@@ -304,8 +351,11 @@ data class SettingsUiState(
     /** null — состояние оплаты ещё не получено; выдумывать его нельзя. */
     val billing: MobileBillingStatus? = null,
     val practice: MobilePracticeSettings? = null,
+    /** null — настройки оплаты ещё не получены с сервера. */
+    val payment: MobilePaymentSettings? = null,
     val isSavingProfile: Boolean = false,
     val isSavingPractice: Boolean = false,
+    val isSavingPayment: Boolean = false,
     /** Документы специалиста для клиентов: согласие, договор, памятка. */
     val documents: List<SpecialistDocument> = emptyList(),
     val isSavingDocument: Boolean = false,
