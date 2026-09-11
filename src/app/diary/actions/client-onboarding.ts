@@ -2,7 +2,9 @@
 
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
-import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
+import { sendTelegramPhoto } from '@/lib/telegram';
+import { PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
+import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery, paymentQrForClient } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { timezoneLabel } from '@/lib/practice/timezones';
 import { sendTelegramMessage } from '@/lib/telegram';
@@ -152,6 +154,20 @@ export async function sendClientOnboarding(
                 : { maxChatId: chatId, preferredChannel: 'max' },
             htmlText,
         );
+
+        // КОД ОПЛАТЫ — КАРТИНКОЙ, СЛЕДОМ ЗА ТЕКСТОМ.
+        //
+        // Ссылка оплаты у большинства — статическая ссылка СБП: длинная
+        // строка, которую человек должен скопировать с того же телефона, где
+        // читает переписку. Код он наводит камерой. Рисуется он из ТОЙ ЖЕ
+        // ссылки, отдельной картинки специалисту заводить не нужно.
+        //
+        // Не дошёл — не беда и не повод ронять отправку: ссылка ушла текстом
+        // рядом, в том же сообщении.
+        if (opts.channel === 'telegram') {
+            const qr = await paymentQrForClient(psychologistId).catch(() => null);
+            if (qr) await sendTelegramPhoto(chatId, qr, PAYMENT_QR_CAPTION).catch(() => false);
+        }
         return { status: 'sent' as const, channel: opts.channel };
     }
 

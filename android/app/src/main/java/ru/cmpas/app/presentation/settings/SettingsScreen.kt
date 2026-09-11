@@ -132,9 +132,20 @@ fun SettingsScreen(
                             ?: "Не задана",
                     ) { activeSheet = ProfileSheet.ONLINE_LINK }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.Description, "Документы", documentsSubtitle(uiState)) { activeSheet = ProfileSheet.DOCUMENTS }
+                    // РАЗДЕЛЫ ПОМЕНЯЛИСЬ МЕСТАМИ ПО СМЫСЛУ.
+                    //
+                    // «Документы» показывали центральные документы сервиса —
+                    // те, что специалист принимает сам. Ему они интересны
+                    // однажды; каждый день нужны СВОИ: информированное
+                    // согласие, договор, памятка — то, что получает клиент.
+                    // Их в приложении не было вовсе, и завести было нельзя.
+                    //
+                    // Центральные переехали в «Данные и конфиденциальность»:
+                    // там же, где сказано, что мы храним, лежит и то, что вы
+                    // приняли.
+                    SettingRow(Icons.Outlined.Description, "Документы для клиентов", specialistDocumentsSubtitle(uiState)) { activeSheet = ProfileSheet.DOCUMENTS }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Доступ, хранение и удаление") { activeSheet = ProfileSheet.DATA }
+                    SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", dataSubtitle(uiState)) { activeSheet = ProfileSheet.DATA }
                     ThinDivider()
                     // Задача 20 §10: версия та, что реально собрана, а не
                     // вписанная руками в код когда-то давно.
@@ -243,6 +254,8 @@ fun SettingsScreen(
                 onAdsChange = viewModel::setAdsConsent,
                 onSaveName = viewModel::saveName,
                 onSaveOnlineLink = viewModel::saveOnlineSessionLink,
+                onCreateDocument = viewModel::createDocument,
+                onDocumentSavedShown = viewModel::documentSavedShown,
             )
         }
     }
@@ -418,9 +431,17 @@ private fun ProfileInfoSheet(
     onAdsChange: (Boolean) -> Unit,
     onSaveName: (String) -> Unit,
     onSaveOnlineLink: (String) -> Unit,
+    onCreateDocument: (String, String, Boolean) -> Unit,
+    onDocumentSavedShown: () -> Unit,
 ) {
-    if (sheet == ProfileSheet.DOCUMENTS) {
+    if (sheet == ProfileSheet.DATA) {
+        // Центральные документы сервиса переехали сюда вместе с рассказом о
+        // том, что и где хранится: принятое и хранимое — один разговор.
         DocumentsSheet(state, onClose, onRefresh, onAcceptRequired, onAdsChange)
+        return
+    }
+    if (sheet == ProfileSheet.DOCUMENTS) {
+        SpecialistDocumentsSheet(state, onClose, onCreateDocument, onDocumentSavedShown)
         return
     }
     if (sheet == ProfileSheet.BOOKING) {
@@ -442,15 +463,9 @@ private fun ProfileInfoSheet(
         // Обещание «будет доступно» из этого текста убрано: раздел
         // рассказывает, что с данными происходит СЕЙЧАС, и ведёт туда, где
         // ими действительно можно распорядиться.
-        ProfileSheet.DATA -> Triple(
-            "Данные и конфиденциальность",
-            "Что мы храним и как это удалить",
-            "Записи клиентов и заметки хранятся в ПРАКТИКЕ и видны только вам. Учётная запись, почта и способы " +
-                "входа — в Экосистеме СИМПАС, там же лежат принятые вами документы. Удаление практики и выгрузку " +
-                "записей делает поддержка по вашему запросу: это необратимо, и подтверждение должно быть живым.",
-        )
         ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
-        ProfileSheet.PROFILE, ProfileSheet.DOCUMENTS, ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK -> Triple("", "", "")
+        ProfileSheet.PROFILE, ProfileSheet.DOCUMENTS, ProfileSheet.DATA,
+        ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK -> Triple("", "", "")
     }
     CompasBottomSheet(onClose = onClose) {
         SheetHead(title, subtitle)
@@ -633,6 +648,153 @@ private fun OnlineLinkSheet(state: SettingsUiState, onClose: () -> Unit, onSave:
 // presentation/components/BookingLinkSheet.kt — общий код для настроек и
 // главного экрана, см. import ru.cmpas.app.presentation.components.* выше.
 
+/**
+ * Свои документы специалиста: что уже заведено и как завести ещё.
+ *
+ * Это документы, которые получает КЛИЕНТ: информированное согласие,
+ * договор, памятка. В приложении их не было вовсе — раздел «Документы»
+ * показывал центральные документы сервиса, нужные специалисту однажды.
+ */
+@Composable
+private fun SpecialistDocumentsSheet(
+    state: SettingsUiState,
+    onClose: () -> Unit,
+    onCreate: (String, String, Boolean) -> Unit,
+    onSavedShown: () -> Unit,
+) {
+    var adding by rememberSaveable { mutableStateOf(false) }
+    var title by rememberSaveable { mutableStateOf("") }
+    var link by rememberSaveable { mutableStateOf("") }
+    var sendOnNewClient by rememberSaveable { mutableStateOf(true) }
+
+    // Сохранилось — форма закрывается и очищается сама: оставленная
+    // открытой, она выглядит как «не сохранилось».
+    LaunchedEffect(state.documentSaved) {
+        if (state.documentSaved) {
+            adding = false
+            title = ""
+            link = ""
+            onSavedShown()
+        }
+    }
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Документы для клиентов", "Их получает клиент — согласие, договор, памятка")
+        Spacer(Modifier.height(14.dp))
+
+        if (state.documents.isEmpty()) {
+            GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) {
+                Text(
+                    "Пока ни одного документа. Заведите информированное согласие — оно будет уходить клиенту " +
+                        "вместе с подтверждением записи.",
+                    style = tBody2,
+                    color = CompasMutedFg,
+                )
+            }
+        } else {
+            GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                state.documents.forEachIndexed { index, doc ->
+                    if (index > 0) ThinDivider()
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Description, null, Modifier.size(21.dp), tint = Forest700)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(doc.title, style = tBody, color = CompasFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            // Сколько раз документ уходил клиентам: по этому
+                            // числу видно, живой он или заготовка.
+                            Text(
+                                documentMeta(doc.version, doc.deliveriesCount, doc.isActive, doc.sendOnNewClient),
+                                style = tBody2,
+                                color = CompasMutedFg,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        if (adding) {
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Название") },
+                placeholder = { Text("Информированное согласие") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = link,
+                onValueChange = { link = it },
+                label = { Text("Ссылка на файл") },
+                placeholder = { Text("https://…") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Отправлять новому клиенту", style = tBody, color = CompasFg)
+                    Text("Вместе с первым сообщением после заведения карточки", style = tBody2, color = CompasMutedFg)
+                }
+                Switch(
+                    checked = sendOnNewClient,
+                    onCheckedChange = { sendOnNewClient = it },
+                    colors = SwitchDefaults.colors(checkedTrackColor = Forest700),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                // Прямо и без обещаний: набирать полный текст согласия на
+                // телефоне никто не станет, и делать вид, что станет, незачем.
+                "С телефона документ заводится ссылкой на готовый файл. Документ текстом набирается в веб-кабинете.",
+                style = tMeta,
+                color = CompasMutedFg,
+            )
+            state.error?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(it, style = tMeta, color = Red600)
+            }
+            Spacer(Modifier.height(14.dp))
+            PrimaryButton(
+                text = if (state.isSavingDocument) "Сохраняем…" else "Сохранить документ",
+                onClick = { onCreate(title, link, sendOnNewClient) },
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Outlined.Check,
+                enabled = !state.isSavingDocument && title.isNotBlank() && link.isNotBlank(),
+            )
+            Spacer(Modifier.height(8.dp))
+            GhostButton("Отмена", { adding = false }, Modifier.fillMaxWidth())
+        } else {
+            PrimaryButton(
+                text = "Добавить документ",
+                onClick = { adding = true },
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Outlined.Add,
+            )
+            Spacer(Modifier.height(8.dp))
+            GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
+        }
+    }
+}
+
+/** Строка под названием документа: редакция, отправки, состояние. */
+internal fun documentMeta(version: String, deliveries: Int, isActive: Boolean, sendOnNewClient: Boolean): String {
+    val parts = mutableListOf("ред. $version")
+    if (!isActive) parts.add("не используется")
+    if (sendOnNewClient) parts.add("уходит новому клиенту")
+    // Ноль отправок — это «ещё ни разу», и сказать об этом полезнее, чем
+    // промолчать: заготовка, которой не пользуются, выглядит как рабочий
+    // документ.
+    parts.add(if (deliveries == 0) "ещё не отправлялся" else "отправлен $deliveries раз")
+    return parts.joinToString(" · ")
+}
+
 @Composable
 private fun DocumentsSheet(
     state: SettingsUiState,
@@ -743,11 +905,26 @@ private fun LegalDocSettingRow(doc: MobileLegalDoc, title: String, onOpen: () ->
     }
 }
 
-private fun documentsSubtitle(state: SettingsUiState): String = when {
-    state.legalStatus?.requiresTermsAcceptance == true -> "Требуется принятие"
-    state.legalStatus != null -> "Версии и согласия"
+/** Подпись про СВОИ документы: сколько их и есть ли вообще. */
+private fun specialistDocumentsSubtitle(state: SettingsUiState): String {
+    val active = state.documents.count { it.isActive }
+    return when {
+        active > 0 -> "Согласие, договор, памятка — $active"
+        state.isLoading -> "Загружаем…"
+        else -> "Пока ни одного"
+    }
+}
+
+/**
+ * Подпись про данные и центральные документы.
+ *
+ * Требование принять документы — единственное, что здесь срочно, и потому
+ * оно вытесняет всё остальное.
+ */
+private fun dataSubtitle(state: SettingsUiState): String = when {
+    state.legalStatus?.requiresTermsAcceptance == true -> "Требуется принятие документов"
     state.isLoading -> "Загружаем…"
-    else -> "Версии и согласия"
+    else -> "Хранение, документы сервиса, удаление"
 }
 
 private fun legalUrl(url: String): String {

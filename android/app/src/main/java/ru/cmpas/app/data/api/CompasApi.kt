@@ -184,6 +184,15 @@ interface CompasApi {
     @POST("dadata")
     suspend fun suggestAddresses(@Body body: AddressSuggestQuery): Response<AddressSuggestResponse>
 
+    // Документы САМОГО специалиста: информированное согласие, договор,
+    // памятка. Это не центральные документы сервиса — это то, что получает
+    // клиент.
+    @GET("documents")
+    suspend fun getSpecialistDocuments(): Response<SpecialistDocumentList>
+
+    @POST("documents")
+    suspend fun createSpecialistDocument(@Body body: NewSpecialistDocument): Response<CreatedDocument>
+
     // Кабинеты практики (Задача 21). Удаления кабинета в контракте нет:
     // DELETE выводит кабинет из работы, а строка остаётся — иначе у прошедших
     // сессий пропало бы место встречи. Занятый кабинет сервер не выводит и

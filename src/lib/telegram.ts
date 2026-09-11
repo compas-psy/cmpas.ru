@@ -88,3 +88,47 @@ export async function sendTelegramMessage(chatId: string, text: string, options?
         clearTimeout(timeout);
     }
 }
+
+/**
+ * Картинка в переписку — для кода оплаты.
+ *
+ * Ссылка на картинку требует от человека её открыть; код, пришедший
+ * картинкой, он наводит камерой соседнего телефона и платит. Ради одного
+ * этого случая функция и нужна.
+ *
+ * Отправляется телом запроса, а не адресом: адрес пришлось бы сделать
+ * публичным, чтобы его достал Telegram, — то есть выложить наружу ссылку
+ * оплаты конкретного специалиста.
+ */
+export async function sendTelegramPhoto(
+    chatId: string,
+    photo: Buffer,
+    caption?: string,
+): Promise<boolean> {
+    if (!TELEGRAM_BOT_TOKEN) {
+        console.warn('[Telegram] Отсутствует TELEGRAM_BOT_TOKEN, отправка картинки пропущена.');
+        return false;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+        const form = new FormData();
+        form.append('chat_id', chatId);
+        if (caption) form.append('caption', caption);
+        form.append('photo', new Blob([new Uint8Array(photo)], { type: 'image/png' }), 'qr.png');
+
+        const url = `${TELEGRAM_API_URL}/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+        const res = await fetch(url, { method: 'POST', body: form, signal: controller.signal });
+        if (!res.ok) console.error('[Telegram] Ошибка при отправке картинки:', await res.text());
+        return res.ok;
+    } catch (error: unknown) {
+        // Код оплаты — не единственный способ заплатить: ссылка ушла
+        // текстом рядом. Поэтому неудача здесь не роняет отправку целиком.
+        console.error('[Telegram] Исключение при отправке картинки:', error);
+        return false;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
