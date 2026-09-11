@@ -197,3 +197,41 @@ data class AddressSuggestResponse(val suggestions: List<AddressSuggestion> = emp
  */
 @Serializable
 data class AddressSuggestion(val value: String = "")
+
+/**
+ * Документ специалиста для клиентов.
+ *
+ * `deliveriesCount` — сколько раз он уже уходил клиентам: по нему видно,
+ * живой это документ или заготовка, которой ни разу не пользовались.
+ */
+@Serializable
+data class SpecialistDocument(
+    val id: String = "",
+    val title: String = "",
+    val version: String = "",
+    val fileUrl: String? = null,
+    val isActive: Boolean = true,
+    val sendOnNewClient: Boolean = false,
+    val sendOnFirstSession: Boolean = false,
+    val deliveriesCount: Int = 0,
+)
+
+@Serializable
+data class SpecialistDocumentList(val documents: List<SpecialistDocument> = emptyList())
+
+/**
+ * Заведение документа с телефона: название и ссылка на файл.
+ *
+ * Набирать полный текст согласия на телефоне никто не станет — у
+ * специалиста файл уже есть. Текстовые документы остаются веб-кабинету.
+ */
+@Serializable
+data class NewSpecialistDocument(
+    val title: String,
+    val fileUrl: String,
+    val sendOnNewClient: Boolean = false,
+    val sendOnFirstSession: Boolean = false,
+)
+
+@Serializable
+data class CreatedDocument(val id: String = "")

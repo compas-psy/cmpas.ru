@@ -20,6 +20,8 @@ import ru.cmpas.app.domain.model.MobileLegalStatus
 import ru.cmpas.app.domain.model.MobilePracticeSettings
 import ru.cmpas.app.domain.model.MobilePracticeSettingsPatch
 import ru.cmpas.app.domain.model.MobileProfilePatch
+import ru.cmpas.app.domain.model.NewSpecialistDocument
+import ru.cmpas.app.domain.model.SpecialistDocument
 import ru.cmpas.app.domain.model.User
 import javax.inject.Inject
 
@@ -87,6 +89,8 @@ class SettingsViewModel @Inject constructor(
                 // остаётся последнее известное, выдуманного нет.
                 val billingResponse = runCatching { api.getBilling() }.getOrNull()
                 val practiceResponse = runCatching { api.getPracticeSettings() }.getOrNull()
+                // Документы САМОГО специалиста — те, что получает клиент.
+                val documentsResponse = runCatching { api.getSpecialistDocuments() }.getOrNull()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -96,6 +100,7 @@ class SettingsViewModel @Inject constructor(
                         reminders = mergeReminders(remindersResponse, it.reminders),
                         billing = billingResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.billing,
                         practice = practiceResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.practice,
+                        documents = documentsResponse?.takeIf { r -> r.isSuccessful }?.body()?.documents ?: it.documents,
                         error = if (!legalResponse.isSuccessful) "Не удалось загрузить документы" else null,
                     )
                 }
@@ -183,6 +188,54 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Завести свой документ — названием и ссылкой на файл.
+     *
+     * Полный текст согласия на телефоне не набирают: у специалиста файл уже
+     * есть. Текстовые документы остаются веб-кабинету, и шторка об этом
+     * говорит прямо, а не молчит.
+     */
+    fun createDocument(title: String, fileUrl: String, sendOnNewClient: Boolean) {
+        val trimmedTitle = title.trim()
+        val trimmedUrl = fileUrl.trim()
+        if (trimmedTitle.isBlank() || trimmedUrl.isBlank()) {
+            _uiState.update { it.copy(error = "Нужны название и ссылка на файл") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingDocument = true, error = null) }
+            try {
+                val response = api.createSpecialistDocument(
+                    NewSpecialistDocument(
+                        title = trimmedTitle,
+                        fileUrl = trimmedUrl,
+                        sendOnNewClient = sendOnNewClient,
+                    ),
+                )
+                if (!response.isSuccessful) {
+                    throw IllegalStateException(if (response.code() == 400) "LINK" else "OTHER")
+                }
+                _uiState.update { it.copy(isSavingDocument = false, documentSaved = true) }
+                // Список перечитывается с сервера, а не дописывается на
+                // экране: дописанный показывал бы документ, которого на
+                // сервере может и не оказаться.
+                refresh()
+            } catch (error: Exception) {
+                val message = if (error.message == "LINK") {
+                    "Проверьте ссылку: она должна начинаться с http:// или https://"
+                } else {
+                    "Не удалось сохранить документ"
+                }
+                _uiState.update { it.copy(isSavingDocument = false, error = message) }
+            }
+        }
+    }
+
+    /** Шторка закрылась — признак «сохранено» больше не нужен. */
+    fun documentSavedShown() {
+        _uiState.update { it.copy(documentSaved = false) }
+    }
+
     fun acceptRequiredDocuments() {
         val status = _uiState.value.legalStatus ?: return
         viewModelScope.launch {
@@ -253,6 +306,10 @@ data class SettingsUiState(
     val practice: MobilePracticeSettings? = null,
     val isSavingProfile: Boolean = false,
     val isSavingPractice: Boolean = false,
+    /** Документы специалиста для клиентов: согласие, договор, памятка. */
+    val documents: List<SpecialistDocument> = emptyList(),
+    val isSavingDocument: Boolean = false,
+    val documentSaved: Boolean = false,
 )
 
 /**

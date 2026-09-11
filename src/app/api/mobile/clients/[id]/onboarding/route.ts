@@ -3,7 +3,9 @@ import { randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { deliverMessage } from '@/lib/messaging/deliver';
-import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
+import { sendTelegramPhoto } from '@/lib/telegram';
+import { PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
+import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery, paymentQrForClient } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { timezoneLabel } from '@/lib/practice/timezones';
 import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
@@ -143,6 +145,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                     : { maxChatId: chatId, preferredChannel: 'max' },
                 htmlText,
             );
+
+            // КОД ОПЛАТЫ — КАРТИНКОЙ, СЛЕДОМ ЗА ТЕКСТОМ.
+            //
+            // Ссылка оплаты у большинства — статическая ссылка СБП: длинная
+            // строка, которую человек должен скопировать с того же телефона,
+            // где читает переписку. Код он наводит камерой. Рисуется он из
+            // ТОЙ ЖЕ ссылки — отдельной картинки специалисту заводить не
+            // нужно.
+            //
+            // Не дошёл — не повод ронять отправку: ссылка ушла текстом рядом.
+            if (channel === 'telegram') {
+                const qr = await paymentQrForClient(auth.userId).catch(() => null);
+                if (qr) await sendTelegramPhoto(chatId, qr, PAYMENT_QR_CAPTION).catch(() => false);
+            }
+
             return NextResponse.json({ status: 'sent', channel });
         }
 

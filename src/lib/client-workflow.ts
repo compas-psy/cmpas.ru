@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import { messageLink } from '@/lib/messaging/format';
+import { paymentQrSource, paymentQrPng } from '@/lib/messaging/payment-qr';
 import { extractFirstName } from '@/lib/person-name';
 import { appSecret, safeEqualHex } from '@/lib/app-secret';
 
@@ -276,6 +277,51 @@ export async function createAutoDocumentDeliveries(params: {
     return deliveries;
 }
 
+/**
+ * Последние прочитанные настройки оплаты — чтобы не читать их дважды.
+ *
+ * Живут в пределах одного вызова пары getPaymentInstruction →
+ * paymentQrForClient: второй запрос в базу ради тех же двух полей был бы
+ * лишним, а передавать их через все слои сообщений — лишний параметр в
+ * шести местах.
+ */
+let lastPaymentSettings: { paymentLink: string | null; paymentQrUrl: string | null } | null = null;
+
+/**
+ * Код оплаты картинкой — из той ссылки, которую дал специалист.
+ *
+ * У большинства это статическая ссылка СБП: в сообщении она выглядит как
+ * длинная строка, которую человек должен скопировать с того же телефона,
+ * на котором читает. Код он наводит камерой.
+ *
+ * null означает «кода не будет»: оплата не настроена, ссылки нет или банк
+ * уже дал готовую картинку — она ушла ссылкой в тексте.
+ */
+export async function paymentQrForClient(psychologistId: string): Promise<Buffer | null> {
+    const settings = lastPaymentSettings ?? await readPaymentSettings(psychologistId);
+    if (!settings) return null;
+    const source = paymentQrSource(settings);
+    if (!source) return null;
+    try {
+        return await paymentQrPng(source);
+    } catch (error) {
+        // Не нарисовался — не беда: ссылка ушла текстом рядом.
+        console.error('[paymentQrForClient] не удалось нарисовать код:', error);
+        return null;
+    }
+}
+
+async function readPaymentSettings(psychologistId: string) {
+    const rows = await db.$queryRaw<Array<{ isEnabled: boolean; paymentLink: string | null; paymentQrUrl: string | null }>>`
+        SELECT "isEnabled", "paymentLink", "paymentQrUrl"
+        FROM "PsychologistPaymentSettings"
+        WHERE "psychologistId" = ${psychologistId}
+        LIMIT 1
+    `;
+    const settings = rows[0];
+    return settings?.isEnabled ? settings : null;
+}
+
 export async function getPaymentInstruction(psychologistId: string, sessionId?: string | null, clientId?: string | null) {
     const rows = await db.$queryRaw<Array<{
         isEnabled: boolean;
@@ -294,6 +340,7 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
     const settings = rows[0];
     if (!settings?.isEnabled) return null;
     if (!settings.paymentText && !settings.paymentLink && !settings.paymentQrUrl) return null;
+    lastPaymentSettings = settings;
 
     if (sessionId && clientId) {
         const id = randomUUID();
@@ -313,6 +360,9 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
         // Ссылки — за словом. Ссылка на оплату у эквайринга легко занимает
         // полторы строки, и в сообщении о встрече это выглядит как мусор.
         settings.paymentLink ? messageLink(settings.paymentLink, 'Перейти к оплате') : '',
+        // Готовая картинка от банка — ссылкой; код, нарисованный из ссылки
+        // оплаты, уходит отдельной картинкой (paymentQrForClient ниже), и
+        // дублировать его текстом незачем.
         settings.paymentQrUrl ? messageLink(settings.paymentQrUrl, 'QR-код для оплаты') : '',
         'ПРАКТИКА не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
     ];

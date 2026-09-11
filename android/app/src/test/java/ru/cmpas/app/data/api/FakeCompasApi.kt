@@ -80,6 +80,9 @@ open class FakeCompasApi(
         notStubbed("updatePracticeSettings")
     override suspend fun suggestAddresses(body: AddressSuggestQuery): Response<AddressSuggestResponse> =
         notStubbed("suggestAddresses")
+    override suspend fun getSpecialistDocuments(): Response<SpecialistDocumentList> = notStubbed("getSpecialistDocuments")
+    override suspend fun createSpecialistDocument(body: NewSpecialistDocument): Response<CreatedDocument> =
+        notStubbed("createSpecialistDocument")
     override suspend fun getAddresses(): Response<PracticeAddressList> = notStubbed("getAddresses")
     override suspend fun createAddress(body: CreatePracticeAddressRequest): Response<PracticeAddress> = notStubbed("createAddress")
     override suspend fun updateAddress(id: String, body: UpdatePracticeAddressRequest): Response<PracticeAddressList> = notStubbed("updateAddress")
