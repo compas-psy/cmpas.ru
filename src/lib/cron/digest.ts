@@ -4,6 +4,7 @@
  * Если сессий нет — молчим.
  */
 import { db } from '@/lib/db';
+import { hourInTimezone, weekdayInTimezone } from '@/lib/messaging/quiet-hours';
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -23,8 +24,32 @@ async function notify(tgId: string | null, maxId: string | null, text: string) {
 }
 
 /**
- * Утренний дайджест — вызывается cron ~08:00 МСК.
- * Одно сообщение со списком сессий на сегодня.
+ * Пояса практик одним запросом: задание идёт по всем, у кого включена
+ * рассылка, и спрашивать пояс по одному значило бы столько же запросов,
+ * сколько специалистов.
+ */
+async function practiceTimezones(ids: string[]): Promise<Map<string, string | null>> {
+    const rows = await db.psychologistSettings.findMany({
+        where: { psychologistId: { in: ids } },
+        select: { psychologistId: true, timezone: true },
+    }).catch(() => []);
+    return new Map(rows.map(r => [r.psychologistId, r.timezone]));
+}
+
+/** Час, в который специалист получает список сегодняшних встреч. */
+export const MORNING_DIGEST_HOUR = 8;
+/** Понедельник, 10 утра — сводка за прошлую неделю. */
+export const WEEKLY_DIGEST_HOUR = 10;
+const MONDAY = 1;
+
+/**
+ * Утренний дайджест — список сегодняшних встреч.
+ *
+ * ЧАС СЧИТАЕТСЯ ПО ПОЯСУ ПРАКТИКИ, А НЕ ПО МОСКВЕ. Задание в кроне стояло
+ * на 08:00 МСК для всех сразу: специалисту в Калининграде список приходил
+ * в 07:00, во Владивостоке — в 15:00, то есть к вечеру рабочего дня, когда
+ * встречи уже прошли. Теперь задание идёт каждый час, а отбирает тех, у
+ * кого СЕЙЧАС восемь утра.
  */
 export async function processMorningDigest() {
     try {
@@ -38,7 +63,11 @@ export async function processMorningDigest() {
             select: { psychologistId: true }
         });
 
+        const timezones = await practiceTimezones(settings.map(s => s.psychologistId));
+
         for (const { psychologistId } of settings) {
+            // Ровно один час в сутках совпадёт — значит и отправка одна.
+            if (hourInTimezone(timezones.get(psychologistId), today) !== MORNING_DIGEST_HOUR) continue;
             const sessions = await db.diarySession.findMany({
                 where: {
                     psychologistId,
@@ -93,7 +122,13 @@ export async function processWeeklyDigest() {
             select: { psychologistId: true }
         });
 
+        const timezones = await practiceTimezones(settings.map(s => s.psychologistId));
+
         for (const { psychologistId } of settings) {
+            // И день недели тоже по поясу практики: в понедельник 10:00 во
+            // Владивостоке в Москве ещё воскресенье.
+            if (weekdayInTimezone(timezones.get(psychologistId), now) !== MONDAY) continue;
+            if (hourInTimezone(timezones.get(psychologistId), now) !== WEEKLY_DIGEST_HOUR) continue;
             const allSessions = await db.diarySession.findMany({
                 where: {
                     psychologistId,

@@ -7,7 +7,10 @@
 // reaches this job at all, and never gets postSessionNudged set — so
 // re-enabling the flag later picks it straight back up.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Часы возвращаются настоящими: подменённые протекли бы в соседние файлы.
+afterEach(() => { vi.useRealTimers(); });
 
 const diarySessionFindMany = vi.fn();
 const diarySessionUpdate = vi.fn().mockResolvedValue({});
@@ -48,6 +51,13 @@ function baseSession(overrides: Record<string, unknown> = {}) {
 describe('processPostSessionNudge: quiet on clientNotificationsEnabled=false (Task 9)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // ЧАСЫ ЗАКРЕПЛЕНЫ. Каскад теперь молчит ночью по поясу практики, и
+        // без закреплённого времени тест зеленел бы утром и краснел вечером —
+        // то есть сообщал бы о времени суток, а не о поведении кода.
+        // Подменяется только Date: настоящие таймеры этим тестам нужны.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-11T09:00:00Z')); // 12:00 в Москве
+
         diarySessionUpdate.mockResolvedValue({});
     });
 

@@ -69,6 +69,17 @@ open class FakeCompasApi(
 
     override suspend fun updateNotificationSettings(body: MobileNotificationSettingsPatch): Response<MobileNotificationSettings> =
         notStubbed("updateNotificationSettings")
+
+    // Двойник обязан знать ВСЕ методы контракта: не знает — модуль тестов не
+    // компилируется вовсе, и об этом узнаёшь не от одного упавшего теста, а
+    // от «тесты не запускались».
+    override suspend fun updateProfile(body: MobileProfilePatch): Response<User> = notStubbed("updateProfile")
+    override suspend fun getBilling(): Response<MobileBillingStatus> = notStubbed("getBilling")
+    override suspend fun getPracticeSettings(): Response<MobilePracticeSettings> = notStubbed("getPracticeSettings")
+    override suspend fun updatePracticeSettings(body: MobilePracticeSettingsPatch): Response<MobilePracticeSettings> =
+        notStubbed("updatePracticeSettings")
+    override suspend fun suggestAddresses(body: AddressSuggestQuery): Response<AddressSuggestResponse> =
+        notStubbed("suggestAddresses")
     override suspend fun getAddresses(): Response<PracticeAddressList> = notStubbed("getAddresses")
     override suspend fun createAddress(body: CreatePracticeAddressRequest): Response<PracticeAddress> = notStubbed("createAddress")
     override suspend fun updateAddress(id: String, body: UpdatePracticeAddressRequest): Response<PracticeAddressList> = notStubbed("updateAddress")
