@@ -182,13 +182,26 @@ class DashboardSurfaceTest {
     }
 
     @Test
-    fun `остались только серверные напоминания с настоящей частотой`() {
+    fun `тумблеров ровно столько, сколько настоящих рассылок`() {
         val body = code(settings)
-        assertTrue(body.contains("\"За 24 часа\""))
-        assertTrue(body.contains("\"За 1 час\""))
+        // Подписи стали называть адресата: в разделе теперь не только
+        // напоминания клиенту, но и рассылки специалисту, и «За 24 часа»
+        // рядом с «Мой день утром» не говорило, кому именно.
+        assertTrue(body.contains("\"Клиенту за 24 часа\""))
+        assertTrue(body.contains("\"Клиенту за 1 час\""))
+        // Три рассылки специалисту и клиенту, за которыми стоит cron.
+        assertTrue(body.contains("ReminderKind.MORNING_DIGEST"))
+        assertTrue(body.contains("ReminderKind.WEEKLY_DIGEST"))
+        assertTrue(body.contains("ReminderKind.MOOD_CHECK"))
+        // А этих рассылок на сервере нет — и тумблеров быть не должно.
         assertFalse("такой рассылки на сервере нет", body.contains("За 2 часа"))
         assertFalse("нет серверного поля", body.contains("\"Об оплате\""))
         assertFalse("нет серверного поля", body.contains("\"О документах\""))
+        // Пять флагов таблицы, которых не читает НИКТО: показать их значило
+        // бы завести тумблеры, которые ничего не выключают.
+        for (dead in listOf("newBookingEnabled", "clientRescheduleEnabled", "clientCancelEnabled")) {
+            assertFalse("настройка $dead никем не читается", body.contains(dead))
+        }
     }
 
     @Test

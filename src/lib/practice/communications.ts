@@ -29,6 +29,14 @@ export function buildClientOnboardingMessage(params: {
     psychologistName: string;
     documentLinks?: Array<{ title: string; link: string }>;
     bookingLink: string;
+    /**
+     * Инструкция об оплате — та же, что в сообщении о встрече.
+     *
+     * Её здесь не было вовсе: клиент, заведённый БЕЗ записи, получал
+     * документы и ссылку на запись, а про оплату узнавал отдельным
+     * сообщением, которое специалист писал руками.
+     */
+    paymentText?: string | null;
     mode?: 'html' | 'plain';
 }) {
     const html = (params.mode ?? 'html') === 'html';
@@ -49,6 +57,10 @@ export function buildClientOnboardingMessage(params: {
         for (const d of params.documentLinks) {
             lines.push(link(d.link, humanizeDocumentTitle(d.title)));
         }
+    }
+
+    if (params.paymentText) {
+        lines.push('', esc(params.paymentText));
     }
 
     // Точка ставится только там, где адрес спрятан за текстом ссылки: в

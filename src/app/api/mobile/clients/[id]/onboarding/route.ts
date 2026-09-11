@@ -5,6 +5,7 @@ import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-au
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
+import { timezoneLabel } from '@/lib/practice/timezones';
 import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
 
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'CompasProBot';
@@ -117,11 +118,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 documentLinks,
                 paymentText,
                 bookingLink,
+                timezoneLabel: timezoneLabel(psych?.psychologistSettings?.timezone),
             };
             htmlText = buildSessionClientMessage({ ...base, mode: 'html' });
             plainText = buildSessionClientMessage({ ...base, mode: 'plain' });
         } else {
-            const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink };
+            // Оплата уходит и тому, у кого записи ещё нет: раньше про неё
+            // такой человек узнавал отдельным сообщением, написанным руками.
+            const paymentText = await getPaymentInstruction(auth.userId, null, null);
+            const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink, paymentText };
             htmlText = buildClientOnboardingMessage({ ...base, mode: 'html' });
             plainText = buildClientOnboardingMessage({ ...base, mode: 'plain' });
         }

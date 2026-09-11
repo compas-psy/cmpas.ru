@@ -461,6 +461,13 @@ export function buildSessionClientMessage(params: {
      */
     manageLink?: string | null;
     paymentText?: string | null;
+    /**
+     * Чьи это одиннадцать часов: «Москва (GMT+3)».
+     *
+     * Без этого время уходило безымянным, а клиент из другого региона
+     * приходил на час-другой мимо — и виноватым выглядел сервис.
+     */
+    timezoneLabel?: string | null;
     mode?: 'html' | 'plain';
 }) {
     const html = (params.mode ?? 'html') === 'html';
@@ -474,12 +481,13 @@ export function buildSessionClientMessage(params: {
     const isOnline = params.format !== 'offline';
     const formatText = isOnline ? 'онлайн-консультация' : 'очная встреча';
 
+    const zone = params.timezoneLabel?.trim();
     const lines: string[] = [
         `${name}, здравствуйте!`,
         '',
         `Подтверждаю запись на консультацию к специалисту ${psyName}.`,
         '',
-        bold(`${dateText} в ${params.time}`),
+        bold(`${dateText} в ${params.time}`) + (zone ? esc(` (${zone})`) : ''),
         `Формат: ${bold(formatText)}`,
     ];
 
@@ -495,6 +503,8 @@ export function buildSessionClientMessage(params: {
     }
 
     if (params.paymentText) {
+        // Оплата — отдельным блоком и после документов: в сообщении она
+        // читается как последний шаг подготовки, а не как главное в нём.
         lines.push('', esc(params.paymentText));
     }
 
