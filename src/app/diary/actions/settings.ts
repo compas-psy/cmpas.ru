@@ -339,6 +339,22 @@ export async function updateProfile(data: {
     return { success: true };
 }
 
+/**
+ * Публичная ссылка для записи — настоящая, а не «compas.ru/...».
+ *
+ * В карточке профиля в настройках стоял текст-заглушка со ссылкой в никуда
+ * (href="#"). Это ровно то место, где человек проверяет, что отдать клиенту.
+ */
+export async function getPublicBookingLink() {
+    try {
+        const psychologistId = await getPsychologistId();
+        const { getPsychologistBookingUrl } = await import('@/lib/booking/slug');
+        return { success: true as const, url: await getPsychologistBookingUrl(psychologistId) };
+    } catch (e: unknown) {
+        return { success: false as const, url: null, error: e instanceof Error ? e.message : 'Ошибка' };
+    }
+}
+
 export async function getAdsConsentForUser() {
     await getPsychologistId(); // ensures caller is authenticated before delegating
     return getAdsConsentStatus();

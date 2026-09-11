@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Save, Clock, Video, MapPin, AlertCircle, Eye, CreditCard, ChevronRight, User, Lock, Download } from 'lucide-react';
+import { Save, Clock, Video, MapPin, AlertCircle, Eye, CreditCard, ChevronRight, User } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import AddressAutocomplete from '@/components/ui/address-autocomplete';
@@ -20,6 +20,54 @@ type Settings = {
     notifyAds: boolean;
     blockConflicts: boolean;
 };
+
+/** Что показывает карточка профиля. Ровно то, что приходит с сервера. */
+type ProfileCard = {
+    fullName: string;
+    email: string;
+    methods: string[];
+};
+
+/** Готовый вывод сервера об оплате — экран его не пересчитывает. */
+type BillingState = {
+    daysLeft: number | null;
+    isExpired: boolean;
+    isForever: boolean;
+    subscriptionActive: boolean;
+    subscriptionEndsAt: string | null;
+    trialActive: boolean;
+};
+
+/** Инициалы из настоящего имени, а не две буквы, вписанные в вёрстку. */
+function initials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '—';
+    return parts.slice(0, 2).map(p => p[0]).join('');
+}
+
+function billingTitle(billing: BillingState | null): string {
+    if (!billing) return 'Загрузка…';
+    if (billing.isForever) return 'Бесплатный доступ';
+    if (billing.subscriptionActive) return 'Подписка активна';
+    if (billing.trialActive) return 'Пробный период';
+    if (billing.isExpired) return 'Подписка закончилась';
+    return 'Подписка';
+}
+
+function billingSubtitle(billing: BillingState | null): string {
+    if (!billing) return '';
+    if (billing.isForever) return 'Бессрочно, без оплаты';
+    if (billing.subscriptionActive && billing.subscriptionEndsAt) {
+        return `Действует до ${new Date(billing.subscriptionEndsAt).toLocaleDateString('ru-RU')}`;
+    }
+    if (billing.trialActive && billing.daysLeft !== null) {
+        const d = billing.daysLeft;
+        const word = d % 100 >= 11 && d % 100 <= 14 ? 'дней' : d % 10 === 1 ? 'день' : d % 10 >= 2 && d % 10 <= 4 ? 'дня' : 'дней';
+        return `Осталось ${d} ${word}`;
+    }
+    if (billing.isExpired) return 'Оформите подписку, чтобы продолжить работу';
+    return 'Состояние оплаты';
+}
 
 type Address = {
     id: string;
@@ -82,7 +130,12 @@ export default function SettingsPage() {
         notifyAds: false,
         blockConflicts: true,
     });
-    const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
+    // Состояние оплаты приходит с сервера готовым выводом: «активна» — это
+    // про срок, а не про факт оплаты когда-то (src/lib/billing/status.ts).
+    const [billing, setBilling] = useState<BillingState | null>(null);
+    // Профиль показывается настоящий — тот, кто вошёл.
+    const [profile, setProfile] = useState<ProfileCard>({ fullName: '', email: '', methods: [] });
+    const [bookingLink, setBookingLink] = useState<string | null>(null);
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [newAddress, setNewAddress] = useState({ name: '', address: '' });
     const [addingAddress, setAddingAddress] = useState(false);
@@ -100,7 +153,7 @@ export default function SettingsPage() {
                 getAddresses({ includeInactive: true }),
                 fetch('/api/billing/status').then(r => r.json()).catch(() => null),
             ]);
-            if (trialRes?.daysLeft !== undefined) setTrialDaysLeft(trialRes.daysLeft);
+            if (trialRes) setBilling(trialRes as BillingState);
 
             if (settingsRes.success && settingsRes.data) {
                 const data = settingsRes.data;
@@ -120,6 +173,22 @@ export default function SettingsPage() {
             } else if (!settingsRes.success) {
                 toast.error(settingsRes.error || 'Ошибка при загрузке настроек');
             }
+
+            // Карточка профиля берёт те же данные, что и страница правки:
+            // два источника для одного и того же имени разойдутся молча.
+            const { getProfile } = await import('../actions/settings');
+            const profileRes = await getProfile();
+            if (profileRes.success && profileRes.data) {
+                setProfile({
+                    fullName: profileRes.data.fullName || '',
+                    email: profileRes.data.email || '',
+                    methods: profileRes.data.methods || [],
+                });
+            }
+
+            const { getPublicBookingLink } = await import('../actions/settings');
+            const linkRes = await getPublicBookingLink().catch(() => null);
+            if (linkRes?.success && linkRes.url) setBookingLink(linkRes.url);
 
             const { getAdsConsentForUser } = await import('../actions/settings');
             const adsRes = await getAdsConsentForUser();
@@ -221,14 +290,26 @@ export default function SettingsPage() {
     // размер и та же толщина линии. Эмодзи здесь выбивались — они рисуются
     // шрифтом системы, у каждой платформы свой, и рядом со строгим меню
     // выглядели наклейками, а не частью интерфейса.
+    // РАЗДЕЛЫ НАЗЫВАЮТ ТО, ЧТО В НИХ ЛЕЖИТ.
+    //
+    // Было «Время и язык», и внутри — часовой пояс, длительность сессии,
+    // ссылка на видеовстречу и три тумблера про разное: уведомления,
+    // календарь и рекламные рассылки. Ссылке на встречу в разделе про время
+    // делать нечего, а тумблеры разного смысла в одной карточке читаются как
+    // один набор.
+    //
+    // Убраны «Безопасность» и «Экспорт данных»: оба были пустыми, с
+    // подписью «в разработке». Пустой раздел «Безопасность» — худший из
+    // возможных: человек читает его как «здесь ничего нет», а речь о
+    // защите его клиентских записей. Про данные теперь сказано там, где это
+    // правда, — в «Данных и конфиденциальности».
     const tabs = [
         { id: 'profile', icon: User, label: 'Профиль' },
-        { id: 'time', icon: Clock, label: 'Время и язык' },
+        { id: 'sessions', icon: Video, label: 'Сессии' },
+        { id: 'time', icon: Clock, label: 'Время' },
         { id: 'offices', icon: MapPin, label: 'Офлайн-кабинеты' },
         { id: 'cancellation', icon: AlertCircle, label: 'Правила отмены' },
         { id: 'billing', icon: CreditCard, label: 'Подписка' },
-        { id: 'security', icon: Lock, label: 'Безопасность' },
-        { id: 'export', icon: Download, label: 'Экспорт данных' },
     ];
 
     if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -273,76 +354,81 @@ export default function SettingsPage() {
 
                     {activeTab === 'profile' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                            {/* Profile Card */}
+                            {/* КАРТОЧКА ПОКАЗЫВАЕТ ТОГО, КТО ВОШЁЛ.
+                                Раньше здесь стояли «Мартынов Илья», «Психолог,
+                                гештальт-терапевт», «ИНН —» и ссылка
+                                «compas.ru/...», ведущая в никуда (href="#"), —
+                                нарисованный профиль одного человека, который
+                                видели все. Кнопка «Редактировать» не делала
+                                ничего: обработчика у неё не было вовсе. */}
                             <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
                                 <div className="flex items-center justify-between mb-5">
-                                    <h2 className="text-lg font-bold text-foreground">Профиль кабинета</h2>
-                                    <button className="text-[13px] font-semibold text-primary hover:text-forest-800 transition-colors">Редактировать</button>
+                                    <h2 className="text-lg font-bold text-foreground">Профиль</h2>
+                                    <Link href="/diary/profile" className="text-[13px] font-semibold text-primary hover:text-forest-800 transition-colors">
+                                        Редактировать
+                                    </Link>
                                 </div>
                                 <div className="flex items-center gap-4 mb-5">
-                                    <div className="w-14 h-14 rounded-full bg-sage-100 flex items-center justify-center text-xl font-bold text-forest-700 border-2 border-sage-200 uppercase shrink-0">ИМ</div>
-                                    <div>
-                                        <div className="text-[16px] font-bold text-foreground">Мартынов Илья <span className="text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded ml-1">Основной</span></div>
-                                        <div className="text-[13px] text-muted-foreground">Психолог, гештальт-терапевт</div>
+                                    <div className="w-14 h-14 rounded-full bg-sage-100 flex items-center justify-center text-xl font-bold text-forest-700 border-2 border-sage-200 uppercase shrink-0">
+                                        {initials(profile.fullName)}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-[16px] font-bold text-foreground truncate">
+                                            {profile.fullName || 'Имя не указано'}
+                                        </div>
+                                        <div className="text-[13px] text-muted-foreground truncate">
+                                            {profile.methods.length > 0 ? profile.methods.join(', ') : 'Специализация не указана'}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="space-y-2 text-[13px]">
-                                    <div className="flex items-center gap-3 text-muted-foreground"><span className="font-semibold text-foreground/70 w-24">ИНН</span> —</div>
-                                    <div className="flex items-center gap-3 text-muted-foreground"><span className="font-semibold text-foreground/70 w-24">Публичная ссылка</span> <a href="#" className="text-primary hover:underline">compas.ru/...</a></div>
+                                    <div className="flex items-center gap-3 text-muted-foreground">
+                                        <span className="font-semibold text-foreground/70 w-24 shrink-0">Почта</span>
+                                        <span className="truncate">{profile.email || '—'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-muted-foreground">
+                                        <span className="font-semibold text-foreground/70 w-24 shrink-0">Ссылка для записи</span>
+                                        {bookingLink ? (
+                                            <a href={bookingLink} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate">
+                                                {bookingLink.replace(/^https?:\/\//, '')}
+                                            </a>
+                                        ) : <span>—</span>}
+                                    </div>
                                 </div>
+                                {/* Почта и способ входа живут в Экосистеме СИМПАС:
+                                    продукт их получает, а не хранит, и полем для
+                                    правки притворяться им нельзя. */}
+                                <p className="text-[12px] text-muted-foreground mt-4 leading-relaxed">
+                                    Почта и способ входа хранятся в Экосистеме СИМПАС — их меняют там.
+                                    Имя и специализация остаются в ПРАКТИКЕ.
+                                </p>
                             </div>
 
-                            {/* Billing Widget */}
-                            <Link href="/billing" className="block bg-card border border-border rounded-2xl p-5 shadow-card hover:border-primary/40 transition-all group">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[15px] font-bold text-foreground">Подписка и оплата</p>
-                                        <p className="text-[13px] text-muted-foreground">
-                                            {trialDaysLeft === null ? 'Пробный период' : trialDaysLeft > 0 ? `Осталось ${trialDaysLeft} дн.` : 'Завершён'}
-                                        </p>
+                            {/* Рекламное согласие — это согласие, а не настройка
+                                уведомлений: оно жило среди тумблеров про календарь
+                                и видеосвязь, где его смысл терялся. */}
+                            <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
+                                <h2 className="text-lg font-bold text-foreground mb-5">Согласия</h2>
+                                <label className="flex items-start gap-3 cursor-pointer group">
+                                    <div className={`w-10 h-[22px] rounded-full transition-colors shrink-0 mt-0.5 relative cursor-pointer ${settings.notifyAds ? 'bg-primary' : 'bg-border'}`}
+                                        onClick={() => setSettings(s => ({ ...s, notifyAds: !s.notifyAds }))}>
+                                        <div className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${settings.notifyAds ? 'translate-x-[20px]' : 'translate-x-[2px]'}`} />
                                     </div>
-                                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                                </div>
-                            </Link>
+                                    <div>
+                                        <div className="text-[13px] font-bold text-foreground">Рекламные рассылки</div>
+                                        <div className="text-[11px] text-muted-foreground">Подборки статей, анонсы и программы. Необязательно, отзывается в любой момент</div>
+                                    </div>
+                                </label>
+                                <Link href="/diary/documents" className="mt-5 flex items-center justify-between p-3 rounded-xl border border-border hover:bg-sage-50 transition-colors">
+                                    <span className="text-[13px] font-semibold text-foreground">Документы и принятые версии</span>
+                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                </Link>
+                            </div>
                         </div>
                     )}
 
-                    {activeTab === 'time' && (
+                    {activeTab === 'sessions' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                            <div className="bg-card rounded-2xl border border-border p-6 shadow-card lg:col-span-2">
-                                <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Clock className="w-5 h-5 text-muted-foreground" /> Время и язык</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Часовой пояс</label>
-                                        <select value={settings.timezone} onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}
-                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
-                                            {timezones.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-                                            {!timezones.some(tz => tz.value === settings.timezone) && <option value={settings.timezone}>{settings.timezone}</option>}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Формат времени</label>
-                                        <select value={(settings as any).timeFormat !== '12h' ? '24h' : '12h'} onChange={e => setSettings(s => ({ ...s, timeFormat: e.target.value } as any))}
-                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
-                                            <option value="24h">24 часа (14:00)</option><option value="12h">AM/PM (2:00 PM)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Формат даты</label>
-                                        <select value={(settings as any).dateFormat === 'MM/dd/yyyy' ? 'MM/dd/yyyy' : 'dd.MM.yyyy'} onChange={e => setSettings(s => ({ ...s, dateFormat: e.target.value } as any))}
-                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
-                                            <option value="dd.MM.yyyy">ДД.ММ.ГГГГ</option><option value="MM/dd/yyyy">ММ/ДД/ГГГГ</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Начало недели</label>
-                                        <select value={(settings as any).weekStartsOn === 'sunday' ? 'sunday' : 'monday'} onChange={e => setSettings(s => ({ ...s, weekStartsOn: e.target.value } as any))}
-                                            className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
-                                            <option value="monday">Понедельник</option><option value="sunday">Воскресенье</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
                             <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
                                 <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Video className="w-5 h-5 text-muted-foreground" /> Форматы сессий</h2>
                                 <div className="space-y-4">
@@ -362,33 +448,62 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Ссылка на встречу переехала сюда из «Времени и языка»:
+                                это параметр сессии, а не часового пояса. */}
                             <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
-                                <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Video className="w-5 h-5 text-muted-foreground" /> Ссылка и уведомления</h2>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Ссылка для онлайн-сессий</label>
-                                        <input type="text" value={settings.onlineSessionLink} onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
-                                            placeholder="https://zoom.us/j/..." className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm" />
-                                    </div>
-                                    <div className="space-y-3 pt-2">
-                                        {[
-                                            { key: 'notifyTelegram', label: 'Telegram уведомления психологу', desc: 'Получать напоминания о предстоящих сессиях (за 24 часа)', checked: settings.notifyTelegram },
-                                            { key: 'blockConflicts', label: 'Блокировать занятые слоты из календаря', desc: 'События из Google / Яндекс Календаря автоматически закрывают время', checked: settings.blockConflicts },
-                                            { key: 'notifyAds', label: 'Согласие на рекламные рассылки', desc: 'Получать подборки статей, анонсы и программы от партнеров', checked: settings.notifyAds },
-                                        ].map(opt => (
-                                            <label key={opt.key} className="flex items-start gap-3 cursor-pointer group">
-                                                <div className={`w-10 h-[22px] rounded-full transition-colors shrink-0 mt-0.5 relative cursor-pointer ${opt.checked ? 'bg-primary' : 'bg-border'}`}
-                                                    onClick={() => setSettings(s => ({ ...s, [opt.key]: !opt.checked } as any))}>
-                                                    <div className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${opt.checked ? 'translate-x-[20px]' : 'translate-x-[2px]'}`} />
-                                                </div>
-                                                <div>
-                                                    <div className="text-[13px] font-bold text-foreground">{opt.label}</div>
-                                                    <div className="text-[11px] text-muted-foreground">{opt.desc}</div>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
+                                <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Video className="w-5 h-5 text-muted-foreground" /> Онлайн-встречи</h2>
+                                <label className="block text-[13px] font-semibold text-muted-foreground mb-2">Ссылка для онлайн-сессий</label>
+                                <input type="text" value={settings.onlineSessionLink} onChange={e => setSettings(s => ({ ...s, onlineSessionLink: e.target.value }))}
+                                    placeholder="https://telemost.yandex.ru/j/..." className="w-full px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm" />
+                                <p className="text-[12px] text-muted-foreground mt-2 leading-relaxed">
+                                    Уходит клиенту в подтверждении записи и в напоминаниях. Пустое поле — ссылки в сообщении не будет.
+                                </p>
+
+                                <div className="mt-5 pt-5 border-t border-border">
+                                    <label className="flex items-start gap-3 cursor-pointer group">
+                                        <div className={`w-10 h-[22px] rounded-full transition-colors shrink-0 mt-0.5 relative cursor-pointer ${settings.blockConflicts ? 'bg-primary' : 'bg-border'}`}
+                                            onClick={() => setSettings(s => ({ ...s, blockConflicts: !s.blockConflicts }))}>
+                                            <div className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${settings.blockConflicts ? 'translate-x-[20px]' : 'translate-x-[2px]'}`} />
+                                        </div>
+                                        <div>
+                                            <div className="text-[13px] font-bold text-foreground">Закрывать время из календаря</div>
+                                            <div className="text-[11px] text-muted-foreground">События из Google и Яндекс Календаря не дают записаться на занятый час</div>
+                                        </div>
+                                    </label>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'time' && (
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
+                            <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Clock className="w-5 h-5 text-muted-foreground" /> Часовой пояс</h2>
+                            <select value={settings.timezone} onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}
+                                className="w-full max-w-md px-4 py-3 border border-border rounded-xl bg-background focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium">
+                                {timezones.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+                                {!timezones.some(tz => tz.value === settings.timezone) && <option value={settings.timezone}>{settings.timezone}</option>}
+                            </select>
+                            {/* Пояс — не украшение расписания: по нему считается, в
+                                котором часу уходят сообщения клиенту. */}
+                            <p className="text-[12px] text-muted-foreground mt-3 leading-relaxed max-w-md">
+                                По этому поясу считается ваше расписание и время, в которое уходят сообщения клиентам.
+                            </p>
+
+                            {/* УБРАНЫ ТРИ ВЫБОРА: формат времени, формат даты и
+                                начало недели. Они не сохранялись нигде — ни в
+                                схеме, ни в действии updateSettings: человек менял
+                                их, нажимал «Сохранить», видел «Настройки
+                                сохранены» и получал прежнее при следующем
+                                открытии. */}
+                            <div className="mt-6 pt-5 border-t border-border">
+                                <Link href="/diary/notifications" className="flex items-center justify-between p-4 rounded-xl border border-border hover:bg-sage-50 transition-colors">
+                                    <div>
+                                        <div className="text-[14px] font-bold text-foreground">Уведомления</div>
+                                        <div className="text-[12px] text-muted-foreground">Что и когда получают вы и ваши клиенты</div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                                </Link>
                             </div>
                         </div>
                     )}
@@ -448,19 +563,19 @@ export default function SettingsPage() {
                     {activeTab === 'billing' && (
                         <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
                             <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><CreditCard className="w-5 h-5 text-muted-foreground" /> Подписка</h2>
+                            {/* Состояние пришло с сервера готовым: раньше здесь
+                                всегда было написано «Пробный период» — и тому,
+                                кто платит второй год, тоже. */}
                             <Link href="/billing" className="flex items-center justify-between p-4 rounded-xl border border-border hover:bg-sage-50 transition-colors">
-                                <div><div className="text-[14px] font-bold">Пробный период</div><div className="text-[12px] text-muted-foreground">{trialDaysLeft !== null ? `Осталось ${trialDaysLeft} дней` : 'Загрузка...'}</div></div>
-                                <span className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold">Выбрать тариф</span>
+                                <div>
+                                    <div className="text-[14px] font-bold">{billingTitle(billing)}</div>
+                                    <div className="text-[12px] text-muted-foreground">{billingSubtitle(billing)}</div>
+                                </div>
+                                <span className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold shrink-0 ml-3">
+                                    {billing?.subscriptionActive || billing?.isForever ? 'Открыть' : 'Оформить'}
+                                </span>
                             </Link>
                         </div>
-                    )}
-
-                    {activeTab === 'security' && (
-                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Lock className="w-5 h-5 text-muted-foreground" /> Безопасность</h2><p className="text-sm text-muted-foreground">Управление доступом — в разработке.</p></div>
-                    )}
-
-                    {activeTab === 'export' && (
-                        <div className="bg-card rounded-2xl border border-border p-6 shadow-card"><h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2"><Download className="w-5 h-5 text-muted-foreground" /> Экспорт данных</h2><p className="text-sm text-muted-foreground">Выгрузка данных — в разработке.</p></div>
                     )}
 
                 </div>

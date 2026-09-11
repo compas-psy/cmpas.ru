@@ -402,7 +402,9 @@ private fun SettingRow(icon: ImageVector, title: String, subtitle: String, onCli
 }
 
 @Composable
-private fun ThinDivider() {
+// Видна всему модулю: тот же волосок разделяет строки и в списке кабинетов.
+// Приватной она была file-private, и экран кабинетов её не видел.
+internal fun ThinDivider() {
     HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
 }
 
