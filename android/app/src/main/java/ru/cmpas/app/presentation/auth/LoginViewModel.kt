@@ -14,6 +14,7 @@ import ru.cmpas.app.data.api.SimpasIdExchangeRequest
 import ru.cmpas.app.data.datastore.UserPreferences
 import ru.cmpas.simpasid.Platform
 import ru.cmpas.simpasid.SimpasIdClient
+import ru.cmpas.simpasid.SimpasIdException
 import javax.inject.Inject
 
 /**
@@ -141,7 +142,7 @@ class LoginViewModel @Inject constructor(
                     it.copy(isLoading = false, step = LoginStep.CODE, resendPauseSeconds = pause, code = "")
                 }
             } catch (error: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = SIGN_IN_UNAVAILABLE) }
+                _uiState.update { it.copy(isLoading = false, error = signInErrorMessage(error)) }
             }
         }
     }
@@ -162,9 +163,14 @@ class LoginViewModel @Inject constructor(
                 val tokens = simpasId.verifyEmailAuth(email, code, deviceKey, Platform.ANDROID)
                 adoptSimpasIdSession(tokens.accessToken, tokens.account.id)
             } catch (error: Exception) {
-                _uiState.update {
-                    it.copy(isLoading = false, step = LoginStep.CODE, error = "Код не подошёл. Проверьте и попробуйте снова")
+                // «Код не подошёл» на исчерпанных попытках — ложь: человек
+                // может вводить верный код, а его уже не принимают.
+                val message = if ((error as? SimpasIdException)?.code == "too_many_attempts") {
+                    signInErrorMessage(error)
+                } else {
+                    "Код не подошёл. Проверьте и попробуйте снова"
                 }
+                _uiState.update { it.copy(isLoading = false, step = LoginStep.CODE, error = message) }
             }
         }
     }
@@ -193,9 +199,16 @@ class LoginViewModel @Inject constructor(
      * исходное состояние, а отказ провайдера называется общей фразой.
      */
     fun onProviderSignInAborted(failed: Boolean) {
-        _uiState.update {
-            it.copy(isLoading = false, step = LoginStep.EMAIL, error = if (failed) SIGN_IN_UNAVAILABLE else null)
+        // Отказ здесь — это отказ ПРОВАЙДЕРА (не дал токен, не отдал JWT), а
+        // не наша поломка. Общая фраза «мы уже чиним» звала бы ждать того,
+        // чего не случится: у человека есть рабочий второй путь, и назвать
+        // его — единственное полезное, что тут можно сделать.
+        val message = if (failed) {
+            PROVIDER_REFUSED
+        } else {
+            null
         }
+        _uiState.update { it.copy(isLoading = false, step = LoginStep.EMAIL, error = message) }
     }
 
     /**
@@ -269,7 +282,7 @@ class LoginViewModel @Inject constructor(
                 adoptSimpasIdSession(tokens.accessToken, tokens.account.id)
             } catch (error: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = SIGN_IN_UNAVAILABLE)
+                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = signInErrorMessage(error))
                 }
             }
         }
@@ -403,5 +416,58 @@ class LoginViewModel @Inject constructor(
 
         /** Дословно из рецепта: ни кода ошибки, ни адреса сервера человеку. */
         const val SIGN_IN_UNAVAILABLE = "Вход временно недоступен. Мы уже чиним. Попробуйте через несколько минут."
+
+        /**
+         * Провайдер не подтвердил вход.
+         *
+         * Одна строка на два места — отказ его SDK на устройстве и отказ
+         * обмена на сервере: для человека это одно и то же событие, и
+         * разными словами об одном он решил бы, что это две разные беды.
+         */
+        const val PROVIDER_REFUSED = "Провайдер не подтвердил вход. Попробуйте ещё раз или войдите по почте."
+
+        /**
+         * Отказ единого входа — человеческими словами.
+         *
+         * Раньше на все случаи была одна фраза «вход временно недоступен, мы
+         * уже чиним». Для половины отказов это НЕПРАВДА: чинить нечего, и
+         * ждать бесполезно. Человек, у которого провайдер не отдал
+         * подтверждённой почты, будет жать кнопку до вечера — а ему надо
+         * войти по почте, и мы это знаем в момент отказа.
+         *
+         * Коды взяты из перечня стороны СИМПАС (issue #172, 11.09.2026) и
+         * сверены с их сервером, а не придуманы по смыслу.
+         *
+         * Ни кода ошибки, ни адреса сервера в тексте нет — это требование их
+         * же рецепта, и оно верное: человеку они ничего не объясняют.
+         */
+        fun signInErrorMessage(error: Throwable): String =
+            when ((error as? SimpasIdException)?.code) {
+                // Провайдер не дал подтверждённой почты. Ждать нечего —
+                // называем действие, которое сработает.
+                "email_required" ->
+                    "Этот способ входа не дал подтверждённой почты. Войдите по почте."
+
+                // Личность провайдера уже за другой учётной записью. Вторую
+                // практику рядом человеку заводить нельзя, и он этого не
+                // хочет — ему надо в свою.
+                "identity_taken" ->
+                    "Этот аккаунт уже связан с другой учётной записью ПРАКТИКИ. Войдите тем способом, которым входили раньше."
+
+                "too_many_attempts" ->
+                    "Слишком много попыток. Попробуйте через несколько минут."
+
+                // Провайдер отказал или подпись не сошлась. Виноваты не мы и
+                // не он — но человеку нужен выход, а не разбирательство.
+                "invalid_provider_code" -> PROVIDER_REFUSED
+
+                "provider_unavailable" ->
+                    "Этот способ входа сейчас недоступен. Войдите по почте."
+
+                // forbidden_client, invalid_request и всё неизвестное — это
+                // НАША ошибка настройки или сети. Человеку правда нечего
+                // делать, и общая фраза здесь честна.
+                else -> SIGN_IN_UNAVAILABLE
+            }
     }
 }
