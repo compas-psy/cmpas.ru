@@ -7,6 +7,7 @@
 // которая при нажатии падает.
 import { EMAIL_DOOR, isSimpasIdConfigured, shouldSendToSimpasId } from "@/lib/auth/simpasid"
 import { safeReturnPath } from "@/lib/auth/return-path"
+import { fetchSimpasIdLegalLinks } from "@/lib/auth/simpasid-legal"
 import AuthForm from "./AuthForm"
 import SimpasIdDoor from "./SimpasIdDoor"
 
@@ -52,5 +53,12 @@ export default async function AuthPage({
         return <SimpasIdDoor returnPath={returnPath} emailDoorHref={`/auth?${emailDoor.toString()}`} />
     }
 
-    return <AuthForm simpasIdEnabled={configured} />
+    // Адреса документов спрашиваются у консент-центра на каждый показ
+    // экрана: редакция там может смениться в любой день, а константа в коде
+    // означала бы, что до нашей правки человек читает устаревший текст.
+    // Не ответили — ведём на наши прежние страницы, экран входа не имеет
+    // права не открыться из-за стороннего сервиса.
+    const legalLinks = await fetchSimpasIdLegalLinks()
+
+    return <AuthForm simpasIdEnabled={configured} legalLinks={legalLinks} />
 }

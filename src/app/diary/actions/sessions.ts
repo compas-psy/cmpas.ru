@@ -314,6 +314,44 @@ export async function markSessionOutcome(id: string, outcome: 'completed' | 'no_
     return session;
 }
 
+/**
+ * Причина неявки — словами специалиста.
+ *
+ * Отдельное действие, а не поле в updateSession: туда попадают заметки по
+ * сессии и статус, и подмешивать к ним причину значило бы, что форма
+ * редактирования записи может её затереть, ничего про неё не зная.
+ *
+ * Пустая строка стирает причину — это осознанное «я передумал записывать»,
+ * а не потеря. Отличать пустую строку от «не передавали» здесь нужно:
+ * undefined не трогает поле вовсе.
+ */
+export async function setNoShowReason(id: string, reason: string) {
+    const psychologistId = await getPsychologistId();
+    await requireOwnedSession(psychologistId, id);
+
+    const trimmed = reason.trim();
+    if (trimmed.length > 500) {
+        throw new Error('Причина не должна быть длиннее 500 символов');
+    }
+
+    const session = await db.diarySession.update({
+        where: { id },
+        data: { noShowReason: trimmed || null } as never,
+    });
+
+    // В аналитику уходит ФАКТ и длина, но не текст: причина неявки — это
+    // сведения о конкретном человеке, и им в событиях не место.
+    await track(db, {
+        event: 'session_no_show_reason_saved',
+        product: 'practice',
+        accountId: psychologistId,
+        props: { filled: trimmed.length > 0 },
+    });
+
+    revalidatePath('/diary');
+    return session;
+}
+
 export async function getAvailableDatesForReschedule(year: number, month: number) {
     const psychologistId = await getPsychologistId();
     const { getAvailableDates } = await import('@/app/bot/actions');

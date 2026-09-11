@@ -1,3 +1,4 @@
+import { PRACTICE_PRICE_RUB } from '@/lib/billing/pricing';
 import type { Metadata } from 'next';
 import LandingHeader from '@/components/landing/Header';
 import Hero from '@/components/landing/Hero';
@@ -54,7 +55,7 @@ export default function HomePage() {
         url: 'https://cmpas.ru',
         offers: {
             '@type': 'Offer',
-            price: '990',
+            price: String(PRACTICE_PRICE_RUB),
             priceCurrency: 'RUB',
             priceValidUntil: '2027-12-31',
         },

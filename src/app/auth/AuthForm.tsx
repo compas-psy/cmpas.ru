@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react"
 import { useState } from "react"
 import { safeReturnPath } from "@/lib/auth/return-path"
+import type { LegalLinks } from "@/lib/auth/simpasid-legal"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowRight, ShieldCheck } from "lucide-react"
@@ -15,7 +16,7 @@ interface EmailCheckResponse {
     message?: string
 }
 
-export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean }) {
+export default function AuthForm({ simpasIdEnabled, legalLinks }: { simpasIdEnabled: boolean; legalLinks: LegalLinks }) {
     // Куда вернуть после входа — читаем в момент нажатия, а не хуком.
     //
     // useSearchParams() здесь потребовал бы обёртки в Suspense и ронял
@@ -32,23 +33,23 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
     const [emailWarning, setEmailWarning] = useState<string | null>(null)
     const [suggestedProvider, setSuggestedProvider] = useState<string | null>(null)
 
+    // ОБА ПРОВАЙДЕРА ИДУТ ЧЕРЕЗ ЕДИНЫЙ ВХОД.
+    //
+    // Кнопка Яндекса вела в НАШЕ приложение Яндекс ID, то есть личность
+    // ПРАКТИКА получала напрямую от провайдера, минуя Экосистему. Пока
+    // подсказки провайдера у СИМПАС не было, иначе и не получалось. Теперь
+    // есть, и решением учредителя от 11.09.2026 обе двери сведены в одну.
+    //
+    // НИЧЕГО НЕ УДАЛЯЕТСЯ. Человек, входивший прежней кнопкой, попадёт в ту
+    // же учётную запись: связывание идёт по подтверждённой почте
+    // (allowDangerousEmailAccountLinking у провайдера simpasid). Прежняя
+    // строка Account с provider='yandex' остаётся лежать нетронутой, рядом
+    // появляется вторая — 'simpasid'.
     const handleYandexAuth = async () => {
         try {
-            await signIn("yandex", { callbackUrl: returnPath() })
+            await signIn("simpasid", { callbackUrl: returnPath() }, { provider: "yandex" })
         } catch (error) {
             console.error("Yandex sign-in error:", error)
-        }
-    }
-
-    // callbackUrl тот же, что у двух соседних кнопок, и это не мелочь: бот
-    // на пересланный контакт отвечает ссылкой /diary/clients?attest=1, и
-    // без возврата вход через СИМПАС молча уводил бы на «Сегодня» —
-    // только для тех, кто вошёл новым способом.
-    const handleSimpasIdAuth = async () => {
-        try {
-            await signIn("simpasid", { callbackUrl: returnPath() })
-        } catch (error) {
-            console.error("SimpasID sign-in error:", error)
         }
     }
 
@@ -117,16 +118,22 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                 {/* Левая часть: Форма авторизации */}
                 <div className="flex flex-col items-center">
                     {/* Логотип */}
+                    {/* СЛОВО ЦЕНТРИРУЕТСЯ, А НЕ БЛОК СО ЗНАКОМ.
+                        Раньше по центру стояла пара «знак + слово», и само
+                        слово из-за этого сидело на 24 px правее центра
+                        карточки — глаз это ловит, хотя вёрстка формально
+                        «по центру». Знак вынесен из потока и висит слева от
+                        слова: центр слова совпадает с центром карточки. */}
                     <Link
                         href="/"
-                        className="flex items-center gap-3 mb-10 hover:opacity-90 transition-opacity"
+                        className="relative flex items-center justify-center mb-10 hover:opacity-90 transition-opacity"
                     >
                         <Image
                             src="/logo-tree.png"
-                            alt="Compas Logo"
+                            alt=""
                             width={36}
                             height={36}
-                            className="object-contain"
+                            className="object-contain absolute right-full mr-3"
                         />
                         <span className="text-[22px] font-bold text-forest-800 tracking-wide uppercase">
                             ПРАКТИКА
@@ -157,46 +164,32 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                             некому исполнить, и на экране входа оно стоит дороже
                             всего: человек нажимает и остаётся снаружи. */}
                         <div className="flex items-center justify-center gap-4 mb-6">
-                            <button
-                                onClick={handleYandexAuth}
-                                aria-label="Войти через Яндекс"
-                                title="Яндекс"
-                                className="w-14 h-14 rounded-full bg-white hover:bg-sage-50 flex items-center justify-center transition-all shadow-card active:scale-[0.94]"
-                            >
-                                <Image src="/yandex-logo.png" alt="" width={28} height={28} className="object-contain" />
-                            </button>
+                            {/* ОБА КРУЖКА ВЕДУТ В ЕДИНЫЙ ВХОД и показываются
+                                только при настроенном СИМПАС: без него за ними
+                                ничего нет, а кружок, за которым ничего нет, —
+                                обещание, которое некому исполнить.
 
-                            {/* Знак СИМПАС ставится как есть и не перекрашивается
-                                ни в одной теме: это знак владельца аккаунта, а не
-                                элемент нашего интерфейса. Файл — копия
-                                канонического (compas-psy/auth,
-                                portal/public/assets/brand/simpas-logo-disc.svg). */}
+                                Отдельного кружка СИМПАС здесь больше нет. Он
+                                вёл ровно туда же, только без подсказки
+                                провайдера, — то есть предлагал человеку
+                                выбрать «войти через сервис входа» рядом с
+                                «войти через Яндекс», хотя это одно и то же
+                                место. Вход по почте в СИМПАС никуда не делся:
+                                он на их же экране, рядом с обеими кнопками. */}
                             {simpasIdEnabled && (
                                 <button
-                                    onClick={handleSimpasIdAuth}
-                                    aria-label="Войти через СИМПАС"
-                                    title="СИМПАС"
+                                    onClick={handleYandexAuth}
+                                    aria-label="Войти через Яндекс"
+                                    title="Яндекс"
                                     className="w-14 h-14 rounded-full bg-white hover:bg-sage-50 flex items-center justify-center transition-all shadow-card active:scale-[0.94]"
                                 >
-                                    {/* Знак сидит на белой подложке, а не заливает
-                                        кружок целиком: его собственный тёмно-зелёный
-                                        диск на нашей тёмно-зелёной карточке сливался
-                                        с фоном, и кнопка переставала читаться как
-                                        кнопка. Сам знак при этом не тронут. */}
-                                    <Image src="/simpas-logo-disc.svg" alt="" width={34} height={34} className="object-contain rounded-full" />
+                                    <Image src="/yandex-logo.png" alt="" width={28} height={28} className="object-contain" />
                                 </button>
                             )}
 
-                            {/* Знак VK — копия канонического файла единого входа
-                                (compas-psy/auth, portal/public/assets/vk-id-blue.svg):
-                                тот же путь, та же заливка #07F. Из копии убран
-                                только блок <metadata> — 8,5 КБ служебного
-                                манифеста, к рисунку отношения не имеющего.
-                                Чужой знак не перекрашивается под нашу тему.
-
-                                Кружок стоит только при работающем СИМПАС: вход
-                                VK идёт через них, и без настроенного единого
-                                входа кнопка вела бы в никуда. */}
+                            {/* Знаки — копии канонических файлов единого входа
+                                (compas-psy/auth). Чужой знак не
+                                перекрашивается под нашу тему. */}
                             {simpasIdEnabled && (
                                 <button
                                     onClick={handleVkAuth}
@@ -223,7 +216,14 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                                 <p className="text-forest-800 text-[14px] font-semibold mb-3">
                                     {emailWarning}
                                 </p>
-                                {suggestedProvider === "yandex" && (
+                                {/* Кнопка подсказки ведёт ТУДА ЖЕ, куда кружок
+                                    выше. Раньше она звала прежний вход Яндекса;
+                                    оставь её как была — она повела бы в дверь,
+                                    которой больше нет, и сломалось бы это молча,
+                                    только у тех, кто ошибся способом входа.
+                                    Слово «Яндекс» в подписи остаётся правдой:
+                                    изменилась дорога, а не провайдер. */}
+                                {suggestedProvider === "yandex" && simpasIdEnabled && (
                                     <button
                                         onClick={handleYandexAuth}
                                         className="w-full bg-white hover:bg-sage-50 rounded-xl px-4 py-3 flex items-center justify-center gap-2 transition-colors"
@@ -301,13 +301,29 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                             когда центральные тексты там опубликуют. */}
                         <div className="mt-6 text-center text-[12px] text-white/50 leading-relaxed font-medium">
                             <p>
-                                <a href="/legal/terms" className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
+                                <a href={legalLinks.terms} className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
                                     Пользовательское соглашение
                                 </a>
                                 {" · "}
-                                <a href="/legal/privacy" className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
+                                <a href={legalLinks.privacy} className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
                                     Политика конфиденциальности
                                 </a>
+                                {/* Особые условия ПРАКТИКИ — дополнение к
+                                    центральному Соглашению, и без него ссылок
+                                    было две там, где документов три: человек
+                                    не видел того, что относится именно к
+                                    продукту, которым он пользуется. Ссылка
+                                    появляется, только когда документ есть в
+                                    реестре: выдуманного адреса тут быть не
+                                    может. */}
+                                {legalLinks.practiceTerms && (
+                                    <>
+                                        {" · "}
+                                        <a href={legalLinks.practiceTerms} className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
+                                            Особые условия ПРАКТИКИ
+                                        </a>
+                                    </>
+                                )}
                             </p>
                         </div>
                     </div>

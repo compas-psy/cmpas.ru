@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Check } from 'lucide-react';
+import { PRACTICE_PRICE_RUB } from '@/lib/billing/pricing';
 
 const included = [
     'Все возможности ПРАКТИКИ',
@@ -29,7 +30,7 @@ export default function Pricing() {
                         {/* Price */}
                         <div className="text-center mb-7">
                             <div className="flex items-baseline justify-center gap-1">
-                                <span className="text-[48px] md:text-[56px] font-bold text-[#142018] tracking-tight">990</span>
+                                <span className="text-[48px] md:text-[56px] font-bold text-[#142018] tracking-tight">{PRACTICE_PRICE_RUB.toLocaleString('ru-RU')}</span>
                                 <span className="text-[20px] font-semibold text-[#5F6C64]">₽</span>
                             </div>
                             <div className="text-[14px] text-[#5F6C64] font-medium -mt-1">в месяц, после пробного периода</div>
