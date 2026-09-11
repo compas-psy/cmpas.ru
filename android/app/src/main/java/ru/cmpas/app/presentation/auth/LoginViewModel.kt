@@ -199,9 +199,16 @@ class LoginViewModel @Inject constructor(
      * исходное состояние, а отказ провайдера называется общей фразой.
      */
     fun onProviderSignInAborted(failed: Boolean) {
-        _uiState.update {
-            it.copy(isLoading = false, step = LoginStep.EMAIL, error = if (failed) SIGN_IN_UNAVAILABLE else null)
+        // Отказ здесь — это отказ ПРОВАЙДЕРА (не дал токен, не отдал JWT), а
+        // не наша поломка. Общая фраза «мы уже чиним» звала бы ждать того,
+        // чего не случится: у человека есть рабочий второй путь, и назвать
+        // его — единственное полезное, что тут можно сделать.
+        val message = if (failed) {
+            PROVIDER_REFUSED
+        } else {
+            null
         }
+        _uiState.update { it.copy(isLoading = false, step = LoginStep.EMAIL, error = message) }
     }
 
     /**
@@ -411,6 +418,15 @@ class LoginViewModel @Inject constructor(
         const val SIGN_IN_UNAVAILABLE = "Вход временно недоступен. Мы уже чиним. Попробуйте через несколько минут."
 
         /**
+         * Провайдер не подтвердил вход.
+         *
+         * Одна строка на два места — отказ его SDK на устройстве и отказ
+         * обмена на сервере: для человека это одно и то же событие, и
+         * разными словами об одном он решил бы, что это две разные беды.
+         */
+        const val PROVIDER_REFUSED = "Провайдер не подтвердил вход. Попробуйте ещё раз или войдите по почте."
+
+        /**
          * Отказ единого входа — человеческими словами.
          *
          * Раньше на все случаи была одна фраза «вход временно недоступен, мы
@@ -443,8 +459,7 @@ class LoginViewModel @Inject constructor(
 
                 // Провайдер отказал или подпись не сошлась. Виноваты не мы и
                 // не он — но человеку нужен выход, а не разбирательство.
-                "invalid_provider_code" ->
-                    "Провайдер не подтвердил вход. Попробуйте ещё раз или войдите по почте."
+                "invalid_provider_code" -> PROVIDER_REFUSED
 
                 "provider_unavailable" ->
                     "Этот способ входа сейчас недоступен. Войдите по почте."
