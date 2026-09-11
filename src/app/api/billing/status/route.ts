@@ -1,64 +1,22 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db } from '@/lib/db';
+import { readBillingStatus, EMPTY_BILLING_STATUS } from '@/lib/billing/status';
 
-/** Ответ «ничего не знаем»: ни подписки, ни триала. */
-const EMPTY = {
-    daysLeft: null,
-    isExpired: false,
-    isForever: false,
-    subscriptionActive: false,
-    subscriptionEndsAt: null,
-    subscriptionPlan: null,
-} as const;
-
+/**
+ * Состояние оплаты для веб-кабинета.
+ *
+ * Само правило — в `src/lib/billing/status.ts`: им пользуется и приложение.
+ * Два вычисления «активна ли подписка» в двух местах рано или поздно
+ * разойдутся, и разойдутся молча.
+ */
 export async function GET() {
     const session = await auth();
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
     try {
-        const rows = await db.$queryRaw<{
-            trialEndsAt: Date | null;
-            subscriptionEndsAt: Date | null;
-            subscriptionPlan: string | null;
-        }[]>`
-            SELECT "trialEndsAt", "subscriptionEndsAt", "subscriptionPlan"
-            FROM "User" WHERE id = ${session.user.id} LIMIT 1
-        `;
-        const user = rows[0];
-        if (!user) return NextResponse.json(EMPTY);
-
-        const now = new Date();
-        const trialEndsAt = user.trialEndsAt ? new Date(user.trialEndsAt) : null;
-        const subscriptionEndsAt = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
-
-        const isForever = trialEndsAt && trialEndsAt.getFullYear() >= 2099;
-        const hasActiveSub = subscriptionEndsAt && subscriptionEndsAt > now;
-
-        const effectiveEnd = hasActiveSub ? subscriptionEndsAt : trialEndsAt;
-        const isExpired = effectiveEnd ? effectiveEnd < now : false;
-        const daysLeft = effectiveEnd
-            ? Math.max(0, Math.ceil((effectiveEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
-            : null;
-
-        return NextResponse.json({
-            daysLeft: isForever ? null : daysLeft,
-            // ОТДАЁМ ВЫВОД, А НЕ ТОЛЬКО ИСХОДНИК.
-            //
-            // hasActiveSub считался здесь и раньше — и здесь же терялся:
-            // наружу уходила одна дата окончания, и экран делал из неё
-            // собственный вывод «раз дата есть, значит активна». У
-            // подписки, кончившейся в мае, это давало крупное «Подписка
-            // активна» в сентябре. Сервер знал правду и молчал о ней.
-            subscriptionActive: !!hasActiveSub,
-            isExpired: isForever ? false : isExpired,
-            isForever: !!isForever,
-            subscriptionEndsAt: subscriptionEndsAt ? subscriptionEndsAt.toISOString() : null,
-            subscriptionPlan: user.subscriptionPlan,
-        });
+        return NextResponse.json(await readBillingStatus(session.user.id));
     } catch {
-        return NextResponse.json(EMPTY);
+        return NextResponse.json(EMPTY_BILLING_STATUS);
     }
 }

@@ -4,6 +4,7 @@
  * Только если психолог включил настройку clientMoodCheckEnabled.
  */
 import { db } from '@/lib/db';
+import { isQuietHour } from '@/lib/messaging/quiet-hours';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage } from '../max';
 
@@ -63,7 +64,10 @@ export async function processPostSessionNudge() {
                 psychologist: {
                     select: {
                         id: true,
-                        notificationSettings: { select: { clientMoodCheckEnabled: true } }
+                        notificationSettings: { select: { clientMoodCheckEnabled: true } },
+                        // Пояс практики: по нему считается, не ночь ли сейчас
+                        // у человека, которому уйдёт вопрос о самочувствии.
+                        psychologistSettings: { select: { timezone: true } }
                     }
                 }
             }
@@ -85,6 +89,13 @@ export async function processPostSessionNudge() {
                 });
                 continue;
             }
+
+            // НЕ БУДИМ. Встреча, закончившаяся в 23:00, давала этот вопрос
+            // в 23:30. Сессия остаётся неотмеченной — но окно у этого
+            // каскада три часа, и если оно целиком пришлось на ночь,
+            // сообщение не уйдёт вовсе. Это и правильно: «как вы после
+            // встречи?» наутро — вопрос не о том.
+            if (isQuietHour(session.psychologist?.psychologistSettings?.timezone, now)) continue;
 
             // Проверяем, включил ли психолог эту настройку
             const moodEnabled = session.psychologist?.notificationSettings?.clientMoodCheckEnabled;

@@ -29,6 +29,7 @@
 // явная отметка специалиста лишь подтверждает или поправляет это значение.
 
 import { db } from '@/lib/db';
+import { isQuietHour } from '@/lib/messaging/quiet-hours';
 import { messageLink } from '@/lib/messaging/format';
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { clientBookingLink } from '../client-workflow';
@@ -115,6 +116,28 @@ async function psychologistDisplayName(psychologistId: string): Promise<string> 
  * считаем встречу состоявшейся и шлём предложение ближайшего времени.
  * Точный текст — v2 §2.4.
  */
+
+/**
+ * Тихо ли сейчас у практики, от имени которой уходит сообщение.
+ *
+ * Пояс читается на каждую практику отдельно и кэшируется на проход: в одном
+ * проходе сессий бывает много, а практик — единицы.
+ *
+ * Ничего не теряется: сессия остаётся неотмеченной и попадёт в следующий
+ * проход — первый же дневной. Именно поэтому здесь только запрет, без
+ * очереди и без переносов.
+ */
+async function quietNow(psychologistId: string, cache: Map<string, string | null>, now: Date): Promise<boolean> {
+    if (!cache.has(psychologistId)) {
+        const settings = await db.psychologistSettings.findUnique({
+            where: { psychologistId },
+            select: { timezone: true },
+        }).catch(() => null);
+        cache.set(psychologistId, settings?.timezone ?? null);
+    }
+    return isQuietHour(cache.get(psychologistId), now);
+}
+
 export async function processNextBookingNudge(): Promise<void> {
     try {
         const now = new Date();
@@ -148,10 +171,20 @@ export async function processNextBookingNudge(): Promise<void> {
             },
         });
 
+        // Пояса практик на этот проход: одна и та же практика встречается в
+        // списке столько раз, сколько у неё сессий.
+        const timezones = new Map<string, string | null>();
+
         for (const rawSession of sessions as any[]) {
             const session = rawSession;
             const end = sessionEndAt(session);
             if (end > twoHoursAgo) continue; // ещё не прошло 2 часа
+
+            // НЕ БУДИМ. Встреча, закончившаяся в 22:00, давала это сообщение
+            // в полночь: задание идёт каждые полчаса и до сих пор ничем не
+            // ограничивалось по времени суток. Сессия остаётся неотмеченной
+            // и уйдёт первым же дневным проходом.
+            if (await quietNow(session.psychologistId, timezones, now)) continue;
 
             if (end < staleCutoff) {
                 // Слишком старая (заведена до этого релиза либо cron не
@@ -253,10 +286,18 @@ export async function processWeeklyFollowup(): Promise<void> {
             },
         });
 
+        const timezones = new Map<string, string | null>();
+
         for (const rawSession of sessions as any[]) {
             const session = rawSession;
             const end = sessionEndAt(session);
             if (end > sevenDaysAgo) continue; // неделя ещё не прошла
+
+            // Задание заведено на 03:10 МСК — «тихое время» для сервера, но
+            // не для человека: включи его кто-нибудь, и письма ушли бы среди
+            // ночи. Запрет стоит здесь, а не в расписании крона, потому что
+            // тихо должно быть по поясу практики, а не по поясу сервера.
+            if (await quietNow(session.psychologistId, timezones, now)) continue;
 
             if (end < staleCutoff) {
                 // Слишком старая (существовала до этой фичи, либо cron не

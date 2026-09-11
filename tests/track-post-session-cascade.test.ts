@@ -5,6 +5,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Часы возвращаются настоящими: подменённые протекли бы в соседние файлы.
+afterEach(() => { vi.useRealTimers(); });
+
 const diarySessionFindMany = vi.fn();
 const diarySessionFindFirst = vi.fn();
 const diarySessionUpdate = vi.fn().mockResolvedValue({});
@@ -18,6 +21,9 @@ vi.mock('@/lib/db', () => ({
             update: (...args: unknown[]) => diarySessionUpdate(...args),
         },
         user: { findUnique: (...args: unknown[]) => userFindUnique(...args) },
+        // Пояс практики: по нему каскад решает, не ночь ли сейчас у человека,
+        // которому уйдёт сообщение.
+        psychologistSettings: { findUnique: async () => ({ timezone: 'Europe/Moscow' }) },
     },
 }));
 
@@ -55,6 +61,11 @@ function endTimeStrFor(d: Date): string {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    // ЧАСЫ ЗАКРЕПЛЕНЫ: каскад молчит ночью по поясу практики, и без этого
+    // тест сообщал бы о времени суток, а не о поведении кода.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-11T09:00:00Z')); // 12:00 в Москве
+
     userFindUnique.mockResolvedValue({ name: 'Анна Волкова', psychologistSettings: null });
     sendTelegramMessage.mockResolvedValue(true);
 });

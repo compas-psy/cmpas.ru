@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.BuildConfig
+import ru.cmpas.app.domain.model.MobileBillingStatus
 import ru.cmpas.app.domain.model.MobileLegalDoc
 import ru.cmpas.app.presentation.components.*
 import ru.cmpas.app.presentation.theme.*
@@ -37,6 +38,9 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
     val displayName = uiState.user?.name ?: "Профиль специалиста"
+    // Оплата открывается страницей на сайте: своего платёжного окна у
+    // приложения нет, и заводить второй путь возврата от банка незачем.
+    val uriHandler = LocalUriHandler.current
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
@@ -80,65 +84,32 @@ fun SettingsScreen(
             // оценок в продукте нет вовсе. Карточка убрана целиком —
             // подменять одно выдуманное число другим смысла нет.
 
-            // Задача 20 §11: остались только те два напоминания, за которыми
-            // стоит настоящая серверная рассылка — за сутки и за час до
-            // сессии. Три остальных тумблера жили в памяти экрана:
-            // переключались, ничего не меняли и забывались при
-            // переустановке. Пока серверное состояние не пришло, тумблеров
-            // нет вовсе — тумблер без известного состояния это выдумка.
-            uiState.reminders?.let { reminders ->
-                item { SectionTitle("Автонапоминания клиенту") }
+            // ПОДПИСКА ВИДНА ТАМ, ГДЕ ЧЕЛОВЕК ЕЁ ИЩЕТ.
+            //
+            // В настройках приложения не было ни слова о том, оплачено ли
+            // что-нибудь: разделы практики были, а «сколько осталось
+            // пробного периода» и «до какого числа работает подписка» —
+            // нет. Узнать это можно было только из веб-кабинета, то есть с
+            // другого устройства.
+            //
+            // Здесь была «ссылка на оплату» вида cmpas.ru/pay/<имя> и
+            // декоративный QR к ней (Задача 20 §7) — такого ресурса не
+            // существовало. Теперь состояние приходит с сервера, а оплата
+            // честно ведёт на страницу оплаты: своего платёжного окна у
+            // приложения нет, и делать вид, что есть, незачем.
+            uiState.billing?.let { billing ->
+                item { SectionTitle("Подписка") }
                 item {
                     GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                        ReminderSwitch(
-                            title = "За 24 часа",
-                            subtitle = "Напоминание клиенту накануне встречи",
-                            checked = reminders.clientReminder25hEnabled,
-                            saving = uiState.savingReminder == ReminderKind.DAY_BEFORE,
-                        ) { viewModel.setClientReminder(ReminderKind.DAY_BEFORE, it) }
-                        ThinDivider()
-                        ReminderSwitch(
-                            title = "За 1 час",
-                            subtitle = "Короткое напоминание перед началом",
-                            checked = reminders.clientReminder1hEnabled,
-                            saving = uiState.savingReminder == ReminderKind.HOUR_BEFORE,
-                        ) { viewModel.setClientReminder(ReminderKind.HOUR_BEFORE, it) }
+                        SubscriptionRow(billing) { uriHandler.openUri(billing.payUrl) }
                     }
                 }
             }
 
-            // Задача 20 §7: здесь была «ссылка на оплату» вида
-            // cmpas.ru/pay/<имя-из-профиля> и декоративный QR к ней. Такого
-            // ресурса не существует — ни на сервере, ни в контракте: ссылка
-            // собиралась из имени пользователя, а QR вёл в никуда. Блок
-            // убран целиком; появится настоящая ссылка — появится и блок.
-
-            item { SectionTitle("Аналитика") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    AnalyticsConsentRow(
-                        checked = uiState.analyticsConsentGranted,
-                        saving = uiState.isSavingAnalyticsConsent,
-                        onChange = viewModel::setAnalyticsConsent,
-                    )
-                }
-            }
-
-            item { SectionTitle("Мессенджеры и данные") }
-            item {
-                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
-                    // Задача 20 §8: состояние приходит с сервера. Раньше
-                    // Telegram был «подключён» всегда, MAX — «не подключён»
-                    // всегда, независимо от реальности, да ещё и с именем
-                    // бота, которого экран знать не мог.
-                    ConnectionRow("Telegram", connectionSubtitle(uiState.user?.telegramConnected), Tg, uiState.user?.telegramConnected == true) { activeSheet = ProfileSheet.TELEGRAM }
-                    ThinDivider()
-                    ConnectionRow("MAX", connectionSubtitle(uiState.user?.maxConnected), Max, uiState.user?.maxConnected == true) { activeSheet = ProfileSheet.MAX }
-                }
-            }
-            // Задача 27, кадр A04: у этой карточки не было заголовка, хотя
-            // ровно ради названных групп кадр и заведён — «Практика /
-            // Мессенджеры / Аналитика», а не двадцать разделов подряд.
+            // Порядок разделов — решение учредителя от 11.09.2026:
+            // Практика, Мессенджеры, Уведомления, Аналитика, выход.
+            // Раньше первыми шли напоминания и аналитика, то есть настройки
+            // редкого случая стояли выше ежедневных дел.
             item { SectionTitle("Практика") }
             item {
                 GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
@@ -150,13 +121,104 @@ fun SettingsScreen(
                     ThinDivider()
                     SettingRow(Icons.Outlined.Link, "Ссылка для записи", uiState.bookingLink?.removePrefix("https://")?.removePrefix("http://") ?: "Загружаем…") { activeSheet = ProfileSheet.BOOKING }
                     ThinDivider()
+                    // Ссылка на встречу уходит клиенту в подтверждении и в
+                    // напоминаниях. Поменять её можно было только в
+                    // веб-кабинете — а узнают о том, что она устарела, когда
+                    // клиент уже ждёт по старому адресу, и ноутбука рядом нет.
+                    SettingRow(
+                        Icons.Outlined.Videocam,
+                        "Ссылка для онлайн-сессий",
+                        uiState.practice?.onlineSessionLink?.removePrefix("https://")?.removePrefix("http://")
+                            ?: "Не задана",
+                    ) { activeSheet = ProfileSheet.ONLINE_LINK }
+                    ThinDivider()
                     SettingRow(Icons.Outlined.Description, "Документы", documentsSubtitle(uiState)) { activeSheet = ProfileSheet.DOCUMENTS }
                     ThinDivider()
-                    SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Экспорт, доступ и удаление") { activeSheet = ProfileSheet.DATA }
+                    SettingRow(Icons.Outlined.Security, "Данные и конфиденциальность", "Доступ, хранение и удаление") { activeSheet = ProfileSheet.DATA }
                     ThinDivider()
                     // Задача 20 §10: версия та, что реально собрана, а не
                     // вписанная руками в код когда-то давно.
                     SettingRow(Icons.Outlined.HelpOutline, "Помощь и поддержка", "Версия ${BuildConfig.VERSION_NAME}") { activeSheet = ProfileSheet.HELP }
+                }
+            }
+
+            item { SectionTitle("Мессенджеры") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    // Задача 20 §8: состояние приходит с сервера. Раньше
+                    // Telegram был «подключён» всегда, MAX — «не подключён»
+                    // всегда, независимо от реальности, да ещё и с именем
+                    // бота, которого экран знать не мог.
+                    ConnectionRow("Telegram", connectionSubtitle(uiState.user?.telegramConnected), Tg, uiState.user?.telegramConnected == true) { activeSheet = ProfileSheet.TELEGRAM }
+                    ThinDivider()
+                    ConnectionRow("MAX", connectionSubtitle(uiState.user?.maxConnected), Max, uiState.user?.maxConnected == true) { activeSheet = ProfileSheet.MAX }
+                }
+            }
+
+            // ТУМБЛЕРОВ РОВНО СТОЛЬКО, СКОЛЬКО ЕСТЬ РАССЫЛОК.
+            //
+            // Раньше здесь были только два напоминания клиенту, и это
+            // читалось как «настроить можно лишь автоматику». Теперь здесь
+            // всё, за чем стоит настоящая отправка: два напоминания клиенту
+            // (cron/reminders.ts), утренний список и недельная сводка
+            // специалисту (cron/digest.ts), вопрос о самочувствии после
+            // сессии (cron/post-session.ts).
+            //
+            // Больше не стало намеренно. В таблице настроек есть ещё пять
+            // флагов — их не читает НИКТО: отправка идёт мимо них. Показать
+            // их значило бы завести пять тумблеров, которые ничего не
+            // выключают; это ровно та поломка, из-за которой прежние
+            // тумблеры и убирали.
+            uiState.reminders?.let { reminders ->
+                item { SectionTitle("Уведомления") }
+                item {
+                    GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                        ReminderSwitch(
+                            title = "Клиенту за 24 часа",
+                            subtitle = "Напоминание накануне встречи",
+                            checked = reminders.clientReminder25hEnabled,
+                            saving = uiState.savingReminder == ReminderKind.DAY_BEFORE,
+                        ) { viewModel.setClientReminder(ReminderKind.DAY_BEFORE, it) }
+                        ThinDivider()
+                        ReminderSwitch(
+                            title = "Клиенту за 1 час",
+                            subtitle = "Короткое напоминание перед началом",
+                            checked = reminders.clientReminder1hEnabled,
+                            saving = uiState.savingReminder == ReminderKind.HOUR_BEFORE,
+                        ) { viewModel.setClientReminder(ReminderKind.HOUR_BEFORE, it) }
+                        ThinDivider()
+                        ReminderSwitch(
+                            title = "Мой день утром",
+                            subtitle = "Список сегодняшних встреч в мессенджер",
+                            checked = reminders.morningDigestEnabled,
+                            saving = uiState.savingReminder == ReminderKind.MORNING_DIGEST,
+                        ) { viewModel.setClientReminder(ReminderKind.MORNING_DIGEST, it) }
+                        ThinDivider()
+                        ReminderSwitch(
+                            title = "Сводка за неделю",
+                            subtitle = "По понедельникам: сколько встреч и с кем",
+                            checked = reminders.weeklyDigestEnabled,
+                            saving = uiState.savingReminder == ReminderKind.WEEKLY_DIGEST,
+                        ) { viewModel.setClientReminder(ReminderKind.WEEKLY_DIGEST, it) }
+                        ThinDivider()
+                        ReminderSwitch(
+                            title = "Спрашивать клиента о самочувствии",
+                            subtitle = "Короткий вопрос после встречи. По умолчанию выключено",
+                            checked = reminders.clientMoodCheckEnabled,
+                            saving = uiState.savingReminder == ReminderKind.MOOD_CHECK,
+                        ) { viewModel.setClientReminder(ReminderKind.MOOD_CHECK, it) }
+                    }
+                }
+            }
+
+            item { SectionTitle("Аналитика") }
+            item {
+                GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                    AnalyticsConsentRow(
+                        checked = uiState.analyticsConsentGranted,
+                        saving = uiState.isSavingAnalyticsConsent,
+                        onChange = viewModel::setAnalyticsConsent,
+                    )
                 }
             }
 
@@ -179,6 +241,8 @@ fun SettingsScreen(
                 onRefresh = viewModel::refresh,
                 onAcceptRequired = viewModel::acceptRequiredDocuments,
                 onAdsChange = viewModel::setAdsConsent,
+                onSaveName = viewModel::saveName,
+                onSaveOnlineLink = viewModel::saveOnlineSessionLink,
             )
         }
     }
@@ -338,7 +402,9 @@ private fun SettingRow(icon: ImageVector, title: String, subtitle: String, onCli
 }
 
 @Composable
-private fun ThinDivider() {
+// Видна всему модулю: тот же волосок разделяет строки и в списке кабинетов.
+// Приватной она была file-private, и экран кабинетов её не видел.
+internal fun ThinDivider() {
     HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = CompasBorder.copy(alpha = .8f))
 }
 
@@ -350,6 +416,8 @@ private fun ProfileInfoSheet(
     onRefresh: () -> Unit,
     onAcceptRequired: () -> Unit,
     onAdsChange: (Boolean) -> Unit,
+    onSaveName: (String) -> Unit,
+    onSaveOnlineLink: (String) -> Unit,
 ) {
     if (sheet == ProfileSheet.DOCUMENTS) {
         DocumentsSheet(state, onClose, onRefresh, onAcceptRequired, onAdsChange)
@@ -359,14 +427,30 @@ private fun ProfileInfoSheet(
         BookingLinkSheet(state.bookingLink, onClose)
         return
     }
+    if (sheet == ProfileSheet.PROFILE) {
+        ProfileEditSheet(state, onClose, onSaveName)
+        return
+    }
+    if (sheet == ProfileSheet.ONLINE_LINK) {
+        OnlineLinkSheet(state, onClose, onSaveOnlineLink)
+        return
+    }
 
     val (title, subtitle, body) = when (sheet) {
-        ProfileSheet.PROFILE -> Triple("Профессиональный профиль", "Данные, которые видит клиент", "Имя, специализация и описание практики будут редактироваться в следующем шаге настройки профиля.")
         ProfileSheet.TELEGRAM -> Triple("Telegram", connectionSubtitle(state.user?.telegramConnected), connectionSheetBody("Telegram", state.user?.telegramConnected))
         ProfileSheet.MAX -> Triple("MAX", connectionSubtitle(state.user?.maxConnected), connectionSheetBody("MAX", state.user?.maxConnected))
-        ProfileSheet.DATA -> Triple("Данные и конфиденциальность", "Контроль информации", "Экспорт данных, журнал согласий, управление доступом и запрос на удаление будут доступны в одном разделе.")
+        // Обещание «будет доступно» из этого текста убрано: раздел
+        // рассказывает, что с данными происходит СЕЙЧАС, и ведёт туда, где
+        // ими действительно можно распорядиться.
+        ProfileSheet.DATA -> Triple(
+            "Данные и конфиденциальность",
+            "Что мы храним и как это удалить",
+            "Записи клиентов и заметки хранятся в ПРАКТИКЕ и видны только вам. Учётная запись, почта и способы " +
+                "входа — в Экосистеме СИМПАС, там же лежат принятые вами документы. Удаление практики и выгрузку " +
+                "записей делает поддержка по вашему запросу: это необратимо, и подтверждение должно быть живым.",
+        )
         ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
-        ProfileSheet.DOCUMENTS, ProfileSheet.BOOKING -> Triple("", "", "")
+        ProfileSheet.PROFILE, ProfileSheet.DOCUMENTS, ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK -> Triple("", "", "")
     }
     CompasBottomSheet(onClose = onClose) {
         SheetHead(title, subtitle)
@@ -374,6 +458,174 @@ private fun ProfileInfoSheet(
         GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) { Text(body, style = tBody2, color = CompasMutedFg) }
         Spacer(Modifier.height(16.dp))
         PrimaryButton("Готово", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Check)
+    }
+}
+
+/**
+ * Строка подписки: состояние и одно действие.
+ *
+ * Вывод «активна» приходит с сервера готовым. Экран его НЕ вычисляет: ровно
+ * из самодельного вывода «дата есть, значит оплачено» и получалось крупное
+ * «Подписка активна» рядом с датой из прошлого.
+ */
+@Composable
+private fun SubscriptionRow(billing: MobileBillingStatus, onPay: () -> Unit) {
+    val title = when {
+        billing.isForever -> "Бесплатный доступ"
+        billing.subscriptionActive -> "Подписка активна"
+        billing.trialActive -> "Пробный период"
+        billing.isExpired -> "Подписка закончилась"
+        else -> "Подписка"
+    }
+    val subtitle = when {
+        billing.isForever -> "Бессрочно, без оплаты"
+        billing.subscriptionActive -> "Действует до ${humanDate(billing.subscriptionEndsAt)}"
+        // Дни, а не дата: «осталось 5 дней» человек понимает без календаря.
+        billing.trialActive && billing.daysLeft != null -> "Осталось ${daysWord(billing.daysLeft)}"
+        billing.isExpired -> "Оформите подписку, чтобы продолжить работу"
+        else -> "Состояние оплаты"
+    }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CreditCard, null, Modifier.size(21.dp), tint = Forest700)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = tBody, color = CompasFg)
+                Text(subtitle, style = tBody2, color = CompasMutedFg)
+            }
+        }
+        // Кнопки нет там, где платить не надо: у бессрочного доступа и у
+        // действующей подписки предложение оплатить читается как «мы не
+        // видим вашей оплаты».
+        if (!billing.isForever && !billing.subscriptionActive) {
+            Spacer(Modifier.height(12.dp))
+            PrimaryButton(
+                text = if (billing.priceLabel.isBlank()) "Оформить подписку" else "Оформить за ${billing.priceLabel}",
+                onClick = onPay,
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Outlined.OpenInNew,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text("Оплата откроется на сайте", style = tMeta, color = CompasMutedFg)
+        }
+    }
+}
+
+/** «5 дней» / «1 день» / «2 дня» — без этого строка звучит как машинная. */
+internal fun daysWord(days: Int): String {
+    val tail = days % 100
+    val last = days % 10
+    val word = when {
+        tail in 11..14 -> "дней"
+        last == 1 -> "день"
+        last in 2..4 -> "дня"
+        else -> "дней"
+    }
+    return "$days $word"
+}
+
+/** ISO-дата в человеческий вид. Нечитаемая строка не показывается вовсе. */
+internal fun humanDate(iso: String?): String {
+    val date = iso?.substringBefore('T')?.split('-') ?: return "—"
+    if (date.size != 3) return "—"
+    return "${date[2]}.${date[1]}.${date[0]}"
+}
+
+/**
+ * Правка имени.
+ *
+ * Кнопка «Редактировать» открывала справку о том, что правка «появится в
+ * следующем шаге настройки профиля». Имя видно клиенту в каждом
+ * уведомлении, и опечатка в нём до сих пор исправлялась только из
+ * веб-кабинета.
+ *
+ * Почта и способ входа здесь не правятся и полем не притворяются: они живут
+ * в Экосистеме СИМПАС, продукт их получает, а не хранит.
+ */
+@Composable
+private fun ProfileEditSheet(state: SettingsUiState, onClose: () -> Unit, onSave: (String) -> Unit) {
+    var name by rememberSaveable(state.user?.name) { mutableStateOf(state.user?.name.orEmpty()) }
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Профиль", "Имя, которое видит клиент")
+        Spacer(Modifier.height(14.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Фамилия и имя") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Это имя подставляется в уведомления клиенту: «сессия с …». Почта и способ входа хранятся " +
+                "в Экосистеме СИМПАС — их меняют там.",
+            style = tMeta,
+            color = CompasMutedFg,
+        )
+        state.error?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = tMeta, color = Red600)
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(
+            text = if (state.isSavingProfile) "Сохраняем…" else "Сохранить",
+            onClick = { onSave(name) },
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.Check,
+            enabled = !state.isSavingProfile && name.isNotBlank(),
+        )
+        Spacer(Modifier.height(8.dp))
+        GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
+    }
+}
+
+/**
+ * Ссылка для онлайн-сессий.
+ *
+ * Уходит клиенту в подтверждении записи и в напоминаниях. Менялась только в
+ * веб-кабинете — а узнают о том, что она устарела, ровно в тот момент,
+ * когда клиент уже ждёт по старому адресу.
+ */
+@Composable
+private fun OnlineLinkSheet(state: SettingsUiState, onClose: () -> Unit, onSave: (String) -> Unit) {
+    var link by rememberSaveable(state.practice?.onlineSessionLink) {
+        mutableStateOf(state.practice?.onlineSessionLink.orEmpty())
+    }
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Ссылка для онлайн-сессий", "Её получает клиент перед встречей")
+        Spacer(Modifier.height(14.dp))
+        OutlinedTextField(
+            value = link,
+            onValueChange = { link = it },
+            label = { Text("Адрес встречи") },
+            placeholder = { Text("https://telemost.yandex.ru/j/…") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Подойдёт любой сервис видеосвязи. Пустое поле означает, что ссылки нет — тогда в сообщении " +
+                "клиенту её не будет вовсе, а не пустое место на её месте.",
+            style = tMeta,
+            color = CompasMutedFg,
+        )
+        state.error?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = tMeta, color = Red600)
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(
+            text = if (state.isSavingPractice) "Сохраняем…" else "Сохранить",
+            onClick = { onSave(link) },
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.Check,
+            enabled = !state.isSavingPractice,
+        )
+        Spacer(Modifier.height(8.dp))
+        GhostButton("Закрыть", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Close)
     }
 }
 
@@ -510,4 +762,4 @@ private fun legalUrl(url: String): String {
     }
 }
 
-private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, DOCUMENTS, DATA, HELP }
+private enum class ProfileSheet { PROFILE, TELEGRAM, MAX, BOOKING, ONLINE_LINK, DOCUMENTS, DATA, HELP }

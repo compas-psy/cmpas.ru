@@ -39,8 +39,11 @@ export async function register() {
             }
         }));
 
-        // Утренний дайджест — 08:00 МСК (05:00 UTC)
-        cron.schedule('0 5 * * *', runExclusive('morning-digest', async () => {
+        // Утренний дайджест — КАЖДЫЙ ЧАС, а отбор по поясу практики внутри
+        // (src/lib/cron/digest.ts). Раньше стояло 08:00 МСК на всех сразу:
+        // специалисту в Калининграде список приходил в 07:00, а во
+        // Владивостоке — в 15:00, когда встречи уже прошли.
+        cron.schedule('0 * * * *', runExclusive('morning-digest', async () => {
             console.log('[CRON] Утренний дайджест');
             try {
                 await processMorningDigest();
@@ -49,8 +52,10 @@ export async function register() {
             }
         }));
 
-        // Еженедельная сводка — понедельник 10:00 МСК (07:00 UTC)
-        cron.schedule('0 7 * * 1', runExclusive('weekly-digest', async () => {
+        // Еженедельная сводка — тоже каждый час: понедельник и 10:00
+        // считаются по поясу практики, а не по московскому. В понедельник
+        // 10:00 во Владивостоке в Москве ещё воскресенье.
+        cron.schedule('0 * * * *', runExclusive('weekly-digest', async () => {
             console.log('[CRON] Еженедельная сводка');
             try {
                 await processWeeklyDigest();

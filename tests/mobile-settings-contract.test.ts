@@ -5,11 +5,16 @@
 //   /api/mobile/me                    — реальное состояние мессенджеров
 //   /api/mobile/notification-settings — настоящие настройки напоминаний
 //
-// Второй ресурс отдаёт РОВНО два поля: напоминание клиенту за сутки и за час.
-// Именно за ними стоит настоящая рассылка; «за 2 часа», «об оплате» и «о
-// документах» в приложении были тумблерами без всякой серверной стороны.
+// Второй ресурс отдаёт ровно те пять полей, за которыми стоит НАСТОЯЩАЯ
+// рассылка: два напоминания клиенту (cron/reminders.ts), утренний список и
+// недельная сводка специалисту (cron/digest.ts), вопрос о самочувствии после
+// сессии (cron/post-session.ts). Остальные флаги таблицы не читает никто —
+// показать их значило бы завести тумблеры, которые ничего не выключают,
+// ровно как прежние «за 2 часа», «об оплате» и «о документах».
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const world = vi.hoisted(() => ({
     user: null as Record<string, unknown> | null,
@@ -24,6 +29,23 @@ vi.mock('@/lib/mobile-auth', () => ({
     unauthorizedResponse: () => new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 }),
 }));
 
+/**
+ * Умолчания те же, что в схеме: вопрос о самочувствии выключен, остальное
+ * включено. Двойник, отвечающий не тем составом полей, проверял бы сам себя.
+ */
+const DEFAULTS: Record<string, boolean> = {
+    clientReminder25hEnabled: true,
+    clientReminder1hEnabled: true,
+    morningDigestEnabled: true,
+    weeklyDigestEnabled: true,
+    clientMoodCheckEnabled: false,
+};
+
+/** Ответ отдаёт ровно поля контракта — как select в маршруте. */
+function pickFields(settings: Record<string, boolean>): Record<string, boolean> {
+    return Object.fromEntries(Object.keys(DEFAULTS).map(key => [key, settings[key]]));
+}
+
 vi.mock('@/lib/db', () => ({
     db: {
         user: { findUnique: vi.fn(async () => world.user) },
@@ -31,13 +53,13 @@ vi.mock('@/lib/db', () => ({
             findUnique: vi.fn(async () => world.settings),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 world.created.push(data);
-                world.settings = { clientReminder25hEnabled: true, clientReminder1hEnabled: true, ...(data as Record<string, boolean>) };
-                return { clientReminder25hEnabled: world.settings.clientReminder25hEnabled, clientReminder1hEnabled: world.settings.clientReminder1hEnabled };
+                world.settings = { ...DEFAULTS, ...(data as Record<string, boolean>) };
+                return pickFields(world.settings);
             }),
             upsert: vi.fn(async ({ update }: { update: Record<string, boolean> }) => {
                 world.updated.push(update);
-                world.settings = { clientReminder25hEnabled: true, clientReminder1hEnabled: true, ...(world.settings ?? {}), ...update };
-                return { clientReminder25hEnabled: world.settings.clientReminder25hEnabled, clientReminder1hEnabled: world.settings.clientReminder1hEnabled };
+                world.settings = { ...DEFAULTS, ...(world.settings ?? {}), ...update };
+                return pickFields(world.settings);
             }),
         },
     },
@@ -110,7 +132,13 @@ describe('GET /api/mobile/notification-settings', () => {
         const body = await (await reminders.GET(request())).json();
 
         expect(world.created).toHaveLength(1);
-        expect(body).toEqual({ clientReminder25hEnabled: true, clientReminder1hEnabled: true });
+        expect(body).toEqual({
+            clientReminder25hEnabled: true,
+            clientReminder1hEnabled: true,
+            morningDigestEnabled: true,
+            weeklyDigestEnabled: true,
+            clientMoodCheckEnabled: false,
+        });
     });
 });
 
@@ -131,13 +159,27 @@ describe('PATCH /api/mobile/notification-settings', () => {
     });
 
     it('чужие поля настроек через этот ресурс не проходят', async () => {
+        // Пять тумблеров, за которыми стоит настоящая рассылка, проходят.
+        // Текст шаблона — нет: подменив его, можно было бы через настройки
+        // приложения переписать то, что уходит живому клиенту.
         await reminders.PATCH(request({
             clientReminder25hEnabled: false,
             morningDigestEnabled: false,
             clientReminder25hTemplate: 'подмена',
+            reminderMinutesBefore: 5,
         }));
 
-        expect(world.updated).toEqual([{ clientReminder25hEnabled: false }]);
+        expect(world.updated).toEqual([{ clientReminder25hEnabled: false, morningDigestEnabled: false }]);
+    });
+
+    it('наружу отдаётся только то, за чем стоит настоящая отправка', async () => {
+        // Правило проверяется по КОДУ ОТПРАВКИ, а не по названиям полей
+        // таблицы: в NotificationSettings есть ещё пять флагов, которых не
+        // читает никто. Тумблер, который ничего не выключает, — обещание.
+        const source = readFileSync(join(__dirname, '..', 'src/app/api/mobile/notification-settings/route.ts'), 'utf-8');
+        for (const dead of ['newBookingEnabled', 'clientRescheduleEnabled', 'clientCancelEnabled', 'clientPsyCancelEnabled']) {
+            expect(source.replace(/\/\*[\s\S]*?\*\//g, ''), `${dead} не читает никто`).not.toContain(dead);
+        }
     });
 
     it('не булево значение игнорируется, пустая правка отклоняется', async () => {

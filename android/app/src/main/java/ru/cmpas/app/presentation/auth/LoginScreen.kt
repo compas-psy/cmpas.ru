@@ -333,6 +333,30 @@ private fun ProviderDisc(
     }
 }
 
+/**
+ * «или» между входом провайдером и входом по почте.
+ *
+ * Не украшение: это единственное, что отделяет два самостоятельных пути
+ * друг от друга. Без него поле почты под кружками выглядит как следующий
+ * шаг того же действия.
+ */
+@Composable
+private fun AuthDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+        Text(
+            text = "или по почте",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
 /** Знак провайдера по его имени в реестре СИМПАС. */
 private fun providerMark(provider: String): Int = when (provider) {
     LoginViewModel.PROVIDER_VK -> R.drawable.ic_provider_vk
@@ -380,6 +404,46 @@ private fun SimpasIdEmailStep(
                 textAlign = TextAlign.Center,
             )
         } else {
+            // СНАЧАЛА КРУЖКИ, ПОТОМ ПОЧТА.
+            //
+            // Вход в один щелчок стоит выше входа в три шага (набрать адрес,
+            // дождаться письма, ввести код). Поле почты, стоящее первым,
+            // читается как «здесь надо заполнять», и человек заполняет — даже
+            // когда рядом есть кнопка, которая пустила бы его сразу.
+            //
+            // В ряду только то, что ДЕЙСТВИТЕЛЬНО открывается: нативные
+            // провайдеры из пересечения двух перечней и прежняя дверь Яндекса,
+            // пока ей не собрана нативная замена. Кружок, за которым ничего
+            // нет, — обещание, которое некому исполнить, и на экране входа оно
+            // стоит дороже всего: человек нажимает и остаётся снаружи.
+            //
+            // Знак ставится как есть и не перекрашивается: это чужой знак, а
+            // не элемент нашего интерфейса.
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                state.providers.forEach { provider ->
+                    ProviderDisc(
+                        painter = painterResource(id = providerMark(provider)),
+                        description = LoginViewModel.providerLabel(provider),
+                        onClick = { onProvider(provider) },
+                    )
+                }
+                if (state.providers.none { it == LoginViewModel.PROVIDER_YANDEX }) {
+                    ProviderDisc(
+                        painter = painterResource(id = R.drawable.ic_provider_yandex),
+                        description = "Войти через Яндекс",
+                        onClick = onLegacyYandex,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Разделитель нужен: без него почта под кружками читается как
+            // продолжение входа через провайдера, а не как отдельный путь.
+            AuthDivider()
+
+            Spacer(modifier = Modifier.height(20.dp))
+
             EmailField(
                 email = state.email,
                 error = state.error,
@@ -400,34 +464,6 @@ private fun SimpasIdEmailStep(
             )
 
             Spacer(modifier = Modifier.height(20.dp))
-
-            // ВХОД ЗНАКОМ, А НЕ ПОЛОСОЙ.
-            //
-            // Продолговатая кнопка провайдера занимала полэкрана и спорила с
-            // главным действием. Знак узнаётся быстрее подписи, а ряд кружков
-            // читается как «вот способы», а не как «вот предложение».
-            //
-            // В ряду только то, что ДЕЙСТВИТЕЛЬНО открывается: нативные
-            // провайдеры из пересечения двух перечней и прежняя дверь Яндекса,
-            // пока ей не собрана нативная замена. Кружок, за которым ничего
-            // нет, — обещание, которое некому исполнить, и на экране входа оно
-            // стоит дороже всего: человек нажимает и остаётся снаружи.
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                state.providers.forEach { provider ->
-                    ProviderDisc(
-                        painter = painterResource(id = providerMark(provider)),
-                        description = LoginViewModel.providerLabel(provider),
-                        onClick = { onProvider(provider) },
-                    )
-                }
-                if (state.providers.none { it == LoginViewModel.PROVIDER_YANDEX }) {
-                    ProviderDisc(
-                        painter = painterResource(id = R.drawable.ic_provider_yandex),
-                        description = "Войти через Яндекс",
-                        onClick = onLegacyYandex,
-                    )
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))

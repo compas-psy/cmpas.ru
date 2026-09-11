@@ -9,10 +9,15 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Часы возвращаются настоящими: подменённые протекли бы в соседние файлы.
+afterEach(() => { vi.useRealTimers(); });
+
 const diarySessionFindMany = vi.fn();
 const diarySessionFindFirst = vi.fn();
 const diarySessionUpdate = vi.fn().mockResolvedValue({});
 const userFindUnique = vi.fn();
+
+const practiceSettingsFindUnique = vi.fn(async () => ({ timezone: 'Europe/Moscow' }));
 
 vi.mock('@/lib/db', () => ({
     db: {
@@ -23,6 +28,11 @@ vi.mock('@/lib/db', () => ({
         },
         user: {
             findUnique: (...args: unknown[]) => userFindUnique(...args),
+        },
+        // Пояс практики: по нему каскад решает, не ночь ли сейчас у человека,
+        // которому уйдёт сообщение.
+        psychologistSettings: {
+            findUnique: (...args: unknown[]) => practiceSettingsFindUnique(...args as []),
         },
     },
 }));
@@ -97,6 +107,13 @@ function timeStrOf(d: Date): string {
 describe('processNextBookingNudge (O-260829 §5.4)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // ЧАСЫ ЗАКРЕПЛЕНЫ. Каскад теперь молчит ночью по поясу практики, и
+        // без закреплённого времени тест зеленел бы утром и краснел вечером —
+        // то есть сообщал бы о времени суток, а не о поведении кода.
+        // Подменяется только Date: настоящие таймеры этим тестам нужны.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-11T09:00:00Z')); // 12:00 в Москве
+
         userFindUnique.mockResolvedValue({ name: 'Анна Волкова', psychologistSettings: null });
         getSuggestedTimes.mockResolvedValue([{ date: '2026-09-20', time: '18:00', format: 'online', addressId: null }]);
         sendTelegramMessage.mockResolvedValue(true);
@@ -197,6 +214,13 @@ describe('processWeeklyFollowup (O-260829 §5.4)', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // ЧАСЫ ЗАКРЕПЛЕНЫ. Каскад теперь молчит ночью по поясу практики, и
+        // без закреплённого времени тест зеленел бы утром и краснел вечером —
+        // то есть сообщал бы о времени суток, а не о поведении кода.
+        // Подменяется только Date: настоящие таймеры этим тестам нужны.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-11T09:00:00Z')); // 12:00 в Москве
+
         // PRAKTIKA MVP addendum §8: launch default — выключено; остальные
         // тесты этого блока проверяют логику при явно включённом флаге.
         process.env.PRACTICE_WEEKLY_FOLLOWUP_ENABLED = 'true';

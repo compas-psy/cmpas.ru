@@ -161,6 +161,29 @@ interface CompasApi {
     @PATCH("notification-settings")
     suspend fun updateNotificationSettings(@Body body: MobileNotificationSettingsPatch): Response<MobileNotificationSettings>
 
+    // Имя специалиста правится с телефона: оно видно клиенту в каждом
+    // уведомлении, а опечатка в нём исправлялась только в веб-кабинете.
+    @PATCH("me")
+    suspend fun updateProfile(@Body body: MobileProfilePatch): Response<User>
+
+    // Состояние оплаты: сколько осталось пробного периода, до какого числа
+    // действует подписка. Вывод «активна» считает сервер, а не экран.
+    @GET("billing")
+    suspend fun getBilling(): Response<MobileBillingStatus>
+
+    // Ссылка для онлайн-сессий: уходит клиенту в подтверждении и
+    // напоминаниях, а поменять её можно было только в веб-кабинете.
+    @GET("practice-settings")
+    suspend fun getPracticeSettings(): Response<MobilePracticeSettings>
+
+    @PATCH("practice-settings")
+    suspend fun updatePracticeSettings(@Body body: MobilePracticeSettingsPatch): Response<MobilePracticeSettings>
+
+    // Подсказка адреса кабинета. Ограничение частоты и разбор — общие с
+    // вебом: счёт у подсказок один и считается по человеку.
+    @POST("dadata")
+    suspend fun suggestAddresses(@Body body: AddressSuggestQuery): Response<AddressSuggestResponse>
+
     // Кабинеты практики (Задача 21). Удаления кабинета в контракте нет:
     // DELETE выводит кабинет из работы, а строка остаётся — иначе у прошедших
     // сессий пропало бы место встречи. Занятый кабинет сервер не выводит и

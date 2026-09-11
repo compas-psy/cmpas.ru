@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
+import { timezoneLabel } from '@/lib/practice/timezones';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
@@ -122,11 +123,15 @@ export async function sendClientOnboarding(
             documentLinks,
             paymentText,
             bookingLink,
+            // Чьи это одиннадцать часов: без пояса клиент из другого региона
+            // приходит мимо, и виноватым выглядит сервис.
+            timezoneLabel: timezoneLabel(psych?.psychologistSettings?.timezone),
         };
         htmlText = buildSessionClientMessage({ ...base, mode: 'html' });
         plainText = buildSessionClientMessage({ ...base, mode: 'plain' });
     } else {
-        const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink };
+        const paymentText = await getPaymentInstruction(psychologistId, null, null);
+        const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink, paymentText };
         htmlText = buildClientOnboardingMessage({ ...base, mode: 'html' });
         plainText = buildClientOnboardingMessage({ ...base, mode: 'plain' });
     }

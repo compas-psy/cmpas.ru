@@ -126,11 +126,13 @@ export async function updateSettings(data: {
     cancellationText?: string;
     autoSync?: boolean;
     blockConflicts?: boolean;
-    notifyTelegram?: boolean;
+    // notifyAds — это согласие, а не настройка: оно пишется отдельным
+    // действием toggleAdsConsentForUser, которое ведёт журнал согласий.
     notifyAds?: boolean;
-    timeFormat?: string;
-    dateFormat?: string;
-    weekStartsOn?: string;
+    // УБРАНЫ notifyTelegram, timeFormat, dateFormat, weekStartsOn: они
+    // принимались этим действием и не записывались НИКУДА — ни в схему, ни
+    // в safeData ниже. Человек менял их, видел «Настройки сохранены» и
+    // получал прежнее при следующем открытии.
     scheduleMode?: string;
     maxSessionsPerDay?: number | null;
     bookingHorizonDays?: number;
@@ -337,6 +339,22 @@ export async function updateProfile(data: {
     revalidatePath('/diary/profile');
     revalidatePath('/diary/settings');
     return { success: true };
+}
+
+/**
+ * Публичная ссылка для записи — настоящая, а не «compas.ru/...».
+ *
+ * В карточке профиля в настройках стоял текст-заглушка со ссылкой в никуда
+ * (href="#"). Это ровно то место, где человек проверяет, что отдать клиенту.
+ */
+export async function getPublicBookingLink() {
+    try {
+        const psychologistId = await getPsychologistId();
+        const { getPsychologistBookingUrl } = await import('@/lib/booking/slug');
+        return { success: true as const, url: await getPsychologistBookingUrl(psychologistId) };
+    } catch (e: unknown) {
+        return { success: false as const, url: null, error: e instanceof Error ? e.message : 'Ошибка' };
+    }
 }
 
 export async function getAdsConsentForUser() {

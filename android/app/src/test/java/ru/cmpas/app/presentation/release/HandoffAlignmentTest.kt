@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.release
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -23,11 +24,23 @@ class HandoffAlignmentTest {
     private fun source(path: String) = File("src/main/java/ru/cmpas/app/$path").readText()
 
     @Test
-    fun `A04 — разделы профиля названы, а не идут сплошным списком`() {
+    fun `A04 — разделы профиля названы и идут в утверждённом порядке`() {
+        // Порядок разделов — решение учредителя от 11.09.2026: Практика,
+        // Мессенджеры, Уведомления, Аналитика. Раньше проверялось только
+        // НАЛИЧИЕ подписей, и настройки редкого случая спокойно стояли выше
+        // ежедневных дел.
+        //
+        // «Мессенджеры и данные» стали просто «Мессенджерами»: данные и
+        // конфиденциальность живут в разделе «Практика», и держать слово
+        // «данные» в заголовке про каналы связи значило обещать не то.
         val settings = source("presentation/settings/SettingsScreen.kt")
-        assertTrue("группа практики подписана", settings.contains("SectionTitle(\"Практика\")"))
-        assertTrue("группа мессенджеров подписана", settings.contains("SectionTitle(\"Мессенджеры и данные\")"))
-        assertTrue("группа аналитики подписана", settings.contains("SectionTitle(\"Аналитика\")"))
+        val order = listOf("Практика", "Мессенджеры", "Уведомления", "Аналитика")
+            .map { title ->
+                val at = settings.indexOf("SectionTitle(\"" + title + "\")")
+                assertTrue("группа «" + title + "» подписана", at >= 0)
+                at
+            }
+        assertEquals("разделы идут в утверждённом порядке", order.sorted(), order)
     }
 
     @Test

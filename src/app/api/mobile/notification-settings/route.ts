@@ -3,32 +3,52 @@ import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 
 /**
- * Настройки автонапоминаний клиенту (Задача 20 §11).
+ * Настройки уведомлений (Задача 20 §11).
  *
  * В приложении эти тумблеры жили в rememberSaveable: переключались, ничего
  * не меняли и забывались при переустановке. Настройка, которая никуда не
  * доходит, — не настройка, а обещание.
  *
- * Наружу отдаются ровно те два поля NotificationSettings, за которыми стоит
- * настоящая рассылка (src/lib/cron/reminders.ts): напоминание клиенту за
- * сутки и за час. Никакого «за 2 часа» на сервере нет и придумывать его
- * здесь нельзя.
+ * ПОЧЕМУ ЗДЕСЬ ПЯТЬ ПОЛЕЙ, А В ТАБЛИЦЕ ИХ БОЛЬШЕ. Наружу отдаётся ровно то,
+ * за чем стоит настоящая рассылка — и это проверено по коду отправки, а не
+ * по названиям полей:
+ *
+ *   clientReminder25hEnabled, clientReminder1hEnabled  → src/lib/cron/reminders.ts
+ *   morningDigestEnabled, weeklyDigestEnabled          → src/lib/cron/digest.ts
+ *   clientMoodCheckEnabled                             → src/lib/cron/post-session.ts
+ *
+ * Остальные поля таблицы (newBookingEnabled, reminderEnabled,
+ * clientRescheduleEnabled, clientCancelEnabled, clientPsyCancelEnabled) не
+ * читает НИКТО: отправка идёт независимо от них. Показать их в приложении
+ * значило бы завести пять тумблеров, которые ничего не выключают.
  */
 type RemindersPayload = {
     clientReminder25hEnabled: boolean;
     clientReminder1hEnabled: boolean;
+    morningDigestEnabled: boolean;
+    weeklyDigestEnabled: boolean;
+    clientMoodCheckEnabled: boolean;
 };
+
+/** Один список полей на чтение, запись и выборку — расходиться им нечем. */
+const FIELDS = {
+    clientReminder25hEnabled: true,
+    clientReminder1hEnabled: true,
+    morningDigestEnabled: true,
+    weeklyDigestEnabled: true,
+    clientMoodCheckEnabled: true,
+} as const;
 
 async function readOrCreate(psychologistId: string): Promise<RemindersPayload> {
     const existing = await db.notificationSettings.findUnique({
         where: { psychologistId },
-        select: { clientReminder25hEnabled: true, clientReminder1hEnabled: true },
+        select: FIELDS,
     });
     if (existing) return existing;
 
     const created = await db.notificationSettings.create({
         data: { psychologistId },
-        select: { clientReminder25hEnabled: true, clientReminder1hEnabled: true },
+        select: FIELDS,
     });
     return created;
 }
@@ -54,11 +74,9 @@ export async function PATCH(req: NextRequest) {
         // Принимается только то, чем действительно можно управлять: любое
         // другое поле настроек уведомлений через этот ресурс не проходит.
         const patch: Partial<RemindersPayload> = {};
-        if (typeof (body as RemindersPayload | null)?.clientReminder25hEnabled === 'boolean') {
-            patch.clientReminder25hEnabled = (body as RemindersPayload).clientReminder25hEnabled;
-        }
-        if (typeof (body as RemindersPayload | null)?.clientReminder1hEnabled === 'boolean') {
-            patch.clientReminder1hEnabled = (body as RemindersPayload).clientReminder1hEnabled;
+        for (const key of Object.keys(FIELDS) as (keyof RemindersPayload)[]) {
+            const value = (body as Partial<RemindersPayload> | null)?.[key];
+            if (typeof value === 'boolean') patch[key] = value;
         }
         if (Object.keys(patch).length === 0) {
             return NextResponse.json({ error: 'NOTHING_TO_UPDATE' }, { status: 400 });
@@ -68,7 +86,7 @@ export async function PATCH(req: NextRequest) {
             where: { psychologistId: auth.userId },
             create: { psychologistId: auth.userId, ...patch },
             update: patch,
-            select: { clientReminder25hEnabled: true, clientReminder1hEnabled: true },
+            select: FIELDS,
         });
         return NextResponse.json(updated);
     } catch (error) {
