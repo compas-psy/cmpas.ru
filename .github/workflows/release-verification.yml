@@ -40,6 +40,9 @@ concurrency:
 # быть известно на сборке. Пусто — нативного входа Яндекса в пакете нет, и
 # это рабочее состояние: на экране остаётся прежняя браузерная дверь.
 env:
+  # Имя секрета в репозитории — YANDEX_CLIENT_ID. Прежнее имя остаётся
+  # запасным: если оно где-то заполнено, сборка возьмёт его.
+  YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
   YANDEX_NATIVE_CLIENT_ID: ${{ secrets.YANDEX_NATIVE_CLIENT_ID }}
 
 jobs:

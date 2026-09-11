@@ -238,8 +238,11 @@ class LoginViewModel @Inject constructor(
                 )
                 adoptSimpasIdSession(tokens.accessToken, tokens.account.id)
             } catch (error: Exception) {
+                // Тот же разбор причин, что и на пути с кодом. Разойтись им
+                // нечем: отказы приходят от одной и той же ручки, и человеку
+                // безразлично, чем именно его SDK подтверждал вход.
                 _uiState.update {
-                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = SIGN_IN_UNAVAILABLE)
+                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = signInErrorMessage(error))
                 }
             }
         }
