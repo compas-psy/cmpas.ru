@@ -35,3 +35,16 @@
 # Domain models (keep for serialization)
 -keep class ru.cmpas.app.domain.model.** { *; }
 -keep class ru.cmpas.app.data.api.** { *; }
+
+# Яндекс ID SDK.
+#
+# Своих правил артефакт не везёт — в authsdk-3.2.1.aar нет ни
+# proguard.txt, ни consumer-rules. Релиз собирается с минификацией и
+# сокращением ресурсов, то есть отказ проявился бы ТОЛЬКО в релизной
+# сборке и только на устройстве: отладочная и юнит-тесты его не увидят.
+#
+# Держим публичный API и переносимые через Intent классы целиком: обмен с
+# активностью SDK идёт через Parcelable, а имена полей CREATOR и extras
+# переживать обфускацию обязаны.
+-keep class com.yandex.authsdk.** { *; }
+-dontwarn com.yandex.authsdk.**

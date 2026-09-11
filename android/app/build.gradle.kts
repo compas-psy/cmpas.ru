@@ -72,8 +72,11 @@ android {
         // способ его доставки. Оставить 1.2.2 значило бы выложить под тем же
         // номером ДРУГОЕ приложение — телефон принял бы его как ту же
         // версию, а человек получил бы другой экран входа без предупреждения.
-        versionCode = 20
-        versionName = "1.3.1"
+        // 1.3.2 — нативный вход Яндекса вместо ухода в браузер (#172).
+        // Версия продукта, а не пересборка: человек видит другой экран
+        // провайдера и не покидает приложение.
+        versionCode = 21
+        versionName = "1.3.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -232,6 +235,14 @@ dependencies {
 
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
+
+    // НАТИВНЫЙ ВХОД ЯНДЕКС ID.
+    //
+    // Заменяет уход в системный браузер: тот возвращал код на веб-адрес
+    // ПРАКТИКИ, а не приложению, и уносил человека из приложения.
+    // Идентификатор приложения в сборку НЕ ПОПАДАЕТ — SDK принимает его в
+    // рантайме, значение приходит от СИМПАС в /v1/auth/methods.
+    implementation(libs.yandex.authsdk)
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.robolectric)

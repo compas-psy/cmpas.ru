@@ -78,7 +78,15 @@ class LoginViewModel @Inject constructor(
                         // приложение — те, чей нативный SDK у него есть.
                         // Показать провайдера без SDK значит показать кнопку,
                         // которая уводит в браузер.
-                        providers = methods.providers.filter { name -> name in PROVIDERS_WITH_NATIVE_SDK },
+                        // Три условия, а не два: сервер назвал провайдера,
+                        // у нас есть его SDK И сервер прислал идентификатор
+                        // приложения. Без идентификатора SDK нечем завести, и
+                        // нажатие увело бы человека в ошибку провайдера
+                        // (рецепт СИМПАС, шаг 4).
+                        providers = methods.providers.filter { name ->
+                            name in PROVIDERS_WITH_NATIVE_SDK && !methods.providerAppIds[name].isNullOrBlank()
+                        },
+                        providerAppIds = methods.providerAppIds,
                         centralTermsVersion = terms?.version,
                     )
                 }
@@ -174,6 +182,53 @@ class LoginViewModel @Inject constructor(
      */
     fun signInWithProvider(provider: String) {
         _uiState.update { it.copy(error = SIGN_IN_UNAVAILABLE) }
+    }
+
+    /**
+     * Вход через провайдера отменён или не удался.
+     *
+     * Отмена — не ошибка: человек передумал, и красная строка на экране
+     * была бы обвинением. Поэтому отмена просто возвращает экран в
+     * исходное состояние, а отказ провайдера называется общей фразой.
+     */
+    fun onProviderSignInAborted(failed: Boolean) {
+        _uiState.update {
+            it.copy(isLoading = false, step = LoginStep.EMAIL, error = if (failed) SIGN_IN_UNAVAILABLE else null)
+        }
+    }
+
+    /**
+     * Подписанный провайдером JWT — в личность, личность — в нашу сессию.
+     *
+     * Для SDK, которые кода не отдают. Android-SDK Яндекса из них: его
+     * результат — `YandexAuthResult.Success(YandexAuthToken)`, типа с кодом
+     * авторизации в публичном API нет вовсе (проверено чтением артефакта
+     * com.yandex.android:authsdk:3.2.1).
+     *
+     * Голый ключ доступа сюда не попадает и сервером не принимается: ключ,
+     * выданный чужому приложению, подходит к справочнику профиля так же,
+     * как наш, и подменой токена можно было бы войти чужой учётной
+     * записью. Отличает «провайдер подтвердил» от «приложение сказало»
+     * только подпись.
+     */
+    fun completeProviderJwtSignIn(provider: String, providerJwt: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, step = LoginStep.VERIFY) }
+            try {
+                val deviceKey = userPreferences.getOrCreateDeviceKey()
+                val tokens = simpasId.exchangeProviderJwt(
+                    provider = provider,
+                    providerJwt = providerJwt,
+                    deviceKey = deviceKey,
+                    platform = Platform.ANDROID,
+                )
+                adoptSimpasIdSession(tokens.accessToken, tokens.account.id)
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = SIGN_IN_UNAVAILABLE)
+                }
+            }
+        }
     }
 
     /**
@@ -277,12 +332,15 @@ class LoginViewModel @Inject constructor(
         /**
          * Провайдеры, чей НАТИВНЫЙ SDK подключён к приложению.
          *
-         * Пусто — и это не недоделка, а состояние: пока SDK нет, кнопки
-         * провайдера на экране быть не должно. Прежняя кнопка «Войти через
-         * Яндекс» уводила в системный браузер и возвращала код на веб-адрес
-         * ПРАКТИКИ, то есть приложению он не доставался вовсе.
+         * Яндекс — есть: com.yandex.android:authsdk. ВК пока нет, и причина
+         * не в лени: его SDK требует идентификатор приложения ВНУТРИ сборки
+         * (manifest placeholder VKIDClientID и, что неустранимо, схема
+         * возврата VKIDRedirectScheme = "vk" + идентификатор — это
+         * intent-фильтр манифеста, вычислить его после установки нельзя).
+         * Значение придёт от учредителя отдельным секретом; до тех пор
+         * кнопки ВК на экране быть не должно.
          */
-        val PROVIDERS_WITH_NATIVE_SDK: Set<String> = emptySet()
+        val PROVIDERS_WITH_NATIVE_SDK: Set<String> = setOf(PROVIDER_YANDEX)
 
         /**
          * Прежний вход через Яндекс — уходом в системный браузер.
