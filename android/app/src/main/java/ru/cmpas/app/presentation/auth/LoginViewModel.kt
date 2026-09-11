@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.BuildConfig
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.MagicLinkRequest
 import ru.cmpas.app.data.api.SimpasIdExchangeRequest
@@ -78,13 +79,13 @@ class LoginViewModel @Inject constructor(
                         // приложение — те, чей нативный SDK у него есть.
                         // Показать провайдера без SDK значит показать кнопку,
                         // которая уводит в браузер.
-                        // Три условия, а не два: сервер назвал провайдера,
-                        // у нас есть его SDK И сервер прислал идентификатор
-                        // приложения. Без идентификатора SDK нечем завести, и
-                        // нажатие увело бы человека в ошибку провайдера
-                        // (рецепт СИМПАС, шаг 4).
+                        // Кнопка показывается, только если идентификатор
+                        // приложения в сборке СОВПАЛ с тем, что назвал
+                        // сервер. Это сильнее, чем «есть SDK и есть
+                        // идентификатор»: сменят идентификатор у себя —
+                        // кнопка исчезнет, а не поведёт в отказ провайдера.
                         providers = methods.providers.filter { name ->
-                            name in PROVIDERS_WITH_NATIVE_SDK && !methods.providerAppIds[name].isNullOrBlank()
+                            matchesBuiltInAppId(name, methods.providerAppIds[name])
                         },
                         providerAppIds = methods.providerAppIds,
                         centralTermsVersion = terms?.version,
@@ -330,17 +331,47 @@ class LoginViewModel @Inject constructor(
         const val CENTRAL_TERMS_CODE = "cmpas_terms"
 
         /**
-         * Провайдеры, чей НАТИВНЫЙ SDK подключён к приложению.
+         * Идентификаторы приложений провайдеров, ЗАШИТЫЕ В СБОРКУ.
          *
-         * Яндекс — есть: com.yandex.android:authsdk. ВК пока нет, и причина
-         * не в лени: его SDK требует идентификатор приложения ВНУТРИ сборки
-         * (manifest placeholder VKIDClientID и, что неустранимо, схема
-         * возврата VKIDRedirectScheme = "vk" + идентификатор — это
-         * intent-фильтр манифеста, вычислить его после установки нельзя).
-         * Значение придёт от учредителя отдельным секретом; до тех пор
-         * кнопки ВК на экране быть не должно.
+         * Копия здесь вынужденная, а не по недосмотру. Оба SDK объявляют
+         * адрес возврата intent-фильтром манифеста — у Яндекса схема
+         * `yx<идентификатор>`, у ВК `vk<идентификатор>`. Манифест часть
+         * APK; вычислить адрес возврата после установки нельзя, и без
+         * подстановки сборка не собирается вовсе.
+         *
+         * ЧТО С ЭТИМ СДЕЛАНО. Копию убрать нельзя — можно убрать её
+         * молчание: значение сверяется с тем, что назвал сервер. Разошлись
+         * — кнопки нет, и человек видит прежнюю дверь вместо «вход не
+         * работает» без причины на экране.
+         *
+         * ВК здесь нет: его идентификатор пока не выдан. Появится — строка
+         * добавится сюда, и больше ничего менять не придётся.
          */
-        val PROVIDERS_WITH_NATIVE_SDK: Set<String> = setOf(PROVIDER_YANDEX)
+        val BUILT_IN_PROVIDER_APP_IDS: Map<String, String> = mapOf(
+            PROVIDER_YANDEX to BuildConfig.YANDEX_NATIVE_CLIENT_ID,
+        )
+
+        /**
+         * Совпал ли идентификатор из сборки с тем, что назвал сервер.
+         *
+         * Пустой в сборке — нативного входа этого провайдера у нас нет.
+         * Пустой у сервера — заводить SDK нечем. Разные — заводить SDK
+         * НЕЛЬЗЯ: код, выданный под наш идентификатор, сервер обменяет
+         * своим, и провайдер откажет.
+         */
+        fun matchesBuiltInAppId(provider: String, serverAppId: String?): Boolean =
+            appIdMatches(BUILT_IN_PROVIDER_APP_IDS[provider], serverAppId)
+
+        /**
+         * Само правило, отдельно от того, что лежит в сборке.
+         *
+         * Вынесено, чтобы его можно было проверить всеми четырьмя случаями:
+         * привязанный к BuildConfig тест проверял бы не правило, а значение
+         * секрета в конкретном прогоне — и менял бы ответ в тот день, когда
+         * секрет появится.
+         */
+        fun appIdMatches(builtIn: String?, serverAppId: String?): Boolean =
+            !builtIn.isNullOrBlank() && !serverAppId.isNullOrBlank() && builtIn == serverAppId
 
         /**
          * Прежний вход через Яндекс — уходом в системный браузер.

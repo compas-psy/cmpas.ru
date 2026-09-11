@@ -34,31 +34,47 @@ class NativeProviderSignInTest {
         .joinToString("\n")
 
     @Test
-    fun `идентификатор приложения берётся у сервера, а не из сборки`() {
+    fun `SDK заводится значением от сервера, а не из сборки`() {
+        // Копия идентификатора в сборке существует вынужденно — её требует
+        // intent-фильтр возврата в манифесте SDK. Но ЗАПРОС уходит с тем,
+        // что назвал сервер: конструктор с тремя аргументами ровно для
+        // этого, и мета-данными манифеста SDK мы не пользуемся.
         val screen = withoutComments(loginScreen)
-        assertTrue(
-            "SDK должен заводиться значением из providerAppIds",
-            screen.contains("uiState.providerAppIds[LoginViewModel.PROVIDER_YANDEX]"),
-        )
-        // Конструктор с тремя аргументами существует ровно ради этого:
-        // мета-данные манифеста com.yandex.auth.CLIENT_ID — запасной путь
-        // SDK, и пользоваться им значит вписать копию в сборку.
+        assertTrue(screen.contains("uiState.providerAppIds[LoginViewModel.PROVIDER_YANDEX]"))
         assertTrue(screen.contains("YandexAuthOptions(false, clientId"))
-        assertFalse(
-            "идентификатора приложения Яндекса в сборке быть не должно",
-            screen.contains("com.yandex.auth.CLIENT_ID"),
-        )
     }
 
     @Test
-    fun `кнопка провайдера не показывается без идентификатора`() {
-        // Три условия, а не два: сервер назвал провайдера, у нас есть SDK и
-        // сервер прислал, чем его заводить. Кнопка без третьего уводит
-        // человека в ошибку провайдера — то есть в «вход не работает» без
-        // причины на экране.
+    fun `кнопка провайдера показывается только при совпадении идентификаторов`() {
+        // Копию убрать нельзя — можно убрать её молчание. Разошлись
+        // значения: кнопки нет, человек видит прежнюю дверь вместо «вход не
+        // работает» без причины.
         val model = withoutComments(loginModel)
-        assertTrue(model.contains("PROVIDERS_WITH_NATIVE_SDK"))
-        assertTrue(model.contains("providerAppIds[name].isNullOrBlank()"))
+        assertTrue(model.contains("matchesBuiltInAppId(name, methods.providerAppIds[name])"))
+        assertTrue(model.contains("builtIn == serverAppId"))
+    }
+
+    @Test
+    fun `правило совпадения идентификаторов — все четыре случая`() {
+        // Проверяется само правило, а не значение секрета в этом прогоне:
+        // привязанный к BuildConfig тест менял бы ответ в тот день, когда
+        // секрет появится, и проверял бы настройку вместо логики.
+        assertTrue(LoginViewModel.appIdMatches("123", "123"))
+        // Секрета в сборке нет — адрес возврата собран из заглушки, вход
+        // не сработает, кнопки быть не должно.
+        assertFalse(LoginViewModel.appIdMatches("", "123"))
+        // Сервер не назвал идентификатор — заводить SDK нечем.
+        assertFalse(LoginViewModel.appIdMatches("123", null))
+        // Разъехались — код, выданный под наш идентификатор, сервер
+        // обменяет своим, и провайдер откажет.
+        assertFalse(LoginViewModel.appIdMatches("123", "456"))
+    }
+
+    @Test
+    fun `ВК в перечень собранных не входит, пока нет его идентификатора`() {
+        val model = withoutComments(loginModel)
+        assertTrue(model.contains("PROVIDER_YANDEX to BuildConfig.YANDEX_NATIVE_CLIENT_ID"))
+        assertFalse(model.contains("PROVIDER_VK to BuildConfig"))
     }
 
     @Test
@@ -92,14 +108,6 @@ class NativeProviderSignInTest {
         // Человек передумал. Красная строка в этом месте — обвинение.
         val screen = withoutComments(loginScreen)
         assertTrue(screen.contains("YandexAuthResult.Cancelled -> viewModel.onProviderSignInAborted(failed = false)"))
-    }
-
-    @Test
-    fun `ВК в перечень собранных SDK не входит, пока нет его идентификатора`() {
-        val model = withoutComments(loginModel)
-        assertTrue(model.contains("PROVIDERS_WITH_NATIVE_SDK: Set<String> = setOf(PROVIDER_YANDEX)"))
-        // Кружок без собранного SDK — обещание, которое некому исполнить.
-        assertFalse(model.contains("setOf(PROVIDER_YANDEX, PROVIDER_VK)"))
     }
 
     @Test

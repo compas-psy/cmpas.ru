@@ -33,6 +33,15 @@ concurrency:
   group: release-verification-${{ github.ref }}
   cancel-in-progress: true
 
+# Идентификатор приложения Яндекса для сборки.
+#
+# Его требует не наш код, а манифест SDK: адрес возврата объявлен
+# intent-фильтром со схемой `yx<идентификатор>`, то есть значение обязано
+# быть известно на сборке. Пусто — нативного входа Яндекса в пакете нет, и
+# это рабочее состояние: на экране остаётся прежняя браузерная дверь.
+env:
+  YANDEX_NATIVE_CLIENT_ID: ${{ secrets.YANDEX_NATIVE_CLIENT_ID }}
+
 jobs:
   android:
     name: Android unit + lint + assemble
