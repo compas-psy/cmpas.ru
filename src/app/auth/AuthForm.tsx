@@ -126,34 +126,47 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                     {/* Карточка авторизации */}
                     <div className="w-full max-w-[420px] bg-forest-800 rounded-3xl shadow-floating p-8 lg:p-10">
 
-                        {/* Кнопка Яндекс */}
-                        <button
-                            onClick={handleYandexAuth}
-                            className="w-full bg-white hover:bg-sage-50 rounded-2xl px-6 py-[18px] flex items-center justify-center gap-3 transition-all mb-6 shadow-card active:scale-[0.97]"
-                        >
-                            <Image
-                                src="/yandex-logo.png"
-                                alt="Яндекс"
-                                width={28}
-                                height={28}
-                                className="object-contain"
-                            />
-                            <span className="text-foreground font-semibold">
-                                Продолжить с Яндекс
-                            </span>
-                        </button>
+                        {/* ВХОД ЗНАКОМ, А НЕ ПОЛОСОЙ.
+                            Две продолговатые кнопки занимали половину карточки и
+                            спорили с главным действием — входом по почте. Знак
+                            узнаётся быстрее подписи, а ряд кружков читается как
+                            «вот способы», а не как «вот два предложения».
 
-                        {/* Кнопка СИМПАС — появляется, только когда единый вход настроен */}
-                        {simpasIdEnabled && (
+                            В ряду только то, что ДЕЙСТВИТЕЛЬНО открывается.
+                            Кружок, за которым ничего нет, — обещание, которое
+                            некому исполнить, и на экране входа оно стоит дороже
+                            всего: человек нажимает и остаётся снаружи. */}
+                        <div className="flex items-center justify-center gap-4 mb-6">
                             <button
-                                onClick={handleSimpasIdAuth}
-                                className="w-full bg-white hover:bg-sage-50 rounded-2xl px-6 py-[18px] flex items-center justify-center gap-3 transition-all mb-6 shadow-card active:scale-[0.97]"
+                                onClick={handleYandexAuth}
+                                aria-label="Войти через Яндекс"
+                                title="Яндекс"
+                                className="w-14 h-14 rounded-full bg-white hover:bg-sage-50 flex items-center justify-center transition-all shadow-card active:scale-[0.94]"
                             >
-                                <span className="text-foreground font-semibold">
-                                    Продолжить с СИМПАС
-                                </span>
+                                <Image src="/yandex-logo.png" alt="" width={28} height={28} className="object-contain" />
                             </button>
-                        )}
+
+                            {/* Знак СИМПАС ставится как есть и не перекрашивается
+                                ни в одной теме: это знак владельца аккаунта, а не
+                                элемент нашего интерфейса. Файл — копия
+                                канонического (compas-psy/auth,
+                                portal/public/assets/brand/simpas-logo-disc.svg). */}
+                            {simpasIdEnabled && (
+                                <button
+                                    onClick={handleSimpasIdAuth}
+                                    aria-label="Войти через СИМПАС"
+                                    title="СИМПАС"
+                                    className="w-14 h-14 rounded-full bg-white hover:bg-sage-50 flex items-center justify-center transition-all shadow-card active:scale-[0.94]"
+                                >
+                                    {/* Знак сидит на белой подложке, а не заливает
+                                        кружок целиком: его собственный тёмно-зелёный
+                                        диск на нашей тёмно-зелёной карточке сливался
+                                        с фоном, и кнопка переставала читаться как
+                                        кнопка. Сам знак при этом не тронут. */}
+                                    <Image src="/simpas-logo-disc.svg" alt="" width={34} height={34} className="object-contain rounded-full" />
+                                </button>
+                            )}
+                        </div>
 
                         {/* Разделитель ИЛИ */}
                         <div className="relative h-6 mb-6">
@@ -227,18 +240,32 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                             </button>
                         </form>
 
-                        {/* Пользовательское соглашение */}
+                        {/* ЗДЕСЬ НЕ ПРИНИМАЮТ ДОКУМЕНТЫ — ЗДЕСЬ НА НИХ ССЫЛАЮТСЯ.
+                            До 11.09.2026 стояло «Продолжая, вы соглашаетесь с
+                            Пользовательским соглашением и Политикой
+                            конфиденциальности». Две ошибки в одной фразе:
+
+                            * Пользовательское соглашение принимается в СИМПАС,
+                              при создании учётной записи. Акцепт здесь — вторая
+                              запись о том же факте, с другим временем и другим
+                              источником, и в споре придётся объяснять, какая из
+                              двух настоящая;
+                            * Политику НЕ ПРИНИМАЮТ вовсе. Это информационный
+                              документ оператора, и глагол принятия рядом с ним
+                              сам по себе дефект правовой конструкции
+                              (14_LEGAL_PRODUCTS_UNIFIED.md §2.7, §9.7).
+
+                            Ссылки остаются: прочитать документ человек вправе в
+                            любой момент. Уйдут они на auth.cmpas.ru в тот день,
+                            когда центральные тексты там опубликуют. */}
                         <div className="mt-6 text-center text-[12px] text-white/50 leading-relaxed font-medium">
                             <p>
-                                Продолжая, вы соглашаетесь с{" "}
                                 <a href="/legal/terms" className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
-                                    Пользовательским соглашением
+                                    Пользовательское соглашение
                                 </a>
-                            </p>
-                            <p className="mt-1">
-                                и{" "}
+                                {" · "}
                                 <a href="/legal/privacy" className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors">
-                                    Политикой конфиденциальности
+                                    Политика конфиденциальности
                                 </a>
                             </p>
                         </div>

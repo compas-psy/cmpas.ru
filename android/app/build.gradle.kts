@@ -72,8 +72,8 @@ android {
         // способ его доставки. Оставить 1.2.2 значило бы выложить под тем же
         // номером ДРУГОЕ приложение — телефон принял бы его как ту же
         // версию, а человек получил бы другой экран входа без предупреждения.
-        versionCode = 19
-        versionName = "1.3.0"
+        versionCode = 20
+        versionName = "1.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
