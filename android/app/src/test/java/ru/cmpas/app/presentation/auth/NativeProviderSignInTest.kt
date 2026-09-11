@@ -34,14 +34,15 @@ class NativeProviderSignInTest {
         .joinToString("\n")
 
     @Test
-    fun `SDK заводится значением от сервера, а не из сборки`() {
-        // Копия идентификатора в сборке существует вынужденно — её требует
-        // intent-фильтр возврата в манифесте SDK. Но ЗАПРОС уходит с тем,
-        // что назвал сервер: конструктор с тремя аргументами ровно для
-        // этого, и мета-данными манифеста SDK мы не пользуемся.
+    fun `SDK заводится только при совпадении идентификаторов`() {
+        // Идентификатор SDK берёт из манифеста: публичного способа передать
+        // его в рантайме у него нет — конструктор с тремя аргументами
+        // internal. Поэтому единственная защита от расхождения — сверка,
+        // и SDK не создаётся, пока провайдер не попал в uiState.providers.
         val screen = withoutComments(loginScreen)
         assertTrue(screen.contains("uiState.providerAppIds[LoginViewModel.PROVIDER_YANDEX]"))
-        assertTrue(screen.contains("YandexAuthOptions(false, clientId"))
+        assertTrue(screen.contains("LoginViewModel.PROVIDER_YANDEX in uiState.providers"))
+        assertTrue(screen.contains("if (yandexReady) YandexAuthSdk.create(YandexAuthOptions(context))"))
     }
 
     @Test

@@ -69,13 +69,6 @@ import ru.cmpas.app.R
  * сервер, и того, что умеет приложение. Пока наша половина пуста, кнопок
  * нет — и это состояние, а не недоделка.
  */
-/**
- * Адрес OAuth Яндекса. То же значение SDK берёт по умолчанию из своих
- * мета-данных; мы задаём его явно, потому что передаём идентификатор
- * приложения в рантайме и пользуемся конструктором с тремя аргументами.
- */
-private const val YANDEX_OAUTH_HOST = "oauth.yandex.ru"
-
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
@@ -91,19 +84,26 @@ fun LoginScreen(
 
     // НАТИВНЫЙ ВХОД ЯНДЕКСА.
     //
-    // Идентификатор приложения берётся у сервера и передаётся SDK в
-    // рантайме: YandexAuthOptions(isLoggingEnabled, clientId, oauthHost).
-    // Мета-данные манифеста com.yandex.auth.CLIENT_ID — только запасной
-    // путь SDK, и мы им не пользуемся: копия идентификатора в сборке
-    // разошлась бы с оригиналом молча.
+    // Идентификатор приложения SDK берёт ИЗ МАНИФЕСТА — мета-данные
+    // com.yandex.auth.CLIENT_ID, подставленные на сборке. Публичного
+    // способа передать его в рантайме у SDK нет: конструктор
+    // YandexAuthOptions(isLoggingEnabled, clientId, oauthHost) объявлен
+    // internal, и компилятор до него не допускает. Публичных ровно два —
+    // от Context.
     //
-    // Порядок аргументов конструктора сверен по байткоду артефакта
-    // com.yandex.android:authsdk:3.2.1, а не взят из документации.
+    // Проверять это надо было метаданными Kotlin, а не байткодом: в
+    // байткоде internal-конструктор выглядит public, потому что видимость
+    // Kotlin живёт в @Metadata, а не в модификаторах JVM. Сверка по
+    // javap показала «public» и ввела в заблуждение.
+    //
+    // Поэтому значение из сборки СВЕРЯЕТСЯ с тем, что назвал сервер
+    // (LoginViewModel.matchesBuiltInAppId): провайдер попадает в
+    // uiState.providers только при совпадении. Разошлись — кнопки нет, и
+    // человек видит прежнюю дверь вместо «вход не работает» без причины.
     val yandexAppId = uiState.providerAppIds[LoginViewModel.PROVIDER_YANDEX]
-    val yandexSdk = remember(yandexAppId) {
-        yandexAppId?.takeIf { it.isNotBlank() }?.let { clientId ->
-            YandexAuthSdk.create(YandexAuthOptions(false, clientId, YANDEX_OAUTH_HOST))
-        }
+    val yandexReady = LoginViewModel.PROVIDER_YANDEX in uiState.providers
+    val yandexSdk = remember(yandexReady, yandexAppId) {
+        if (yandexReady) YandexAuthSdk.create(YandexAuthOptions(context)) else null
     }
     val yandexLauncher = yandexSdk?.let { sdk ->
         rememberLauncherForActivityResult(sdk.contract) { result ->
