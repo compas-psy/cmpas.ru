@@ -133,6 +133,7 @@ fun LoginScreen(
                             viewModel.requestSimpasIdCode()
                         },
                         onProvider = viewModel::signInWithProvider,
+                        onLegacyYandex = openLegacyYandex,
                         onFallback = viewModel::openFallback,
                     )
                     LoginStep.CODE -> CodeStep(
@@ -152,7 +153,6 @@ fun LoginScreen(
                             focusManager.clearFocus()
                             viewModel.requestMagicLink()
                         },
-                        onYandex = openLegacyYandex,
                         onBack = viewModel::backToStart,
                     )
                     LoginStep.CHECK_EMAIL -> CheckEmailStep(
@@ -164,6 +164,43 @@ fun LoginScreen(
             }
         }
     }
+}
+
+/**
+ * Кружок со знаком провайдера.
+ *
+ * Знак ставится как есть и не перекрашивается: это чужой знак, а не элемент
+ * нашего интерфейса. Подпись уходит в описание для озвучки — зрячий узнаёт
+ * сервис по знаку, незрячий услышит «Войти через Яндекс».
+ */
+@Composable
+private fun ProviderDisc(
+    painter: androidx.compose.ui.graphics.painter.Painter,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = androidx.compose.foundation.shape.CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.size(56.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Image(
+                painter = painter,
+                contentDescription = description,
+                modifier = Modifier.size(28.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
+    }
+}
+
+/** Знак провайдера по его имени в реестре СИМПАС. */
+private fun providerMark(provider: String): Int = when (provider) {
+    LoginViewModel.PROVIDER_VK -> R.drawable.ic_provider_vk
+    else -> R.drawable.ic_provider_yandex
 }
 
 /** Знак владельца аккаунта. Ставится как есть — см. ic_simpas_mark.xml. */
@@ -190,6 +227,7 @@ private fun SimpasIdEmailStep(
     onEmailChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onProvider: (String) -> Unit,
+    onLegacyYandex: () -> Unit,
     onFallback: () -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -225,19 +263,33 @@ private fun SimpasIdEmailStep(
                 onClick = onSubmit,
             )
 
-            // Кнопка появляется, только если провайдер назван сервером И
-            // его нативный SDK собран в приложение. Кнопка без SDK увела бы
-            // в браузер — ровно то, от чего уходим.
-            state.providers.forEach { provider ->
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = { onProvider(provider) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Text(LoginViewModel.providerLabel(provider), style = MaterialTheme.typography.labelLarge)
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ВХОД ЗНАКОМ, А НЕ ПОЛОСОЙ.
+            //
+            // Продолговатая кнопка провайдера занимала полэкрана и спорила с
+            // главным действием. Знак узнаётся быстрее подписи, а ряд кружков
+            // читается как «вот способы», а не как «вот предложение».
+            //
+            // В ряду только то, что ДЕЙСТВИТЕЛЬНО открывается: нативные
+            // провайдеры из пересечения двух перечней и прежняя дверь Яндекса,
+            // пока ей не собрана нативная замена. Кружок, за которым ничего
+            // нет, — обещание, которое некому исполнить, и на экране входа оно
+            // стоит дороже всего: человек нажимает и остаётся снаружи.
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                state.providers.forEach { provider ->
+                    ProviderDisc(
+                        painter = painterResource(id = providerMark(provider)),
+                        description = LoginViewModel.providerLabel(provider),
+                        onClick = { onProvider(provider) },
+                    )
+                }
+                if (state.providers.none { it == LoginViewModel.PROVIDER_YANDEX }) {
+                    ProviderDisc(
+                        painter = painterResource(id = R.drawable.ic_provider_yandex),
+                        description = "Войти через Яндекс",
+                        onClick = onLegacyYandex,
+                    )
                 }
             }
         }
@@ -322,32 +374,16 @@ private fun FallbackStep(
     state: LoginUiState,
     onEmailChange: (String) -> Unit,
     onSubmit: () -> Unit,
-    onYandex: () -> Unit,
     onBack: () -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Прежние способы входа",
+            text = "Вход по ссылке на почту",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Работает, но уводит в браузер и потому требованию СИМПАС не
-        // отвечает. Живёт здесь ровно до дня, когда нативная замена
-        // окажется в сборке.
-        OutlinedButton(
-            onClick = onYandex,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Text("Войти через Яндекс", style = MaterialTheme.typography.labelLarge)
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
 
         EmailField(
             email = state.email,

@@ -21,13 +21,23 @@ vi.mock('next-auth/react', () => ({ signIn: (...args: unknown[]) => signIn(...ar
 // <img> адресовано разметке продукта, а не подмене в тесте.
 // eslint-disable-next-line @next/next/no-img-element
 vi.mock('next/image', () => ({ default: (props: Record<string, unknown>) => <img {...props} alt="" /> }));
+
+// Знак внутри кружка — украшение: имя кнопке даёт её aria-label, а не
+// картинка. Поэтому alt пустой и в проде, и здесь.
 vi.mock('next/link', () => ({
     default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
 import AuthForm from '../AuthForm';
 
-const SIMPAS = /Продолжить с СИМПАС/;
+// Кнопки стали кружками со знаком и подписи на себе больше не носят.
+// Поэтому ищем их ПО ДОСТУПНОМУ ИМЕНИ, а не по видимому тексту, — и это не
+// обход проверки, а усиление: кружок без доступного имени для человека с
+// озвучкой экрана называется «кнопка» и ничего не значит. Раньше подпись
+// была видна и проверять её отдельно было нечего; теперь есть.
+const SIMPAS = /Войти через СИМПАС/;
+const YANDEX = /Войти через Яндекс/;
+const button = (name: RegExp) => screen.getByRole('button', { name });
 
 describe('кнопка единого входа', () => {
     beforeEach(() => {
@@ -38,30 +48,39 @@ describe('кнопка единого входа', () => {
 
     it('единый вход не настроен — кнопки нет', () => {
         render(<AuthForm simpasIdEnabled={false} />);
-        expect(screen.queryByText(SIMPAS)).toBeNull();
+        expect(screen.queryByRole('button', { name: SIMPAS })).toBeNull();
         // Прежние способы на месте и в прежнем порядке — этот способ
         // ДОБАВЛЯЕТСЯ, а не заменяет.
-        expect(screen.getByText(/Продолжить с Яндекс/)).toBeTruthy();
+        expect(button(YANDEX)).toBeTruthy();
     });
 
     it('настроен — кнопка есть, и прежние способы никуда не делись', () => {
         render(<AuthForm simpasIdEnabled />);
-        expect(screen.getByText(SIMPAS)).toBeTruthy();
-        expect(screen.getByText(/Продолжить с Яндекс/)).toBeTruthy();
+        expect(button(SIMPAS)).toBeTruthy();
+        expect(button(YANDEX)).toBeTruthy();
         expect(screen.getByPlaceholderText('Введите email')).toBeTruthy();
     });
 
     it('нажатие ведёт в провайдера simpasid', () => {
         render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(screen.getByText(SIMPAS));
+        fireEvent.click(button(SIMPAS));
         expect(signIn.mock.calls[0][0]).toBe('simpasid');
     });
 
     it('адрес возврата сохраняется — иначе сценарий с ботом сломается', () => {
         window.history.replaceState({}, '', '/auth?next=%2Fdiary%2Fclients%3Fattest%3D1');
         render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(screen.getByText(SIMPAS));
+        fireEvent.click(button(SIMPAS));
         expect(signIn.mock.calls[0][1]).toEqual({ callbackUrl: '/diary/clients?attest=1' });
+    });
+
+    it('у кружков есть доступное имя — иначе для озвучки это просто «кнопка»', () => {
+        // Кнопка со знаком вместо подписи читается глазами мгновенно и не
+        // читается вовсе без них. Имя — единственное, что делает её
+        // нажимаемой для человека с озвучкой экрана.
+        render(<AuthForm simpasIdEnabled />);
+        expect(button(YANDEX).getAttribute('aria-label')).toBe('Войти через Яндекс');
+        expect(button(SIMPAS).getAttribute('aria-label')).toBe('Войти через СИМПАС');
     });
 
     // Тот же строгий разбор, что у двух соседних кнопок: параметр «куда
@@ -69,7 +88,7 @@ describe('кнопка единого входа', () => {
     it('чужой адрес в next не уводит наружу', () => {
         window.history.replaceState({}, '', '/auth?next=https%3A%2F%2Fevil.example.com');
         render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(screen.getByText(SIMPAS));
+        fireEvent.click(button(SIMPAS));
         const target = (signIn.mock.calls[0][1] as { callbackUrl: string }).callbackUrl;
         expect(target.startsWith('/')).toBe(true);
         expect(target).not.toContain('evil.example.com');
