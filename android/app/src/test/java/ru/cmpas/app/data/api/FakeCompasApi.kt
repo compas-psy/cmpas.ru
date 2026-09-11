@@ -29,6 +29,7 @@ open class FakeCompasApi(
     override suspend fun requestMagicLink(body: MagicLinkRequest): Response<MagicLinkResponse> = notStubbed("requestMagicLink")
     override suspend fun verifyMagicLink(body: VerifyRequest): Response<AuthTokens> = notStubbed("verifyMagicLink")
     override suspend fun refreshToken(body: RefreshRequest): Response<AuthTokens> = notStubbed("refreshToken")
+    override suspend fun exchangeSimpasIdToken(body: SimpasIdExchangeRequest): Response<AuthTokens> = notStubbed("exchangeSimpasIdToken")
     override suspend fun getDashboard(): Response<DashboardDataV2> = notStubbed("getDashboard")
     override suspend fun getSessions(from: String?, to: String?, status: String?): Response<List<Session>> = notStubbed("getSessions")
     override suspend fun getSession(id: String): Response<Session> = notStubbed("getSession")
