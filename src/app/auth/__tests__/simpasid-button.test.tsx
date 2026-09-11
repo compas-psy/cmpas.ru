@@ -37,6 +37,7 @@ import AuthForm from '../AuthForm';
 // была видна и проверять её отдельно было нечего; теперь есть.
 const SIMPAS = /Войти через СИМПАС/;
 const YANDEX = /Войти через Яндекс/;
+const VK = /Войти через VK/;
 const button = (name: RegExp) => screen.getByRole('button', { name });
 
 describe('кнопка единого входа', () => {
@@ -61,6 +62,43 @@ describe('кнопка единого входа', () => {
         expect(screen.getByPlaceholderText('Введите email')).toBeTruthy();
     });
 
+    // ВХОД VK ИДЁТ ТОЛЬКО ЧЕРЕЗ СИМПАС.
+    //
+    // Своего приложения VK у ПРАКТИКИ нет: код, выданный провайдером,
+    // принадлежит запросившему приложению, и обменять его может только
+    // владелец ключей. Кружок без настроенного единого входа вёл бы в
+    // никуда — поэтому его в этом состоянии не существует.
+    it('единый вход не настроен — кружка VK нет вовсе', () => {
+        render(<AuthForm simpasIdEnabled={false} />);
+        expect(screen.queryByRole('button', { name: VK })).toBeNull();
+    });
+
+    it('настроен — кружок VK есть', () => {
+        render(<AuthForm simpasIdEnabled />);
+        expect(button(VK)).toBeTruthy();
+    });
+
+    // ПОДСКАЗКА ПРОВАЙДЕРА — СМЫСЛ ВСЕЙ КНОПКИ.
+    //
+    // Без неё кружок со знаком VK открывал бы общий список способов: обещал
+    // бы одно, показывал другое. Параметр заведён на стороне СИМПАС по нашей
+    // просьбе и доезжает до authorize третьим аргументом signIn
+    // (@auth/core, lib/actions/signin/authorization-url.js: query кладётся
+    // в параметры последним).
+    it('кружок VK несёт подсказку провайдера, иначе он обещает не то', () => {
+        render(<AuthForm simpasIdEnabled />);
+        fireEvent.click(button(VK));
+        expect(signIn.mock.calls[0][0]).toBe('simpasid');
+        expect(signIn.mock.calls[0][2]).toEqual({ provider: 'vkid' });
+    });
+
+    it('адрес возврата у кружка VK тот же, что у соседей', () => {
+        window.history.replaceState({}, '', '/auth?next=%2Fdiary%2Fclients%3Fattest%3D1');
+        render(<AuthForm simpasIdEnabled />);
+        fireEvent.click(button(VK));
+        expect(signIn.mock.calls[0][1]).toEqual({ callbackUrl: '/diary/clients?attest=1' });
+    });
+
     it('нажатие ведёт в провайдера simpasid', () => {
         render(<AuthForm simpasIdEnabled />);
         fireEvent.click(button(SIMPAS));
@@ -81,6 +119,7 @@ describe('кнопка единого входа', () => {
         render(<AuthForm simpasIdEnabled />);
         expect(button(YANDEX).getAttribute('aria-label')).toBe('Войти через Яндекс');
         expect(button(SIMPAS).getAttribute('aria-label')).toBe('Войти через СИМПАС');
+        expect(button(VK).getAttribute('aria-label')).toBe('Войти через VK');
     });
 
     // Тот же строгий разбор, что у двух соседних кнопок: параметр «куда
