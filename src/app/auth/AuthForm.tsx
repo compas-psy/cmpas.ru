@@ -52,6 +52,26 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
         }
     }
 
+    // Кружок VK ведёт в СИМПАС, а не к VK напрямую, и это не обходной путь.
+    //
+    // Своего приложения VK у ПРАКТИКИ нет и не должно быть: §2
+    // четырнадцатого ТЗ отдаёт личность Экосистеме целиком. Подсказка
+    // provider=vkid — необязательный параметр, который СИМПАС завёл по
+    // нашей просьбе: на их экране VK встаёт первым и помечен.
+    //
+    // ЧЕГО ОНА НЕ ДЕЛАЕТ: не пропускает экран СИМПАС насквозь. Человек
+    // увидит его и нажмёт второй раз. Это не недоделка, а требование
+    // того же параграфа: Пользовательское соглашение принимается на их
+    // экране и больше нигде, а уведи мы человека прямо к VK — принимать
+    // его стало бы негде.
+    const handleVkAuth = async () => {
+        try {
+            await signIn("simpasid", { callbackUrl: returnPath() }, { provider: "vkid" })
+        } catch (error) {
+            console.error("VK sign-in error:", error)
+        }
+    }
+
     const checkEmail = async (emailToCheck: string): Promise<EmailCheckResponse | null> => {
         try {
             const response = await fetch("/api/auth/check-email", {
@@ -164,6 +184,27 @@ export default function AuthForm({ simpasIdEnabled }: { simpasIdEnabled: boolean
                                         с фоном, и кнопка переставала читаться как
                                         кнопка. Сам знак при этом не тронут. */}
                                     <Image src="/simpas-logo-disc.svg" alt="" width={34} height={34} className="object-contain rounded-full" />
+                                </button>
+                            )}
+
+                            {/* Знак VK — копия канонического файла единого входа
+                                (compas-psy/auth, portal/public/assets/vk-id-blue.svg):
+                                тот же путь, та же заливка #07F. Из копии убран
+                                только блок <metadata> — 8,5 КБ служебного
+                                манифеста, к рисунку отношения не имеющего.
+                                Чужой знак не перекрашивается под нашу тему.
+
+                                Кружок стоит только при работающем СИМПАС: вход
+                                VK идёт через них, и без настроенного единого
+                                входа кнопка вела бы в никуда. */}
+                            {simpasIdEnabled && (
+                                <button
+                                    onClick={handleVkAuth}
+                                    aria-label="Войти через VK"
+                                    title="VK"
+                                    className="w-14 h-14 rounded-full bg-white hover:bg-sage-50 flex items-center justify-center transition-all shadow-card active:scale-[0.94]"
+                                >
+                                    <Image src="/vk-logo.svg" alt="" width={28} height={28} className="object-contain" />
                                 </button>
                             )}
                         </div>
