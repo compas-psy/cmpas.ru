@@ -72,10 +72,41 @@ class NativeProviderSignInTest {
     }
 
     @Test
-    fun `ВК в перечень собранных не входит, пока нет его идентификатора`() {
+    fun `оба провайдера сверяются с тем, что назвал сервер`() {
         val model = withoutComments(loginModel)
         assertTrue(model.contains("PROVIDER_YANDEX to BuildConfig.YANDEX_NATIVE_CLIENT_ID"))
-        assertFalse(model.contains("PROVIDER_VK to BuildConfig"))
+        assertTrue(model.contains("PROVIDER_VK to BuildConfig.VK_NATIVE_CLIENT_ID"))
+    }
+
+    @Test
+    fun `у ВК на сервер уходит код и всё, что пришло вместе с ним`() {
+        // Код ВК сам по себе ничего не подтверждает: обменять его может
+        // только держатель ключа приложения, то есть СИМПАС. Но обменять он
+        // сможет, лишь получив ВСЕ четыре величины — проверочный код PKCE,
+        // device_id, состояние и адрес возврата. Потеряй любую — ВК откажет,
+        // и отказ будет выглядеть как наша поломка.
+        val screen = withoutComments(loginScreen)
+        assertTrue(screen.contains("codeVerifier = codeVerifier"))
+        assertTrue(screen.contains("providerDeviceId = data.deviceId"))
+        assertTrue(screen.contains("state = state"))
+        assertTrue(screen.contains("redirectUri = VkIdSignIn.redirectUri(appId)"))
+    }
+
+    @Test
+    fun `ключ доступа ВК не принимается`() {
+        // onAuth зовётся, только если SDK обменял код сам. Ключ доступа
+        // личность не подтверждает: выданный чужому приложению, он подходит
+        // к справочнику профиля так же, как наш.
+        val screen = withoutComments(loginScreen)
+        assertTrue(screen.contains("override fun onAuth(accessToken: AccessToken)"))
+        assertFalse(screen.contains("completeProviderSignIn(LoginViewModel.PROVIDER_VK, accessToken"))
+        assertFalse(screen.contains("saveSimpasIdSession(accessToken"))
+    }
+
+    @Test
+    fun `закрытое окно ВК не показывается ошибкой`() {
+        val screen = withoutComments(loginScreen)
+        assertTrue(screen.contains("failed = fail !is VKIDAuthFail.Canceled"))
     }
 
     @Test

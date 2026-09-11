@@ -21,6 +21,10 @@ env:
   # запасным: если оно где-то заполнено, сборка возьмёт его.
   YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
   YANDEX_NATIVE_CLIENT_ID: ${{ secrets.YANDEX_NATIVE_CLIENT_ID }}
+  # ВК: идентификатор мобильного приложения и защищённый ключ ИМЕННО
+  # мобильного приложения. Оба уезжают в APK — так устроен их SDK.
+  VKID_NATIVE_CLIENT_ID: ${{ secrets.VKID_NATIVE_CLIENT_ID }}
+  VK_CLIENT_SECRET: ${{ secrets.VK_CLIENT_SECRET }}
 
 jobs:
   web:

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -34,6 +35,12 @@ import com.yandex.authsdk.YandexAuthLoginOptions
 import com.yandex.authsdk.YandexAuthOptions
 import com.yandex.authsdk.YandexAuthResult
 import com.yandex.authsdk.YandexAuthSdk
+import com.vk.id.AccessToken
+import com.vk.id.VKID
+import com.vk.id.VKIDAuthFail
+import com.vk.id.auth.AuthCodeData
+import com.vk.id.auth.VKIDAuthCallback
+import com.vk.id.auth.VKIDAuthParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -129,6 +136,67 @@ fun LoginScreen(
         }
     }
 
+    // НАТИВНЫЙ ВХОД ВК.
+    //
+    // Отличие от Яндекса не в удобстве, а в том, ЧТО возвращает SDK. Яндекс
+    // отдаёт подписанный JWT — им личность и подтверждается. ВК отдаёт код,
+    // и код этот сам по себе ничего не подтверждает: обменять его на личность
+    // может только тот, у кого есть ключ приложения, то есть СИМПАС.
+    //
+    // Поэтому приложение ЗАДУМЫВАЕТ проверочный код PKCE и строку состояния
+    // ДО входа, а после входа отдаёт серверу четыре величины сразу: код,
+    // device_id от ВК, состояние и адрес возврата. Без любой из них ВК
+    // откажет при обмене — это его протокол, а не наша осторожность.
+    val vkAppId = uiState.providerAppIds[LoginViewModel.PROVIDER_VK]
+    val vkReady = LoginViewModel.PROVIDER_VK in uiState.providers
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val vkid = remember(vkReady) {
+        // init зовётся один раз на процесс: второй вызов SDK считает ошибкой
+        // настройки и бросает. Заводить его до совпадения идентификаторов
+        // незачем — при расхождении кнопки на экране всё равно нет.
+        if (vkReady && VkIdInitializer.ensureInitialized(context.applicationContext)) VKID.instance else null
+    }
+    val startVkSignIn = startVkSignIn@{
+        val sdk = vkid ?: return@startVkSignIn viewModel.signInWithProvider(LoginViewModel.PROVIDER_VK)
+        val appId = vkAppId ?: return@startVkSignIn viewModel.signInWithProvider(LoginViewModel.PROVIDER_VK)
+        val codeVerifier = VkIdSignIn.newCodeVerifier()
+        val state = VkIdSignIn.newState()
+        sdk.authorize(
+            lifecycleOwner = lifecycleOwner,
+            callback = object : VKIDAuthCallback {
+                override fun onAuthCode(data: AuthCodeData, isCompletion: Boolean) {
+                    viewModel.completeProviderSignIn(
+                        provider = LoginViewModel.PROVIDER_VK,
+                        providerCode = data.code,
+                        codeVerifier = codeVerifier,
+                        providerDeviceId = data.deviceId,
+                        state = state,
+                        redirectUri = VkIdSignIn.redirectUri(appId),
+                    )
+                }
+
+                // Сюда SDK попадает, только если обменял код сам. Мы этого
+                // не просили и ключа доступа не принимаем: подтвердить им
+                // личность нельзя — ключ, выданный чужому приложению,
+                // подходит к справочнику профиля так же, как наш.
+                override fun onAuth(accessToken: AccessToken) {
+                    viewModel.onProviderSignInAborted(failed = true)
+                }
+
+                override fun onFail(fail: VKIDAuthFail) {
+                    // Человек закрыл окно входа — это не ошибка.
+                    viewModel.onProviderSignInAborted(failed = fail !is VKIDAuthFail.Canceled)
+                }
+            },
+            params = VKIDAuthParams {
+                // Проверочный код передаётся вызовом, а не собой: иначе
+                // перехвативший код обменял бы его без нас.
+                this.codeChallenge = VkIdSignIn.codeChallenge(codeVerifier)
+                this.state = state
+            },
+        )
+    }
+
     LaunchedEffect(uiState.isAuthenticated) {
         if (uiState.isAuthenticated) onLoginSuccess()
     }
@@ -194,10 +262,11 @@ fun LoginScreen(
                         // перечни разъедутся, — чтобы отвечать честно, а не
                         // молчать.
                         onProvider = { provider ->
-                            if (provider == LoginViewModel.PROVIDER_YANDEX && yandexLauncher != null) {
-                                yandexLauncher.launch(YandexAuthLoginOptions())
-                            } else {
-                                viewModel.signInWithProvider(provider)
+                            when {
+                                provider == LoginViewModel.PROVIDER_YANDEX && yandexLauncher != null ->
+                                    yandexLauncher.launch(YandexAuthLoginOptions())
+                                provider == LoginViewModel.PROVIDER_VK && vkid != null -> startVkSignIn()
+                                else -> viewModel.signInWithProvider(provider)
                             }
                         },
                         onLegacyYandex = openLegacyYandex,

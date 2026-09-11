@@ -48,3 +48,8 @@
 # переживать обфускацию обязаны.
 -keep class com.yandex.authsdk.** { *; }
 -dontwarn com.yandex.authsdk.**
+
+# SDK ВК: те же соображения — рефлексия по мета-данным манифеста и
+# сериализация ответов.
+-keep class com.vk.id.** { *; }
+-dontwarn com.vk.id.**
