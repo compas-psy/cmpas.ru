@@ -1,14 +1,29 @@
 'use client';
 
-import { Sparkles, MessageCircle, Shield, Bell, Calendar, Share2, Smartphone, Zap, Globe } from 'lucide-react';
+import { Shield, Route, Smartphone, Sparkles } from 'lucide-react';
 
+/**
+ * «Что нового» — страница, которую человек открывает, чтобы узнать, что
+ * изменилось у НЕГО. Поэтому здесь нет ни одной строки про устройство
+ * сервиса: прежняя редакция рассказывала про DNS в Docker и таймауты на
+ * вызовы API — сведения, по которым психолог не может ни решить, ни
+ * сделать ничего.
+ *
+ * Номера версий — настоящие, из сборки. Прежние 2.4–2.6 не существовали
+ * никогда: страница жила своей нумерацией и своим календарём, отстала на
+ * четыре месяца и молчала об этом. Чтобы это не повторилось, верхняя
+ * запись сверяется со сборкой (`tests/changelog-matches-release.test.ts`):
+ * поднялась версия продукта — здесь появилась строка, иначе проверка
+ * роняет сборку.
+ */
 type ChangelogEntry = {
     date: string;
+    /** Линия версий, которую описывает запись: «1.3» покрывает 1.3.0–1.3.x. */
     version: string;
     title: string;
     icon: typeof Sparkles;
     color: string;
-    items: { emoji: string; text: string; tag?: 'new' | 'fix' | 'improved' }[];
+    items: { text: string; tag?: 'new' | 'fix' | 'improved' }[];
 };
 
 const tagStyle = {
@@ -18,51 +33,57 @@ const tagStyle = {
 };
 const tagLabel = { new: 'Новое', fix: 'Исправлено', improved: 'Улучшено' };
 
-const changelog: ChangelogEntry[] = [
+export const changelog: ChangelogEntry[] = [
     {
-        date: '3 мая 2026',
-        version: '2.6',
-        title: 'MAX бот — полная функциональность',
-        icon: MessageCircle,
+        date: '11 сентября 2026',
+        version: '1.3',
+        title: 'Один вход на все продукты',
+        icon: Shield,
+        color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+        items: [
+            { text: 'Вход по Яндексу, VK и по почте ведёт в одну учётную запись — общую для всех продуктов, а не отдельную для ПРАКТИКИ', tag: 'improved' },
+            { text: 'Документы — соглашение, политика и особые условия ПРАКТИКИ — открываются действующей редакцией из одного места', tag: 'improved' },
+            { text: 'Если войти не удалось, экран называет причину и второй путь вместо общего «попробуйте позже»', tag: 'fix' },
+        ],
+    },
+    {
+        date: '10 сентября 2026',
+        version: '1.2',
+        title: 'Путь от встречи до следующей записи',
+        icon: Route,
         color: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400',
         items: [
-            { emoji: '✅', text: 'Подтверждение сессии прямо из MAX (кнопка в напоминании)', tag: 'new' },
-            { emoji: '🔄', text: 'Перенос сессии — кнопка открывает страницу записи', tag: 'new' },
-            { emoji: '😊', text: 'Оценка самочувствия после сессии сохраняется в карточке', tag: 'new' },
-            { emoji: '📋', text: 'Команда /help — контекстная справка для психолога и клиента', tag: 'new' },
-            { emoji: '🔗', text: 'Команда /link — получить ссылку для записи клиентов', tag: 'new' },
-            { emoji: '🇷🇺', text: 'Русские команды: /сессии, /помощь', tag: 'improved' },
-            { emoji: '🤖', text: 'Умный ответ на любой текст — кнопки по роли (психолог/клиент)', tag: 'improved' },
+            { text: 'После встречи — отметка «Была» или «Не пришли», и запись на следующую прямо оттуда', tag: 'new' },
+            { text: 'Тот же час через неделю одной кнопкой; час можно закрепить за клиентом на выбранный срок', tag: 'new' },
+            { text: 'Если клиент не пришёл, причину можно записать и перенести встречу в том же окне', tag: 'new' },
+            { text: 'У клиента — своя страница встречи: перенос и отмена без переписки', tag: 'new' },
+            { text: 'Одно событие — одно сообщение: клиент больше не получает две одинаковые записи подряд', tag: 'fix' },
         ],
     },
     {
-        date: '2 мая 2026',
-        version: '2.5',
-        title: 'Стабильность и DNS',
-        icon: Shield,
+        date: '6–10 сентября 2026',
+        version: '1.1',
+        title: 'Приложение умеет то же, что кабинет',
+        icon: Smartphone,
+        color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+        items: [
+            { text: 'Расписание правится в приложении: часы конкретного дня и блокировка отдельных часов, а не только целого дня', tag: 'new' },
+            { text: 'Вместо инициалов — фотография клиента из его мессенджера', tag: 'new' },
+            { text: 'Вечерняя отметка: как прошли сегодняшние встречи, одним экраном', tag: 'new' },
+            { text: 'Клиент, удалённый в кабинете, исчезает и в приложении', tag: 'fix' },
+            { text: 'Время сессии и свободные часы в приложении совпадают с кабинетом', tag: 'fix' },
+        ],
+    },
+    {
+        date: 'август 2026',
+        version: '1.0',
+        title: 'ПРАКТИКА на телефоне',
+        icon: Sparkles,
         color: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
         items: [
-            { emoji: '🛡️', text: 'Booking page больше не зависает при проблемах с Telegram', tag: 'fix' },
-            { emoji: '⏱️', text: 'Timeout на все Telegram API вызовы (10 сек)', tag: 'fix' },
-            { emoji: '🔍', text: 'Диагностический endpoint — проверка connectivity к TG и MAX', tag: 'new' },
-            { emoji: '🌐', text: 'DNS fix: 8.8.8.8 / 1.1.1.1 в Docker', tag: 'fix' },
-            { emoji: '📋', text: 'Поддержка TELEGRAM_API_URL для обхода блокировок', tag: 'new' },
-        ],
-    },
-    {
-        date: '2 мая 2026',
-        version: '2.4',
-        title: 'Бот-ассистент',
-        icon: Sparkles,
-        color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
-        items: [
-            { emoji: '☀️', text: 'Утренний дайджест — бот присылает список сессий на день', tag: 'new' },
-            { emoji: '📊', text: 'Еженедельная сводка по понедельникам', tag: 'new' },
-            { emoji: '💬', text: 'Оценка самочувствия клиента после сессии', tag: 'new' },
-            { emoji: '🔗', text: 'Кнопка «Отправить ссылку клиенту» на Dashboard', tag: 'new' },
-            { emoji: '📅', text: 'Календарь в нижнем меню на мобильном', tag: 'improved' },
-            { emoji: '📲', text: 'ПРАКТИКУ можно установить как приложение (PWA)', tag: 'new' },
-            { emoji: '🔔', text: 'Настройки: дайджест, сводка, mood-check, напоминания', tag: 'new' },
+            { text: 'Приложение для Android: клиенты, расписание и заметки по сессиям', tag: 'new' },
+            { text: 'Самозапись клиентов и напоминания через боты в популярных мессенджерах', tag: 'new' },
+            { text: 'Синхронизация с Яндекс и другими календарями', tag: 'new' },
         ],
     },
 ];
@@ -72,7 +93,7 @@ export default function ChangelogPage() {
         <div className="space-y-6 pb-12 max-w-3xl mx-auto">
             <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Что нового</h1>
-                <p className="text-muted-foreground text-sm mt-1">Последние обновления сервиса</p>
+                <p className="text-muted-foreground text-sm mt-1">Обновления ПРАКТИКИ — в кабинете и в приложении</p>
             </div>
 
             <div className="relative">
@@ -105,8 +126,11 @@ export default function ChangelogPage() {
                                     </div>
                                     <ul className="space-y-2.5">
                                         {entry.items.map((item, j) => (
+                                            /* Вместо эмодзи — точка: эмодзи у каждой строки
+                                               спорили с иконкой записи и набирались вразнобой
+                                               (щит, лупа, флажок), не добавляя смысла. */
                                             <li key={j} className="flex items-start gap-2.5 text-sm text-foreground/90 leading-relaxed">
-                                                <span className="text-base mt-0.5 flex-shrink-0">{item.emoji}</span>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[7px] flex-shrink-0" />
                                                 <span className="flex-1 font-medium">{item.text}</span>
                                                 {item.tag && (
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${tagStyle[item.tag]}`}>
