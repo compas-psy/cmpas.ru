@@ -52,8 +52,14 @@ val simpasIdClientId: String = (project.findProperty("simpasIdClientId") as Stri
 //
 // Пусто — нативного Яндекса в сборке нет, и это честное состояние: прежний
 // браузерный вход остаётся на экране.
+// Имя секрета — YANDEX_CLIENT_ID: так он назван в репозитории, и так же
+// называется placeholder в манифесте SDK. Прежнее YANDEX_NATIVE_CLIENT_ID
+// осталось запасным входом: выдумав себе третье имя, сборка молча собиралась
+// БЕЗ идентификатора при заполненном секрете — ровно та поломка, которую
+// сверка с сервером не ловит, потому что ловить нечего.
 val yandexNativeClientId: String = (project.findProperty("yandexNativeClientId") as String?)
     ?.takeIf { it.isNotBlank() }
+    ?: System.getenv("YANDEX_CLIENT_ID")?.takeIf { it.isNotBlank() }
     ?: System.getenv("YANDEX_NATIVE_CLIENT_ID").orEmpty()
 
 android {
@@ -99,8 +105,13 @@ android {
         // 1.3.3 — отказ входа называет причину и второй путь вместо одной
         // фразы «мы уже чиним» на все случаи. Версия продукта: меняется то,
         // что человек читает на экране в момент неудачи.
-        versionCode = 22
-        versionName = "1.3.3"
+        // 1.3.4 — нативный вход Яндекса наконец собирается: сборка читала
+        // выдуманное ею же имя секрета (YANDEX_NATIVE_CLIENT_ID) вместо
+        // настоящего (YANDEX_CLIENT_ID) и потому собиралась без
+        // идентификатора при заполненном секрете. Версия продукта: на экране
+        // входа появляется кнопка, которой не было.
+        versionCode = 23
+        versionName = "1.3.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
