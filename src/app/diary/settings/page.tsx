@@ -16,7 +16,6 @@ type Settings = {
     cancellationHours: number;
     cancellationFee: number;
     cancellationText: string;
-    notifyTelegram: boolean;
     notifyAds: boolean;
     blockConflicts: boolean;
 };
@@ -126,7 +125,6 @@ export default function SettingsPage() {
         cancellationHours: 24,
         cancellationFee: 50,
         cancellationText: '',
-        notifyTelegram: true,
         notifyAds: false,
         blockConflicts: true,
     });
@@ -166,7 +164,6 @@ export default function SettingsPage() {
                     cancellationHours: data.cancellationHours,
                     cancellationFee: data.cancellationFee,
                     cancellationText: data.cancellationText || '',
-                    notifyTelegram: (data as any).notifyTelegram !== false,
                     notifyAds: settings.notifyAds,
                     blockConflicts: (data as any).blockConflicts !== false,
                 });

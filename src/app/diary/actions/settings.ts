@@ -126,11 +126,13 @@ export async function updateSettings(data: {
     cancellationText?: string;
     autoSync?: boolean;
     blockConflicts?: boolean;
-    notifyTelegram?: boolean;
+    // notifyAds — это согласие, а не настройка: оно пишется отдельным
+    // действием toggleAdsConsentForUser, которое ведёт журнал согласий.
     notifyAds?: boolean;
-    timeFormat?: string;
-    dateFormat?: string;
-    weekStartsOn?: string;
+    // УБРАНЫ notifyTelegram, timeFormat, dateFormat, weekStartsOn: они
+    // принимались этим действием и не записывались НИКУДА — ни в схему, ни
+    // в safeData ниже. Человек менял их, видел «Настройки сохранены» и
+    // получал прежнее при следующем открытии.
     scheduleMode?: string;
     maxSessionsPerDay?: number | null;
     bookingHorizonDays?: number;
