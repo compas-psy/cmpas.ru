@@ -16,6 +16,13 @@ on:
       - 'analytics/schema/**'
       - 'src/app/api/ingest/**'
       - '.github/workflows/android-build.yml'
+      # Сторож готового пакета и то, чем он меряет. Их правка НЕ запускала
+      # сборку, хотя проверяет именно её: скрипт менялся, а проверялся он
+      # только следующей правкой Android — то есть неизвестно когда.
+      - 'scripts/check-apk.sh'
+      - 'scripts/check-release-naming.sh'
+      - 'android/allowed-permissions.txt'
+      - 'android/EXPECTED_SIGNER.txt'
   pull_request:
     paths:
       - 'android/**'
@@ -30,6 +37,13 @@ on:
       - 'analytics/schema/**'
       - 'src/app/api/ingest/**'
       - '.github/workflows/android-build.yml'
+      # Сторож готового пакета и то, чем он меряет. Их правка НЕ запускала
+      # сборку, хотя проверяет именно её: скрипт менялся, а проверялся он
+      # только следующей правкой Android — то есть неизвестно когда.
+      - 'scripts/check-apk.sh'
+      - 'scripts/check-release-naming.sh'
+      - 'android/allowed-permissions.txt'
+      - 'android/EXPECTED_SIGNER.txt'
   workflow_dispatch:
 
 permissions:
