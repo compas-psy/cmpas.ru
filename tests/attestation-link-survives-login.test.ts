@@ -22,6 +22,17 @@ const LAYOUT = read('src/app/diary/layout.tsx');
 // а переменные с ключом в браузер не отдаются). Кнопки живут здесь.
 const AUTH = read('src/app/auth/AuthForm.tsx');
 
+/**
+ * Код без комментариев.
+ *
+ * Сторож ниже ищет вызовы signIn — и дважды срабатывал на УПОМИНАНИИ
+ * вызова в комментарии («раньше форма звала signIn(\"nodemailer\")»).
+ * Это ложная тревога ровно того рода, из-за которой сторожей начинают
+ * отключать: он ловит рассказ о коде вместо самого кода.
+ */
+const withoutComments = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
 describe('ссылка переживает вход', () => {
     it('адрес запроса кладётся в заголовок — иначе layout его не знает', () => {
         // Серверный layout своего адреса не получает: Next его не передаёт.
@@ -48,7 +59,7 @@ describe('ссылка переживает вход', () => {
         // одной кнопки без. Способов входа стало три, и забытый
         // callbackUrl у нового ломает сценарий только для тех, кто вошёл
         // именно им, — то есть незаметно.
-        const calls = AUTH.match(/signIn\([^)]*\)/g) ?? [];
+        const calls = withoutComments(AUTH).match(/signIn\([^)]*\)/g) ?? [];
         expect(calls.length).toBeGreaterThanOrEqual(3);
         for (const call of calls) {
             expect(call).toContain('callbackUrl: returnPath()');
