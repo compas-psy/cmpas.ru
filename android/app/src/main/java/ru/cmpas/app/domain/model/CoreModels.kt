@@ -29,14 +29,56 @@ data class User(
 data class MobileNotificationSettings(
     val clientReminder25hEnabled: Boolean = true,
     val clientReminder1hEnabled: Boolean = true,
+    /** Список сессий на сегодня утром — специалисту (cron/digest.ts). */
+    val morningDigestEnabled: Boolean = true,
+    /** Сводка по неделе в понедельник — специалисту (cron/digest.ts). */
+    val weeklyDigestEnabled: Boolean = true,
+    /** Вопрос клиенту о самочувствии после сессии (cron/post-session.ts). */
+    val clientMoodCheckEnabled: Boolean = false,
 )
 
-/** Меняется один тумблер за раз — второе поле остаётся нетронутым. */
+/** Меняется один тумблер за раз — остальные поля остаются нетронутыми. */
 @Serializable
 data class MobileNotificationSettingsPatch(
     val clientReminder25hEnabled: Boolean? = null,
     val clientReminder1hEnabled: Boolean? = null,
+    val morningDigestEnabled: Boolean? = null,
+    val weeklyDigestEnabled: Boolean? = null,
+    val clientMoodCheckEnabled: Boolean? = null,
 )
+
+/** Правится только имя: почта и способ входа живут в Экосистеме СИМПАС. */
+@Serializable
+data class MobileProfilePatch(val name: String)
+
+/**
+ * Состояние оплаты. Все выводы делает сервер: экран не решает по дате,
+ * активна ли подписка, — именно так подписка, кончившаяся в мае, в
+ * сентябре показывалась активной.
+ */
+@Serializable
+data class MobileBillingStatus(
+    val daysLeft: Int? = null,
+    val isExpired: Boolean = false,
+    val isForever: Boolean = false,
+    val subscriptionActive: Boolean = false,
+    val subscriptionEndsAt: String? = null,
+    val subscriptionPlan: String? = null,
+    val trialActive: Boolean = false,
+    val trialEndsAt: String? = null,
+    val priceLabel: String = "",
+    val payUrl: String = "",
+)
+
+/** Настройки практики, которые правятся с телефона. */
+@Serializable
+data class MobilePracticeSettings(
+    val onlineSessionLink: String? = null,
+    val timezone: String = "Europe/Moscow",
+)
+
+@Serializable
+data class MobilePracticeSettingsPatch(val onlineSessionLink: String)
 
 /**
  * Кабинет практики (Задача 21).
@@ -138,3 +180,20 @@ enum class ConsentStatus { OK, MISSING, EXPIRED }
 
 @Serializable
 enum class HomeworkStatus { DONE, PARTIAL, MISSING, NOT_ASSIGNED }
+
+/** Запрос подсказки адреса. Короче трёх знаков сервер не принимает. */
+@Serializable
+data class AddressSuggestQuery(val query: String)
+
+@Serializable
+data class AddressSuggestResponse(val suggestions: List<AddressSuggestion> = emptyList())
+
+/**
+ * Подсказка адреса.
+ *
+ * `value` — то, что видит и сохраняет человек. Остальные поля DaData
+ * приложению не нужны и намеренно не читаются: адрес кабинета — это строка,
+ * а не разобранная на части запись о месте.
+ */
+@Serializable
+data class AddressSuggestion(val value: String = "")

@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.Response
 import ru.cmpas.app.data.api.CompasApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import ru.cmpas.app.domain.model.AddressSuggestQuery
 import ru.cmpas.app.domain.model.CreatePracticeAddressRequest
 import ru.cmpas.app.domain.model.PracticeAddress
 import ru.cmpas.app.domain.model.PracticeAddressList
@@ -34,6 +37,16 @@ data class AddressesUiState(
     val isSaving: Boolean = false,
     /** Кабинет, над которым идёт действие: карточка на это время блокируется. */
     val busyAddressId: String? = null,
+    /** Подсказки адреса под полем ввода. Пусто — показывать нечего. */
+    val suggestions: List<String> = emptyList(),
+    /**
+     * Подсказки сейчас недоступны — и человек об этом знает.
+     *
+     * Пустой список и «сервис не отвечает» — разные вещи: в первом случае
+     * адрес просто редкий, во втором сломана интеграция. Молча показывать
+     * пустоту в обоих случаях значит не узнать о поломке месяцами.
+     */
+    val suggestUnavailable: Boolean = false,
 )
 
 /**
@@ -71,6 +84,9 @@ class AddressesViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AddressesUiState())
     val uiState = _uiState.asStateFlow()
 
+    /** Запрос подсказки в полёте: при новом нажатии он отменяется. */
+    private var suggestJob: Job? = null
+
     init { refresh() }
 
     fun refresh() {
@@ -86,6 +102,45 @@ class AddressesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Подсказка адреса, пока человек набирает.
+     *
+     * Дебаунс обязателен, и не ради красоты: каждый запрос к DaData платный,
+     * а набор адреса — это десяток нажатий в секунду. Прежний запрос при
+     * новом нажатии отменяется — иначе ответы приходили бы вразнобой и
+     * последним показывался бы ответ на предпоследний ввод.
+     *
+     * Короче трёх знаков не спрашиваем вовсе: сервер такой запрос всё равно
+     * отклонит, а платить за отказ незачем.
+     */
+    fun suggest(query: String) {
+        suggestJob?.cancel()
+        val trimmed = query.trim()
+        if (trimmed.length < MIN_SUGGEST_LENGTH) {
+            _uiState.update { it.copy(suggestions = emptyList(), suggestUnavailable = false) }
+            return
+        }
+        suggestJob = viewModelScope.launch {
+            delay(SUGGEST_DEBOUNCE_MS)
+            val response = runCatching { api.suggestAddresses(AddressSuggestQuery(trimmed)) }.getOrNull()
+            val body = response?.takeIf { it.isSuccessful }?.body()
+            _uiState.update {
+                it.copy(
+                    suggestions = body?.suggestions.orEmpty().map { s -> s.value }.filter { v -> v.isNotBlank() },
+                    // 400 — это «запрос не годится», поведение вызывающего, а
+                    // не поломка. Остальные коды и отсутствие ответа — поломка.
+                    suggestUnavailable = response != null && !response.isSuccessful && response.code() != 400,
+                )
+            }
+        }
+    }
+
+    /** Подсказку выбрали или поле закрыли — список больше не нужен. */
+    fun clearSuggestions() {
+        suggestJob?.cancel()
+        _uiState.update { it.copy(suggestions = emptyList(), suggestUnavailable = false) }
     }
 
     fun create(name: String, address: String) {
@@ -168,3 +223,9 @@ class AddressesViewModel @Inject constructor(
         }
     }
 }
+
+/** Короче — сервер откажет, и это был бы платный запрос за отказ. */
+private const val MIN_SUGGEST_LENGTH = 3
+
+/** Живой набор — это ~10 нажатий в секунду; 350 мс гасит их в один запрос. */
+private const val SUGGEST_DEBOUNCE_MS = 350L

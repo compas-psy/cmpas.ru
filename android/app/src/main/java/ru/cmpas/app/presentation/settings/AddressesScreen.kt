@@ -1,6 +1,7 @@
 package ru.cmpas.app.presentation.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,8 +40,11 @@ import ru.cmpas.app.presentation.theme.*
  * или расписание), карточка остаётся на месте, а причина видна на экране —
  * делать вид, что кабинет убран, нельзя.
  *
- * Адрес вводится руками. Подсказок адресов в приложении нет, и заводить их
- * ради этого экрана не нужно: подсказка не должна быть условием сохранения.
+ * Адрес можно выбрать подсказкой, а можно набрать целиком: подсказка —
+ * удобство, а не условие сохранения. Недоступность справочника видна
+ * строкой под полем, а не молчаливым отсутствием вариантов: пустой список
+ * означает «такого адреса не нашли», и путать его с «сервис не отвечает»
+ * нельзя.
  */
 @Composable
 fun AddressesScreen(
@@ -135,9 +139,17 @@ fun AddressesScreen(
             AddressFormSheet(
                 form = form,
                 isSaving = uiState.isSaving,
-                onClose = { editing = null },
+                suggestions = uiState.suggestions,
+                suggestUnavailable = uiState.suggestUnavailable,
+                onQueryChange = viewModel::suggest,
+                onSuggestionPicked = viewModel::clearSuggestions,
+                onClose = {
+                    viewModel.clearSuggestions()
+                    editing = null
+                },
                 onSave = { name, address ->
                     if (form.id == null) viewModel.create(name, address) else viewModel.rename(form.id, name, address)
+                    viewModel.clearSuggestions()
                     editing = null
                 },
             )
@@ -227,6 +239,10 @@ private fun PrimaryBadge() {
 private fun AddressFormSheet(
     form: AddressForm,
     isSaving: Boolean,
+    suggestions: List<String>,
+    suggestUnavailable: Boolean,
+    onQueryChange: (String) -> Unit,
+    onSuggestionPicked: () -> Unit,
     onClose: () -> Unit,
     onSave: (String, String) -> Unit,
 ) {
@@ -243,9 +259,42 @@ private fun AddressFormSheet(
 
         AddressInput("Название", "Яузская", name) { name = it }
         Spacer(Modifier.height(10.dp))
-        // Адрес пишется руками и сохраняется как есть: справочника адресов в
-        // приложении нет, и придумывать его здесь не нужно.
-        AddressInput("Адрес", "Москва, Яузская ул., 8с2", address) { address = it }
+        AddressInput("Адрес", "Москва, Яузская ул., 8с2", address) {
+            address = it
+            onQueryChange(it)
+        }
+
+        // Подсказки — список под полем, а не всплывающее окно: всплывающее
+        // на телефоне перекрывает клавиатуру и само поле.
+        if (suggestions.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            GlassCard(Modifier.fillMaxWidth(), padding = 4.dp) {
+                suggestions.take(5).forEachIndexed { index, value ->
+                    if (index > 0) ThinDivider()
+                    Text(
+                        value,
+                        style = tBody2,
+                        color = CompasFg,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                address = value
+                                onSuggestionPicked()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                    )
+                }
+            }
+        } else if (suggestUnavailable) {
+            Spacer(Modifier.height(8.dp))
+            // Ровно то, что произошло, и ровно то, что делать: адрес
+            // сохраняется набранным вручную в любом случае.
+            Text(
+                "Подсказки адресов сейчас не отвечают. Наберите адрес целиком — он сохранится как есть.",
+                style = tMeta,
+                color = CompasMutedFg,
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
         PrimaryButton(

@@ -15,7 +15,11 @@ import ru.cmpas.app.domain.model.DashboardDataV2
 import ru.cmpas.app.domain.model.MobileLegalAcceptBody
 import ru.cmpas.app.domain.model.MobileNotificationSettings
 import ru.cmpas.app.domain.model.MobileNotificationSettingsPatch
+import ru.cmpas.app.domain.model.MobileBillingStatus
 import ru.cmpas.app.domain.model.MobileLegalStatus
+import ru.cmpas.app.domain.model.MobilePracticeSettings
+import ru.cmpas.app.domain.model.MobilePracticeSettingsPatch
+import ru.cmpas.app.domain.model.MobileProfilePatch
 import ru.cmpas.app.domain.model.User
 import javax.inject.Inject
 
@@ -79,6 +83,10 @@ class SettingsViewModel @Inject constructor(
                 // дошли до сервера — не показываем выдуманное: остаётся
                 // последнее известное, а нового обещания экран не даёт.
                 val remindersResponse = runCatching { api.getNotificationSettings() }.getOrNull()
+                // Оплата и настройки практики — тем же правилом: не дошли,
+                // остаётся последнее известное, выдуманного нет.
+                val billingResponse = runCatching { api.getBilling() }.getOrNull()
+                val practiceResponse = runCatching { api.getPracticeSettings() }.getOrNull()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -86,6 +94,8 @@ class SettingsViewModel @Inject constructor(
                         legalStatus = if (legalResponse.isSuccessful) legalResponse.body() else it.legalStatus,
                         bookingLink = mergeBookingLink(dashboardResponse, it.bookingLink),
                         reminders = mergeReminders(remindersResponse, it.reminders),
+                        billing = billingResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.billing,
+                        practice = practiceResponse?.takeIf { r -> r.isSuccessful }?.body() ?: it.practice,
                         error = if (!legalResponse.isSuccessful) "Не удалось загрузить документы" else null,
                     )
                 }
@@ -108,6 +118,9 @@ class SettingsViewModel @Inject constructor(
             val patch = when (kind) {
                 ReminderKind.DAY_BEFORE -> MobileNotificationSettingsPatch(clientReminder25hEnabled = enabled)
                 ReminderKind.HOUR_BEFORE -> MobileNotificationSettingsPatch(clientReminder1hEnabled = enabled)
+                ReminderKind.MORNING_DIGEST -> MobileNotificationSettingsPatch(morningDigestEnabled = enabled)
+                ReminderKind.WEEKLY_DIGEST -> MobileNotificationSettingsPatch(weeklyDigestEnabled = enabled)
+                ReminderKind.MOOD_CHECK -> MobileNotificationSettingsPatch(clientMoodCheckEnabled = enabled)
             }
             try {
                 val response = api.updateNotificationSettings(patch)
@@ -116,6 +129,56 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(savingReminder = null, reminders = saved) }
             } catch (_: Exception) {
                 _uiState.update { it.copy(savingReminder = null, reminders = current, error = "Не удалось сохранить напоминание") }
+            }
+        }
+    }
+
+    /**
+     * Имя специалиста. Видно клиенту в каждом уведомлении — опечатка в нём
+     * до сих пор исправлялась только из веб-кабинета.
+     */
+    fun saveName(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            _uiState.update { it.copy(error = "Имя не может быть пустым") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingProfile = true, error = null) }
+            try {
+                val response = api.updateProfile(MobileProfilePatch(name = trimmed))
+                val saved = response.body()
+                if (!response.isSuccessful || saved == null) throw IllegalStateException()
+                _uiState.update { it.copy(isSavingProfile = false, user = saved) }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isSavingProfile = false, error = "Не удалось сохранить имя") }
+            }
+        }
+    }
+
+    /**
+     * Ссылка для онлайн-сессий: уходит клиенту в подтверждении записи и в
+     * напоминаниях. Пустая строка означает «ссылки нет» — сервер запишет
+     * null, а не пустоту в шаблон сообщения.
+     */
+    fun saveOnlineSessionLink(link: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingPractice = true, error = null) }
+            try {
+                val response = api.updatePracticeSettings(MobilePracticeSettingsPatch(onlineSessionLink = link.trim()))
+                val saved = response.body()
+                if (!response.isSuccessful || saved == null) {
+                    // 400 здесь означает одно: адрес не разбирается как ссылка.
+                    throw IllegalStateException(if (response.code() == 400) "LINK" else "OTHER")
+                }
+                _uiState.update { it.copy(isSavingPractice = false, practice = saved) }
+            } catch (error: Exception) {
+                val message = if (error.message == "LINK") {
+                    "Ссылка должна начинаться с http:// или https://"
+                } else {
+                    "Не удалось сохранить ссылку"
+                }
+                _uiState.update { it.copy(isSavingPractice = false, error = message) }
             }
         }
     }
@@ -185,7 +248,20 @@ data class SettingsUiState(
      */
     val reminders: MobileNotificationSettings? = null,
     val savingReminder: ReminderKind? = null,
+    /** null — состояние оплаты ещё не получено; выдумывать его нельзя. */
+    val billing: MobileBillingStatus? = null,
+    val practice: MobilePracticeSettings? = null,
+    val isSavingProfile: Boolean = false,
+    val isSavingPractice: Boolean = false,
 )
 
-/** Две настоящие серверные рассылки клиенту: за сутки и за час до сессии. */
-enum class ReminderKind { DAY_BEFORE, HOUR_BEFORE }
+/**
+ * Уведомления, за которыми стоит НАСТОЯЩАЯ серверная рассылка.
+ *
+ * Список сверен с кодом отправки, а не с названиями полей таблицы: в
+ * NotificationSettings есть ещё пять флагов (newBookingEnabled,
+ * reminderEnabled, clientRescheduleEnabled, clientCancelEnabled,
+ * clientPsyCancelEnabled), которых не читает никто — отправка идёт мимо
+ * них. Тумблер, который ничего не выключает, — это обещание.
+ */
+enum class ReminderKind { DAY_BEFORE, HOUR_BEFORE, MORNING_DIGEST, WEEKLY_DIGEST, MOOD_CHECK }
