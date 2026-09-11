@@ -62,6 +62,34 @@ val yandexNativeClientId: String = (project.findProperty("yandexNativeClientId")
     ?: System.getenv("YANDEX_CLIENT_ID")?.takeIf { it.isNotBlank() }
     ?: System.getenv("YANDEX_NATIVE_CLIENT_ID").orEmpty()
 
+// ИДЕНТИФИКАТОР И КЛЮЧ ПРИЛОЖЕНИЯ ВК — ТОЖЕ В СБОРКЕ, И ПО ТОЙ ЖЕ ПРИЧИНЕ.
+//
+// SDK ВК читает оба значения из мета-данных манифеста своей AuthActivity
+// (VKIDClientID, VKIDClientSecret), а адрес возврата собирает как
+// `${VKIDRedirectScheme}://${VKIDRedirectHost}/blank.html`, где схема — это
+// intent-фильтр в манифесте. Передать это в рантайме нельзя: пути нет ни у
+// идентификатора, ни тем более у схемы возврата.
+//
+// Идентификатор ВК обязан быть ЧИСЛОМ: SDK читает его как int
+// (VKIDDepsProd: metaData.getIntOrThrow("VKIDClientID")). Поэтому пустое
+// значение подставляется нулём, а не словом «unset», — иначе приложение
+// падало бы при заведении SDK вместо того, чтобы просто не показать кнопку.
+//
+// Защищённый ключ уезжает в APK — так устроен ВК, и это их решение, не наше.
+// Ключ здесь ИМЕННО мобильного приложения (пакет ru.cmpas.app), а не
+// сервисный: сервисный в приложении на устройстве человека делать нечего.
+val vkNativeClientId: String = (project.findProperty("vkNativeClientId") as String?)
+    ?.takeIf { it.isNotBlank() }
+    ?: System.getenv("VKID_NATIVE_CLIENT_ID").orEmpty()
+val vkClientSecret: String = (project.findProperty("vkClientSecret") as String?)
+    ?.takeIf { it.isNotBlank() }
+    ?: System.getenv("VK_CLIENT_SECRET").orEmpty()
+
+// Хост возврата ВК. Значение одно на всех и задаётся самим ВК; лежит здесь,
+// потому что из него складывается redirect_uri, который приложение обязано
+// назвать серверу СИМПАС слово в слово — иначе ВК откажет при обмене кода.
+val vkRedirectHost = "vk.ru"
+
 android {
     namespace = "ru.cmpas.app"
     compileSdk = 35
@@ -110,8 +138,11 @@ android {
         // настоящего (YANDEX_CLIENT_ID) и потому собиралась без
         // идентификатора при заполненном секрете. Версия продукта: на экране
         // входа появляется кнопка, которой не было.
-        versionCode = 23
-        versionName = "1.3.4"
+        // 1.3.5 — нативный вход ВК: код с PKCE уходит в СИМПАС вместе с
+        // device_id, состоянием и адресом возврата. Версия продукта: на
+        // экране входа появляется вторая кнопка.
+        versionCode = 24
+        versionName = "1.3.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -121,8 +152,19 @@ android {
         // пустом секрете не появится.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexNativeClientId.ifBlank { "unset" }
 
+        // Ноль, а не «unset»: SDK ВК читает идентификатор как целое.
+        // Схема возврата при нулевом идентификаторе — «vk0»: адрес, на
+        // который никто не ответит, и кнопки при пустом секрете всё равно
+        // не будет (сверка с сервером не найдёт совпадения).
+        manifestPlaceholders["VKIDClientID"] = vkNativeClientId.ifBlank { "0" }
+        manifestPlaceholders["VKIDClientSecret"] = vkClientSecret.ifBlank { "unset" }
+        manifestPlaceholders["VKIDRedirectHost"] = vkRedirectHost
+        manifestPlaceholders["VKIDRedirectScheme"] = "vk${vkNativeClientId.ifBlank { "0" }}"
+
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "YANDEX_NATIVE_CLIENT_ID", "\"$yandexNativeClientId\"")
+        buildConfigField("String", "VK_NATIVE_CLIENT_ID", "\"$vkNativeClientId\"")
+        buildConfigField("String", "VK_REDIRECT_HOST", "\"$vkRedirectHost\"")
         buildConfigField("String", "SIMPASID_ISSUER", "\"$simpasIdIssuer\"")
         buildConfigField("String", "SIMPASID_CLIENT_ID", "\"$simpasIdClientId\"")
     }
@@ -282,9 +324,18 @@ dependencies {
     //
     // Заменяет уход в системный браузер: тот возвращал код на веб-адрес
     // ПРАКТИКИ, а не приложению, и уносил человека из приложения.
-    // Идентификатор приложения в сборку НЕ ПОПАДАЕТ — SDK принимает его в
-    // рантайме, значение приходит от СИМПАС в /v1/auth/methods.
+    // Идентификатор приложения известен на сборке вынужденно: адрес
+    // возврата SDK объявляет intent-фильтром в манифесте. Значение
+    // сверяется с тем, что назвал сервер, и само по себе ничего не включает.
     implementation(libs.yandex.authsdk)
+
+    // НАТИВНЫЙ ВХОД ВК.
+    //
+    // Обмен кода на личность остаётся у СИМПАС: приложение получает код с
+    // PKCE и отдаёт его серверу вместе с device_id, state и адресом
+    // возврата. Ключ приложения в APK уезжает — так устроен их SDK, — но
+    // ключ этот от МОБИЛЬНОГО приложения, а не сервисный.
+    implementation(libs.vkid)
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.robolectric)

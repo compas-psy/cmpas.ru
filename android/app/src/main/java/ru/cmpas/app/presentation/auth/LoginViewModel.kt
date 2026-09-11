@@ -360,11 +360,13 @@ class LoginViewModel @Inject constructor(
          * — кнопки нет, и человек видит прежнюю дверь вместо «вход не
          * работает» без причины на экране.
          *
-         * ВК здесь нет: его идентификатор пока не выдан. Появится — строка
-         * добавится сюда, и больше ничего менять не придётся.
+         * У ВК то же самое и по той же причине: `VKIDRedirectScheme` —
+         * это `vk` плюс идентификатор приложения, то есть intent-фильтр в
+         * манифесте.
          */
         val BUILT_IN_PROVIDER_APP_IDS: Map<String, String> = mapOf(
             PROVIDER_YANDEX to BuildConfig.YANDEX_NATIVE_CLIENT_ID,
+            PROVIDER_VK to BuildConfig.VK_NATIVE_CLIENT_ID,
         )
 
         /**
