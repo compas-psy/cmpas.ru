@@ -17,6 +17,7 @@ import androidx.navigation.navArgument
 import ru.cmpas.app.presentation.actions.NewActionSheet
 import ru.cmpas.app.presentation.actions.QuickActionScreen
 import ru.cmpas.app.presentation.auth.LoginScreen
+import ru.cmpas.app.presentation.connect.ServiceConnectScreen
 import ru.cmpas.app.presentation.calendar.CalendarScreen
 import ru.cmpas.app.presentation.clients.ClientDetailScreen
 import ru.cmpas.app.presentation.clients.ClientsScreen
@@ -63,9 +64,19 @@ fun CompasNavHost(
             popExitTransition = { fadeOut() + slideOutHorizontally { it / 4 } },
         ) {
             composable(Screen.Login.route) {
+                // После входа — не сразу в кабинет: между ними стоит первое
+                // подключение сервиса. Принимать нечего — экран пропустит
+                // молча, и человек разницы не заметит.
                 LoginScreen(onLoginSuccess = {
-                    navController.navigate(Screen.Dashboard.route) {
+                    navController.navigate(Screen.ServiceConnect.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                })
+            }
+            composable(Screen.ServiceConnect.route) {
+                ServiceConnectScreen(onDone = {
+                    navController.navigate(Screen.Dashboard.route) {
+                        popUpTo(Screen.ServiceConnect.route) { inclusive = true }
                     }
                 })
             }

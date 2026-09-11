@@ -17,6 +17,24 @@ val apiBaseUrl: String = (project.findProperty("apiBaseUrl") as String?)
     ?.takeIf { it.isNotBlank() }
     ?: "https://cmpas.ru/api/mobile/"
 
+// ЕДИНЫЙ ВХОД СИМПАС.
+//
+// Адрес и идентификатор клиента — не секрет: приложение на устройстве
+// человека секрет не сохранит, и безопасность здесь держится на признаке
+// first_party у самого клиента, а не на тайне его имени
+// (compas-psy/auth, docs/integration/practice-android.md, «Что нужно от нас»).
+// Поэтому оба значения лежат в сборке открыто, как и адрес нашего API.
+//
+// Пустой идентификатор означает «вход СИМПАС не настроен»: кнопки на экране
+// не будет вовсе. Это не отказ, а честное состояние, и приложение в нём
+// работает прежними способами входа.
+val simpasIdIssuer: String = (project.findProperty("simpasIdIssuer") as String?)
+    ?.takeIf { it.isNotBlank() }
+    ?: "https://auth.cmpas.ru"
+val simpasIdClientId: String = (project.findProperty("simpasIdClientId") as String?)
+    ?.takeIf { it.isNotBlank() }
+    ?: "practice-mobile"
+
 android {
     namespace = "ru.cmpas.app"
     compileSdk = 35
@@ -55,6 +73,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "SIMPASID_ISSUER", "\"$simpasIdIssuer\"")
+        buildConfigField("String", "SIMPASID_CLIENT_ID", "\"$simpasIdClientId\"")
     }
 
     // Ключ подписи приходит ИЗВНЕ, а не из репозитория.
@@ -91,6 +111,8 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+            buildConfigField("String", "SIMPASID_ISSUER", "\"$simpasIdIssuer\"")
+            buildConfigField("String", "SIMPASID_CLIENT_ID", "\"$simpasIdClientId\"")
         }
         release {
             if (hasSigningKey) {

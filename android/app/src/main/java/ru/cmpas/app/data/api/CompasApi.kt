@@ -16,6 +16,16 @@ interface CompasApi {
     @POST("auth/refresh")
     suspend fun refreshToken(@Body body: RefreshRequest): Response<AuthTokens>
 
+    /**
+     * Обмен ключа доступа СИМПАС на токены ПРАКТИКИ.
+     *
+     * На мобильном браузер запрещён (12_NATIVE_AUTH у СИМПАС): нативный вход
+     * отдаёт приложению ключ СИМПАС, а нашему API нужен наш собственный.
+     * Обменника между ними не было вовсе — это он.
+     */
+    @POST("auth/simpasid")
+    suspend fun exchangeSimpasIdToken(@Body body: SimpasIdExchangeRequest): Response<AuthTokens>
+
     @GET("dashboard")
     suspend fun getDashboard(): Response<DashboardDataV2>
 
@@ -220,6 +230,9 @@ data class VerifyRequest(val token: String)
 
 @kotlinx.serialization.Serializable
 data class RefreshRequest(val refreshToken: String)
+
+@kotlinx.serialization.Serializable
+data class SimpasIdExchangeRequest(val accessToken: String)
 
 @kotlinx.serialization.Serializable
 data class CreateSessionRequest(
