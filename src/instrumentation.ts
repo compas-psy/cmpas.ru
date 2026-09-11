@@ -6,6 +6,7 @@ export async function register() {
         const { processPostSessionNudge } = await import('./lib/cron/post-session');
         const { processNextBookingNudge, processWeeklyFollowup } = await import('./lib/cron/post-session-cascade');
         const { processScheduledMessages } = await import('./lib/cron/scheduled-messages');
+        const { processPaymentReminders } = await import('./lib/cron/payment-reminders');
         const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
         const { pruneOldAnalyticsEvents } = await import('./lib/cron/analytics-retention');
         const { rescueUndeliveredTelegramUpdates } = await import('./lib/telegram/webhook-watchdog');
@@ -93,6 +94,19 @@ export async function register() {
                 await processWeeklyFollowup();
             } catch (error) {
                 console.error('[CRON] Ошибка недельного напоминания:', error);
+            }
+        }));
+
+        // Напоминание об оплате перед встречей — каждые 15 минут, тем же
+        // шагом, что и напоминания о самой встрече. Точнее не нужно:
+        // интервал задаётся в часах, а четверть часа в напоминании об
+        // оплате за сутки ничего не меняет. Тихие часы считаются по поясу
+        // практики внутри задания, а не расписанием сервера.
+        cron.schedule('*/15 * * * *', runExclusive('payment-reminders', async () => {
+            try {
+                await processPaymentReminders();
+            } catch (error) {
+                console.error('[CRON] Ошибка напоминаний об оплате:', error);
             }
         }));
 

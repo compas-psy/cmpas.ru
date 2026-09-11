@@ -4,6 +4,7 @@ import { messageLink } from '@/lib/messaging/format';
 import { paymentQrSource, paymentQrPng } from '@/lib/messaging/payment-qr';
 import { extractFirstName } from '@/lib/person-name';
 import { appSecret, safeEqualHex } from '@/lib/app-secret';
+import { paymentInstructionText, type PaymentSettingsForMessage } from '@/lib/messaging/payment-instruction';
 
 export function publicBaseUrl() {
     return process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'https://cmpas.ru';
@@ -322,6 +323,14 @@ async function readPaymentSettings(psychologistId: string) {
     return settings?.isEnabled ? settings : null;
 }
 
+
+// Текст инструкции живёт отдельным модулем: его же читает напоминание об
+// оплате перед сессией, которое поднимается в cron при старте сервера и не
+// должно тянуть за собой весь этот файл. Здесь — перевывоз для тех, кто уже
+// берёт его отсюда.
+export { paymentInstructionText };
+export type { PaymentSettingsForMessage };
+
 export async function getPaymentInstruction(psychologistId: string, sessionId?: string | null, clientId?: string | null) {
     const rows = await db.$queryRaw<Array<{
         isEnabled: boolean;
@@ -347,27 +356,13 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
         const now = new Date();
         await db.$executeRaw`
             INSERT INTO "SessionPaymentRequest"
-                (id, "sessionId", "psychologistId", "clientId", status, "paymentTextSnapshot", "paymentLinkSnapshot", "paymentQrUrlSnapshot", "sentAt", "createdAt", "updatedAt")
+                (id, "sessionId", "psychologistId", "clientId", status, kind, "paymentTextSnapshot", "paymentLinkSnapshot", "paymentQrUrlSnapshot", "sentAt", "createdAt", "updatedAt")
             VALUES
-                (${id}, ${sessionId}, ${psychologistId}, ${clientId}, 'sent', ${settings.paymentText}, ${settings.paymentLink}, ${settings.paymentQrUrl}, ${now}, ${now}, ${now})
+                (${id}, ${sessionId}, ${psychologistId}, ${clientId}, 'sent', 'manual', ${settings.paymentText}, ${settings.paymentLink}, ${settings.paymentQrUrl}, ${now}, ${now}, ${now})
         `;
     }
 
-    const lines = [
-        settings.prepaymentRequired ? 'Оплата консультации производится по инструкции специалиста.' : 'Оплата консультации: по договорённости со специалистом.',
-        settings.paymentDueText ? `Срок оплаты: ${settings.paymentDueText}` : '',
-        settings.paymentText || '',
-        // Ссылки — за словом. Ссылка на оплату у эквайринга легко занимает
-        // полторы строки, и в сообщении о встрече это выглядит как мусор.
-        settings.paymentLink ? messageLink(settings.paymentLink, 'Перейти к оплате') : '',
-        // Готовая картинка от банка — ссылкой; код, нарисованный из ссылки
-        // оплаты, уходит отдельной картинкой (paymentQrForClient ниже), и
-        // дублировать его текстом незачем.
-        settings.paymentQrUrl ? messageLink(settings.paymentQrUrl, 'QR-код для оплаты') : '',
-        'ПРАКТИКА не принимает оплату и не подтверждает её поступление. Статус оплаты ведёт специалист.',
-    ];
-
-    return lines.filter(Boolean).join('\n');
+    return paymentInstructionText(settings);
 }
 
 export async function getDocumentDelivery(deliveryId: string, token?: string | null) {

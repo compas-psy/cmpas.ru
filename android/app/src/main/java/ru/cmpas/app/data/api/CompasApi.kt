@@ -179,6 +179,15 @@ interface CompasApi {
     @PATCH("practice-settings")
     suspend fun updatePracticeSettings(@Body body: MobilePracticeSettingsPatch): Response<MobilePracticeSettings>
 
+    // Оплата клиентом: ссылка и напоминание перед встречей. Текст
+    // инструкции правится в веб-кабинете — набирать его на телефоне никто
+    // не станет.
+    @GET("payment-settings")
+    suspend fun getPaymentSettings(): Response<MobilePaymentSettings>
+
+    @PATCH("payment-settings")
+    suspend fun updatePaymentSettings(@Body body: MobilePaymentSettingsPatch): Response<MobilePaymentSettings>
+
     // Подсказка адреса кабинета. Ограничение частоты и разбор — общие с
     // вебом: счёт у подсказок один и считается по человеку.
     @POST("dadata")

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-import { deliverMessage } from '@/lib/messaging/deliver';
-import { sendTelegramPhoto } from '@/lib/telegram';
+import { deliverMessage, deliverPhoto } from '@/lib/messaging/deliver';
 import { PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery, paymentQrForClient } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
@@ -155,9 +154,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             // нужно.
             //
             // Не дошёл — не повод ронять отправку: ссылка ушла текстом рядом.
-            if (channel === 'telegram') {
-                const qr = await paymentQrForClient(auth.userId).catch(() => null);
-                if (qr) await sendTelegramPhoto(chatId, qr, PAYMENT_QR_CAPTION).catch(() => false);
+            //
+            // Код уходит В ТОТ ЖЕ КАНАЛ, что и текст. Раньше здесь стояло
+            // `if (channel === 'telegram')` — у MAX картинка отправляется
+            // иначе, и клиенты в MAX оставались вовсе без кода. Разница
+            // между мессенджерами теперь целиком в deliverPhoto.
+            const qr = await paymentQrForClient(auth.userId).catch(() => null);
+            if (qr) {
+                await deliverPhoto(
+                    channel === 'telegram'
+                        ? { telegramChatId: chatId, preferredChannel: 'telegram' }
+                        : { maxChatId: chatId, preferredChannel: 'max' },
+                    qr,
+                    PAYMENT_QR_CAPTION,
+                );
             }
 
             return NextResponse.json({ status: 'sent', channel });

@@ -81,6 +81,33 @@ data class MobilePracticeSettings(
 data class MobilePracticeSettingsPatch(val onlineSessionLink: String)
 
 /**
+ * Оплата клиентом: что видно и что правится с телефона.
+ *
+ * Ссылку на оплату (у большинства — статическая ссылка СБП) и напоминание
+ * перед встречей специалист меняет на ходу; длинный текст инструкции
+ * остаётся веб-кабинету, поэтому сюда приезжает только признак, заполнен ли
+ * он, — иначе «оплата настроена» выглядит одинаково у того, кто её настроил,
+ * и у того, кто нет.
+ */
+@Serializable
+data class MobilePaymentSettings(
+    val isEnabled: Boolean = false,
+    val paymentLink: String? = null,
+    val hasPaymentText: Boolean = false,
+    val hasPaymentQrUrl: Boolean = false,
+    val paymentReminderEnabled: Boolean = false,
+    val paymentReminderHoursBefore: Int = 24,
+)
+
+@Serializable
+data class MobilePaymentSettingsPatch(
+    val isEnabled: Boolean? = null,
+    val paymentLink: String? = null,
+    val paymentReminderEnabled: Boolean? = null,
+    val paymentReminderHoursBefore: Int? = null,
+)
+
+/**
  * Кабинет практики (Задача 21).
  *
  * «Основной» — свойство набора, а не строки: на сервере его держит

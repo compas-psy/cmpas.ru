@@ -1,5 +1,5 @@
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
+import { sendTelegramMessage, sendTelegramPhoto } from '@/lib/telegram';
+import { sendMaxMessage, sendMaxPhoto } from '@/lib/max-bot';
 
 /**
  * ОДНО СОБЫТИЕ — ОДНО СООБЩЕНИЕ, В ОДИН КАНАЛ.
@@ -103,6 +103,38 @@ export async function deliverMessage(
         return { channel: 'max', sent: true };
     } catch (error) {
         console.error(`[deliver] ${target.channel} send failed:`, error);
+        return { channel: target.channel, sent: false };
+    }
+}
+
+/**
+ * Картинка тому же человеку и в тот же канал — для кода оплаты.
+ *
+ * Отдельная дверь нужна потому, что «картинка» у мессенджеров устроена
+ * по-разному: Telegram принимает её одним запросом, MAX — тремя
+ * (загрузка, удостоверение, сообщение). Знать об этом вызывающему незачем,
+ * а выбирать канал он обязан ровно так же, как для текста, — иначе текст
+ * уйдёт в MAX, а код к нему в Telegram.
+ *
+ * Неудача не бросает исключение: код оплаты идёт следом за текстом, в
+ * котором та же ссылка уже есть. Не дошла картинка — человек всё равно
+ * может заплатить.
+ */
+export async function deliverPhoto(
+    bearer: ChannelBearer | null | undefined,
+    photo: Buffer,
+    caption?: string,
+): Promise<DeliveryResult> {
+    const target = pickChannel(bearer);
+    if (!target) return { channel: null, sent: false };
+
+    try {
+        const sent = target.channel === 'telegram'
+            ? await sendTelegramPhoto(target.chatId, photo, caption)
+            : await sendMaxPhoto(target.chatId, photo, caption);
+        return { channel: target.channel, sent };
+    } catch (error) {
+        console.error(`[deliver] ${target.channel} photo failed:`, error);
         return { channel: target.channel, sent: false };
     }
 }
