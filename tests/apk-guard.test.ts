@@ -117,6 +117,28 @@ describe('разбор вывода apksigner', () => {
     });
 });
 
+describe('отпечатки для консолей провайдеров', () => {
+    const guard = fs.readFileSync(SCRIPT, 'utf-8');
+
+    it('печатаются оба вида: Яндексу нужен SHA-256, ВК — SHA-1', () => {
+        // 11.09.2026 нативный вход ВК отказывал НА УСТРОЙСТВЕ: запрос не
+        // доходил ни до нас, ни до СИМПАС, и в журналах его не было вовсе.
+        // Первое, что надо сверить в таком случае, — отпечаток подписи того
+        // пакета, который стоит у человека. Взять его было неоткуда.
+        expect(guard).toContain('certificate SHA-256 digest');
+        expect(guard).toContain('certificate SHA-1 digest');
+        expect(guard).toContain('SHA-1   (ВК)');
+    });
+
+    it('печать не решает, проходит ли сборка', () => {
+        // Отпечаток для консоли — сведение, а не правило: ключ сверяется
+        // отдельно, с EXPECTED_SIGNER, и это единственная проверка, которая
+        // роняет сборку.
+        const block = guard.slice(guard.indexOf('Отпечатки для консолей'));
+        expect(block.slice(0, block.indexOf('── Разрешения ──'))).not.toContain('fail ');
+    });
+});
+
 describe('разбор разрешений из вывода aapt2', () => {
     it('одинарные кавычки — формат dump permissions', () => {
         expect(parse('--parse-permissions', [
