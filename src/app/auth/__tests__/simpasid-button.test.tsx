@@ -29,107 +29,107 @@ vi.mock('next/link', () => ({
 }));
 
 import AuthForm from '../AuthForm';
+import type { LegalLinks } from '@/lib/auth/simpasid-legal';
+
+// Адреса документов приходят с сервера: экран их не выдумывает.
+const LINKS: LegalLinks = { terms: 'https://auth.cmpas.ru/legal/terms/0.9', privacy: 'https://auth.cmpas.ru/legal/privacy/0.9', practiceTerms: 'https://auth.cmpas.ru/legal/practice-terms/0.9' };
+const form = (enabled: boolean, links: LegalLinks = LINKS) => <AuthForm simpasIdEnabled={enabled} legalLinks={links} />;
 
 // Кнопки стали кружками со знаком и подписи на себе больше не носят.
 // Поэтому ищем их ПО ДОСТУПНОМУ ИМЕНИ, а не по видимому тексту, — и это не
 // обход проверки, а усиление: кружок без доступного имени для человека с
 // озвучкой экрана называется «кнопка» и ничего не значит. Раньше подпись
 // была видна и проверять её отдельно было нечего; теперь есть.
-const SIMPAS = /Войти через СИМПАС/;
 const YANDEX = /Войти через Яндекс/;
 const VK = /Войти через VK/;
 const button = (name: RegExp) => screen.getByRole('button', { name });
 
-describe('кнопка единого входа', () => {
+describe('кнопки входа через провайдеров', () => {
     beforeEach(() => {
         signIn.mockReset();
         window.history.replaceState({}, '', '/auth');
     });
     afterEach(cleanup);
 
-    it('единый вход не настроен — кнопки нет', () => {
-        render(<AuthForm simpasIdEnabled={false} />);
-        expect(screen.queryByRole('button', { name: SIMPAS })).toBeNull();
-        // Прежние способы на месте и в прежнем порядке — этот способ
-        // ДОБАВЛЯЕТСЯ, а не заменяет.
-        expect(button(YANDEX)).toBeTruthy();
-    });
-
-    it('настроен — кнопка есть, и прежние способы никуда не делись', () => {
-        render(<AuthForm simpasIdEnabled />);
-        expect(button(SIMPAS)).toBeTruthy();
-        expect(button(YANDEX)).toBeTruthy();
+    // ЕДИНЫЙ ВХОД НЕ НАСТРОЕН — КРУЖКОВ НЕТ ВОВСЕ.
+    //
+    // Оба провайдера ходят через СИМПАС. Без настроенного единого входа за
+    // кружком нет ничего, а кружок, за которым ничего нет, — обещание,
+    // которое некому исполнить. Остаётся вход по почте.
+    it('единый вход не настроен — ни одного кружка провайдера', () => {
+        render(form(false));
+        expect(screen.queryByRole('button', { name: YANDEX })).toBeNull();
+        expect(screen.queryByRole('button', { name: VK })).toBeNull();
         expect(screen.getByPlaceholderText('Введите email')).toBeTruthy();
     });
 
-    // ВХОД VK ИДЁТ ТОЛЬКО ЧЕРЕЗ СИМПАС.
-    //
-    // Своего приложения VK у ПРАКТИКИ нет: код, выданный провайдером,
-    // принадлежит запросившему приложению, и обменять его может только
-    // владелец ключей. Кружок без настроенного единого входа вёл бы в
-    // никуда — поэтому его в этом состоянии не существует.
-    it('единый вход не настроен — кружка VK нет вовсе', () => {
-        render(<AuthForm simpasIdEnabled={false} />);
-        expect(screen.queryByRole('button', { name: VK })).toBeNull();
-    });
-
-    it('настроен — кружок VK есть', () => {
-        render(<AuthForm simpasIdEnabled />);
+    it('настроен — ровно два кружка, Яндекс и VK', () => {
+        render(form(true));
+        expect(button(YANDEX)).toBeTruthy();
         expect(button(VK)).toBeTruthy();
+        // Отдельного кружка СИМПАС нет: он вёл ровно туда же, только без
+        // подсказки провайдера.
+        expect(screen.queryByRole('button', { name: /СИМПАС/ })).toBeNull();
     });
 
-    // ПОДСКАЗКА ПРОВАЙДЕРА — СМЫСЛ ВСЕЙ КНОПКИ.
+    // ГЛАВНАЯ ПРОВЕРКА ФАЙЛА.
     //
-    // Без неё кружок со знаком VK открывал бы общий список способов: обещал
-    // бы одно, показывал другое. Параметр заведён на стороне СИМПАС по нашей
-    // просьбе и доезжает до authorize третьим аргументом signIn
-    // (@auth/core, lib/actions/signin/authorization-url.js: query кладётся
-    // в параметры последним).
-    it('кружок VK несёт подсказку провайдера, иначе он обещает не то', () => {
-        render(<AuthForm simpasIdEnabled />);
+    // Раньше кнопка Яндекса звала signIn("yandex") — наше собственное
+    // приложение Яндекс ID, мимо Экосистемы. Решение учредителя от
+    // 11.09.2026: личность приходит только от СИМПАС.
+    it('Яндекс идёт через единый вход с подсказкой провайдера', () => {
+        render(form(true));
+        fireEvent.click(button(YANDEX));
+        expect(signIn.mock.calls[0][0]).toBe('simpasid');
+        expect(signIn.mock.calls[0][2]).toEqual({ provider: 'yandex' });
+    });
+
+    it('VK идёт через единый вход с подсказкой провайдера', () => {
+        render(form(true));
         fireEvent.click(button(VK));
         expect(signIn.mock.calls[0][0]).toBe('simpasid');
         expect(signIn.mock.calls[0][2]).toEqual({ provider: 'vkid' });
     });
 
-    it('адрес возврата у кружка VK тот же, что у соседей', () => {
-        window.history.replaceState({}, '', '/auth?next=%2Fdiary%2Fclients%3Fattest%3D1');
-        render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(button(VK));
-        expect(signIn.mock.calls[0][1]).toEqual({ callbackUrl: '/diary/clients?attest=1' });
-    });
-
-    it('нажатие ведёт в провайдера simpasid', () => {
-        render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(button(SIMPAS));
-        expect(signIn.mock.calls[0][0]).toBe('simpasid');
-    });
-
     it('адрес возврата сохраняется — иначе сценарий с ботом сломается', () => {
         window.history.replaceState({}, '', '/auth?next=%2Fdiary%2Fclients%3Fattest%3D1');
-        render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(button(SIMPAS));
+        render(form(true));
+        fireEvent.click(button(YANDEX));
         expect(signIn.mock.calls[0][1]).toEqual({ callbackUrl: '/diary/clients?attest=1' });
     });
 
-    it('у кружков есть доступное имя — иначе для озвучки это просто «кнопка»', () => {
-        // Кнопка со знаком вместо подписи читается глазами мгновенно и не
-        // читается вовсе без них. Имя — единственное, что делает её
-        // нажимаемой для человека с озвучкой экрана.
-        render(<AuthForm simpasIdEnabled />);
-        expect(button(YANDEX).getAttribute('aria-label')).toBe('Войти через Яндекс');
-        expect(button(SIMPAS).getAttribute('aria-label')).toBe('Войти через СИМПАС');
-        expect(button(VK).getAttribute('aria-label')).toBe('Войти через VK');
-    });
-
-    // Тот же строгий разбор, что у двух соседних кнопок: параметр «куда
-    // вернуться» без проверки — это открытая переадресация.
     it('чужой адрес в next не уводит наружу', () => {
         window.history.replaceState({}, '', '/auth?next=https%3A%2F%2Fevil.example.com');
-        render(<AuthForm simpasIdEnabled />);
-        fireEvent.click(button(SIMPAS));
+        render(form(true));
+        fireEvent.click(button(VK));
         const target = (signIn.mock.calls[0][1] as { callbackUrl: string }).callbackUrl;
         expect(target.startsWith('/')).toBe(true);
         expect(target).not.toContain('evil.example.com');
+    });
+
+    it('у кружков есть доступное имя — иначе для озвучки это просто «кнопка»', () => {
+        render(form(true));
+        expect(button(YANDEX).getAttribute('aria-label')).toBe('Войти через Яндекс');
+        expect(button(VK).getAttribute('aria-label')).toBe('Войти через VK');
+    });
+});
+
+describe('юридическая строка', () => {
+    afterEach(cleanup);
+
+    // Документов три, и третий — про продукт, которым человек пользуется.
+    it('ведёт на три документа в консент-центре, а не на наши копии', () => {
+        render(form(true));
+        const href = (name: RegExp) => screen.getByRole('link', { name }).getAttribute('href');
+        expect(href(/Пользовательское соглашение/)).toBe(LINKS.terms);
+        expect(href(/Политика конфиденциальности/)).toBe(LINKS.privacy);
+        expect(href(/Особые условия ПРАКТИКИ/)).toBe(LINKS.practiceTerms);
+    });
+
+    // Выдуманного адреса тут быть не может: нет документа — нет ссылки.
+    it('Особых условий нет в реестре — ссылки нет, остальные на месте', () => {
+        render(form(true, { ...LINKS, practiceTerms: null }));
+        expect(screen.queryByRole('link', { name: /Особые условия/ })).toBeNull();
+        expect(screen.getByRole('link', { name: /Пользовательское соглашение/ })).toBeTruthy();
     });
 });

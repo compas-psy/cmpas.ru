@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { SessionModal } from './components/SessionModal';
 import { compareByDayThenTime } from '@/lib/practice/session-day';
 import { RescheduleModal } from './components/RescheduleModal';
+import { NoShowReasonModal } from './components/NoShowReasonModal';
 import { WelcomeStrip } from '@/components/psidairy/WelcomeStrip';
 import { ShareButton, notifyBookingLinkShared } from '@/components/psidairy/ShareSheet';
 import type { PracticeAttentionItem, PracticeAttentionType } from '@/lib/practice/attention';
@@ -36,6 +37,8 @@ type Session = {
      * «специалист сказал», то ли «время прошло, и мы предположили».
      */
     outcomeRecordedAt?: string | Date | null;
+    /** Почему клиент не пришёл. Заполняется только при status='no_show'. */
+    noShowReason?: string | null;
     client: { id: string; name: string; questionnaire?: { data: any } | null; consentDate?: string | null };
 };
 
@@ -148,6 +151,9 @@ export default function DiaryCalendarPage() {
     const [loading, setLoading] = useState(true);
     const [newSessionDefaults, setNewSessionDefaults] = useState<{ date?: Date; client?: { id: string; name: string } }>({});
     const [rescheduleTarget, setRescheduleTarget] = useState<Session | null>(null);
+    // Своё состояние, а не editingSession: «Причина» открывала общую форму
+    // записи, где причину ввести было негде.
+    const [noShowTarget, setNoShowTarget] = useState<Session | null>(null);
     const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
     const [authName, setAuthName] = useState('');
     const [scheduleFilter, setScheduleFilter] = useState<'all' | 'confirmed' | 'completed' | 'pending'>('all');
@@ -833,15 +839,18 @@ export default function DiaryCalendarPage() {
                                                 {s.status === 'no_show' && (
                                                     <div className="flex items-center gap-1.5 flex-wrap mt-2" onClick={(e) => e.stopPropagation()}>
                                                         <button
-                                                            onClick={() => openSession(s)}
+                                                            onClick={() => setNoShowTarget(s)}
                                                             className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sage-100 hover:bg-sage-150 text-forest-700 border border-sage-200 transition-colors">
-                                                            Причина
+                                                            {s.noShowReason ? 'Причина' : 'Указать причину'}
                                                         </button>
                                                         <button
                                                             onClick={() => setRescheduleTarget(s)}
                                                             className="px-2 py-1 rounded-lg text-[11px] font-bold bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors">
                                                             Перенести
                                                         </button>
+                                                        {s.noShowReason && (
+                                                            <p className="basis-full text-[11px] text-muted-foreground mt-0.5">{s.noShowReason}</p>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -997,6 +1006,23 @@ export default function DiaryCalendarPage() {
                     currentTime={rescheduleTarget.time}
                     clientName={rescheduleTarget.client.name}
                     clientId={rescheduleTarget.client.id}
+                />
+            )}
+
+            {noShowTarget && (
+                <NoShowReasonModal
+                    isOpen={!!noShowTarget}
+                    onClose={() => setNoShowTarget(null)}
+                    onSaved={() => fetchSessions()}
+                    // Переход из причины в перенос: закрываем одно и открываем
+                    // другое той же встречей, чтобы специалисту не пришлось
+                    // искать ту же строку заново.
+                    onReschedule={() => { const s = noShowTarget; setNoShowTarget(null); setRescheduleTarget(s); }}
+                    sessionId={noShowTarget.id}
+                    date={typeof noShowTarget.date === 'string' ? noShowTarget.date : new Date(noShowTarget.date).toISOString()}
+                    time={noShowTarget.time}
+                    clientName={noShowTarget.client.name}
+                    initialReason={noShowTarget.noShowReason ?? null}
                 />
             )}
         </div>

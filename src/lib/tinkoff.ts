@@ -11,6 +11,8 @@
  * optional — until they're configured, only the site terminal is known and
  * behavior is unchanged from before.
  */
+import { PRACTICE_PRICE_KOPECKS } from '@/lib/billing/pricing';
+
 import { createHash } from 'crypto';
 
 // Демонстрационный терминал — только для разработки. На бою молчаливый откат
@@ -62,7 +64,10 @@ export function resolveTerminal(terminalKey: string | undefined): TerminalConfig
 export const PLANS = {
     practice: {
         name: 'Практика',
-        price: 99000, // kopecks = 990 руб
+        // Сумма списания берётся из общего места, а не вписывается рядом
+        // с ценой на витрине: разойдись эти два числа — кнопка обещала бы
+        // одно, а банк списывал другое.
+        price: PRACTICE_PRICE_KOPECKS,
         description: 'Подписка «Практика» — 1 месяц',
     },
     practice_plus: {

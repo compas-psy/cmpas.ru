@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 
+/** Ответ «ничего не знаем»: ни подписки, ни триала. */
+const EMPTY = {
+    daysLeft: null,
+    isExpired: false,
+    isForever: false,
+    subscriptionActive: false,
+    subscriptionEndsAt: null,
+    subscriptionPlan: null,
+} as const;
+
 export async function GET() {
     const session = await auth();
     if (!session?.user?.id) {
@@ -18,7 +28,7 @@ export async function GET() {
             FROM "User" WHERE id = ${session.user.id} LIMIT 1
         `;
         const user = rows[0];
-        if (!user) return NextResponse.json({ daysLeft: null, isExpired: false, isForever: false, subscriptionEndsAt: null, subscriptionPlan: null });
+        if (!user) return NextResponse.json(EMPTY);
 
         const now = new Date();
         const trialEndsAt = user.trialEndsAt ? new Date(user.trialEndsAt) : null;
@@ -35,12 +45,20 @@ export async function GET() {
 
         return NextResponse.json({
             daysLeft: isForever ? null : daysLeft,
+            // ОТДАЁМ ВЫВОД, А НЕ ТОЛЬКО ИСХОДНИК.
+            //
+            // hasActiveSub считался здесь и раньше — и здесь же терялся:
+            // наружу уходила одна дата окончания, и экран делал из неё
+            // собственный вывод «раз дата есть, значит активна». У
+            // подписки, кончившейся в мае, это давало крупное «Подписка
+            // активна» в сентябре. Сервер знал правду и молчал о ней.
+            subscriptionActive: !!hasActiveSub,
             isExpired: isForever ? false : isExpired,
             isForever: !!isForever,
             subscriptionEndsAt: subscriptionEndsAt ? subscriptionEndsAt.toISOString() : null,
             subscriptionPlan: user.subscriptionPlan,
         });
     } catch {
-        return NextResponse.json({ daysLeft: null, isExpired: false, isForever: false, subscriptionEndsAt: null, subscriptionPlan: null });
+        return NextResponse.json(EMPTY);
     }
 }
