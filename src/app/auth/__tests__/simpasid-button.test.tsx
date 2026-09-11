@@ -107,6 +107,29 @@ describe('кнопки входа через провайдеров', () => {
         expect(target).not.toContain('evil.example.com');
     });
 
+    // ВХОД ПО ПОЧТЕ ТОЖЕ ВЕДЁТ В ЕДИНЫЙ ВХОД.
+    //
+    // Раньше форма звала наш собственный nodemailer, и человек, заведённый
+    // ею, Пользовательское соглашение не принимал нигде: акцепт происходит
+    // на экране СИМПАС. Набранный адрес уходит подсказкой, чтобы не
+    // набирать его дважды.
+    it('почта уходит в единый вход вместе с набранным адресом', () => {
+        render(form(true));
+        fireEvent.change(screen.getByPlaceholderText('Введите email'), { target: { value: 'psy@example.ru' } });
+        fireEvent.click(screen.getByRole('button', { name: /Продолжить по email/ }));
+        expect(signIn.mock.calls[0][0]).toBe('simpasid');
+        expect(signIn.mock.calls[0][2]).toEqual({ login_hint: 'psy@example.ru' });
+    });
+
+    // Единый вход не настроен — на экране не осталось бы ни одного способа
+    // войти. Прежняя дверь держится ровно для этого случая.
+    it('единый вход не настроен — почта идёт прежней дверью', () => {
+        render(form(false));
+        fireEvent.change(screen.getByPlaceholderText('Введите email'), { target: { value: 'psy@example.ru' } });
+        fireEvent.click(screen.getByRole('button', { name: /Продолжить по email/ }));
+        expect(signIn.mock.calls[0][0]).toBe('nodemailer');
+    });
+
     it('у кружков есть доступное имя — иначе для озвучки это просто «кнопка»', () => {
         render(form(true));
         expect(button(YANDEX).getAttribute('aria-label')).toBe('Войти через Яндекс');

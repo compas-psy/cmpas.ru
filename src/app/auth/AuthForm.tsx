@@ -8,14 +8,6 @@ import Link from "next/link"
 import Image from "next/image"
 import { ArrowRight, ShieldCheck } from "lucide-react"
 
-interface EmailCheckResponse {
-    exists: boolean
-    canUseEmail: boolean
-    provider?: string
-    providerName?: string
-    message?: string
-}
-
 export default function AuthForm({ simpasIdEnabled, legalLinks }: { simpasIdEnabled: boolean; legalLinks: LegalLinks }) {
     // Куда вернуть после входа — читаем в момент нажатия, а не хуком.
     //
@@ -30,8 +22,6 @@ export default function AuthForm({ simpasIdEnabled, legalLinks }: { simpasIdEnab
     )
     const [email, setEmail] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [emailWarning, setEmailWarning] = useState<string | null>(null)
-    const [suggestedProvider, setSuggestedProvider] = useState<string | null>(null)
 
     // ОБА ПРОВАЙДЕРА ИДУТ ЧЕРЕЗ ЕДИНЫЙ ВХОД.
     //
@@ -73,37 +63,33 @@ export default function AuthForm({ simpasIdEnabled, legalLinks }: { simpasIdEnab
         }
     }
 
-    const checkEmail = async (emailToCheck: string): Promise<EmailCheckResponse | null> => {
-        try {
-            const response = await fetch("/api/auth/check-email", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: emailToCheck })
-            })
-            if (!response.ok) return null
-            return await response.json()
-        } catch {
-            return null
-        }
-    }
-
+    // ВХОД ПО ПОЧТЕ ТОЖЕ ИДЁТ В ЕДИНЫЙ ВХОД.
+    //
+    // Раньше форма звала наш собственный signIn("nodemailer") — и человек,
+    // заведённый ею, Пользовательское соглашение не принимал НИГДЕ: акцепт
+    // происходит на экране СИМПАС, кнопкой входа. Записать его у себя мы
+    // не можем (§2.7, §9.7 четырнадцатого ТЗ), а у СИМПАС такого человека
+    // не существует — у него нет sub, и писать согласие некому и не о ком.
+    // То есть выбор был не «принял у нас или у них», а «принял или не
+    // принял вовсе».
+    //
+    // Набранный адрес уходит подсказкой login_hint: их экран подставит его
+    // в своё поле, и человек не набирает почту дважды. Пока подсказка у них
+    // не выложена, параметр просто игнорируется — ломаться тут нечему.
+    // Подтверждением адреса он не является: код всё равно уходит в ящик.
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsSubmitting(true)
-        setEmailWarning(null)
-        setSuggestedProvider(null)
 
         try {
-            const checkResult = await checkEmail(email)
-
-            if (checkResult && !checkResult.canUseEmail) {
-                setEmailWarning(checkResult.message || "Этот email связан с другим способом входа")
-                setSuggestedProvider(checkResult.provider || null)
-                setIsSubmitting(false)
-                return
+            if (simpasIdEnabled) {
+                await signIn("simpasid", { callbackUrl: returnPath() }, { login_hint: email })
+            } else {
+                // Единый вход не настроен — на экране не осталось бы ни одного
+                // способа войти. Прежняя дверь держится ровно для этого случая
+                // и ни для какого другого.
+                await signIn("nodemailer", { email, callbackUrl: returnPath() })
             }
-
-            await signIn("nodemailer", { email, callbackUrl: returnPath() })
         } catch (error) {
             console.error("Email sign-in error:", error)
         }
@@ -210,39 +196,6 @@ export default function AuthForm({ simpasIdEnabled, legalLinks }: { simpasIdEnab
                             </div>
                         </div>
 
-                        {/* Предупреждение об OAuth аккаунте */}
-                        {emailWarning && (
-                            <div className="mb-4 bg-accent rounded-2xl p-4 text-center">
-                                <p className="text-forest-800 text-[14px] font-semibold mb-3">
-                                    {emailWarning}
-                                </p>
-                                {/* Кнопка подсказки ведёт ТУДА ЖЕ, куда кружок
-                                    выше. Раньше она звала прежний вход Яндекса;
-                                    оставь её как была — она повела бы в дверь,
-                                    которой больше нет, и сломалось бы это молча,
-                                    только у тех, кто ошибся способом входа.
-                                    Слово «Яндекс» в подписи остаётся правдой:
-                                    изменилась дорога, а не провайдер. */}
-                                {suggestedProvider === "yandex" && simpasIdEnabled && (
-                                    <button
-                                        onClick={handleYandexAuth}
-                                        className="w-full bg-white hover:bg-sage-50 rounded-xl px-4 py-3 flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <Image
-                                            src="/yandex-logo.png"
-                                            alt="Яндекс"
-                                            width={20}
-                                            height={20}
-                                            className="object-contain"
-                                        />
-                                        <span className="text-foreground text-sm font-semibold">
-                                            Войти через Яндекс
-                                        </span>
-                                    </button>
-                                )}
-                            </div>
-                        )}
-
                         {/* Форма email */}
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="relative">
@@ -251,13 +204,7 @@ export default function AuthForm({ simpasIdEnabled, legalLinks }: { simpasIdEnab
                                     placeholder="Введите email"
                                     required
                                     value={email}
-                                    onChange={(e) => {
-                                        setEmail(e.target.value)
-                                        if (emailWarning) {
-                                            setEmailWarning(null)
-                                            setSuggestedProvider(null)
-                                        }
-                                    }}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     className="w-full bg-white rounded-2xl px-5 py-4 text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-2 focus:ring-accent/70 transition-all text-[15px] font-medium"
                                 />
                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/40">

@@ -11,6 +11,9 @@ room = "2.6.1"
 datastore = "1.1.1"
 coil = "3.0.4"
 coroutines = "1.9.0"
+# Нативный вход Яндекс ID. Версия закреплена точкой: обновление SDK входа
+# меняет поведение экрана, за которым стоит доступ к практике.
+yandex-authsdk = "3.2.1"
 lifecycle = "2.8.7"
 navigation-compose = "2.8.5"
 serialization = "1.7.3"
@@ -24,6 +27,7 @@ robolectric = "4.14.1"
 androidx-test-core = "1.6.1"
 
 [libraries]
+yandex-authsdk = { group = "com.yandex.android", name = "authsdk", version.ref = "yandex-authsdk" }
 # Compose BOM
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }

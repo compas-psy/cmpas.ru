@@ -105,10 +105,23 @@ class LegalAcceptanceRulesTest {
     }
 
     @Test
-    fun `состав кнопок провайдеров — пересечение, и ни один перечень не зашит`() {
+    fun `состав кнопок провайдеров — пересечение, и источник правды у сервера`() {
+        // Правило сохранилось, изменился способ его выразить.
+        //
+        // Раньше приложение держало перечень собранных SDK
+        // (PROVIDERS_WITH_NATIVE_SDK) и проверяло вхождение в него. Оказалось,
+        // что оба SDK — и Яндекса, и ВК — требуют идентификатор приложения
+        // ВНУТРИ сборки: адрес возврата объявлен intent-фильтром манифеста, а
+        // манифест часть APK. Копию убрать нельзя, поэтому убрано её молчание:
+        // значение из сборки сверяется с тем, что назвал сервер, и кнопка
+        // появляется только при совпадении.
+        //
+        // Источник правды остался у сервера: своё значение приложение само по
+        // себе ничего не включает.
         val model = File("src/main/java/ru/cmpas/app/presentation/auth/LoginViewModel.kt").readText()
         assertTrue(model.contains("methods.providers.filter"))
-        assertTrue(model.contains("PROVIDERS_WITH_NATIVE_SDK"))
+        assertTrue(model.contains("matchesBuiltInAppId"))
+        assertTrue(model.contains("BUILT_IN_PROVIDER_APP_IDS"))
     }
 
     @Test

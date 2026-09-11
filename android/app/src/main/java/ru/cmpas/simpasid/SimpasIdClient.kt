@@ -1,7 +1,7 @@
 // ВЕНДОРЕННАЯ КОПИЯ. НЕ ПРАВИТЬ ЗДЕСЬ.
 //
 // Источник: github.com/compas-psy/auth, clients/android/src/main/kotlin/ru/cmpas/simpasid/SimpasIdClient.kt
-// Взято: коммит dc045be, 11.09.2026.
+// Взято: коммит ac5b28d, 11.09.2026.
 //
 // Почему копией, а не зависимостью: maven-координат у библиотеки ещё нет
 // (docs/integration/practice-android.md, шаг 1 — «или maven-координаты,
@@ -188,8 +188,43 @@ class SimpasIdClient(
     ): TokenResponse = post(
         "/v1/auth/provider/$provider/native",
         ProviderNativeRequest(
-            providerCode, deviceKey, platform.wire,
-            codeVerifier, providerDeviceId, state, redirectUri,
+            providerCode = providerCode,
+            deviceKey = deviceKey,
+            platform = platform.wire,
+            codeVerifier = codeVerifier,
+            providerDeviceId = providerDeviceId,
+            state = state,
+            redirectUri = redirectUri,
+        ),
+        ProviderNativeRequest.serializer(),
+        TokenResponse.serializer(),
+    )
+
+    /**
+     * Обмен подписанного провайдером JWT на личность.
+     *
+     * Для SDK, которые кода не отдают. Android-SDK Яндекса из них:
+     * результат входа там `YandexAuthResult.Success(YandexAuthToken)`,
+     * типа результата с кодом авторизации в нём нет вовсе, а JWT
+     * берётся методом `getJwt`.
+     *
+     * Голый ключ доступа провайдера сюда не отправляется НИКОГДА и
+     * сервером не принимается: ключ, выданный чужому приложению,
+     * подходит к справочнику профиля так же, как наш. Подпись — то
+     * единственное, что отличает «провайдер это подтвердил» от
+     * «приложение так сказало».
+     */
+    suspend fun exchangeProviderJwt(
+        provider: String,
+        providerJwt: String,
+        deviceKey: String,
+        platform: Platform,
+    ): TokenResponse = post(
+        "/v1/auth/provider/$provider/native",
+        ProviderNativeRequest(
+            providerJwt = providerJwt,
+            deviceKey = deviceKey,
+            platform = platform.wire,
         ),
         ProviderNativeRequest.serializer(),
         TokenResponse.serializer(),
@@ -288,8 +323,28 @@ class SimpasIdException(
     val status: Int,
 ) : RuntimeException(message)
 
+/**
+ * Способы входа, как их видит приложение.
+ *
+ * `providers` — чей код сервер готов обменять на личность.
+ * `providerAppIds` — чем заводить SDK провайдера: идентификатор
+ * приложения у провайдера.
+ *
+ * Второе поле существует, чтобы у идентификатора было ОДНО место
+ * правды. Ключи заводит СИМПАС; зашитый в продукт идентификатор
+ * означает, что о смене ключа продукт узнает от сломавшегося входа.
+ * Секретом идентификатор не является — он и так уезжает в приложение
+ * на устройстве, — но и выдумывать его продукту неоткуда.
+ *
+ * На вебе поле приходит пустым: там SDK провайдера не заводится, вход
+ * идёт через OIDC с перенаправлением.
+ */
 @Serializable
-data class AuthMethods(val email: Boolean, val providers: List<String> = emptyList())
+data class AuthMethods(
+    val email: Boolean,
+    val providers: List<String> = emptyList(),
+    @SerialName("provider_app_ids") val providerAppIds: Map<String, String> = emptyMap(),
+)
 
 @Serializable
 data class LegalDocumentList(val documents: List<LegalDocument> = emptyList())
@@ -359,7 +414,8 @@ private data class EmailVerifyRequest(
 
 @Serializable
 private data class ProviderNativeRequest(
-    @SerialName("provider_code") val providerCode: String,
+    @SerialName("provider_code") val providerCode: String? = null,
+    @SerialName("provider_jwt") val providerJwt: String? = null,
     @SerialName("device_key") val deviceKey: String,
     val platform: String,
     @SerialName("code_verifier") val codeVerifier: String? = null,

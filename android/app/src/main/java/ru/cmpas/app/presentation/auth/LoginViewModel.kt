@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cmpas.app.BuildConfig
 import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.MagicLinkRequest
 import ru.cmpas.app.data.api.SimpasIdExchangeRequest
@@ -78,7 +79,15 @@ class LoginViewModel @Inject constructor(
                         // приложение — те, чей нативный SDK у него есть.
                         // Показать провайдера без SDK значит показать кнопку,
                         // которая уводит в браузер.
-                        providers = methods.providers.filter { name -> name in PROVIDERS_WITH_NATIVE_SDK },
+                        // Кнопка показывается, только если идентификатор
+                        // приложения в сборке СОВПАЛ с тем, что назвал
+                        // сервер. Это сильнее, чем «есть SDK и есть
+                        // идентификатор»: сменят идентификатор у себя —
+                        // кнопка исчезнет, а не поведёт в отказ провайдера.
+                        providers = methods.providers.filter { name ->
+                            matchesBuiltInAppId(name, methods.providerAppIds[name])
+                        },
+                        providerAppIds = methods.providerAppIds,
                         centralTermsVersion = terms?.version,
                     )
                 }
@@ -174,6 +183,53 @@ class LoginViewModel @Inject constructor(
      */
     fun signInWithProvider(provider: String) {
         _uiState.update { it.copy(error = SIGN_IN_UNAVAILABLE) }
+    }
+
+    /**
+     * Вход через провайдера отменён или не удался.
+     *
+     * Отмена — не ошибка: человек передумал, и красная строка на экране
+     * была бы обвинением. Поэтому отмена просто возвращает экран в
+     * исходное состояние, а отказ провайдера называется общей фразой.
+     */
+    fun onProviderSignInAborted(failed: Boolean) {
+        _uiState.update {
+            it.copy(isLoading = false, step = LoginStep.EMAIL, error = if (failed) SIGN_IN_UNAVAILABLE else null)
+        }
+    }
+
+    /**
+     * Подписанный провайдером JWT — в личность, личность — в нашу сессию.
+     *
+     * Для SDK, которые кода не отдают. Android-SDK Яндекса из них: его
+     * результат — `YandexAuthResult.Success(YandexAuthToken)`, типа с кодом
+     * авторизации в публичном API нет вовсе (проверено чтением артефакта
+     * com.yandex.android:authsdk:3.2.1).
+     *
+     * Голый ключ доступа сюда не попадает и сервером не принимается: ключ,
+     * выданный чужому приложению, подходит к справочнику профиля так же,
+     * как наш, и подменой токена можно было бы войти чужой учётной
+     * записью. Отличает «провайдер подтвердил» от «приложение сказало»
+     * только подпись.
+     */
+    fun completeProviderJwtSignIn(provider: String, providerJwt: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, step = LoginStep.VERIFY) }
+            try {
+                val deviceKey = userPreferences.getOrCreateDeviceKey()
+                val tokens = simpasId.exchangeProviderJwt(
+                    provider = provider,
+                    providerJwt = providerJwt,
+                    deviceKey = deviceKey,
+                    platform = Platform.ANDROID,
+                )
+                adoptSimpasIdSession(tokens.accessToken, tokens.account.id)
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = SIGN_IN_UNAVAILABLE)
+                }
+            }
+        }
     }
 
     /**
@@ -275,14 +331,47 @@ class LoginViewModel @Inject constructor(
         const val CENTRAL_TERMS_CODE = "cmpas_terms"
 
         /**
-         * Провайдеры, чей НАТИВНЫЙ SDK подключён к приложению.
+         * Идентификаторы приложений провайдеров, ЗАШИТЫЕ В СБОРКУ.
          *
-         * Пусто — и это не недоделка, а состояние: пока SDK нет, кнопки
-         * провайдера на экране быть не должно. Прежняя кнопка «Войти через
-         * Яндекс» уводила в системный браузер и возвращала код на веб-адрес
-         * ПРАКТИКИ, то есть приложению он не доставался вовсе.
+         * Копия здесь вынужденная, а не по недосмотру. Оба SDK объявляют
+         * адрес возврата intent-фильтром манифеста — у Яндекса схема
+         * `yx<идентификатор>`, у ВК `vk<идентификатор>`. Манифест часть
+         * APK; вычислить адрес возврата после установки нельзя, и без
+         * подстановки сборка не собирается вовсе.
+         *
+         * ЧТО С ЭТИМ СДЕЛАНО. Копию убрать нельзя — можно убрать её
+         * молчание: значение сверяется с тем, что назвал сервер. Разошлись
+         * — кнопки нет, и человек видит прежнюю дверь вместо «вход не
+         * работает» без причины на экране.
+         *
+         * ВК здесь нет: его идентификатор пока не выдан. Появится — строка
+         * добавится сюда, и больше ничего менять не придётся.
          */
-        val PROVIDERS_WITH_NATIVE_SDK: Set<String> = emptySet()
+        val BUILT_IN_PROVIDER_APP_IDS: Map<String, String> = mapOf(
+            PROVIDER_YANDEX to BuildConfig.YANDEX_NATIVE_CLIENT_ID,
+        )
+
+        /**
+         * Совпал ли идентификатор из сборки с тем, что назвал сервер.
+         *
+         * Пустой в сборке — нативного входа этого провайдера у нас нет.
+         * Пустой у сервера — заводить SDK нечем. Разные — заводить SDK
+         * НЕЛЬЗЯ: код, выданный под наш идентификатор, сервер обменяет
+         * своим, и провайдер откажет.
+         */
+        fun matchesBuiltInAppId(provider: String, serverAppId: String?): Boolean =
+            appIdMatches(BUILT_IN_PROVIDER_APP_IDS[provider], serverAppId)
+
+        /**
+         * Само правило, отдельно от того, что лежит в сборке.
+         *
+         * Вынесено, чтобы его можно было проверить всеми четырьмя случаями:
+         * привязанный к BuildConfig тест проверял бы не правило, а значение
+         * секрета в конкретном прогоне — и менял бы ответ в тот день, когда
+         * секрет появится.
+         */
+        fun appIdMatches(builtIn: String?, serverAppId: String?): Boolean =
+            !builtIn.isNullOrBlank() && !serverAppId.isNullOrBlank() && builtIn == serverAppId
 
         /**
          * Прежний вход через Яндекс — уходом в системный браузер.

@@ -35,6 +35,27 @@ val simpasIdClientId: String = (project.findProperty("simpasIdClientId") as Stri
     ?.takeIf { it.isNotBlank() }
     ?: "practice-mobile"
 
+// ИДЕНТИФИКАТОР ПРИЛОЖЕНИЯ ЯНДЕКСА — ВЫНУЖДЕННО В СБОРКЕ.
+//
+// Договорённость с СИМПАС была «идентификатор берётся из /v1/auth/methods и
+// в сборку не попадает». Для ЗАПРОСА это выполнимо: SDK принимает его
+// конструктором в рантайме. Для ВОЗВРАТА — нет: манифест самого SDK
+// объявляет intent-фильтр со схемой `yx${YANDEX_CLIENT_ID}` и хостом
+// `yx${YANDEX_CLIENT_ID}.oauth.yandex.ru`. Это часть APK; вычислить адрес
+// возврата после установки нельзя. Без подстановки сборка даже не
+// собирается — манифест-мерджер отказывает.
+//
+// Поэтому копия в сборке есть, но она СВЕРЯЕТСЯ с тем, что назвал сервер
+// (LoginViewModel.nativeProviderAppId): разойдись значения — кнопка
+// нативного входа не показывается, и человек видит прежнюю дверь вместо
+// «вход не работает» без причины.
+//
+// Пусто — нативного Яндекса в сборке нет, и это честное состояние: прежний
+// браузерный вход остаётся на экране.
+val yandexNativeClientId: String = (project.findProperty("yandexNativeClientId") as String?)
+    ?.takeIf { it.isNotBlank() }
+    ?: System.getenv("YANDEX_NATIVE_CLIENT_ID").orEmpty()
+
 android {
     namespace = "ru.cmpas.app"
     compileSdk = 35
@@ -72,12 +93,22 @@ android {
         // способ его доставки. Оставить 1.2.2 значило бы выложить под тем же
         // номером ДРУГОЕ приложение — телефон принял бы его как ту же
         // версию, а человек получил бы другой экран входа без предупреждения.
-        versionCode = 20
-        versionName = "1.3.1"
+        // 1.3.2 — нативный вход Яндекса вместо ухода в браузер (#172).
+        // Версия продукта, а не пересборка: человек видит другой экран
+        // провайдера и не покидает приложение.
+        versionCode = 21
+        versionName = "1.3.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Подстановка обязательна даже когда идентификатора нет: без неё
+        // манифест-мерджер роняет сборку целиком. "unset" не совпадёт ни с
+        // одним значением от сервера, поэтому кнопка нативного входа при
+        // пустом секрете не появится.
+        manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexNativeClientId.ifBlank { "unset" }
+
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "YANDEX_NATIVE_CLIENT_ID", "\"$yandexNativeClientId\"")
         buildConfigField("String", "SIMPASID_ISSUER", "\"$simpasIdIssuer\"")
         buildConfigField("String", "SIMPASID_CLIENT_ID", "\"$simpasIdClientId\"")
     }
@@ -232,6 +263,14 @@ dependencies {
 
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
+
+    // НАТИВНЫЙ ВХОД ЯНДЕКС ID.
+    //
+    // Заменяет уход в системный браузер: тот возвращал код на веб-адрес
+    // ПРАКТИКИ, а не приложению, и уносил человека из приложения.
+    // Идентификатор приложения в сборку НЕ ПОПАДАЕТ — SDK принимает его в
+    // рантайме, значение приходит от СИМПАС в /v1/auth/methods.
+    implementation(libs.yandex.authsdk)
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.robolectric)

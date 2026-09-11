@@ -28,7 +28,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.yandex.authsdk.YandexAuthLoginOptions
+import com.yandex.authsdk.YandexAuthOptions
+import com.yandex.authsdk.YandexAuthResult
+import com.yandex.authsdk.YandexAuthSdk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.cmpas.app.R
 
 /**
@@ -69,8 +77,56 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val openLegacyYandex = {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LoginViewModel.LEGACY_YANDEX_URL)))
+    }
+
+    // НАТИВНЫЙ ВХОД ЯНДЕКСА.
+    //
+    // Идентификатор приложения SDK берёт ИЗ МАНИФЕСТА — мета-данные
+    // com.yandex.auth.CLIENT_ID, подставленные на сборке. Публичного
+    // способа передать его в рантайме у SDK нет: конструктор
+    // YandexAuthOptions(isLoggingEnabled, clientId, oauthHost) объявлен
+    // internal, и компилятор до него не допускает. Публичных ровно два —
+    // от Context.
+    //
+    // Проверять это надо было метаданными Kotlin, а не байткодом: в
+    // байткоде internal-конструктор выглядит public, потому что видимость
+    // Kotlin живёт в @Metadata, а не в модификаторах JVM. Сверка по
+    // javap показала «public» и ввела в заблуждение.
+    //
+    // Поэтому значение из сборки СВЕРЯЕТСЯ с тем, что назвал сервер
+    // (LoginViewModel.matchesBuiltInAppId): провайдер попадает в
+    // uiState.providers только при совпадении. Разошлись — кнопки нет, и
+    // человек видит прежнюю дверь вместо «вход не работает» без причины.
+    val yandexAppId = uiState.providerAppIds[LoginViewModel.PROVIDER_YANDEX]
+    val yandexReady = LoginViewModel.PROVIDER_YANDEX in uiState.providers
+    val yandexSdk = remember(yandexReady, yandexAppId) {
+        if (yandexReady) YandexAuthSdk.create(YandexAuthOptions(context)) else null
+    }
+    val yandexLauncher = yandexSdk?.let { sdk ->
+        rememberLauncherForActivityResult(sdk.contract) { result ->
+            when (result) {
+                is YandexAuthResult.Success -> scope.launch {
+                    // getJwt ходит в сеть — на главном потоке этого делать
+                    // нельзя. Ключ доступа дальше не уходит: он меняется на
+                    // подписанный Яндексом JWT и забывается.
+                    val jwt = runCatching {
+                        withContext(Dispatchers.IO) { sdk.getJwt(result.token) }
+                    }.getOrNull()
+                    if (jwt == null) {
+                        viewModel.onProviderSignInAborted(failed = true)
+                    } else {
+                        viewModel.completeProviderJwtSignIn(LoginViewModel.PROVIDER_YANDEX, jwt)
+                    }
+                }
+                // Человек передумал — это не ошибка, и красная строка была
+                // бы обвинением.
+                is YandexAuthResult.Cancelled -> viewModel.onProviderSignInAborted(failed = false)
+                else -> viewModel.onProviderSignInAborted(failed = true)
+            }
+        }
     }
 
     LaunchedEffect(uiState.isAuthenticated) {
@@ -132,7 +188,18 @@ fun LoginScreen(
                             focusManager.clearFocus()
                             viewModel.requestSimpasIdCode()
                         },
-                        onProvider = viewModel::signInWithProvider,
+                        // Нажатие на кружок Яндекса открывает его SDK; у
+                        // провайдера без собранного SDK кнопки на экране нет
+                        // вовсе, и ветка else существует на случай, если
+                        // перечни разъедутся, — чтобы отвечать честно, а не
+                        // молчать.
+                        onProvider = { provider ->
+                            if (provider == LoginViewModel.PROVIDER_YANDEX && yandexLauncher != null) {
+                                yandexLauncher.launch(YandexAuthLoginOptions())
+                            } else {
+                                viewModel.signInWithProvider(provider)
+                            }
+                        },
                         onLegacyYandex = openLegacyYandex,
                         onFallback = viewModel::openFallback,
                     )
@@ -526,6 +593,13 @@ data class LoginUiState(
     val simpasIdDown: Boolean = false,
     /** Провайдеры, у которых есть И серверная поддержка, И нативный SDK в приложении. */
     val providers: List<String> = emptyList(),
+    /**
+     * Чем заводить SDK провайдера: идентификатор приложения у него.
+     *
+     * Приходит с сервера и в сборку не попадает. Копия в коде разошлась бы
+     * с оригиналом молча, и узнали бы мы об этом от сломавшегося входа.
+     */
+    val providerAppIds: Map<String, String> = emptyMap(),
     /** Действующая редакция центрального Соглашения — спрашивается у сервера. */
     val centralTermsVersion: String? = null,
     val resendPauseSeconds: Int = 0,
