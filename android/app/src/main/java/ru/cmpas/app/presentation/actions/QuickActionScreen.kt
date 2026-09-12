@@ -850,20 +850,23 @@ private fun clientContext(client: Client): String = when {
     else -> "Без записей"
 }
 
+/**
+ * Правки, архивации и удаления клиента здесь БОЛЬШЕ НЕТ — и это не упущение.
+ *
+ * Эти три типа сюда попадали, обработчика не имели и уходили в ветку по
+ * умолчанию: экран показывал поля «Название» и «Дополнительно», а «Сохранить»
+ * отвечало «Сохранено», ничего не изменив. Теперь они живут в самой карточке
+ * клиента, где у каждого свои поля и своё подтверждение
+ * (ClientDetailScreen, ClientSheet.EDIT/ARCHIVE/DELETE).
+ */
 private fun quickActionTitle(type: String) = when (type) {
     "payment" -> "Отметить оплату"
     "repeat-slot" -> "Повторить слот"
-    "edit-client" -> "Изменить клиента"
-    "archive-client" -> "Архивировать клиента"
-    "delete-client" -> "Удалить клиента"
     else -> "Быстрое действие"
 }
 
 private fun genericIcon(type: String): ImageVector = when (type) {
     "payment" -> Icons.Outlined.Payments
     "repeat-slot" -> Icons.Outlined.Replay
-    "edit-client" -> Icons.Outlined.Edit
-    "archive-client" -> Icons.Outlined.Archive
-    "delete-client" -> Icons.Outlined.DeleteOutline
     else -> Icons.Outlined.Bolt
 }

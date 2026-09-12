@@ -51,20 +51,73 @@ function bookingPrefStorageKey(psychologistId: string) {
     return `booking_pref_${psychologistId}`;
 }
 
-function readSavedPreference(psychologistId: string): TimePreference | null {
+/**
+ * Что помнит устройство о прошлом визите.
+ *
+ * ПОЧЕМУ ЗДЕСЬ ПОЯВИЛИСЬ ИМЯ И ТЕЛЕФОН. Страница говорила «С возвращением»,
+ * но форму подавала пустую: человек, уже записывавшийся отсюда, набирал имя
+ * и телефон заново. Узнавание, которое ничего не делает, хуже отсутствия
+ * узнавания — оно обещает и не исполняет.
+ *
+ * Это НЕ серверная память и не новые персональные данные у нас: имя и
+ * телефон человек ввёл сам, на своём устройстве, и остаются они в
+ * localStorage этого браузера — ровно там же, где уже лежало предпочтение.
+ * Ни один новый байт никуда не уезжает, срок тот же (30 дней), и та же
+ * кнопка «Не запоминать меня на этом устройстве» стирает всё разом.
+ */
+interface SavedVisit {
+    preference: TimePreference | null;
+    name?: string;
+    phone?: string;
+}
+
+function readSavedVisit(psychologistId: string): SavedVisit | null {
     try {
         const raw = localStorage.getItem(bookingPrefStorageKey(psychologistId));
         if (!raw) return null;
-        const parsed = JSON.parse(raw) as { preference?: TimePreference; savedAt?: number };
-        if (!parsed?.preference || !parsed?.savedAt) return null;
+        const parsed = JSON.parse(raw) as {
+            preference?: TimePreference;
+            savedAt?: number;
+            name?: string;
+            phone?: string;
+        };
+        if (!parsed?.savedAt) return null;
         if (Date.now() - parsed.savedAt > RETURN_PREFERENCE_TTL_MS) {
             localStorage.removeItem(bookingPrefStorageKey(psychologistId));
             return null;
         }
-        return parsed.preference;
+        if (!parsed.preference && !parsed.name && !parsed.phone) return null;
+        return {
+            preference: parsed.preference ?? null,
+            name: typeof parsed.name === 'string' ? parsed.name : undefined,
+            phone: typeof parsed.phone === 'string' ? parsed.phone : undefined,
+        };
     } catch {
         // Повреждённая запись — ведём себя как при первом визите, а не падаем.
         return null;
+    }
+}
+
+/**
+ * Дописать в запись визита, не потеряв остального.
+ *
+ * Предпочтение и данные человека приходят в РАЗНЫЕ моменты: чип он нажимает
+ * до записи, имя с телефоном — в момент записи. Запись целиком каждый раз
+ * затирала бы то, чего в этот момент под рукой нет.
+ */
+function saveVisit(psychologistId: string, patch: Partial<SavedVisit>) {
+    try {
+        const previous = readSavedVisit(psychologistId);
+        const merged = {
+            preference: patch.preference ?? previous?.preference ?? undefined,
+            name: patch.name ?? previous?.name,
+            phone: patch.phone ?? previous?.phone,
+            savedAt: Date.now(),
+        };
+        localStorage.setItem(bookingPrefStorageKey(psychologistId), JSON.stringify(merged));
+    } catch {
+        // Приватный режим браузера и т.п. — возврат просто не сработает при
+        // следующем визите, сама запись от этого не ломается.
     }
 }
 
@@ -241,7 +294,16 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
     // это чтение localStorage этого устройства, серверу ничего не нужно.
     useEffect(() => {
         if (!psychologistId) return;
-        setReturningPreference(readSavedPreference(psychologistId));
+        const visit = readSavedVisit(psychologistId);
+        setReturningPreference(visit?.preference ?? null);
+        // Имя и телефон подставляются ТОЛЬКО в пустую форму: то, что человек
+        // уже начал править руками, перетирать нельзя.
+        if (visit?.name || visit?.phone) {
+            setForm(f => ({
+                name: f.name || visit.name || '',
+                phone: f.phone || visit.phone || '',
+            }));
+        }
     }, [psychologistId]);
 
     // Task 14 point 1 (founder correction): the first screen shows 2-3
@@ -277,6 +339,10 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
         }
         setShowReturnBanner(false);
         setReturningPreference(null);
+        // Кнопка обещает «не запоминать» — значит с экрана уходит и то, что
+        // было подставлено из памяти устройства. Иначе имя с телефоном
+        // остались бы на виду после нажатия, и обещание оказалось бы ложным.
+        setForm({ name: '', phone: '' });
     };
 
     // Fetch initial data
@@ -528,12 +594,7 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
     const handlePreferenceSelect = async (pref: TimePreference) => {
         setPreference(pref);
-        try {
-            localStorage.setItem(bookingPrefStorageKey(psychologistId), JSON.stringify({ preference: pref, savedAt: Date.now() }));
-        } catch {
-            // Приватный режим браузера и т.п. — S1-R просто не сработает при
-            // следующем визите, сама запись от этого не ломается.
-        }
+        saveVisit(psychologistId, { preference: pref });
         await loadSuggestions(pref);
     };
 
@@ -644,6 +705,13 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
             // Save the signed link TOKEN (never the raw clientId — Task 3,
             // addendum §6) for persistent identification on this device.
+            // Человек только что представился — значит в следующий раз ему
+            // не придётся представляться снова, даже если подписанный токен
+            // до устройства не доехал.
+            if (typeof window !== 'undefined' && (form.name || form.phone)) {
+                saveVisit(psychologistId, { name: form.name || undefined, phone: form.phone || undefined });
+            }
+
             if (res && res.clientToken && typeof window !== 'undefined') {
                 localStorage.setItem('compas_clientToken', res.clientToken);
                 setClientLinkToken(res.clientToken);

@@ -18,6 +18,7 @@ import ru.cmpas.app.data.api.CompasApi
 import ru.cmpas.app.data.api.InviteRequest
 import ru.cmpas.app.data.api.RepeatSlotRequest
 import ru.cmpas.app.data.api.SendMessageRequest
+import ru.cmpas.app.data.api.UpdateClientRequest
 import ru.cmpas.app.domain.model.Client
 import ru.cmpas.app.domain.model.ClientChannelStatus
 import ru.cmpas.app.domain.model.ClientDetail
@@ -263,6 +264,100 @@ class ClientDetailViewModel @Inject constructor(
         lastSessionDate = lastSessionDate,
         status = status,
     )
+    /** Сообщение об исходе показано — гасим, чтобы не всплыло второй раз. */
+    fun clearCardOutcome() {
+        _uiState.update { it.copy(cardError = null) }
+    }
+
+    /**
+     * ПРАВКА, АРХИВАЦИЯ И УДАЛЕНИЕ — НАСТОЯЩИЕ, А НЕ ВИД НАСТОЯЩИХ.
+     *
+     * До 13.09.2026 все три пункта меню карточки вели на общий экран быстрого
+     * действия с полями «Название» и «Дополнительно». Поля ни к чему не
+     * относились, а «Сохранить» отвечало «Сохранено» и не делало НИЧЕГО:
+     * обработчик на эти типы написан не был и попадал в ветку по умолчанию.
+     *
+     * Ответ об успехе несделанного хуже отказа: человек считал клиента
+     * архивированным или удалённым и к карточке больше не возвращался.
+     *
+     * Пустое поле означает «стереть», а не «не трогать»: убравший телефон
+     * вправе рассчитывать, что телефона больше нет. Имя — исключение, без
+     * него карточку не отличить, и экран такую кнопку нажать не даёт.
+     */
+    fun saveClientCard(name: String, phone: String, email: String, onDone: () -> Unit) {
+        val id = loadedClientId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingCard = true, cardError = null) }
+            try {
+                val response = api.updateClient(
+                    id,
+                    UpdateClientRequest(name = name.trim(), phone = phone.trim(), email = email.trim()),
+                )
+                if (!response.isSuccessful) {
+                    _uiState.update { it.copy(isSavingCard = false, cardError = "Не удалось сохранить изменения") }
+                    return@launch
+                }
+                _uiState.update { it.copy(isSavingCard = false) }
+                loadClient(id, showLoader = false)
+                // Список клиентов и «Сегодня» показывают то же имя: без этого
+                // правка была бы видна только на этом экране.
+                PracticeRefreshBus.notifyChanged()
+                onDone()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSavingCard = false, cardError = e.message ?: "Нет связи с сервером") }
+            }
+        }
+    }
+
+    /**
+     * Архивация — смена статуса, а не удаление: встречи, заметки и согласия
+     * остаются на месте, клиент просто уходит из активного списка.
+     */
+    fun archiveClient(onDone: () -> Unit) {
+        val id = loadedClientId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingCard = true, cardError = null) }
+            try {
+                val response = api.updateClient(id, UpdateClientRequest(status = "archived"))
+                if (!response.isSuccessful) {
+                    _uiState.update { it.copy(isSavingCard = false, cardError = "Не удалось архивировать") }
+                    return@launch
+                }
+                _uiState.update { it.copy(isSavingCard = false) }
+                PracticeRefreshBus.notifyChanged()
+                onDone()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSavingCard = false, cardError = e.message ?: "Нет связи с сервером") }
+            }
+        }
+    }
+
+    /**
+     * Удаление необратимо и уносит историю встреч этого человека.
+     * Подтверждение спрашивает экран; здесь — только исполнение.
+     */
+    fun deleteClient(onDone: () -> Unit) {
+        val id = loadedClientId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingCard = true, cardError = null) }
+            try {
+                val response = api.deleteClient(id)
+                if (!response.isSuccessful) {
+                    _uiState.update { it.copy(isSavingCard = false, cardError = "Не удалось удалить карточку") }
+                    return@launch
+                }
+                // Обнуление id гасит перезагрузку по шине: иначе она тут же
+                // попросила бы карточку, которой уже нет, и поверх удачного
+                // удаления мигнуло бы «Клиент не найден».
+                loadedClientId = null
+                _uiState.update { it.copy(isSavingCard = false, isGone = true) }
+                PracticeRefreshBus.notifyChanged()
+                onDone()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSavingCard = false, cardError = e.message ?: "Нет связи с сервером") }
+            }
+        }
+    }
 }
 
 sealed class MessageResult {
@@ -298,4 +393,9 @@ data class ClientDetailUiState(
     val repeatingWeeks: Int? = null,
     val repeatOutcome: RepeatSlotOutcome? = null,
     val repeatError: String? = null,
+    /** Правка карточки, архивация и удаление — идут по одной, не разом. */
+    val isSavingCard: Boolean = false,
+    val cardError: String? = null,
+    /** Карточки больше нет: экран обязан закрыться, а не показывать пустоту. */
+    val isGone: Boolean = false,
 )

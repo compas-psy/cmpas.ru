@@ -173,7 +173,14 @@ class QuickActionViewModel @Inject constructor(
                 when (type) {
                     "repeat-slot" -> saveRepeatedSlot(selectedClient, date, time, secondary, comment)
                     "payment" -> throw IllegalStateException("Откройте конкретную сессию и отметьте оплату там — так статус синхронизируется с вебом")
-                    else -> "Сохранено"
+                    // НЕИЗВЕСТНЫЙ ТИП НЕ ОТВЕЧАЕТ «СОХРАНЕНО».
+                    //
+                    // Раньше отвечал — и из-за этого правка, архивация и
+                    // удаление клиента полгода «работали»: экран рапортовал
+                    // об успехе, сервер не получал ничего. Ветка по умолчанию,
+                    // сообщающая об успехе несделанного, прячет ровно тот
+                    // класс ошибок, который труднее всего заметить.
+                    else -> throw IllegalStateException("Это действие сюда не заведено — расскажите, как вы на него попали")
                 }
             }.onSuccess { message ->
                 _uiState.update { it.copy(isSaving = false) }
