@@ -106,7 +106,7 @@ class LoginViewModel @Inject constructor(
     }
 
     fun onEmailChange(email: String) {
-        _uiState.update { it.copy(email = email, error = null) }
+        _uiState.update { it.copy(email = email, error = null, errorDetails = null) }
     }
 
     fun onCodeChange(code: String) {
@@ -115,7 +115,7 @@ class LoginViewModel @Inject constructor(
 
     /** Назад к выбору способа входа — из кода и из запасной двери. */
     fun backToStart() {
-        _uiState.update { it.copy(step = LoginStep.EMAIL, code = "", error = null) }
+        _uiState.update { it.copy(step = LoginStep.EMAIL, code = "", error = null, errorDetails = null) }
     }
 
     fun openFallback() {
@@ -225,7 +225,19 @@ class LoginViewModel @Inject constructor(
         } else {
             null
         }
-        _uiState.update { it.copy(isLoading = false, step = LoginStep.EMAIL, error = message) }
+        // Причина — ПОД «Подробностями» на экране, а не только в журнале
+        // устройства. Журнал читается с компьютера и кабелем; человек,
+        // которому не открылся вход, сидит с телефоном в руках, и между
+        // «причина есть, но недостижима» и «причины нет» разницы для него
+        // никакой.
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                step = LoginStep.EMAIL,
+                error = message,
+                errorDetails = if (failed) reason else null,
+            )
+        }
     }
 
     /**
@@ -260,7 +272,12 @@ class LoginViewModel @Inject constructor(
                 // безразлично, чем именно его SDK подтверждал вход.
                 logExchangeFailure(provider, error)
                 _uiState.update {
-                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = signInErrorMessage(error))
+                    it.copy(
+                        isLoading = false,
+                        step = LoginStep.EMAIL,
+                        error = signInErrorMessage(error),
+                        errorDetails = exchangeFailureDetails(provider, error),
+                    )
                 }
             }
         }
@@ -304,7 +321,12 @@ class LoginViewModel @Inject constructor(
             } catch (error: Exception) {
                 logExchangeFailure(provider, error)
                 _uiState.update {
-                    it.copy(isLoading = false, step = LoginStep.EMAIL, error = signInErrorMessage(error))
+                    it.copy(
+                        isLoading = false,
+                        step = LoginStep.EMAIL,
+                        error = signInErrorMessage(error),
+                        errorDetails = exchangeFailureDetails(provider, error),
+                    )
                 }
             }
         }
@@ -317,6 +339,22 @@ class LoginViewModel @Inject constructor(
      * него отказ неотличим от отказа SDK на телефоне, и разбирать поломку
      * приходится гаданием. Ни токена, ни почты, ни кода из письма здесь нет.
      */
+    /**
+     * Та же причина, но для экрана — под «Подробностями».
+     *
+     * Кода отказа в ГЛАВНОЙ строке нет и не будет: человеку он ничего не
+     * объясняет, и рецепт СИМПАС это прямо запрещает. Но спрятать причину
+     * совсем значит оставить и себя без неё: два дня разбора отказа ВК ушли
+     * ровно на то, что причину знал только телефон и никому не показывал.
+     */
+    private fun exchangeFailureDetails(provider: String, error: Throwable): String {
+        val simpas = error as? SimpasIdException
+        if (simpas != null) {
+            return "СИМПАС отказал в обмене для $provider: код=${simpas.code ?: "нет"} статус=${simpas.status ?: "нет"}"
+        }
+        return "Обмен для $provider не состоялся: ${error::class.simpleName ?: "ошибка"}"
+    }
+
     private fun logExchangeFailure(provider: String, error: Throwable) {
         val simpas = error as? SimpasIdException
         Log.w(

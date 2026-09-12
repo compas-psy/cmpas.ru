@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -206,7 +208,9 @@ fun LoginScreen(
                     // Человек закрыл окно входа — это не ошибка.
                     viewModel.onProviderSignInAborted(
                         failed = fail !is VKIDAuthFail.Canceled,
-                        reason = "ВК отказал: ${fail.description}",
+                        // Имя случая у ВК информативнее текста: описание
+                        // бывает пустым, а класс отказа называет его всегда.
+                        reason = "ВК отказал: ${fail::class.simpleName} — ${fail.description}",
                     )
                 }
             },
@@ -499,6 +503,16 @@ private fun SimpasIdEmailStep(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
+        // ПОДРОБНОСТИ ОТКАЗА — ПО ЗАПРОСУ, А НЕ В ГЛАВНОЙ СТРОКЕ.
+        //
+        // Появляются, только когда отказ был. Человеку, который просто
+        // входит, их не видно вовсе; человеку, у которого не вышло, они
+        // дают то единственное, что можно переслать в поддержку.
+        state.errorDetails?.let { details ->
+            ErrorDetails(details)
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
         // Запасная дверь не рекламируется: мелкой ссылкой и внизу. Задача
@@ -514,6 +528,42 @@ private fun SimpasIdEmailStep(
         Spacer(modifier = Modifier.height(12.dp))
 
         LegalLinksRow(state.legalLinks, onOpenLink)
+    }
+}
+
+/**
+ * Техническая причина отказа — под словом «Подробности».
+ *
+ * Два дня разбора нативного входа ВК ушли на то, что причину отказа знал
+ * только телефон: SDK называл её, приложение писало в журнал устройства, а
+ * журнал читается с компьютера и кабелем. Человеку, у которого не открылся
+ * вход, от такой причины не было никакого проку.
+ *
+ * Поэтому она есть на экране — но за одним нажатием: в главной строке
+ * человеку нужно действие («войдите по почте»), а не код.
+ */
+@Composable
+private fun ErrorDetails(details: String) {
+    var shown by rememberSaveable { mutableStateOf(false) }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        TextButton(onClick = { shown = !shown }) {
+            Text(
+                if (shown) "Скрыть подробности" else "Подробности",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (shown) {
+            SelectionContainer {
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }
 
@@ -781,6 +831,14 @@ data class LoginUiState(
     val step: LoginStep = LoginStep.EMAIL,
     val isLoading: Boolean = false,
     val error: String? = null,
+    /**
+     * Техническая причина последнего отказа — для «Подробностей» на экране.
+     *
+     * В главной строке её нет: человеку код отказа ничего не объясняет.
+     * Но и прятать совсем нельзя — причину знает только телефон, а
+     * добраться до его журнала можно лишь с компьютера и кабелем.
+     */
+    val errorDetails: String? = null,
     val isAuthenticated: Boolean = false,
     /** Единый вход отвечает и принимает почту. */
     val simpasIdAvailable: Boolean = false,

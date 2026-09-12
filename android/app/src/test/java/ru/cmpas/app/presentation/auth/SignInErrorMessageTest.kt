@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import ru.cmpas.simpasid.SimpasIdException
 
 /**
@@ -45,6 +46,22 @@ class SignInErrorMessageTest {
         val message = LoginViewModel.signInErrorMessage(refusal("invalid_provider_code"))
         assertTrue(message.contains("по почте"))
         assertEquals(LoginViewModel.PROVIDER_REFUSED, message)
+    }
+
+    @Test
+    fun `подробности отказа есть на экране, а не только в журнале устройства`() {
+        // Два дня разбора отказа ВК ушли на то, что причину знал только
+        // телефон: SDK её называл, приложение писало в журнал, а журнал
+        // читается с компьютера и кабелем.
+        val screen = File("src/main/java/ru/cmpas/app/presentation/auth/LoginScreen.kt").readText()
+        val model = File("src/main/java/ru/cmpas/app/presentation/auth/LoginViewModel.kt").readText()
+        assertTrue("причина доезжает до состояния экрана", model.contains("errorDetails = if (failed) reason else null"))
+        assertTrue("и показывается по запросу", screen.contains("ErrorDetails(details)"))
+        assertTrue("её можно выделить и переслать", screen.contains("SelectionContainer"))
+        // В ГЛАВНОЙ строке кода отказа по-прежнему нет: человеку там нужно
+        // действие, а не код.
+        assertFalse(LoginViewModel.PROVIDER_REFUSED_ON_DEVICE.contains("код"))
+        assertFalse(LoginViewModel.PROVIDER_REFUSED.contains("код"))
     }
 
     @Test
