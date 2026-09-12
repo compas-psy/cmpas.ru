@@ -144,8 +144,21 @@ describe('лог конфликта записи', () => {
         expect(line).toContain('source=known_client');
         expect(line).toContain('error_code=SLOT_UNAVAILABLE');
         expect(line).toMatch(/correlation_id=[0-9a-f-]{36}/);
+
+        // ЗАПРЕЩЁННОЕ ИЩЕТСЯ БЕЗ correlation_id, И ВОТ ПОЧЕМУ.
+        //
+        // 12.09.2026 прогон упал на случайном опознавателе
+        // `a2ab1999-dbad-…`: в нём оказались цифры «999» из телефона, и
+        // проверка сочла их утечкой. Утечки не было — совпали шестнадцать
+        // знаков случайности с тремя цифрами запрета, и такое будет
+        // повторяться примерно раз в сотню прогонов.
+        //
+        // Опознаватель случаен по назначению и человека не называет:
+        // искать в нём куски телефона бессмысленно. Всё остальное в строке
+        // пишем мы сами, и проверять надо именно его.
+        const withoutCorrelationId = line.replace(/correlation_id=[0-9a-f-]{36}/g, 'correlation_id=…');
         for (const secret of ['Волкова', '999', 'client=', 'phone=', 'email=', 'token=', 'notes=']) {
-            expect(line).not.toContain(secret);
+            expect(withoutCorrelationId).not.toContain(secret);
         }
     });
 

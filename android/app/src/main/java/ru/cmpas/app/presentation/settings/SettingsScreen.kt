@@ -17,12 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.BuildConfig
+import ru.cmpas.app.util.appSignature
 import ru.cmpas.app.domain.model.MobileBillingStatus
 import ru.cmpas.app.domain.model.MobileLegalDoc
 import ru.cmpas.app.presentation.components.*
@@ -468,13 +470,34 @@ private fun ProfileInfoSheet(
         return
     }
 
+    // Отпечаток считается один раз на показ шторки: он не меняется, пока не
+    // переустановят приложение.
+    val context = LocalContext.current
+    val signature = remember(context) { appSignature(context) }
+
     val (title, subtitle, body) = when (sheet) {
         ProfileSheet.TELEGRAM -> Triple("Telegram", connectionSubtitle(state.user?.telegramConnected), connectionSheetBody("Telegram", state.user?.telegramConnected))
         ProfileSheet.MAX -> Triple("MAX", connectionSubtitle(state.user?.maxConnected), connectionSheetBody("MAX", state.user?.maxConnected))
         // Обещание «будет доступно» из этого текста убрано: раздел
         // рассказывает, что с данными происходит СЕЙЧАС, и ведёт туда, где
         // ими действительно можно распорядиться.
-        ProfileSheet.HELP -> Triple("Помощь и поддержка", "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}", "Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+        // Отпечаток подписи — из САМОЙ установленной копии, а не из сборки.
+        // Нативный вход провайдера проверяется парой «пакет + отпечаток» на
+        // устройстве: не сошлось — отказ приходит до всякой сети и не виден
+        // ни в одном журнале. Сверить его с карточкой приложения теперь можно
+        // с того же телефона, где приложение и стоит.
+        ProfileSheet.HELP -> Triple(
+            "Помощь и поддержка",
+            "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}",
+            buildString {
+                append("Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+                signature?.let { sig ->
+                    append("\n\nПодпись этой копии приложения:")
+                    append("\nSHA-1: ${sig.sha1}")
+                    append("\nSHA-256: ${sig.sha256}")
+                }
+            },
+        )
         ProfileSheet.PROFILE, ProfileSheet.DOCUMENTS, ProfileSheet.DATA,
         ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK, ProfileSheet.PAYMENT -> Triple("", "", "")
     }

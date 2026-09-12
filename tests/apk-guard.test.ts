@@ -117,6 +117,107 @@ describe('разбор вывода apksigner', () => {
     });
 });
 
+describe('чем заведён нативный вход', () => {
+    // Образец — настоящая форма вывода `aapt2 dump xmltree`: целые печатаются
+    // шестнадцатеричными, строки — дважды, значением и «(Raw: …)».
+    const TREE = [
+        '          E: meta-data (line=42)',
+        '            A: android:name(0x01010003)="VKIDClientID" (Raw: "VKIDClientID")',
+        '            A: android:value(0x01010024)=(type 0x10)0x5372f1b',
+        '          E: meta-data (line=45)',
+        '            A: android:name(0x01010003)="com.yandex.auth.CLIENT_ID" (Raw: "com.yandex.auth.CLIENT_ID")',
+        '            A: android:value(0x01010024)="1b261cbc15" (Raw: "1b261cbc15")',
+        '          E: meta-data (line=48)',
+        '            A: android:name(0x01010003)="VKIDClientSecret" (Raw: "VKIDClientSecret")',
+        '            A: android:value(0x01010024)="ZASHISHENNYY-KLYUCH" (Raw: "ZASHISHENNYY-KLYUCH")',
+    ].join('\n');
+
+    function meta(name: string): string {
+        return execFileSync('bash', [SCRIPT, '--parse-manifest-meta', name], {
+            encoding: 'utf8',
+            input: TREE,
+        }).trim();
+    }
+
+    it('идентификатор ВК читается десятичным, а не шестнадцатеричным', () => {
+        // ВК показывает идентификатор в карточке десятичным числом, и сверять
+        // человеку придётся глазами: 0x5372f1b ему ни о чём не говорит.
+        expect(meta('VKIDClientID')).toBe('87502619');
+    });
+
+    it('идентификатор Яндекса — без «(Raw: …)», которым aapt2 дублирует строки', () => {
+        expect(meta('com.yandex.auth.CLIENT_ID')).toBe('1b261cbc15');
+    });
+
+    it('защищённый ключ ВК сторож не печатает', () => {
+        // Идентификаторы приложений не секрет — они и так в APK. Ключ секрет,
+        // и лежит он в том же манифесте, рядом.
+        const guard = fs.readFileSync(SCRIPT, 'utf-8');
+        const section = guard.slice(guard.indexOf('Нативный вход: чем заведён SDK'));
+        expect(section.slice(0, section.indexOf('Пакет проверен'))).not.toContain("parse_manifest_meta 'VKIDClientSecret'");
+    });
+});
+
+describe('укороченное значение — обход маскировки журнала', () => {
+    function short(v: string): string {
+        return execFileSync('bash', [SCRIPT, '--short-value', v], { encoding: 'utf8' }).trim();
+    }
+
+    it('печатает начало, конец и длину', () => {
+        // Целиком журнал GitHub Actions затирает: значение заведено секретом
+        // репозитория, и в прогоне 12.09.2026 обе строки вышли как «***».
+        expect(short('87502619')).toBe('87…19 (8 знаков)');
+    });
+
+    it('слишком короткое не укорачивает вовсе', () => {
+        expect(short('123')).toContain('значение скрыто журналом');
+        expect(short('123')).not.toContain('123');
+    });
+
+    it('середины в выводе нет', () => {
+        expect(short('1b261cbc153045beb7d707389fc27515')).not.toContain('261cbc');
+    });
+});
+
+describe('строка идентификатора печатается один раз', () => {
+    it('в ней нет подстановки, которая печатает значение целиком следом', () => {
+        // Прогон 12.09.2026: строка вышла как «54…57 (8 знаков)***» —
+        // укороченное значение и следом полное, затёртое журналом. Причина:
+        // `${V:-…}` даёт САМО значение, когда оно задано.
+        const guard = fs.readFileSync(SCRIPT, 'utf-8');
+        expect(guard).not.toContain('${VK_ID:-нет в манифесте}');
+        expect(guard).not.toContain('${YANDEX_ID:-нет в манифесте}');
+    });
+});
+
+describe('схема возврата провайдера', () => {
+    function schemes(tree: string): string[] {
+        return execFileSync('bash', [SCRIPT, '--parse-schemes'], { encoding: 'utf8', input: tree })
+            .split('\n').filter(Boolean);
+    }
+
+    it('читает схемы из манифеста, а не пересказывает ожидаемое', () => {
+        // Прежняя строка печатала «vk<идентификатор выше>» — повторяла
+        // предположение. Схема подставляется НА СБОРКЕ, и не подставившаяся
+        // даёт отказ на устройстве, которого не видно ни в одном журнале.
+        const tree = [
+            '            A: android:scheme(0x01010027)="vk54000057" (Raw: "vk54000057")',
+            '            A: android:scheme(0x01010027)="https"',
+        ].join('\n');
+        expect(schemes(tree)).toEqual(['https', 'vk54000057']);
+    });
+
+    it('манифест без схем даёт пусто — сторож на это отвечает отказом', () => {
+        expect(schemes('E: application (line=10)')).toEqual([]);
+    });
+
+    it('отсутствие схемы возврата роняет сборку', () => {
+        const guard = fs.readFileSync(SCRIPT, 'utf-8');
+        expect(guard).toContain('нет схемы возврата ВК');
+        expect(guard).toContain('scheme_present "vk${VK_ID}"');
+    });
+});
+
 describe('отпечатки для консолей провайдеров', () => {
     const guard = fs.readFileSync(SCRIPT, 'utf-8');
 
