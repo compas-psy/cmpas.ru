@@ -50,6 +50,7 @@ import com.vk.id.auth.VKIDAuthParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.cmpas.app.BuildConfig
 import ru.cmpas.app.R
 
 /**
@@ -573,8 +574,18 @@ private fun ErrorDetails(details: String) {
         }
         if (shown) {
             SelectionContainer {
+                // ВЕРСИЯ НАЗЫВАЕТСЯ РЯДОМ С ПРИЧИНОЙ, А НЕ ОТДЕЛЬНО.
+                //
+                // 12.09.2026 снимок экрана с отказом `email_required` не
+                // отвечал на первый же вопрос: это сборка ДО правки или
+                // ПОСЛЕ? Разбор встал на сутки не из-за отказа, а из-за
+                // того, что снимок не называл, что на телефоне стоит.
+                //
+                // Номер версии в разделе «Помощь» для этого не годится:
+                // туда попадают уже ВОШЕДШИЕ, а речь о человеке, который
+                // как раз не вошёл.
                 Text(
-                    text = details,
+                    text = "$details\n\nПРАКТИКА ${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

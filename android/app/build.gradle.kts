@@ -149,8 +149,8 @@ android {
         // «Документы» показывал центральные документы сервиса, а те, что
         // получает клиент, завести было нельзя. Версия продукта: появляется
         // то, чего не было.
-        versionCode = 30
-        versionName = "1.3.11"
+        versionCode = 31
+        versionName = "1.3.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
