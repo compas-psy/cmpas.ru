@@ -46,7 +46,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-enum class ClientSheet { MESSAGE, INVITE, DOCUMENT, CHANNELS }
+enum class ClientSheet { MESSAGE, INVITE, DOCUMENT, CHANNELS, EDIT, ARCHIVE, DELETE }
 
 @Composable
 fun ClientDetailScreen(
@@ -121,9 +121,13 @@ fun ClientDetailScreen(
                 showMenu = showMenu,
                 onMore = { showMenu = true },
                 onDismissMenu = { showMenu = false },
-                onEdit = { showMenu = false; onQuickAction("edit-client") },
-                onArchive = { showMenu = false; onQuickAction("archive-client") },
-                onDelete = { showMenu = false; onQuickAction("delete-client") },
+                // Три пункта меню делают то, что обещают, и делают это ЗДЕСЬ.
+                // Раньше каждый вёл на общий экран быстрого действия с полями
+                // «Название» и «Дополнительно», где «Сохранить» отвечало
+                // «Сохранено» и не меняло ничего.
+                onEdit = { showMenu = false; sheet = ClientSheet.EDIT },
+                onArchive = { showMenu = false; sheet = ClientSheet.ARCHIVE },
+                onDelete = { showMenu = false; sheet = ClientSheet.DELETE },
             )
 
             when {
@@ -359,6 +363,44 @@ fun ClientDetailScreen(
                         )
                     }
                 },
+            )
+            ClientSheet.EDIT -> if (client != null) EditClientSheet(
+                clientName = client.name,
+                initialName = client.name,
+                initialPhone = detail?.phone.orEmpty(),
+                initialEmail = detail?.email.orEmpty(),
+                isSaving = uiState.isSavingCard,
+                error = uiState.cardError,
+                onClose = { sheet = null; viewModel.clearCardOutcome() },
+                onSave = { name, phone, email ->
+                    viewModel.saveClientCard(name, phone, email) { sheet = null }
+                },
+            )
+            ClientSheet.ARCHIVE -> if (client != null) ConfirmClientActionSheet(
+                title = "Архивировать клиента",
+                clientName = client.name,
+                explanation = "Карточка уйдёт из активного списка. Встречи, заметки и согласия останутся на месте — вернуть клиента можно в веб-кабинете.",
+                confirmLabel = "Архивировать",
+                confirmIcon = Icons.Outlined.Archive,
+                danger = false,
+                isRunning = uiState.isSavingCard,
+                error = uiState.cardError,
+                onClose = { sheet = null; viewModel.clearCardOutcome() },
+                // Экран архивированного клиента закрывается: оставаться на
+                // карточке, которой больше нет в списке, незачем.
+                onConfirm = { viewModel.archiveClient { sheet = null; onBack() } },
+            )
+            ClientSheet.DELETE -> if (client != null) ConfirmClientActionSheet(
+                title = "Удалить клиента",
+                clientName = client.name,
+                explanation = "Удаление необратимо: вместе с карточкой уйдут её встречи, заметки и приглашения. Если нужно просто убрать клиента из списка — архивируйте.",
+                confirmLabel = "Удалить навсегда",
+                confirmIcon = Icons.Outlined.DeleteOutline,
+                danger = true,
+                isRunning = uiState.isSavingCard,
+                error = uiState.cardError,
+                onClose = { sheet = null; viewModel.clearCardOutcome() },
+                onConfirm = { viewModel.deleteClient { sheet = null; onBack() } },
             )
             null -> Unit
         }

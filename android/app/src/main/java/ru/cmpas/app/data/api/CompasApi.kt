@@ -82,6 +82,13 @@ interface CompasApi {
     @PATCH("clients/{id}")
     suspend fun updateClient(@Path("id") id: String, @Body body: UpdateClientRequest): Response<Client>
 
+    /**
+     * Удаление карточки. Тот же маршрут, что у веба, и та же зачистка
+     * связанных записей — она живёт на сервере, в ядре удаления.
+     */
+    @retrofit2.http.DELETE("clients/{id}")
+    suspend fun deleteClient(@Path("id") id: String): Response<Unit>
+
     @POST("clients/{id}/message")
     suspend fun sendMessage(@Path("id") id: String, @Body body: SendMessageRequest): Response<SendMessageResponse>
 

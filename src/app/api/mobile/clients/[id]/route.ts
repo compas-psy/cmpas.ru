@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
+import { deleteClientRecord } from '@/lib/clients/delete';
 
 function addMinutes(time: string, minutes: number) {
     const [hours, mins] = time.split(':').map(Number);
@@ -109,6 +110,40 @@ export async function PATCH(
         return NextResponse.json({ id: updated.id, name: updated.name, status: (updated.status || 'active').toUpperCase() });
     } catch (error) {
         console.error('[mobile/clients/id PATCH]', error);
+        return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    }
+}
+
+/**
+ * Удаление карточки из приложения.
+ *
+ * Раньше его здесь не было вовсе, и «Удалить клиента» в приложении вело на
+ * заглушку, которая показывала поля «Название» и «Дополнительно» и на
+ * «Сохранить» отвечала «Сохранено», ничего не удалив. Ответ, который
+ * сообщает об успехе несделанного, хуже отказа: человек считает карточку
+ * удалённой и больше к ней не возвращается.
+ *
+ * Зачистка связанных записей — в ядре `deleteClientRecord`, том же, которым
+ * пользуется веб: два разных удаления одного и того же неизбежно разъехались
+ * бы.
+ */
+export async function DELETE(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const auth = await authenticateMobileRequest(req);
+    if (!auth) return unauthorizedResponse();
+    const { id } = await params;
+
+    try {
+        const removed = await deleteClientRecord(auth.userId, id);
+        // Чужая карточка отвечает так же, как несуществующая: по ответу
+        // нельзя узнать, есть ли у другого специалиста клиент с таким
+        // идентификатором.
+        if (!removed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return NextResponse.json({ ok: true });
+    } catch (error) {
+        console.error('[mobile/clients/id DELETE]', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }
 }

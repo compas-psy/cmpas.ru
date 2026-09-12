@@ -13,7 +13,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -447,4 +450,152 @@ private fun shareText(context: Context, subject: String, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, "Отправить через")) }
+}
+
+/**
+ * ПРАВКА КАРТОЧКИ — НАСТОЯЩАЯ, НА ТЕХ ЖЕ ПОЛЯХ, ЧТО В ВЕБЕ.
+ *
+ * До 13.09.2026 «Изменить клиента» в приложении вело на общий экран быстрого
+ * действия с полями «Название» и «Дополнительно». Поля ни к чему не
+ * относились, а «Сохранить» отвечало «Сохранено» и не меняло ничего.
+ *
+ * Здесь правятся ровно те три поля, которые правит веб и принимает сервер:
+ * имя, телефон, почта. Остальное (возраст, пол, запрос) карточка не заводит
+ * и через приложение не меняется — показывать поле, которое никуда не
+ * уезжает, значит повторить ту же ошибку в новом месте.
+ */
+@Composable
+fun EditClientSheet(
+    clientName: String,
+    initialName: String,
+    initialPhone: String,
+    initialEmail: String,
+    isSaving: Boolean,
+    error: String?,
+    onClose: () -> Unit,
+    onSave: (name: String, phone: String, email: String) -> Unit,
+) {
+    var name by rememberSaveable(initialName) { mutableStateOf(initialName) }
+    var phone by rememberSaveable(initialPhone) { mutableStateOf(initialPhone) }
+    var email by rememberSaveable(initialEmail) { mutableStateOf(initialEmail) }
+
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead("Изменить карточку", clientName)
+        Spacer(Modifier.height(14.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Имя") },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = phone,
+            onValueChange = { phone = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Телефон") },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Почта") },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        )
+        if (error != null) {
+            Spacer(Modifier.height(12.dp))
+            InfoBanner(
+                icon = Icons.Outlined.ErrorOutline,
+                text = error,
+                background = GoldSoft,
+                foreground = Color(0xFF8B6914),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(
+            // Кнопка не молчит о том, чего ждёт: без имени карточку не
+            // отличить от других, и сохранять её нечем.
+            text = if (isSaving) "Сохраняем…" else if (name.isBlank()) "Нужно имя" else "Сохранить",
+            icon = Icons.Outlined.Check,
+            enabled = !isSaving && name.isNotBlank(),
+            onClick = { onSave(name, phone, email) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        GhostButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
+    }
+}
+
+/**
+ * Подтверждение необратимого — отдельным листом, а не «Сохранить» на форме.
+ *
+ * Архивация и удаление ничего не заполняют: спрашивается ровно одно — точно
+ * ли. Форма с полями на этом месте и была причиной того, что человек не
+ * понимал, что вообще произойдёт.
+ */
+@Composable
+fun ConfirmClientActionSheet(
+    title: String,
+    clientName: String,
+    explanation: String,
+    confirmLabel: String,
+    confirmIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    danger: Boolean,
+    isRunning: Boolean,
+    error: String?,
+    onClose: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    CompasBottomSheet(onClose = onClose) {
+        SheetHead(title, clientName)
+        Spacer(Modifier.height(14.dp))
+        InfoBanner(
+            icon = if (danger) Icons.Outlined.DeleteOutline else Icons.Outlined.Archive,
+            text = explanation,
+            background = GoldSoft,
+            foreground = Color(0xFF8B6914),
+        )
+        if (error != null) {
+            Spacer(Modifier.height(12.dp))
+            InfoBanner(
+                icon = Icons.Outlined.ErrorOutline,
+                text = error,
+                background = GoldSoft,
+                foreground = Color(0xFF8B6914),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        // Необратимое действие не красится главной кнопкой: главная кнопка
+        // здесь — «Отмена», а согласие на потерю человек выбирает осознанно.
+        if (danger) {
+            GhostButton(
+                if (isRunning) "Удаляем…" else confirmLabel,
+                onConfirm,
+                modifier = Modifier.fillMaxWidth(),
+                icon = confirmIcon,
+                danger = true,
+                enabled = !isRunning,
+            )
+            Spacer(Modifier.height(8.dp))
+            PrimaryButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close, enabled = !isRunning)
+        } else {
+            PrimaryButton(
+                if (isRunning) "Архивируем…" else confirmLabel,
+                onConfirm,
+                modifier = Modifier.fillMaxWidth(),
+                icon = confirmIcon,
+                enabled = !isRunning,
+            )
+            Spacer(Modifier.height(8.dp))
+            GhostButton("Отмена", onClose, modifier = Modifier.fillMaxWidth(), icon = Icons.Outlined.Close)
+        }
+    }
 }
