@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -23,6 +24,23 @@ import java.security.SecureRandom
  */
 @RunWith(RobolectricTestRunner::class)
 class VkIdSignInTest {
+
+    @Test
+    fun `у ВК запрашивается почта — без неё вход не состоится`() {
+        // 12.09.2026, живой вход: `422 email_required`. Код SDK отдавал,
+        // СИМПАС его обменивал, ВК отвечал профилем БЕЗ адреса — и связывать
+        // учётную запись было нечем (И-5: у каждой всегда есть
+        // подтверждённая почта).
+        //
+        // Область доступа в нативном входе называет ПРИЛОЖЕНИЕ: авторизацию
+        // начинает оно. В браузерном её ставит сервер СИМПАС, поэтому там
+        // почта была, а здесь — нет.
+        val screen = File("src/main/java/ru/cmpas/app/presentation/auth/LoginScreen.kt").readText()
+        assertTrue("почта обязана запрашиваться", screen.contains("""this.scopes = setOf("email")"""))
+        // Ничего сверх почты: ФИО, аватар, пол и день рождения нам негде
+        // показывать и незачем хранить.
+        assertFalse("лишних прав не просим", screen.contains("vkid.personal_info"))
+    }
 
     @Test
     fun `адрес возврата складывается по правилу самого SDK`() {
