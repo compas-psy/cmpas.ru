@@ -117,6 +117,47 @@ describe('разбор вывода apksigner', () => {
     });
 });
 
+describe('чем заведён нативный вход', () => {
+    // Образец — настоящая форма вывода `aapt2 dump xmltree`: целые печатаются
+    // шестнадцатеричными, строки — дважды, значением и «(Raw: …)».
+    const TREE = [
+        '          E: meta-data (line=42)',
+        '            A: android:name(0x01010003)="VKIDClientID" (Raw: "VKIDClientID")',
+        '            A: android:value(0x01010024)=(type 0x10)0x5372f1b',
+        '          E: meta-data (line=45)',
+        '            A: android:name(0x01010003)="com.yandex.auth.CLIENT_ID" (Raw: "com.yandex.auth.CLIENT_ID")',
+        '            A: android:value(0x01010024)="1b261cbc15" (Raw: "1b261cbc15")',
+        '          E: meta-data (line=48)',
+        '            A: android:name(0x01010003)="VKIDClientSecret" (Raw: "VKIDClientSecret")',
+        '            A: android:value(0x01010024)="ZASHISHENNYY-KLYUCH" (Raw: "ZASHISHENNYY-KLYUCH")',
+    ].join('\n');
+
+    function meta(name: string): string {
+        return execFileSync('bash', [SCRIPT, '--parse-manifest-meta', name], {
+            encoding: 'utf8',
+            input: TREE,
+        }).trim();
+    }
+
+    it('идентификатор ВК читается десятичным, а не шестнадцатеричным', () => {
+        // ВК показывает идентификатор в карточке десятичным числом, и сверять
+        // человеку придётся глазами: 0x5372f1b ему ни о чём не говорит.
+        expect(meta('VKIDClientID')).toBe('87502619');
+    });
+
+    it('идентификатор Яндекса — без «(Raw: …)», которым aapt2 дублирует строки', () => {
+        expect(meta('com.yandex.auth.CLIENT_ID')).toBe('1b261cbc15');
+    });
+
+    it('защищённый ключ ВК сторож не печатает', () => {
+        // Идентификаторы приложений не секрет — они и так в APK. Ключ секрет,
+        // и лежит он в том же манифесте, рядом.
+        const guard = fs.readFileSync(SCRIPT, 'utf-8');
+        const section = guard.slice(guard.indexOf('Нативный вход: чем заведён SDK'));
+        expect(section.slice(0, section.indexOf('Пакет проверен'))).not.toContain("parse_manifest_meta 'VKIDClientSecret'");
+    });
+});
+
 describe('отпечатки для консолей провайдеров', () => {
     const guard = fs.readFileSync(SCRIPT, 'utf-8');
 
