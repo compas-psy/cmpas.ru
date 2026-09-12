@@ -158,6 +158,27 @@ describe('чем заведён нативный вход', () => {
     });
 });
 
+describe('укороченное значение — обход маскировки журнала', () => {
+    function short(v: string): string {
+        return execFileSync('bash', [SCRIPT, '--short-value', v], { encoding: 'utf8' }).trim();
+    }
+
+    it('печатает начало, конец и длину', () => {
+        // Целиком журнал GitHub Actions затирает: значение заведено секретом
+        // репозитория, и в прогоне 12.09.2026 обе строки вышли как «***».
+        expect(short('87502619')).toBe('87…19 (8 знаков)');
+    });
+
+    it('слишком короткое не укорачивает вовсе', () => {
+        expect(short('123')).toContain('значение скрыто журналом');
+        expect(short('123')).not.toContain('123');
+    });
+
+    it('середины в выводе нет', () => {
+        expect(short('1b261cbc153045beb7d707389fc27515')).not.toContain('261cbc');
+    });
+});
+
 describe('отпечатки для консолей провайдеров', () => {
     const guard = fs.readFileSync(SCRIPT, 'utf-8');
 
