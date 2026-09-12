@@ -190,6 +190,34 @@ describe('строка идентификатора печатается оди�
     });
 });
 
+describe('схема возврата провайдера', () => {
+    function schemes(tree: string): string[] {
+        return execFileSync('bash', [SCRIPT, '--parse-schemes'], { encoding: 'utf8', input: tree })
+            .split('\n').filter(Boolean);
+    }
+
+    it('читает схемы из манифеста, а не пересказывает ожидаемое', () => {
+        // Прежняя строка печатала «vk<идентификатор выше>» — повторяла
+        // предположение. Схема подставляется НА СБОРКЕ, и не подставившаяся
+        // даёт отказ на устройстве, которого не видно ни в одном журнале.
+        const tree = [
+            '            A: android:scheme(0x01010027)="vk54000057" (Raw: "vk54000057")',
+            '            A: android:scheme(0x01010027)="https"',
+        ].join('\n');
+        expect(schemes(tree)).toEqual(['https', 'vk54000057']);
+    });
+
+    it('манифест без схем даёт пусто — сторож на это отвечает отказом', () => {
+        expect(schemes('E: application (line=10)')).toEqual([]);
+    });
+
+    it('отсутствие схемы возврата роняет сборку', () => {
+        const guard = fs.readFileSync(SCRIPT, 'utf-8');
+        expect(guard).toContain('нет схемы возврата ВК');
+        expect(guard).toContain('scheme_present "vk${VK_ID}"');
+    });
+});
+
 describe('отпечатки для консолей провайдеров', () => {
     const guard = fs.readFileSync(SCRIPT, 'utf-8');
 
