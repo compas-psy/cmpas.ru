@@ -867,6 +867,33 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
 
                         {suggestLoading && <p className="text-[var(--booking-muted)] text-sm text-center py-2">Подбираем время…</p>}
 
+                        {/* СНАЧАЛА ВОПРОС, ПОТОМ ОТВЕТ.
+                            Чипы предпочтения стояли ПОД подобранными часами: человек
+                            нажимал «Утро выходных», а варианты появлялись ВЫШЕ нажатой
+                            кнопки — за пределами того, куда он смотрел. Ответ на
+                            вопрос не может быть выше самого вопроса: следствие должно
+                            идти за причиной, иначе экран читается как случайный. */
+                        }
+                        <div className="grid grid-cols-1 gap-2 mb-3">
+                            {([
+                                ['weekday_evening', 'Будни, после 18:00'],
+                                ['weekend_morning', 'Утро выходных'],
+                                ['any', 'Не важно — покажите ближайшее'],
+                            ] as [TimePreference, string][]).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => handlePreferenceSelect(value)}
+                                    className={`py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${preference === value
+                                        ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
+                                        : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
                         {!suggestLoading && suggestedTimes && suggestedTimes.length > 0 && (
                             <div className="space-y-2 mb-3">
                                 {suggestedTimes.map(candidate => {
@@ -890,26 +917,6 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                                 })}
                             </div>
                         )}
-
-                        <div className="grid grid-cols-1 gap-2 mb-3">
-                            {([
-                                ['weekday_evening', 'Будни, после 18:00'],
-                                ['weekend_morning', 'Утро выходных'],
-                                ['any', 'Не важно — покажите ближайшее'],
-                            ] as [TimePreference, string][]).map(([value, label]) => (
-                                <button
-                                    key={value}
-                                    type="button"
-                                    onClick={() => handlePreferenceSelect(value)}
-                                    className={`py-2.5 px-3 rounded-xl border-2 text-left font-medium text-sm transition-colors haptic-light ${preference === value
-                                        ? 'border-[var(--booking-accent)] text-white bg-[var(--booking-accent)]'
-                                        : 'border-[var(--booking-line)] text-[var(--booking-ink)] hover:border-[var(--booking-accent)]'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
 
                         {/* Макет C01/C12: «Нет подходящего времени?» — постоянная
                             дверь, а не аварийный выход. Раньше форма заявки
@@ -1089,7 +1096,18 @@ export default function BookingPageClient({ psychologistId }: { psychologistId: 
                             }`}
                     >
                         {booking ? <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> : null}
-                        {scheduleMode === 'readonly' ? 'Только просмотр' : booking ? 'Оформление...' : 'Записаться'}
+                        {/* КНОПКА НАЗЫВАЕТ, ЧЕГО ЖДЁТ.
+                            Человек заполнял имя и телефон, жал «Записаться» — и
+                            ничего не происходило: час он не выбрал, а кнопка об
+                            этом молчала. Отключённая кнопка без причины неотличима
+                            от сломанной. */}
+                        {scheduleMode === 'readonly'
+                            ? 'Только просмотр'
+                            : booking
+                                ? 'Оформление...'
+                                : (!selectedDate || !selectedTimeSlot)
+                                    ? 'Сначала выберите время'
+                                    : 'Записаться'}
                     </button>
                     {scheduleMode === 'readonly' && (
                         <p className="text-xs text-center text-[var(--booking-muted)] mt-2">
