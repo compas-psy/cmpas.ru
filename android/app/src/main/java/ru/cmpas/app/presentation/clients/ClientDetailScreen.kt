@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.cmpas.app.domain.model.*
+import ru.cmpas.app.presentation.comms.ConfirmClientActionSheet
 import ru.cmpas.app.presentation.comms.DocumentSendResult
+import ru.cmpas.app.presentation.comms.EditClientSheet
 import ru.cmpas.app.presentation.comms.InviteSheet
 import ru.cmpas.app.presentation.comms.SendDocumentSheet
 import ru.cmpas.app.presentation.comms.SendMessageSheet
