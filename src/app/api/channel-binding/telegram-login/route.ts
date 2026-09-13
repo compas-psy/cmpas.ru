@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
                 parse_mode: 'HTML',
                 disable_web_page_preview: true,
             }).then(() => undefined),
+            announce: (text) => sendTelegramMessage(payload.id, text).then(() => undefined),
         });
 
         return NextResponse.redirect(`${APP_URL}/connect/success?status=ok&channel=telegram`);

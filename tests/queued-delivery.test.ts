@@ -25,7 +25,7 @@ vi.mock('@/lib/db', () => ({
     },
 }));
 
-import { flushQueuedMessages, queuedMessageSkipReason, QUEUED_MESSAGE_TTL_MS } from '@/lib/messaging/queued-delivery';
+import { flushQueuedMessages, queuedMessageSkipReason, backlogIntro, QUEUED_MESSAGE_TTL_MS } from '@/lib/messaging/queued-delivery';
 
 const NOW = new Date('2026-09-13T10:00:00Z');
 
@@ -44,7 +44,7 @@ function queued(overrides: Record<string, unknown> = {}) {
     };
 }
 
-describe('что ещё правда, а что протухло', () => {
+describe('что ещё правда, а что нет', () => {
     it('встреча прошла — не досылаем', async () => {
         sessionFindUnique.mockResolvedValue({ date: new Date('2026-02-26T00:00:00Z'), time: '17:15', status: 'confirmed' });
         expect(await queuedMessageSkipReason(queued({ sessionId: 's1' }), NOW)).toBe('SESSION_PASSED');
@@ -130,5 +130,56 @@ describe('слив очереди при привязке мессенджера
         expect(printed).not.toContain('Ирина');
         expect(printed).not.toContain('716');
         log.mockRestore();
+    });
+});
+
+describe('накопленное подаётся человеку, а не вываливается', () => {
+    it('перед накопленным идёт строка, объясняющая, откуда оно взялось', async () => {
+        findMany.mockResolvedValue([queued({ id: 'a' }), queued({ id: 'b', text: 'второе' })]);
+        const send = vi.fn().mockResolvedValue(undefined);
+        const announce = vi.fn().mockResolvedValue(undefined);
+
+        await flushQueuedMessages({ clientId: 'c1', channel: 'max', send, announce, now: NOW });
+
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce.mock.calls[0][0]).toContain('накопилось 2 сообщения');
+        // Вступление — первым, иначе оно объясняет уже случившееся.
+        expect(announce.mock.invocationCallOrder[0]).toBeLessThan(send.mock.invocationCallOrder[0]);
+    });
+
+    it('доставлять нечего — человека не трогаем вовсе', async () => {
+        findMany.mockResolvedValue([queued({ id: 'old', sessionId: 's1' })]);
+        sessionFindUnique.mockResolvedValue({ date: new Date('2026-02-26T00:00:00Z'), time: '17:15', status: 'confirmed' });
+        const announce = vi.fn();
+
+        await flushQueuedMessages({ clientId: 'c1', channel: 'max', send: vi.fn(), announce, now: NOW });
+
+        expect(announce).not.toHaveBeenCalled();
+    });
+
+    it('числительное согласовано — иначе первая же фраза выглядит машинной', () => {
+        expect(backlogIntro(1)).toContain('одно сообщение');
+        expect(backlogIntro(2)).toContain('2 сообщения');
+        expect(backlogIntro(4)).toContain('4 сообщения');
+        expect(backlogIntro(5)).toContain('5 сообщений');
+        expect(backlogIntro(11)).toContain('11 сообщений');
+        expect(backlogIntro(21)).toContain('21 сообщение');
+        expect(backlogIntro(22)).toContain('22 сообщения');
+    });
+
+    it('вступление не дошло — накопленное всё равно уходит', async () => {
+        findMany.mockResolvedValue([queued({ id: 'a' })]);
+        const send = vi.fn().mockResolvedValue(undefined);
+
+        const result = await flushQueuedMessages({
+            clientId: 'c1',
+            channel: 'max',
+            send,
+            announce: vi.fn().mockRejectedValue(new Error('сеть')),
+            now: NOW,
+        });
+
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(result.sent).toBe(1);
     });
 });

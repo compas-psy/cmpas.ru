@@ -82,6 +82,7 @@ async function handleClientInvite(body: any): Promise<boolean> {
             parse_mode: 'HTML',
             link_preview_options: { is_disabled: true },
         }), 6000).then(() => undefined),
+        announce: (text) => withTimeout(bot.telegram.sendMessage(chatId, text), 6000).then(() => undefined),
     });
 
     return true;

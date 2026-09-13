@@ -68,6 +68,7 @@ async function handleClientInvite(update: MaxWebhookUpdate) {
             clientId: client.id,
             channel: 'max',
             send: (text) => sendMaxMessage(userId, text).then(() => undefined),
+            announce: (text) => sendMaxMessage(userId, text).then(() => undefined),
         });
     } catch (error) {
         const code = error instanceof Error ? error.message : '';

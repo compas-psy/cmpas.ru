@@ -285,6 +285,7 @@ async function handleStart(userId: number, payload: string | undefined) {
                 clientId: client.id,
                 channel: 'max',
                 send: (text) => sendMaxMessage(userId, text).then(() => undefined),
+                announce: (text) => sendMaxMessage(userId, text).then(() => undefined),
             }).catch((e) => console.error('[MAX Bot] queued delivery failed:', e));
             return;
         } catch (e) {

@@ -247,6 +247,7 @@ export function setupBot() {
                         parse_mode: 'HTML',
                         link_preview_options: { is_disabled: true },
                     }).then(() => undefined),
+                    announce: (text) => ctx.telegram.sendMessage(tgId, text).then(() => undefined),
                 }).catch((e) => console.error('[telegram-bot] queued delivery failed:', e));
                 return;
             } catch (e) {
