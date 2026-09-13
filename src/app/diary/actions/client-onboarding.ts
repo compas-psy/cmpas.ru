@@ -7,7 +7,7 @@ import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, cr
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { timezoneLabel } from '@/lib/practice/timezones';
 import { sendTelegramMessage } from '@/lib/telegram';
-import { deliverMessage, deliverPhoto } from '@/lib/messaging/deliver';
+import { deliverMessage, deliverPhoto, pickChannel } from '@/lib/messaging/deliver';
 import { createClientChannelInvite, getClientChannelStatus, type ClientChannel } from '@/lib/channel-binding';
 import { extractFirstName } from '@/lib/person-name';
 import { findUpcomingSessionForClient, hasUpcomingSessionForClient } from '@/lib/practice/upcoming-session';
@@ -67,7 +67,9 @@ export async function getOnboardingOptions(clientId: string) {
         phone: client.phone ?? null,
         hasTelegram: Boolean(client.telegramChatId),
         hasMax: Boolean(client.maxChatId),
-        recommendedChannel: channelStatus?.recommendedChannel || (client.maxChatId ? 'max' as const : client.telegramChatId ? 'telegram' as const : 'max' as const),
+        // Тот же ответ, что даёт getClientChannelStatus: основной канал, а
+        // если ничего не подключено — MAX, в него приглашают новых.
+        recommendedChannel: channelStatus?.recommendedChannel || pickChannel(client)?.channel || ('max' as const),
         documents,
         hasSession: hasUpcoming,
     };

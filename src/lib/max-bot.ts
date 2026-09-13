@@ -13,6 +13,7 @@
  * URL for all of maxApi(), not two parallel ones.
  */
 import { db } from '@/lib/db';
+import { flushQueuedMessages } from '@/lib/messaging/queued-delivery';
 import { format } from 'date-fns';
 import { createNotification } from '@/lib/notifications';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
@@ -280,25 +281,11 @@ async function handleStart(userId: number, payload: string | undefined) {
                 `Здравствуйте, ${client.name}!\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`,
             );
 
-            try {
-                const queued = await db.scheduledClientMessage.findMany({
-                    where: { clientId: client.id, channel: 'max', status: 'pending' },
-                    orderBy: { createdAt: 'asc' },
-                });
-                for (const m of queued) {
-                    try {
-                        await sendMaxMessage(userId, m.text);
-                        await db.scheduledClientMessage.update({
-                            where: { id: m.id },
-                            data: { status: 'sent', sentAt: new Date() },
-                        });
-                    } catch (e) {
-                        console.error('[MAX Bot] queued onboarding delivery failed:', e);
-                    }
-                }
-            } catch (e) {
-                console.error('[MAX Bot] queued onboarding lookup failed:', e);
-            }
+            await flushQueuedMessages({
+                clientId: client.id,
+                channel: 'max',
+                send: (text) => sendMaxMessage(userId, text).then(() => undefined),
+            }).catch((e) => console.error('[MAX Bot] queued delivery failed:', e));
             return;
         } catch (e) {
             const code = e instanceof Error ? e.message : '';

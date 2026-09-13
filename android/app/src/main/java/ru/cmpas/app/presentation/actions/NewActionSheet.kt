@@ -52,7 +52,7 @@ fun NewActionSheet(
                 channel = channel,
                 bound = bound,
                 onClose = onClose,
-                onSend = { viewModel.sendMessage(client.id, it) },
+                onSend = { text, _ -> viewModel.sendMessage(client.id, text) },
             )
             // Задача 27: отправка документа не дублируется здесь.
             //

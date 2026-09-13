@@ -63,6 +63,64 @@ fun OnboardingDoc.asDocumentTemplate(): DocumentTemplate {
     )
 }
 
+/**
+ * ВЫБОР КАНАЛА, КОГДА ИХ ПРАВДА ДВА.
+ *
+ * 13.09.2026: у клиентки подключены и MAX, и Telegram — а отправка документа
+ * показывала один Telegram и выбора не давала. Решал не человек, а строка
+ * «есть telegramChatId — значит Telegram», написанная в четырёх местах
+ * по-разному: приложение называло Telegram, веб в том же случае советовал MAX.
+ *
+ * Теперь канал по умолчанию — основной (тот, через который человек пришёл
+ * последним), а если подключены оба, специалист может выбрать другой. Один
+ * канал — выбирать нечего, и чип остаётся простой подписью: лишний вопрос
+ * там, где ответ один, — тоже дефект.
+ */
+@Composable
+fun ChannelPicker(
+    channels: List<String>,
+    selected: String?,
+    bound: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    if (channels.size < 2) {
+        ChannelChip(channel = selected, bound = bound)
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        channels.forEach { value ->
+            val isPicked = value == selected
+            val label = if (value == "max") "MAX" else "Telegram"
+            val color = if (value == "max") Max else Tg
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (isPicked) (if (value == "max") MaxSoft else TgSoft) else CompasMuted)
+                    .clickable { onSelect(value) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    if (value == "max") Icons.Outlined.Forum else Icons.Outlined.Send,
+                    null,
+                    Modifier.size(14.dp),
+                    tint = if (isPicked) color else CompasMutedFg,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    label,
+                    color = if (isPicked) color else CompasMutedFg,
+                    style = tBody2,
+                )
+                if (isPicked) {
+                    Spacer(Modifier.width(5.dp))
+                    Icon(Icons.Outlined.Check, null, Modifier.size(14.dp), tint = color)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SendMessageSheet(
     clientName: String,
@@ -70,11 +128,14 @@ fun SendMessageSheet(
     bound: Boolean,
     onClose: () -> Unit,
     initialText: String = "",
-    onSend: (String) -> Unit = {},
+    /** Подключённые каналы клиента. Два — специалист выбирает, один — выбирать нечего. */
+    channels: List<String> = listOfNotNull(channel),
+    onSend: (text: String, channel: String?) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     var text by remember(initialText) { mutableStateOf(initialText) }
     var sent by remember { mutableStateOf<Boolean?>(null) }
+    var picked by remember(channel) { mutableStateOf(channel) }
 
     CompasBottomSheet(onClose = onClose) {
         if (sent != null) {
@@ -83,7 +144,7 @@ fun SendMessageSheet(
         }
         SheetHead("Написать клиенту", clientName)
         Spacer(Modifier.height(14.dp))
-        ChannelChip(channel = channel, bound = bound)
+        ChannelPicker(channels = channels, selected = picked, bound = bound, onSelect = { picked = it })
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
             value = text,
@@ -119,7 +180,7 @@ fun SendMessageSheet(
                 val ready = text.trim()
                 if (ready.isNotBlank()) {
                     if (bound) {
-                        onSend(ready)
+                        onSend(ready, picked)
                         sent = true
                     } else {
                         shareText(context, "Сообщение для $clientName", ready)
@@ -285,6 +346,8 @@ fun SendDocumentSheet(
     clientName: String,
     channel: String?,
     bound: Boolean,
+    /** Подключённые каналы клиента. Два — специалист выбирает, один — выбирать нечего. */
+    channels: List<String> = listOfNotNull(channel),
     documents: List<DocumentTemplate> = emptyList(),
     isLoading: Boolean = false,
     error: String? = null,
@@ -293,7 +356,7 @@ fun SendDocumentSheet(
     initiallySelectedId: String? = null,
     onRetry: () -> Unit = {},
     onSend: (DocumentTemplate) -> Unit = {},
-    onSendWithResult: ((DocumentTemplate, (DocumentSendResult) -> Unit) -> Unit)? = null,
+    onSendWithResult: ((DocumentTemplate, String?, (DocumentSendResult) -> Unit) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var selectedId by remember(initiallySelectedId, documents) {
@@ -301,6 +364,7 @@ fun SendDocumentSheet(
     }
     var sent by remember { mutableStateOf<Boolean?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var pickedChannel by remember(channel) { mutableStateOf(channel) }
     val selected = documents.firstOrNull { it.id == selectedId }
 
     CompasBottomSheet(onClose = onClose) {
@@ -310,7 +374,7 @@ fun SendDocumentSheet(
         }
         SheetHead("Отправить документ", clientName)
         Spacer(Modifier.height(14.dp))
-        ChannelChip(channel = channel, bound = bound)
+        ChannelPicker(channels = channels, selected = pickedChannel, bound = bound, onSelect = { pickedChannel = it })
         Spacer(Modifier.height(14.dp))
 
         when {
@@ -373,7 +437,7 @@ fun SendDocumentSheet(
                         }
                     }
                     if (onSendWithResult != null) {
-                        onSendWithResult(document, resultHandler)
+                        onSendWithResult(document, pickedChannel, resultHandler)
                     } else {
                         onSend(document)
                         if (bound) sent = true else localError = "Подключите отправку документа к сервису"

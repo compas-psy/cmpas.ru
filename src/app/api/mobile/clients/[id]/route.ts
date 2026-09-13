@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
+import { pickChannel } from '@/lib/messaging/deliver';
 import { deleteClientRecord } from '@/lib/clients/delete';
 
 function addMinutes(time: string, minutes: number) {
@@ -77,7 +78,17 @@ export async function GET(
                 notes: typeof session.notes === 'string' ? session.notes : null,
             })),
             hasMessenger: !!(client.telegramChatId || client.maxChatId),
-            messengerChannel: client.telegramChatId ? 'telegram' : client.maxChatId ? 'max' : null,
+            // КАНАЛ НАЗЫВАЕТ ОБЩЕЕ ПРАВИЛО, А НЕ ЭТА СТРОКА.
+            //
+            // 13.09.2026: у клиента подключены ОБА мессенджера, последним он
+            // пришёл через MAX — а приложение предлагало отправку только в
+            // Telegram, потому что здесь стояло «есть telegramChatId —
+            // значит telegram». Веб в том же случае советовал MAX: два места
+            // отвечали на один вопрос по-разному.
+            //
+            // pickChannel учитывает preferredChannel — канал, через который
+            // человек пришёл последним; его и проставляет привязка.
+            messengerChannel: pickChannel(client)?.channel ?? null,
         });
     } catch (error) {
         console.error('[mobile/clients/id GET]', error);

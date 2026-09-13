@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import { db } from '@/lib/db';
+import { pickChannel } from '@/lib/messaging/channel-rule';
 import { extractFirstName } from '@/lib/person-name';
 import { createNotification } from '@/lib/notifications';
 
@@ -324,7 +325,7 @@ export async function expireClientChannelInvites(now = new Date()) {
 export async function getClientChannelStatus(psychologistId: string, clientId: string) {
     const client = await db.diaryClient.findFirst({
         where: { id: clientId, psychologistId },
-        select: { id: true, name: true, phone: true, telegramChatId: true, maxChatId: true },
+        select: { id: true, name: true, phone: true, telegramChatId: true, maxChatId: true, preferredChannel: true },
     });
     if (!client) throw new Error('Клиент не найден');
 
@@ -336,7 +337,16 @@ export async function getClientChannelStatus(psychologistId: string, clientId: s
             max: { connected: Boolean(client.maxChatId) },
             telegram: { connected: Boolean(client.telegramChatId) },
         },
-        recommendedChannel: client.maxChatId ? 'max' as const : client.telegramChatId ? 'telegram' as const : 'max' as const,
+        // ЧТО ПРЕДЛОЖИТЬ ПО УМОЛЧАНИЮ.
+        //
+        // Здесь стояло «есть MAX — значит MAX», а мобильная карточка в том же
+        // случае отвечала «есть Telegram — значит Telegram». Один вопрос, два
+        // разных ответа: приложение предлагало один канал, веб — другой.
+        //
+        // Правило одно: подключённый основной канал (тот, через который
+        // человек пришёл последним). Не подключено ничего — предлагаем MAX:
+        // в него приглашают тех, у кого мессенджера ещё нет.
+        recommendedChannel: pickChannel(client)?.channel ?? ('max' as const),
     };
 }
 

@@ -2,6 +2,7 @@ import { Telegraf, Context, Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
 import type { Agent } from 'http';
 import { db } from '@/lib/db';
+import { flushQueuedMessages } from '@/lib/messaging/queued-delivery';
 import { format } from 'date-fns';
 import { consumeClientChannelInvite, channelInviteFailureMessage } from '@/lib/channel-binding';
 import { createNotification } from '@/lib/notifications';
@@ -237,22 +238,16 @@ export function setupBot() {
 
                 await ctx.reply(`Здравствуйте, ${client.name}!\n\nВаш аккаунт успешно привязан к специалисту. Теперь вы будете получать уведомления о встречах здесь.`);
 
-                try {
-                    const queued = await db.scheduledClientMessage.findMany({
-                        where: { clientId: client.id, channel: 'telegram', status: 'pending' },
-                        orderBy: { createdAt: 'asc' },
-                    });
-                    for (const m of queued) {
-                        try {
-                            await ctx.telegram.sendMessage(tgId, m.text, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
-                            await db.scheduledClientMessage.update({ where: { id: m.id }, data: { status: 'sent', sentAt: new Date() } });
-                        } catch (e) {
-                            console.error('[telegram-bot] queued onboarding delivery failed:', e);
-                        }
-                    }
-                } catch (e) {
-                    console.error('[telegram-bot] queued onboarding lookup failed:', e);
-                }
+                // Досылается только то, что ещё правда: правило и разбор
+                // живого случая — в queued-delivery.
+                await flushQueuedMessages({
+                    clientId: client.id,
+                    channel: 'telegram',
+                    send: (text) => ctx.telegram.sendMessage(tgId, text, {
+                        parse_mode: 'HTML',
+                        link_preview_options: { is_disabled: true },
+                    }).then(() => undefined),
+                }).catch((e) => console.error('[telegram-bot] queued delivery failed:', e));
                 return;
             } catch (e) {
                 const code = e instanceof Error ? e.message : '';

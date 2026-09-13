@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { queuedMessageSkipReason } from '@/lib/messaging/queued-delivery';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 
@@ -42,6 +43,22 @@ export async function processScheduledMessages() {
                         });
                         continue;
                     }
+                }
+
+                // ПРОТУХШЕЕ НЕ УЕЗЖАЕТ И ПО РАСПИСАНИЮ.
+                //
+                // Сообщение, которому некуда было уйти, кладётся в очередь
+                // со сроком приглашения — тридцать дней. Всё это время оно
+                // ждёт здесь, и без проверки крон отправил бы подтверждение
+                // встречи, которая давно прошла. То же правило, что при
+                // привязке мессенджера, и оно одно на оба пути.
+                const stale = await queuedMessageSkipReason(msg, now);
+                if (stale) {
+                    await db.scheduledClientMessage.update({
+                        where: { id: msg.id },
+                        data: { status: 'failed', errorMsg: stale },
+                    });
+                    continue;
                 }
 
                 // Determine channel from stored value

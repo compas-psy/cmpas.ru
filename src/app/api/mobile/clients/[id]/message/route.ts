@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
-import { sendTelegramMessage } from '@/lib/telegram';
-import { sendMaxMessage } from '@/lib/max-bot';
+import { deliverMessage, pickChannel } from '@/lib/messaging/deliver';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
 
 /**
@@ -73,16 +72,28 @@ export async function POST(
             return NextResponse.json({ error: 'type must be custom or reminder' }, { status: 400 });
         }
 
-        const tgId = client.telegramChatId;
-        const maxId = (client as any).maxChatId as string | null;
+        // КАНАЛ: ЛИБО ВЫБРАННЫЙ ЧЕЛОВЕКОМ, ЛИБО ОБЩЕЕ ПРАВИЛО.
+        //
+        // Раньше здесь стояло «есть telegramChatId — пишем в Telegram», и у
+        // клиента с двумя мессенджерами выбор специалиста не значил ничего.
+        // Заодно отправка шла мимо deliverMessage — а это она прячет ссылки
+        // в кнопки MAX; голая ссылка на полторы строки приходила именно
+        // отсюда.
+        const requested = body.channel === 'telegram' || body.channel === 'max' ? body.channel : null;
+        const bearer = {
+            telegramChatId: client.telegramChatId,
+            maxChatId: (client as any).maxChatId as string | null,
+            preferredChannel: requested ?? client.preferredChannel,
+        };
+        const picked = pickChannel(bearer);
 
         let status: string;
-        if (tgId) {
-            await sendTelegramMessage(tgId, text);
-            status = 'telegram';
-        } else if (maxId) {
-            await sendMaxMessage(maxId, text);
-            status = 'max';
+        if (picked) {
+            const delivery = await deliverMessage(bearer, text);
+            if (!delivery.sent) {
+                return NextResponse.json({ error: 'Не удалось отправить сообщение' }, { status: 502 });
+            }
+            status = delivery.channel ?? picked.channel;
         } else {
             // No messenger — return ready text for share-sheet
             return NextResponse.json({

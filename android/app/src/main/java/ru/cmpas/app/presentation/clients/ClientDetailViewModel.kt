@@ -120,10 +120,15 @@ class ClientDetailViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(clientId: String, type: String, text: String? = null, sessionId: String? = null) {
+    /**
+     * @param channel куда именно писать, если у клиента подключены оба
+     *        мессенджера. Пусто — решает сервер по общему правилу (основной
+     *        канал: тот, через который человек пришёл последним).
+     */
+    fun sendMessage(clientId: String, type: String, text: String? = null, sessionId: String? = null, channel: String? = null) {
         viewModelScope.launch {
             val response = runCatching {
-                api.sendMessage(clientId, SendMessageRequest(type, text, sessionId))
+                api.sendMessage(clientId, SendMessageRequest(type, text, sessionId, channel))
             }.getOrNull()
             val body = response?.body()
             _uiState.update {

@@ -1,4 +1,5 @@
 import { sendTelegramMessage, sendTelegramPhoto } from '@/lib/telegram';
+import { pickChannel, type ChannelBearer, type MessengerChannel } from './channel-rule';
 import { sendMaxMessage, sendMaxPhoto } from '@/lib/max-bot';
 
 /**
@@ -29,39 +30,8 @@ import { sendMaxMessage, sendMaxPhoto } from '@/lib/max-bot';
  * на полторы строки. Через эту дверь плоский текст в MAX не проходит.
  */
 
-export type MessengerChannel = 'telegram' | 'max';
-
-/** Всё, у кого есть мессенджеры: и клиент (DiaryClient), и специалист (User). */
-export interface ChannelBearer {
-    telegramChatId?: string | null;
-    maxChatId?: string | null;
-    /** Канал, через который человек пришёл последним. Пусто — правила ниже. */
-    preferredChannel?: string | null;
-}
-
-export interface PickedChannel {
-    channel: MessengerChannel;
-    chatId: string;
-}
-
-/**
- * Куда писать этому человеку.
- *
- * Основной канал, если он назван и всё ещё привязан. Иначе — тот, который
- * есть. Оба сразу не возвращаются никогда: это и была ошибка.
- */
-export function pickChannel(bearer: ChannelBearer | null | undefined): PickedChannel | null {
-    if (!bearer) return null;
-    const telegram = bearer.telegramChatId || null;
-    const max = bearer.maxChatId || null;
-
-    if (bearer.preferredChannel === 'telegram' && telegram) return { channel: 'telegram', chatId: telegram };
-    if (bearer.preferredChannel === 'max' && max) return { channel: 'max', chatId: max };
-
-    if (telegram) return { channel: 'telegram', chatId: telegram };
-    if (max) return { channel: 'max', chatId: max };
-    return null;
-}
+export type { MessengerChannel, ChannelBearer, PickedChannel } from './channel-rule';
+export { pickChannel } from './channel-rule';
 
 export interface DeliveryResult {
     /** Куда ушло. null — писать было некуда или отправка не удалась. */

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { verifyTelegramLoginPayload, type TelegramLoginPayload } from '@/lib/telegram-login';
 import { sendTelegramMessage } from '@/lib/telegram';
-import { db } from '@/lib/db';
+import { flushQueuedMessages } from '@/lib/messaging/queued-delivery';
 import { extractFirstName } from '@/lib/person-name';
 
 const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
@@ -42,20 +42,14 @@ export async function GET(request: NextRequest) {
             `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
         );
 
-        const queued = await db.scheduledClientMessage.findMany({
-            where: { clientId: client.id, channel: 'telegram', status: 'pending' },
-            orderBy: { createdAt: 'asc' },
-        });
-        for (const message of queued) {
-            await sendTelegramMessage(payload.id, message.text, {
+        await flushQueuedMessages({
+            clientId: client.id,
+            channel: 'telegram',
+            send: (text) => sendTelegramMessage(payload.id, text, {
                 parse_mode: 'HTML',
                 disable_web_page_preview: true,
-            });
-            await db.scheduledClientMessage.update({
-                where: { id: message.id },
-                data: { status: 'sent', sentAt: new Date() },
-            });
-        }
+            }).then(() => undefined),
+        });
 
         return NextResponse.redirect(`${APP_URL}/connect/success?status=ok&channel=telegram`);
     } catch (error) {
