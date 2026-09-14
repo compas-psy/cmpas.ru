@@ -138,7 +138,11 @@ export async function processPaymentReminders(now: Date = new Date()) {
                 if (!client.telegramChatId && !client.maxChatId) continue;
                 if (await alreadyHandled(session.id)) continue;
 
-                const instruction = paymentInstructionText(setting);
+                // Напоминание уходит через deliverMessage — то есть в
+                // разметке Telegram; в MAX её переводит сама отправка.
+                // Режим назван явно: умолчание здесь однажды уже совпало
+                // случайно, а совпадение — не гарантия.
+                const instruction = paymentInstructionText(setting, 'html');
                 const text = buildPaymentReminderText({
                     clientName: client.name,
                     date: session.date,

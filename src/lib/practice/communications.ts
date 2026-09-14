@@ -1,3 +1,4 @@
+import type { PaymentInstructionVariants } from '@/lib/messaging/payment-instruction';
 import { escapeHtml } from '@/lib/client-workflow';
 import { extractFirstName } from '@/lib/person-name';
 
@@ -36,7 +37,17 @@ export function buildClientOnboardingMessage(params: {
      * документы и ссылку на запись, а про оплату узнавал отдельным
      * сообщением, которое специалист писал руками.
      */
-    paymentText?: string | null;
+    /**
+     * Инструкция об оплате — ОБА вида сразу, а не готовая строка.
+     *
+     * 14.09.2026 клиент увидел в Telegram `<a href="…">Перейти к оплате</a>`
+     * разметкой. Сюда приходил заранее собранный HTML, а сообщение строится
+     * дважды: в плоский вид разметка попадала буквой, в HTML-виде её
+     * экранировал `esc` ниже — ссылка была сломана в обоих видах.
+     *
+     * Теперь вид выбирает тот, кто знает режим, то есть этот сборщик.
+     */
+    payment?: PaymentInstructionVariants | null;
     mode?: 'html' | 'plain';
 }) {
     const html = (params.mode ?? 'html') === 'html';
@@ -59,8 +70,11 @@ export function buildClientOnboardingMessage(params: {
         }
     }
 
-    if (params.paymentText) {
-        lines.push('', esc(params.paymentText));
+    // Без esc: текст уже собран в нужном виде, а слова специалиста внутри
+    // него экранированы там же, где собирались.
+    const payment = params.payment && (html ? params.payment.html : params.payment.plain);
+    if (payment) {
+        lines.push('', payment);
     }
 
     // Точка ставится только там, где адрес спрятан за текстом ссылки: в

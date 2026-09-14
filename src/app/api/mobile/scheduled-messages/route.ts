@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
             const psyName = psych?.psychologistSettings?.fullName || psych?.name || 'специалист';
             const bookingLink = clientBookingLink(auth.userId, clientId);
             const onlineLink = session.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
-            const paymentText = await getPaymentInstruction(auth.userId, sessionId, clientId);
+            const payment = await getPaymentInstruction(auth.userId, sessionId, clientId);
             messageText = buildSessionClientMessage({
                 clientName: client.name,
                 psychologistName: psyName,
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
                 format: session.format,
                 onlineLink,
                 documentLinks: [],
-                paymentText,
+                payment,
                 bookingLink,
             });
         } else {

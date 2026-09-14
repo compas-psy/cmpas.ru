@@ -35,7 +35,9 @@ export async function buildClientManualDocumentMessage(clientId: string) {
 
     const psyName = client.psychologist.psychologistSettings?.fullName || client.psychologist.name || 'специалист';
     const bookingLink = clientBookingLink(psychologistId, client.id);
-    const paymentText = await getPaymentInstruction(psychologistId);
+    // Текст здесь плоский — адреса стоят голыми, — значит и инструкция
+    // об оплате берётся плоская. Разметка тут превратилась бы в буквы.
+    const payment = await getPaymentInstruction(psychologistId);
 
     const text = [
         `${client.name}, здравствуйте.`,
@@ -44,7 +46,7 @@ export async function buildClientManualDocumentMessage(clientId: string) {
         ...deliveries.map(d => `— ${d.title}: ${d.link}`),
         '',
         'Пожалуйста, ознакомьтесь с документами до первой консультации.',
-        paymentText || '',
+        payment?.plain || '',
         `Ссылка для управления записью: ${bookingLink}`,
     ].filter(Boolean).join('\n');
 
