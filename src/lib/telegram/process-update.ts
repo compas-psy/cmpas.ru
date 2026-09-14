@@ -33,9 +33,9 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 async function handleClientInvite(body: any): Promise<boolean> {
     const { bot } = await import('@/lib/telegram-bot');
-    const { db } = await import('@/lib/db');
     const { consumeClientChannelInvite, channelInviteFailureMessage } = await import('@/lib/channel-binding');
     const { extractFirstName } = await import('@/lib/person-name');
+    const { flushQueuedMessages } = await import('@/lib/messaging/queued-delivery');
 
     const text = body.message?.text as string | undefined;
     if (!text?.startsWith('/start c_')) return false;
@@ -75,27 +75,15 @@ async function handleClientInvite(body: any): Promise<boolean> {
         console.error('[telegram-webhook] confirmation send failed/slow (link already succeeded):', error instanceof Error ? error.message : error);
     }
 
-    const queued = await db.scheduledClientMessage.findMany({
-        where: { clientId: client.id, channel: 'telegram', status: 'pending' },
-        orderBy: { createdAt: 'asc' },
+    await flushQueuedMessages({
+        clientId: client.id,
+        channel: 'telegram',
+        send: (text) => withTimeout(bot.telegram.sendMessage(chatId, text, {
+            parse_mode: 'HTML',
+            link_preview_options: { is_disabled: true },
+        }), 6000).then(() => undefined),
+        announce: (text) => withTimeout(bot.telegram.sendMessage(chatId, text), 6000).then(() => undefined),
     });
-    for (const message of queued) {
-        try {
-            await withTimeout(bot.telegram.sendMessage(chatId, message.text, {
-                parse_mode: 'HTML',
-                link_preview_options: { is_disabled: true },
-            }), 6000);
-            await db.scheduledClientMessage.update({
-                where: { id: message.id },
-                data: { status: 'sent', sentAt: new Date() },
-            });
-        } catch (error) {
-            await db.scheduledClientMessage.update({
-                where: { id: message.id },
-                data: { status: 'failed', errorMsg: error instanceof Error ? error.message : 'Telegram send failed' },
-            });
-        }
-    }
 
     return true;
 }

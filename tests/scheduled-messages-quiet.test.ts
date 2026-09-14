@@ -42,6 +42,11 @@ vi.mock('@/lib/max-bot', () => ({
     sendMaxMessage: (...args: unknown[]) => sendMaxFull(...args),
 }));
 
+/** Встреча, которая ещё впереди: иначе крон справедливо сочтёт сообщение протухшим. */
+function futureDate() {
+    return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+}
+
 function baseMessage(overrides: Record<string, unknown> = {}) {
     return {
         id: 'msg_1',
@@ -51,6 +56,9 @@ function baseMessage(overrides: Record<string, unknown> = {}) {
         channel: 'telegram',
         text: 'Не забудьте про домашнее задание',
         status: 'pending',
+        // Настоящая строка всегда несёт дату создания и ссылку на встречу:
+        // по ним крон решает, не протухло ли сообщение (queued-delivery).
+        createdAt: new Date(),
         ...overrides,
     };
 }
@@ -65,7 +73,7 @@ describe('processScheduledMessages: session-based pending message respects clien
 
     it('sessionId set, clientNotificationsEnabled=false: client send is NOT called, message moves to a terminal state', async () => {
         scheduledClientMessageFindMany.mockResolvedValue([baseMessage()]);
-        diarySessionFindUnique.mockResolvedValue({ clientNotificationsEnabled: false });
+        diarySessionFindUnique.mockResolvedValue({ clientNotificationsEnabled: false, date: futureDate(), time: '12:00', status: 'confirmed' });
 
         const { processScheduledMessages } = await import('../src/lib/cron/scheduled-messages');
         await processScheduledMessages();
@@ -79,7 +87,7 @@ describe('processScheduledMessages: session-based pending message respects clien
 
     it('sessionId set, clientNotificationsEnabled=true: sends as before', async () => {
         scheduledClientMessageFindMany.mockResolvedValue([baseMessage()]);
-        diarySessionFindUnique.mockResolvedValue({ clientNotificationsEnabled: true });
+        diarySessionFindUnique.mockResolvedValue({ clientNotificationsEnabled: true, date: futureDate(), time: '12:00', status: 'confirmed' });
 
         const { processScheduledMessages } = await import('../src/lib/cron/scheduled-messages');
         await processScheduledMessages();
@@ -112,5 +120,36 @@ describe('processScheduledMessages: session-based pending message respects clien
         // Never even looks at the session's notification policy — this ping targets the psychologist.
         expect(diarySessionFindUnique).not.toHaveBeenCalled();
         expect(sendTelegramMessage).toHaveBeenCalledWith('tg_psy', expect.any(String));
+    });
+});
+
+describe('протухшее сообщение не уезжает и по расписанию (13.09.2026)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        scheduledClientMessageUpdate.mockResolvedValue({});
+        diaryClientFindUnique.mockResolvedValue({ telegramChatId: 'tg_client', maxChatId: null, name: 'Клиент' });
+        sendTelegramMessage.mockResolvedValue(true);
+    });
+
+    it('встреча прошла — крон не шлёт подтверждение задним числом', async () => {
+        // Сообщение, которому некуда было уйти, ждёт в очереди тридцать дней.
+        // Без этой проверки крон отправлял бы подтверждение встречи, которая
+        // давно состоялась, — ровно то, что получила клиентка 13.09.2026.
+        scheduledClientMessageFindMany.mockResolvedValue([baseMessage()]);
+        diarySessionFindUnique.mockResolvedValue({
+            clientNotificationsEnabled: true,
+            date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            time: '17:15',
+            status: 'confirmed',
+        });
+
+        const { processScheduledMessages } = await import('../src/lib/cron/scheduled-messages');
+        await processScheduledMessages();
+
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
+        expect(scheduledClientMessageUpdate).toHaveBeenCalledWith({
+            where: { id: 'msg_1' },
+            data: { status: 'failed', errorMsg: 'SESSION_PASSED' },
+        });
     });
 });

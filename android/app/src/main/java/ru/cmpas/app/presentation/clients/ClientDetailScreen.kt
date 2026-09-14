@@ -112,6 +112,12 @@ fun ClientDetailScreen(
         !detail?.maxId.isNullOrBlank() -> "max"
         else -> null
     }
+    // ВСЕ подключённые каналы, а не один выбранный за человека. Подключены
+    // оба — специалист выбирает, куда именно уходит это сообщение.
+    val connectedChannels = listOfNotNull(
+        "max".takeIf { !detail?.maxId.isNullOrBlank() },
+        "telegram".takeIf { !detail?.telegramId.isNullOrBlank() },
+    )
 
     Box(Modifier.fillMaxSize().background(CompasBg)) {
         Ambient()
@@ -317,8 +323,9 @@ fun ClientDetailScreen(
                 clientName = client.name,
                 channel = channel,
                 bound = bound,
+                channels = connectedChannels,
                 onClose = { sheet = null },
-                onSend = { viewModel.sendMessage(clientId, "custom", text = it) },
+                onSend = { text, pickedChannel -> viewModel.sendMessage(clientId, "custom", text = text, channel = pickedChannel) },
             )
             ClientSheet.INVITE -> if (client != null) InviteSheet(
                 clientName = client.name,
@@ -346,6 +353,7 @@ fun ClientDetailScreen(
                 clientName = client.name,
                 channel = channel,
                 bound = bound,
+                channels = connectedChannels,
                 documents = uiState.documents.map { it.asDocumentTemplate() },
                 isLoading = uiState.isLoadingDocuments,
                 isSending = uiState.isSendingDocument,
@@ -353,8 +361,8 @@ fun ClientDetailScreen(
                 initiallySelectedId = preferredDocumentId ?: consentPreselectionId,
                 onClose = { sheet = null },
                 onRetry = { viewModel.loadDocuments(clientId) },
-                onSendWithResult = { document, callback ->
-                    viewModel.sendDocument(clientId, channel ?: "telegram", document.id) { result, error ->
+                onSendWithResult = { document, pickedChannel, callback ->
+                    viewModel.sendDocument(clientId, pickedChannel ?: channel ?: "telegram", document.id) { result, error ->
                         callback(
                             when {
                                 error != null -> DocumentSendResult(error = error)
@@ -484,8 +492,20 @@ private fun MessengerCard(
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text("Мессенджеры клиента", style = tBody, color = CompasFg)
+                // ПОДПИСЬ ГОВОРИТ ТО, ЧТО НА ЭКРАНЕ, А НЕ ОБРАТНОЕ.
+                //
+                // Здесь стояло «Активен только один канал — второй отключён»
+                // — и это писалось ВСЕГДА, когда клиент привязан, даже когда
+                // оба кружка ниже горели зелёным. Человек читал утверждение,
+                // которое опровергалось строкой под ним.
                 Text(
-                    if (bound) "Активен только один канал — второй отключён" else client.phone ?: "Приглашение ещё не открыто",
+                    when {
+                        !bound -> client.phone ?: "Приглашение ещё не открыто"
+                        telegramConnected && maxConnected ->
+                            "Подключены оба — писать будем в ${if (channel == "max") "MAX" else "Telegram"}"
+                        maxConnected -> "Подключён MAX"
+                        else -> "Подключён Telegram"
+                    },
                     style = tMeta, color = CompasMutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }

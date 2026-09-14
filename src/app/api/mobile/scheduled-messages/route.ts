@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { pickChannel } from '@/lib/messaging/deliver';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction } from '@/lib/client-workflow';
 
@@ -55,7 +56,9 @@ export async function POST(req: NextRequest) {
         if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
         let messageText = '';
-        const channel = client.telegramChatId ? 'telegram' : (client as any).maxChatId ? 'max' : 'manual';
+        // Одно правило на весь продукт: основной канал — тот, через
+        // который человек пришёл последним (pickChannel).
+        const channel = pickChannel(client)?.channel ?? 'manual';
 
         if (type === 'custom') {
             messageText = String(customText || '').trim();

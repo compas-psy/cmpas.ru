@@ -336,7 +336,10 @@ data class NotificationsPage(val items: List<PracticeNotification>, val nextCurs
 data class MarkNotificationsReadRequest(val ids: List<String>? = null)
 
 @kotlinx.serialization.Serializable
-data class SendMessageRequest(val type: String, val text: String? = null, val sessionId: String? = null)
+data class SendMessageRequest(val type: String, val text: String? = null, val sessionId: String? = null,
+    /** Куда писать, если подключены оба мессенджера. Пусто — решает сервер. */
+    val channel: String? = null,
+)
 
 @kotlinx.serialization.Serializable
 data class InviteRequest(val channel: String = "auto")

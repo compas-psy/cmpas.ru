@@ -298,8 +298,8 @@ fun SessionDetailScreen(
                 bound = bound,
                 initialText = messageText,
                 onClose = { showMessage = false },
-                onSend = {
-                    viewModel.sendMessage(session.clientId, session.id, it) { _, message ->
+                onSend = { text, _ ->
+                    viewModel.sendMessage(session.clientId, session.id, text) { _, message ->
                         notice = message
                     }
                 },

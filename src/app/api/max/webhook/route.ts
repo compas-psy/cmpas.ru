@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { handleMaxUpdate, sendMaxMessage, type MaxUpdate } from '@/lib/max-bot';
-import { db } from '@/lib/db';
+import { flushQueuedMessages } from '@/lib/messaging/queued-delivery';
 import { consumeClientChannelInvite } from '@/lib/channel-binding';
 import { extractFirstName } from '@/lib/person-name';
 
@@ -60,27 +60,16 @@ async function handleClientInvite(update: MaxWebhookUpdate) {
             `Уведомления подключены, ${extractFirstName(client.name) || client.name}!\n\nЗдесь будут только подтверждения, напоминания, переносы и отмены ваших записей.`,
         );
 
-        const queued = await db.scheduledClientMessage.findMany({
-            where: { clientId: client.id, channel: 'max', status: 'pending' },
-            orderBy: { createdAt: 'asc' },
+        // Досылается только то, что ещё правда: сообщение о прошедшей
+        // встрече человеку, который ТОЛЬКО ЧТО подключил уведомления, —
+        // худшее первое впечатление, какое можно устроить. Правило и
+        // разбор живого случая — в queued-delivery.
+        await flushQueuedMessages({
+            clientId: client.id,
+            channel: 'max',
+            send: (text) => sendMaxMessage(userId, text).then(() => undefined),
+            announce: (text) => sendMaxMessage(userId, text).then(() => undefined),
         });
-        for (const message of queued) {
-            try {
-                // Разметку вырезать нельзя: вместе с ней пропадали АДРЕСА
-                // ссылок, и человек получал подпись, ведущую в никуда.
-                // sendMaxMessage сама переводит текст и прячет ссылки в кнопки.
-                await sendMaxMessage(userId, message.text);
-                await db.scheduledClientMessage.update({
-                    where: { id: message.id },
-                    data: { status: 'sent', sentAt: new Date() },
-                });
-            } catch (error) {
-                await db.scheduledClientMessage.update({
-                    where: { id: message.id },
-                    data: { status: 'failed', errorMsg: error instanceof Error ? error.message : 'MAX send failed' },
-                });
-            }
-        }
     } catch (error) {
         const code = error instanceof Error ? error.message : '';
         const message = code === 'INVITE_ALREADY_USED'

@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { pickChannel } from '@/lib/messaging/deliver';
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { buildSessionClientMessage, clientBookingLink, clientSessionLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
@@ -26,7 +27,9 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
 
     if (!full) return { status: 'not_found' as const };
 
-    const channel = full.client.telegramChatId ? 'telegram' : (full.client as any).maxChatId ? 'max' : 'manual';
+    // Одно правило на весь продукт: основной канал — тот, через который
+    // человек пришёл последним (pickChannel).
+    const channel = pickChannel(full.client)?.channel ?? 'manual';
     const recipientContact = full.client.telegramChatId || (full.client as any).maxChatId || full.client.phone || full.client.email || null;
     const deliveries = isFirstSession ? await createAutoDocumentDeliveries({
         psychologistId,
