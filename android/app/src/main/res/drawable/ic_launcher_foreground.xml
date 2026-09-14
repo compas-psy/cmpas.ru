@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PRAKTIKA launcher foreground: cream tree only, transparent bg.
-     Tree fitted into the 72dp safe zone (~62dp tall, centred) so the
-     launcher mask (circle / squircle) never crops it. -->
+<!-- ИКОНКА ПРАКТИКИ: передний слой — дерево, фон прозрачный.
+
+     КРУПНОСТЬ СЧИТАЕТСЯ ОТ ВИДИМОЙ ЗОНЫ 72 dp, А НЕ ОТ ХОЛСТА 108 dp.
+     Маска лаунчера вырезает центральные 72 dp и растягивает их на всю
+     плитку; внешние 18 dp с каждой стороны не видно никогда.
+
+     Здесь стоял scale 0.20013 — дерево высотой ~62 dp, то есть 0,86 от
+     видимой зоны вместо 0,60. По спецификации СИМПАСа (ICON-SPEC, раздел 1)
+     это «слишком крупно»: рядом с иконками других сервисов семейства наша
+     распирала плитку до краёв. Ровно та ошибка, от которой спецификация и
+     предостерегает — считать от 108 вместо 72.
+
+     Числа не подбираются на глаз: высота дерева 43,2 dp = 0,60 × 72,
+     scale к исходному пути 500×500 = 0.139355, центр 54 · 54.
+     translate = 54 − 250 × scale. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="0.20013"
-        android:scaleY="0.20013"
-        android:translateX="3.931477"
-        android:translateY="3.9675">
+        android:scaleX="0.139355"
+        android:scaleY="0.139355"
+        android:translateX="19.16125"
+        android:translateY="19.16125">
         <path
             android:fillColor="#F7F8F4"
             android:fillType="evenOdd"
