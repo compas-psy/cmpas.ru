@@ -4,6 +4,9 @@ import { ru } from 'date-fns/locale';
 import { db } from '@/lib/db';
 import { deliverMessage, deliverPhoto } from '@/lib/messaging/deliver';
 import { isQuietHour } from '@/lib/messaging/quiet-hours';
+import { escapeHtml } from '@/lib/messaging/format';
+import { extractFirstName } from '@/lib/person-name';
+import { timezoneLabel } from '@/lib/practice/timezones';
 import { paymentQrSource, paymentQrPng, PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
 import { paymentInstructionText } from '@/lib/messaging/payment-instruction';
 import { clampReminderHours } from '@/lib/messaging/payment-reminder-interval';
@@ -61,9 +64,12 @@ export function buildPaymentReminderText(params: {
     instruction: string;
 }): string {
     const when = format(params.date, 'd MMMM', { locale: ru });
-    const zone = params.timezoneLabel ? ` (${params.timezoneLabel})` : '';
+    const zone = params.timezoneLabel ? ` (${escapeHtml(params.timezoneLabel)})` : '';
+    // Имя, а не запись из карточки, и с экранированием: сообщение уходит с
+    // разметкой Telegram, и амперсанд в имени роняет отправку целиком.
+    const name = escapeHtml(extractFirstName(params.clientName) || params.clientName);
     return [
-        `${params.clientName}, напоминаю об оплате встречи ${when} в ${params.time}${zone}.`,
+        `${name}, напоминаю об оплате встречи ${when} в ${params.time}${zone}.`,
         '',
         params.instruction,
     ].join('\n');
@@ -147,6 +153,10 @@ export async function processPaymentReminders(now: Date = new Date()) {
                     clientName: client.name,
                     date: session.date,
                     time: session.time,
+                    // Пояс читается тем же запросом (readReminderSettings) и до
+                    // сих пор использовался только для тихих часов. Час при
+                    // этом уходил человеку безымянным.
+                    timezoneLabel: timezoneLabel(setting.timezone),
                     instruction,
                 });
 

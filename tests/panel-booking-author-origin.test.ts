@@ -31,7 +31,7 @@ describe('q_practice_booking_author считается по DiarySession.origin'
 
         const block = await qPracticeBookingAuthor();
         expect(block.state).toBe('ok');
-        if (block.state !== 'ok') return;
+        if (block.state !== 'ok' || !block.data) throw new Error('ожидались данные');
         expect(block.data.selfRate).toBe(75);
         expect(block.data.self).toBe(3);
         expect(block.data.manual).toBe(1);
@@ -44,7 +44,7 @@ describe('q_practice_booking_author считается по DiarySession.origin'
 
         const block = await qPracticeBookingAuthor();
         expect(block.state).toBe('ok');
-        if (block.state !== 'ok') return;
+        if (block.state !== 'ok' || !block.data) throw new Error('ожидались данные');
         expect(block.data.selfRate).toBe(50);
         expect(block.data.imported).toBe(98);
         expect(block.data.total).toBe(100);

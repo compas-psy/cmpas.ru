@@ -42,3 +42,38 @@ export function pickChannel(bearer: ChannelBearer | null | undefined): PickedCha
     if (max) return { channel: 'max', chatId: max };
     return null;
 }
+
+/**
+ * Каналы клиента с учётом СТАРОГО хранилища привязки.
+ *
+ * Часть клиентов пришла до того, как chat id переехал в сам `DiaryClient`:
+ * у них он лежит в связанной записи `TelegramClient.telegramUserId`. Эта
+ * поправка была написана в одном месте — в рассылке напоминаний, — и любой
+ * другой путь, читавший только `telegramChatId`, таким людям не писал вовсе.
+ *
+ * Отдельная тонкость, ради которой правило и вынесено сюда: у MAX-клиента
+ * идентификатор начинается с `max_` и может лежать в том же поле. Если его
+ * не распознать, человек получает «телеграм-сообщение» по MAX-адресу, то
+ * есть не получает ничего.
+ *
+ * Функция чистая: на вход — то, что прочитали из базы, на выход — носитель
+ * каналов для `pickChannel`.
+ */
+export function clientChannelBearer(client: {
+    telegramChatId?: string | null;
+    maxChatId?: string | null;
+    preferredChannel?: string | null;
+    telegramClient?: { telegramUserId?: string | null } | null;
+} | null | undefined): ChannelBearer | null {
+    if (!client) return null;
+
+    const legacy = client.telegramClient?.telegramUserId || null;
+    const telegramId = legacy || client.telegramChatId || null;
+    const maxId = legacy?.startsWith('max_') ? legacy : (client.maxChatId || null);
+
+    // Один и тот же id в обоих полях означает MAX-пользователя: считать его
+    // ещё и телеграмным — это второй адрес того же человека.
+    const telegram = maxId && telegramId === maxId ? null : telegramId;
+
+    return { telegramChatId: telegram, maxChatId: maxId, preferredChannel: client.preferredChannel ?? null };
+}

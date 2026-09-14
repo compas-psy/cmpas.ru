@@ -5,36 +5,23 @@
  */
 import { db } from '@/lib/db';
 import { isQuietHour } from '@/lib/messaging/quiet-hours';
-import { sendTelegramMessage } from '../telegram';
-import { sendMaxMessage } from '../max';
+import { deliverMessage } from '@/lib/messaging/deliver';
+import { clientChannelBearer } from '@/lib/messaging/channel-rule';
+import { escapeHtml } from '@/lib/messaging/format';
+import { extractFirstName } from '@/lib/person-name';
 
-async function notifyClient(
-    tgId: string | null | undefined,
-    maxId: string | null | undefined,
-    text: string,
-    options?: any
-) {
-    if (tgId && !tgId.startsWith('max_')) {
-        await sendTelegramMessage(tgId, text, { parse_mode: 'HTML', ...options }).catch(console.error);
-    }
-    if (maxId || (tgId && tgId.startsWith('max_'))) {
-        const mid = maxId || tgId;
-        if (mid) {
-            // MAX: send with inline keyboard buttons if available
-            const buttons = options?.reply_markup?.inline_keyboard?.map((row: any[]) =>
-                row.map((b: any) => b.url
-                    ? { text: b.text, url: b.url }
-                    : { text: b.text, payload: b.callback_data }
-                )
-            );
-            await (await import('../max-bot')).sendMaxMessage(
-                mid.replace('max_', ''),
-                text.replace(/<[^>]+>/g, ''), // Strip HTML for MAX
-                buttons
-            ).catch(console.error);
-        }
-    }
-}
+/**
+ * Вопрос о самочувствии уходит В ОДИН КАНАЛ.
+ *
+ * Здесь стояли два `if` подряд — тот же дефект, что был в рассылке
+ * напоминаний: у кого привязаны и Telegram, и MAX, тот получал вечерний
+ * вопрос дважды. Теперь канал выбирает общее правило продукта
+ * (`deliverMessage` → `pickChannel`), и разметку в MAX переводит сама
+ * отправка, а не регулярное выражение, срезавшее адрес вместе с тегом.
+ *
+ * Кнопки описываются один раз, в общем виде: перевод в диалект Telegram или
+ * MAX делает `deliverMessage`.
+ */
 
 /**
  * Проверяет завершённые сессии и отправляет клиенту запрос оценки самочувствия.
@@ -60,7 +47,7 @@ export async function processPostSessionNudge() {
                 date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
             } as any,
             include: {
-                client: { select: { id: true, name: true, telegramChatId: true, maxChatId: true, telegramClient: { select: { telegramUserId: true } } } },
+                client: { select: { id: true, name: true, telegramChatId: true, maxChatId: true, preferredChannel: true, telegramClient: { select: { telegramUserId: true } } } },
                 psychologist: {
                     select: {
                         id: true,
@@ -107,30 +94,25 @@ export async function processPostSessionNudge() {
                 continue;
             }
 
-            const clientTgId = session.client?.telegramClient?.telegramUserId || session.client?.telegramChatId;
-            const clientMaxId = session.client?.maxChatId;
+            // Имя — то, как человека зовут, а не полная запись из карточки:
+            // «Спасибо за сессию, Мартынова Ирина Петровна» звучит как письмо
+            // из банка. Сообщение о встрече обращается по имени, и вечерний
+            // вопрос обязан звучать так же.
+            const msg = `Спасибо за сессию, ${escapeHtml(extractFirstName(session.client.name) || session.client.name)}!\n\nКак вы себя чувствуете?`;
 
-            if (clientTgId || clientMaxId) {
-                const msg = `Спасибо за сессию, ${session.client.name}!\n\nКак вы себя чувствуете?`;
-
-                await notifyClient(clientTgId, clientMaxId, msg, {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                { text: 'Отлично', callback_data: `mood_1_${session.id}` },
-                                { text: 'Хорошо', callback_data: `mood_2_${session.id}` },
-                            ],
-                            [
-                                { text: 'Нормально', callback_data: `mood_3_${session.id}` },
-                                { text: 'Так себе', callback_data: `mood_4_${session.id}` },
-                            ],
-                            [
-                                { text: 'Плохо', callback_data: `mood_5_${session.id}` },
-                            ]
-                        ]
-                    }
-                });
-            }
+            await deliverMessage(clientChannelBearer(session.client), msg, [
+                [
+                    { text: 'Отлично', payload: `mood_1_${session.id}` },
+                    { text: 'Хорошо', payload: `mood_2_${session.id}` },
+                ],
+                [
+                    { text: 'Нормально', payload: `mood_3_${session.id}` },
+                    { text: 'Так себе', payload: `mood_4_${session.id}` },
+                ],
+                [
+                    { text: 'Плохо', payload: `mood_5_${session.id}` },
+                ],
+            ]);
 
             await db.diarySession.update({
                 where: { id: session.id },

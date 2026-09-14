@@ -145,10 +145,22 @@ describe('processReminders пишет ReminderOutbox на каждую факт�
         expect(call.create.dueAt.toISOString()).toBe('2026-08-19T09:00:00.000Z');
     });
 
-    it('оба канала сразу (Telegram и MAX) пишут по отдельной строке каждый', async () => {
+    // РАНЬШЕ ЭТОТ ТЕСТ СТЕРЁГ ДЕФЕКТ.
+    //
+    // Он назывался «оба канала сразу пишут по отдельной строке каждый» и
+    // требовал ДВУХ строк журнала на одно напоминание — потому что рассылка
+    // и правда слала его дважды: в Telegram и в MAX. Человеку с двумя
+    // привязанными мессенджерами каждое напоминание приходило по два раза.
+    //
+    // Правило «одно событие — одно сообщение, в один канал» написано после
+    // живого случая 10.09.2026 и с тех пор соблюдалось в трёх местах из
+    // четырёх; рассылка по расписанию осталась со старой парой `if`, а этот
+    // тест закреплял её как норму.
+    //
+    // Теперь канал выбирает общее правило продукта (pickChannel), и журнал
+    // получает ровно одну строку — на тот канал, в который правда отправляли.
+    it('у кого привязаны оба мессенджера — одно сообщение и одна строка журнала', async () => {
         sendTelegramMessage.mockResolvedValue(true);
-        // Client-напоминания всегда несут inline-клавиатуру (sessionActions), поэтому
-        // реально уходят через sendMaxFull ('@/lib/max-bot'), не sendMaxText ('@/lib/max').
         sendMaxFull.mockResolvedValue({ success: true });
         findMany
             .mockResolvedValueOnce([
@@ -161,9 +173,33 @@ describe('processReminders пишет ReminderOutbox на каждую факт�
         const { processReminders } = await import('../src/lib/cron/reminders');
         await processReminders();
 
-        expect(upsert).toHaveBeenCalledTimes(2);
-        const channels = upsert.mock.calls.map((c) => c[0].create.channel).sort();
-        expect(channels).toEqual(['max', 'telegram']);
+        expect(upsert).toHaveBeenCalledTimes(1);
+        expect(upsert.mock.calls[0][0].create.channel).toBe('telegram');
+        expect(sendMaxFull).not.toHaveBeenCalled();
+    });
+
+    // Основной канал решает, а не порядок полей: у пришедшего через MAX
+    // письмо уходит в MAX, хотя telegramChatId у него тоже заполнен.
+    it('основной канал MAX выигрывает у заполненного telegramChatId', async () => {
+        sendTelegramMessage.mockResolvedValue(true);
+        sendMaxFull.mockResolvedValue({ success: true });
+        findMany
+            .mockResolvedValueOnce([
+                baseSession({
+                    client: {
+                        id: 'client_1', name: 'Клиент', telegramClient: null,
+                        telegramChatId: 'tg_client', maxChatId: 'max_client', preferredChannel: 'max',
+                    },
+                }),
+            ])
+            .mockResolvedValueOnce([]);
+
+        const { processReminders } = await import('../src/lib/cron/reminders');
+        await processReminders();
+
+        expect(upsert).toHaveBeenCalledTimes(1);
+        expect(upsert.mock.calls[0][0].create.channel).toBe('max');
+        expect(sendTelegramMessage).not.toHaveBeenCalled();
     });
 
     it('MAX-ответ с success:false считается неуспешной отправкой', async () => {

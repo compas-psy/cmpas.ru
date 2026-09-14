@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { pickChannel } from '@/lib/messaging/deliver';
 import { deliverMessage } from '@/lib/messaging/deliver';
 import { sessionActionButtons } from '@/lib/practice/session-action-links';
+import { timezoneLabel } from '@/lib/practice/timezones';
 import { buildSessionClientMessage, clientBookingLink, clientSessionLink, createAutoDocumentDeliveries, getPaymentInstruction } from '@/lib/client-workflow';
 
 /**
@@ -58,6 +59,11 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
         payment,
         bookingLink,
         manageLink,
+        // ЧЕЙ ЭТО ЧАС. Поле было заведено ровно под этот случай — «клиент из
+        // другого региона приходил на час-другой мимо, и виноватым выглядел
+        // сервис», — но передавалось только двумя сообщениями онбординга.
+        // Главное сообщение о записи уходило без пояса.
+        timezoneLabel: timezoneLabel(full.psychologist.psychologistSettings?.timezone),
     });
 
     // ТРИ КНОПКИ — РОВНО СТОЛЬКО, СКОЛЬКО ДЕЙСТВИЙ ОБЕЩАЕТ ТЕКСТ.
