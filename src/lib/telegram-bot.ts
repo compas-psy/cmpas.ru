@@ -10,6 +10,8 @@ import { telegramSendAgent } from '@/lib/telegram-proxy';
 import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
+import { sessionActionButtons } from '@/lib/practice/session-action-links';
+import { escapeHtml } from '@/lib/messaging/format';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 
@@ -289,9 +291,17 @@ export function setupBot() {
         const tgClient = await db.telegramClient.findUnique({ where: { telegramUserId: tgId } });
         if (tgClient && tgClient.psychologistId) return showClientMenu(ctx, tgClient.psychologistId, tgClient.fullName || 'Клиент', tgClient.diaryClientId || undefined);
 
+        // Имя продукта — ПРАКТИКА. «Compas.ru» пережил переименование и
+        // здоровался от имени того, чего больше нет.
+        //
+        // И дверь здесь одна — для специалиста: бот не знает этого человека,
+        // а клиент попадает в продукт только по ссылке своего психолога.
+        // Поэтому кнопка названа прямо, а клиенту сказано, что делать.
         await ctx.reply(
-            'Добро пожаловать в Compas.ru!\n\nЕсли вы психолог — нажмите кнопку ниже, чтобы привязать свой аккаунт и получать уведомления.',
-            Markup.inlineKeyboard([[Markup.button.webApp('Войти в кабинет', `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}`)]])
+            'Здравствуйте! Это ПРАКТИКА — рабочая среда для психологов, коучей и профориентаторов.\n\n'
+            + 'Если вы специалист — нажмите кнопку ниже, чтобы привязать кабинет и получать уведомления.\n\n'
+            + 'Если вы пришли к своему специалисту — откройте ссылку, которую он вам прислал: по ней и работает запись.',
+            Markup.inlineKeyboard([[Markup.button.webApp('Я специалист — привязать кабинет', `${TELEGRAM_APP_URL}/diary/bot?v=${Date.now()}`)]])
         );
     });
 
@@ -332,22 +342,38 @@ export function setupBot() {
 
         const client = await db.diaryClient.findFirst({ where: { telegramChatId: tgId } });
         if (client) {
+            // ПОКАЗЫВАЕМ ВСЁ ПРЕДСТОЯЩЕЕ, А НЕ ТОЛЬКО ПОДТВЕРЖДЁННОЕ.
+            //
+            // Здесь стоял фильтр `status: 'confirmed'`. Человек записывался,
+            // через минуту спрашивал бота «мои сессии» — и слышал «у вас нет
+            // предстоящих записей», хотя сообщение об этой самой записи
+            // пришло от того же бота. Только что созданная встреча ждёт
+            // подтверждения и в список не попадала.
             const sessions = await db.diarySession.findMany({
-                where: { clientId: client.id, status: 'confirmed', date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+                where: {
+                    clientId: client.id,
+                    status: { in: ['pending', 'confirmed'] },
+                    date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+                },
                 orderBy: [{ date: 'asc' }, { time: 'asc' }],
                 include: { psychologist: true }
             });
             if (sessions.length === 0) return ctx.reply('У вас нет предстоящих записей.');
             for (const s of sessions) {
-                const bookUrl = `${TELEGRAM_APP_URL}/bot/book/${s.psychologistId}?c=${personalClientToken(s.clientId)}&v=${Date.now()}`;
-                const msg = `<b>Сессия с психологом ${s.psychologist.name}</b>\n\nДата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\nФормат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}`;
+                const state = s.status === 'confirmed' ? 'Подтверждена' : 'Ожидает подтверждения';
+                const msg = `<b>Сессия с психологом ${escapeHtml(s.psychologist.name || 'Специалист')}</b>\n\nДата: ${format(s.date, 'dd.MM.yyyy')} в ${s.time}\nФормат: ${s.format === 'offline' ? 'Очно' : 'Онлайн'}\nСостояние: ${state}`;
+                // ТРИ ДЕЙСТВИЯ ИЗ ОДНОГО ИСТОЧНИКА. Кнопка «Перенести» вела на
+                // страницу НОВОЙ записи — подбор времени с нуля, при том что
+                // собственная встреча человека оставалась на месте. Тот же
+                // дефект был найден и закрыт в напоминаниях и в сообщении о
+                // записи; здесь адрес собирался по месту и остался старым.
                 await ctx.reply(msg, {
                     parse_mode: 'HTML',
                     reply_markup: {
-                        inline_keyboard: [
-                            [{ text: 'Перенести', web_app: { url: bookUrl } }],
-                            [{ text: 'Отменить', callback_data: `cancel_${s.id}` }]
-                        ]
+                        inline_keyboard: sessionActionButtons(
+                            { psychologistId: s.psychologistId, clientId: s.clientId, sessionId: s.id, date: s.date },
+                            { includeConfirm: s.status !== 'confirmed' },
+                        ),
                     }
                 });
             }
