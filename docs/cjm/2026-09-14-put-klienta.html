@@ -1,0 +1,1218 @@
+<title>Путь клиента</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">14.09.2026 · на утверждение</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Разбор пути · клиент</div>
+  <h1>Путь клиента</h1>
+  <p class="lede" style="margin-top:16px">Весь путь человека, который пришёл к специалисту: приглашение, подключение мессенджера, страница записи, подтверждение, документы, оплата, напоминания, перенос и отмена, вечер после встречи. Это первый разбор, где клиент — главный герой: до сих пор его путь был описан кусками внутри разборов о специалисте, и каждый кусок проверяли отдельно от остальных.</p>
+
+  <div class="ask">
+    <b>Почему это понадобилось.</b> 14.09.2026 клиент получил в Telegram <code>&lt;a href="…"&gt;Перейти к оплате&lt;/a&gt;</code> разметкой вместо ссылки. Дефект починен за час, но нашёлся он на живом человеке, а не у нас: <b>сообщение клиенту никто не проверяет как целый маршрут</b> — каждое письмо собирается своим кодом, и сверить их между собой негде.
+    <br><br>Здесь они сверены. <b>Двадцать четыре расхождения</b>, из них пять таких, где человек остаётся без ответа или получает неправду. Разбор написан ДО правок, как заведено: сначала решение учредителя по четырём развилкам раздела 05, потом работа по разделу 06.
+  </div>
+
+  <nav class="toc">
+    <a href="#map"><span>01</span>Карта пути</a>
+    <a href="#frames"><span>02</span>Каркасы экранов</a>
+    <a href="#texts"><span>03</span>Тексты и ссылки</a>
+    <a href="#defects"><span>04</span>Дефекты</a>
+    <a href="#forks"><span>05</span>Развилки</a>
+    <a href="#plan"><span>06</span>Порядок работ</a>
+  </nav>
+</header>
+
+<section id="map">
+  <div class="sechead">
+    <div class="eyebrow">01 · Карта пути</div>
+    <h2>Что с человеком происходит на самом деле</h2>
+    <p class="lede">Слева — стадия и кто действует. Зелёным — сообщения, которые уходят человеку. Красной рамкой обведено то, где путь обрывается или обещает не то; номер дефекта ведёт в раздел 04.</p>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">завёл<br>карточку</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Кабинет / приложение</div>
+        <div class="what">Приглашение подключить уведомления</div>
+        <div class="note">Одноразовая ссылка <code>/connect/&lt;токен&gt;</code>, живёт 30 дней. Специалист пересылает её сам — бот не может написать человеку первым, пока тот не нажал «Начать».</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Страница /connect</div>
+        <div class="what">«Куда присылать уведомления?»</div>
+        <div class="note">На телефоне страница через 350 мс сама уходит в MAX, не дожидаясь ответа на собственный вопрос. Внизу обещано «подключение можно отключить в любой момент» — отключения у клиента нет нигде.</div>
+        <div class="tags"><a class="chip" href="#k14">К14</a><a class="chip" href="#k13">К13</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">нажал<br>«Начать»</div></div>
+    <div class="lane-body">
+      <div class="node msg">
+        <div class="where">Клиенту</div>
+        <div class="what">«Здравствуйте, Ирина! Ваш аккаунт привязан»</div>
+        <div class="note">Дальше — накопленное за время без уведомлений, с человеческим предисловием и без встреч, час которых уже прошёл. Правило одно на все шесть точек привязки.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Бот, дальше</div>
+        <div class="what">Меню не приходит</div>
+        <div class="note">После привязки по приглашению клавиатура «Записаться / Мои сессии» не показывается: она есть только на пути <code>psy_</code>. Человек остаётся в переписке, где из всех действий — читать.</div>
+        <div class="tags"><a class="chip" href="#k23">К23</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">открыл<br>страницу записи</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">/u/&lt;имя-специалиста&gt;</div>
+        <div class="what">«Когда вам удобнее?» → чипы → часы</div>
+        <div class="note">Порядок исправлен 13.09: сначала вопрос, потом ответ. Отключённая кнопка называет, чего ждёт. Устройство помнит имя, телефон и предпочтение, и есть кнопка «Не запоминать меня».</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">«Нет подходящего времени?»</div>
+        <div class="what">«Специалист увидит вашу заявку»</div>
+        <div class="note">Не увидит. Заявка ложится в <code>WaitlistEntry</code>, которого нет ни на одном экране — ни в вебе, ни в приложении, ни в админке — и который не порождает уведомления.</div>
+        <div class="tags"><a class="chip" href="#k4">К4</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">нажал<br>«Записаться»</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">«Вы записаны!»</div>
+        <div class="what">«Специалист свяжется с вами по телефону»</div>
+        <div class="note">Так выглядит запись из обычного браузера: мессенджер не привязан, канала нет. Ни подтверждения, ни напоминаний, ни ссылки на встречу человек не получит — и подключить уведомления ему здесь не предлагают, хотя приглашение умеет создаваться одной строкой.</div>
+        <div class="tags"><a class="chip" href="#k16">К16</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad msg">
+        <div class="where">Клиенту · если канал есть</div>
+        <div class="what">«Подтверждаю запись… 26 сентября в 17:15»</div>
+        <div class="note">Час назван без пояса. Поле для пояса в сборщике есть и заведено ровно под этот случай, но на главном пути его никто не передаёт — только в двух сообщениях онбординга.</div>
+        <div class="tags"><a class="chip" href="#k6">К6</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Кнопки под сообщением</div>
+        <div class="what">«Подтверждаю» · «Перенести» «Отменить»</div>
+        <div class="note">Три действия, три отдельных подписанных токена, каждый на свою встречу. Ссылка «здесь» ведёт на саму встречу, а не на подбор нового времени.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">документы<br>и оплата</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Ссылка на документ</div>
+        <div class="what">Название показывается по-разному</div>
+        <div class="note">В сообщении о встрече — как записано, то есть иногда именем файла; в сообщении новому клиенту — причёсанное; на самой странице — причёсанное иначе. Три правила на одно название в одном маршруте.</div>
+        <div class="tags"><a class="chip" href="#k12">К12</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Страница документа</div>
+        <div class="what">Галочка и «Принимаю условия»</div>
+        <div class="note">Открытие фиксируется отдельно от согласия, согласие — только явной галочкой, версия и дата показаны. Правовая часть здесь сделана честно.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Инструкция об оплате</div>
+        <div class="what">Текст, ссылка, QR</div>
+        <div class="note">Вид выбирает сборщик сообщения, а не производитель текста — 14.09 починено. Оговорка «ПРАКТИКА не принимает оплату» стоит в обоих видах.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Система</div><div class="when">за сутки<br>и за час</div></div>
+    <div class="lane-body">
+      <div class="node bad msg">
+        <div class="where">Клиенту · Telegram</div>
+        <div class="what">«Напоминание о встрече»</div>
+        <div class="note">Обращение полным именем из карточки: «Здравствуйте, Мартынова Ирина Петровна!». Имя не экранировано — амперсанд или угловая скобка в карточке роняют отправку целиком.</div>
+        <div class="tags"><a class="chip" href="#k19">К19</a><a class="chip" href="#k20">К20</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad msg">
+        <div class="where">Клиенту · MAX</div>
+        <div class="what">Ссылки на видеовстречу больше нет</div>
+        <div class="note">Перед отправкой в MAX разметка срезается регулярным выражением вместе с адресом. Отправка в MAX умеет вынести ссылку в кнопку — но получает текст, из которого адрес уже удалён.</div>
+        <div class="tags"><a class="chip" href="#k3">К3</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad msg">
+        <div class="where">Клиенту · оба канала</div>
+        <div class="what">То же напоминание второй раз</div>
+        <div class="note">У кого привязаны и Telegram, и MAX, тот получает каждое напоминание дважды. Правило «одно событие — одно сообщение» написано и соблюдается на трёх путях из четырёх; рассылка по расписанию осталась со старой парой <code>if</code>.</div>
+        <div class="tags"><a class="chip" href="#k2">К2</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">не сможет<br>прийти</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Клиент пишет боту</div>
+        <div class="what">«Я заболел, не смогу завтра»</div>
+        <div class="note">В Telegram — полная тишина: обработчика обычного текста нет вовсе. В MAX — «Используйте команды: /start, /sessions, /help». Ни одно слово клиента не доходит до специалиста никогда.</div>
+        <div class="tags"><a class="chip" href="#k1">К1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Кнопка «Отменить»</div>
+        <div class="what">Встреча отменена. Сразу</div>
+        <div class="note">Одно нажатие, без переспроса и без отката. Соседняя кнопка в том же ряду — «Перенести». Вернуть отменённую встречу клиент не может ничем: страница переноса на отменённой встрече отвечает отказом.</div>
+        <div class="tags"><a class="chip" href="#k9">К9</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Страница результата</div>
+        <div class="what">«Специалист увидит изменение»</div>
+        <div class="note">И всё. Ни «записаться заново», ни «вернуться к моим встречам» — тупик там, где человеку как раз нужен следующий шаг.</div>
+        <div class="tags"><a class="chip" href="#k9">К9</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">ищет свои<br>встречи</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">/bot/client «Мои записи»</div>
+        <div class="what">Предстоящие · Прошедшие, карточка встречи</div>
+        <div class="note">Здесь всё на месте: подтверждение, перенос, отмена, ссылка на видеовстречу, повторная запись по прошедшей. Открывается и в мессенджере, и в обычном браузере по подписанной ссылке.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Команда «Мои сессии» в боте</div>
+        <div class="what">«У вас нет предстоящих записей»</div>
+        <div class="note">Тот же человек, та же минута. Команда показывает только подтверждённые встречи — только что созданная запись в списке не появляется. А кнопка «Перенести» рядом ведёт на подбор времени с нуля: этот дефект был найден и исправлен в сообщениях, но в командах бота остался.</div>
+        <div class="tags"><a class="chip" href="#k7">К7</a><a class="chip" href="#k8">К8</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Система</div><div class="when">вечером<br>после встречи</div></div>
+    <div class="lane-body">
+      <div class="node bad msg">
+        <div class="where">Клиенту</div>
+        <div class="what">«Как вы себя чувствуете?» → «Плохо»</div>
+        <div class="note">Ответ записывается в <code>clientMoodRating</code> и не читается ни одним экраном, ни одним уведомлением, ни одним отчётом. Бот отвечает «Спасибо за обратную связь! Записано: Плохо» — и на этом всё.</div>
+        <div class="tags"><a class="chip" href="#k5">К5</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node msg">
+        <div class="where">Клиенту · через 2 часа</div>
+        <div class="what">«Спасибо за встречу… вот ближайшее время»</div>
+        <div class="note">Не уходит тому, кто уже записан, не уходит в тихие часы, не повторяется. Ссылка — за словом.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="frames">
+  <div class="sechead">
+    <div class="eyebrow">02 · Каркасы экранов</div>
+    <h2>Как сейчас и как предлагается</h2>
+    <p class="lede">Шесть мест, где путь клиента расходится с тем, что ему обещали. Слева — то, что человек видит сегодня; справа — предложение. Каркас показывает состав и порядок, а не оформление: палитра и типографика не меняются.</p>
+  </div>
+
+  <div class="stack g48">
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 1 · Клиент написал боту <a class="chip" href="#k1" style="vertical-align:middle">К1</a> <a class="chip" href="#k18" style="vertical-align:middle">К18</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Самое частое, что человек делает перед встречей, которую не сможет посетить, — пишет в тот чат, откуда пришло напоминание. Сегодня это разговор со стеной.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>ПРАКТИКА · бот</span><span>19:42</span></div>
+            <div class="wf-msg"><div class="l">Напоминание о встрече<br>Завтра в 11:00.</div></div>
+            <div class="wf-row" style="justify-content:flex-end"><div class="wf-card" style="background:var(--sunk);max-width:78%"><div class="wf-t">Здравствуйте, я заболел, завтра не смогу. Как перенести?</div></div></div>
+            <div class="wf-note">Telegram: ответа нет вовсе — обработчика обычного текста в боте не существует.</div>
+            <div class="wf-note">MAX: «Используйте команды: /start — начало, /sessions — мои сессии, /help — помощь» + кнопка «Открыть ПРАКТИКУ», ведущая в кабинет специалиста.</div>
+            <div class="wf-row"><div class="wf-btn cut">специалист не узнает ничего</div></div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>ПРАКТИКА · бот</span><span>19:42</span></div>
+            <div class="wf-row" style="justify-content:flex-end"><div class="wf-card" style="background:var(--sunk);max-width:78%"><div class="wf-t">Здравствуйте, я заболел, завтра не смогу. Как перенести?</div></div></div>
+            <div class="wf-msg"><div class="l">Передал ваше сообщение специалисту — он увидит его в ПРАКТИКЕ. Если нужно перенести встречу прямо сейчас, вот она:</div></div>
+            <div class="wf-row"><div class="wf-btn pri">Перенести · завтра 11:00</div></div>
+            <div class="wf-row"><div class="wf-btn">Мои записи</div></div>
+            <div class="wf-note">В кабинете и в приложении сообщение появляется в «Требует внимания» рядом с карточкой клиента — как непрочитанное, с датой и текстом.</div>
+            <div class="wf-note">Бот отвечает не «я вас понял», а ровно то, что произошло: передал. Отвечать на сообщение по-прежнему будет человек.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 2 · Экран «Вы записаны!» в обычном браузере <a class="chip" href="#k16" style="vertical-align:middle">К16</a> <a class="chip" href="#k24" style="vertical-align:middle">К24</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Так заканчивается запись по ссылке <code>/u/&lt;имя&gt;</code>, открытой не в мессенджере. Это единственный момент, когда человек точно смотрит на экран и готов нажать ещё одну кнопку.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/u/martynov-ilya</span><span></span></div>
+            <div class="wf-h">Вы записаны!</div>
+            <div class="wf-sub">Специалист получил вашу запись и свяжется с вами по телефону.</div>
+            <div class="wf-card"><div class="wf-meta">Дата и время</div><div class="wf-t b">26 сентября, 17:15</div><div class="wf-meta">Формат</div><div class="wf-t">Онлайн</div></div>
+            <div class="wf-row"><div class="wf-btn">Готово</div></div>
+            <div class="wf-note">Подтверждения не придёт. Напоминаний не придёт. Ссылки на встречу у человека нет — «Мои записи» открываются только по подписанной ссылке, которую ему никто не давал.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/u/martynov-ilya</span><span></span></div>
+            <div class="wf-h">Вы записаны</div>
+            <div class="wf-sub">26 сентября в 17:15 (Москва, GMT+3), онлайн.</div>
+            <div class="wf-card">
+              <div class="wf-t b">Куда прислать напоминание?</div>
+              <div class="wf-meta">Подтверждение, напоминание за сутки и за час, ссылка на встречу. Отключить можно в любой момент.</div>
+              <div class="wf-row rw"><div class="wf-btn pri">MAX</div><div class="wf-btn">Telegram</div></div>
+            </div>
+            <div class="wf-row"><div class="wf-btn">Не нужно, специалист позвонит</div></div>
+            <div class="wf-note">Кнопки ведут в то же одноразовое приглашение <code>/connect/&lt;токен&gt;</code>, которым сегодня пользуется специалист, — новой механики не требуется.</div>
+            <div class="wf-note">Обещание «отключить в любой момент» здесь придётся сделать правдой: см. К13.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 3 · Напоминание в MAX <a class="chip" href="#k3" style="vertical-align:middle">К3</a> <a class="chip" href="#k19" style="vertical-align:middle">К19</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">За сутки до онлайн-встречи человеку нужен ровно один предмет — ссылка для подключения. В MAX её в сообщении нет.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>MAX · ПРАКТИКА</span><span>11:00</span></div>
+            <div class="wf-msg">
+              <div class="l">Напоминание о встрече</div>
+              <div class="l">Здравствуйте, Мартынова Ирина Петровна! Завтра в 11:00 у вас встреча.<br>Формат: Онлайн.<br>Ссылка для подключения: Яндекс Телемост</div>
+              <div class="l">Пожалуйста, подтвердите встречу кнопкой ниже.</div>
+            </div>
+            <div class="wf-row rw"><div class="wf-btn">Подтверждаю</div></div>
+            <div class="wf-row rw"><div class="wf-btn">Перенести</div><div class="wf-btn">Отменить</div></div>
+            <div class="wf-note">«Яндекс Телемост» — это слово, а не ссылка: адрес срезан регулярным выражением по пути в MAX.</div>
+            <div class="wf-note">Обращение — полное имя из карточки специалиста, вместе с отчеством и фамилией.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>MAX · ПРАКТИКА</span><span>11:00</span></div>
+            <div class="wf-msg">
+              <div class="l">Напоминание о встрече</div>
+              <div class="l">Здравствуйте, Ирина! Завтра в 11:00 (Москва, GMT+3) у вас встреча.<br>Формат: онлайн.</div>
+              <div class="l">Пожалуйста, подтвердите встречу кнопкой ниже.</div>
+            </div>
+            <div class="wf-row"><div class="wf-btn pri">Яндекс Телемост</div></div>
+            <div class="wf-row rw"><div class="wf-btn">Подтверждаю</div></div>
+            <div class="wf-row rw"><div class="wf-btn">Перенести</div><div class="wf-btn">Отменить</div></div>
+            <div class="wf-note">Ссылка уходит кнопкой — так же, как во всех остальных сообщениях в MAX. Отправка это уже умеет; её нужно перестать обходить.</div>
+            <div class="wf-note">Имя — то, как человека зовут, а не то, как он записан в карточке. Час — с поясом.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 4 · Отмена по кнопке <a class="chip" href="#k9" style="vertical-align:middle">К9</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">«Отменить» стоит в одном ряду с «Перенести». Промах пальцем стоит встречи, и вернуть её человек не может ничем.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru</span><span></span></div>
+            <div class="wf-h" style="color:var(--alarm)">Встреча отменена</div>
+            <div class="wf-sub">Специалист увидит изменение в ПРАКТИКЕ.</div>
+            <div class="wf-note">Переспроса не было: переход по ссылке сразу меняет статус встречи.</div>
+            <div class="wf-note">Дальше идти некуда — ни записаться заново, ни вернуться к своим встречам.</div>
+            <div class="wf-note">Повторный переход по той же ссылке снова скажет «отменена» и снова разбудит специалиста уведомлением.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru</span><span></span></div>
+            <div class="wf-h">Отменить встречу?</div>
+            <div class="wf-card"><div class="wf-t b">26 сентября, 17:15</div><div class="wf-meta">Илья Мартынов · онлайн</div></div>
+            <div class="wf-row rw"><div class="wf-btn danger">Да, отменить</div><div class="wf-btn">Оставить</div></div>
+            <div class="wf-note">После отмены — тот же экран, но с итогом и двумя дверями: «Записаться на другое время» и «Мои записи».</div>
+            <div class="wf-note">Десять минут на возврат: «Отменили случайно? Вернуть встречу» — пока час не занял кто-то другой.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 5 · «Мои сессии» командой бота <a class="chip" href="#k7" style="vertical-align:middle">К7</a> <a class="chip" href="#k8" style="vertical-align:middle">К8</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Человек только что записался и проверяет, что запись на месте. Бот отвечает, что записей нет.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>Telegram · ПРАКТИКА</span><span>17:20</span></div>
+            <div class="wf-row" style="justify-content:flex-end"><div class="wf-card" style="background:var(--sunk)"><div class="wf-t">Мои сессии</div></div></div>
+            <div class="wf-msg"><div class="l">У вас нет предстоящих записей.</div></div>
+            <div class="wf-note">Встреча есть, но она в состоянии «ожидает подтверждения», а список показывает только подтверждённые.</div>
+            <div class="wf-note">Когда встреча всё-таки попадает в список, кнопка «Перенести» рядом с ней открывает подбор времени с нуля, а не перенос этой встречи.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>Telegram · ПРАКТИКА</span><span>17:20</span></div>
+            <div class="wf-msg">
+              <div class="l"><b>26 сентября, 17:15</b><br>Илья Мартынов · онлайн<br>Ожидает подтверждения</div>
+            </div>
+            <div class="wf-row rw"><div class="wf-btn pri">Подтверждаю</div></div>
+            <div class="wf-row rw"><div class="wf-btn">Перенести</div><div class="wf-btn">Отменить</div></div>
+            <div class="wf-note">Те же три действия и те же адреса, что в сообщении о встрече и в напоминании: один источник ссылок на все три места.</div>
+            <div class="wf-note">Список показывает всё предстоящее и называет состояние словом.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 6 · Страница переноса <a class="chip" href="#k15" style="vertical-align:middle">К15</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Тот же дефект, который учредитель нашёл 13.09 на странице записи, живёт на соседней странице — той, куда ведёт кнопка «Перенести».</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/client/reschedule</span><span></span></div>
+            <div class="wf-h">Выберите новое время</div>
+            <div class="wf-card"><div class="wf-meta">Сейчас записаны к Илье Мартынову</div><div class="wf-t b">26 сентября 2026 г. в 17:15</div></div>
+            <div class="wf-sub">сентябрь 2026 · календарь</div>
+            <div class="wf-row rw"><div class="wf-line m"></div><div class="wf-line s"></div></div>
+            <div class="wf-row"><div class="wf-btn off">Перенести встречу</div></div>
+            <div class="wf-note">Кнопка погашена и молчит о причине — ровно то, что было на странице записи до 13.09.</div>
+            <div class="wf-note">Ни пояса времени, ни чипов «будни вечером / утро выходных», которые есть на странице записи. Один человек, две разные механики выбора часа.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/client/reschedule</span><span></span></div>
+            <div class="wf-h">Выберите новое время</div>
+            <div class="wf-card"><div class="wf-meta">Сейчас записаны к Илье Мартынову</div><div class="wf-t b">26 сентября 2026 г. в 17:15 (Москва, GMT+3)</div></div>
+            <div class="wf-row rw"><div class="wf-btn">Будни, после 18:00</div><div class="wf-btn">Утро выходных</div></div>
+            <div class="wf-sub">сентябрь 2026 · календарь</div>
+            <div class="wf-row rw"><div class="wf-line m"></div><div class="wf-line s"></div></div>
+            <div class="wf-row"><div class="wf-btn off">Сначала выберите время</div></div>
+            <div class="wf-note">Те же чипы и то же правило «сначала вопрос, потом ответ», что на странице записи: это один и тот же выбор часа, и выглядеть он обязан одинаково.</div>
+            <div class="wf-note">После переноса — «Мои записи», а не тупик.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="texts">
+  <div class="sechead">
+    <div class="eyebrow">03 · Тексты и ссылки</div>
+    <h2>Что обещает текст и куда ведёт ссылка</h2>
+    <p class="lede">Двадцать три строки: каждое сообщение, которое ПРАКТИКА отправляет клиенту, и каждый экран, которым она ему отвечает. Проверялось одно: совпадает ли обещание строки с тем, что человек находит, нажав.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th style="min-width:180px">Сообщение или экран</th><th style="min-width:200px">Что обещает человеку</th><th style="min-width:180px">Куда ведёт на самом деле</th><th style="min-width:130px">Вердикт</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Приглашение подключить уведомления</b><div class="mono">channel-binding.ts:43</div></td>
+          <td>«Подключите уведомления от специалиста… Это займёт несколько секунд»</td>
+          <td><span class="mono">/connect/&lt;токен&gt;</span> — страница выбора мессенджера, одноразовая, 30 дней</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>Страница /connect</b><div class="mono">ConnectClient.tsx</div></td>
+          <td>«Куда присылать уведомления?» и «подключение можно отключить в любой момент»</td>
+          <td>На телефоне сама уходит в MAX через 350 мс. Отключения у клиента нет ни в одном боте</td>
+          <td><a class="chip" href="#k14">К14</a> <a class="chip" href="#k13">К13</a></td>
+        </tr>
+        <tr>
+          <td><b>«Ваш аккаунт привязан»</b><div class="mono">telegram-bot.ts:239 · max-bot.ts:280</div></td>
+          <td>«Теперь вы будете получать уведомления о встречах здесь»</td>
+          <td>Правда. Но меню «Записаться / Мои сессии» после этого не приходит</td>
+          <td><a class="chip" href="#k23">К23</a></td>
+        </tr>
+        <tr>
+          <td><b>Предисловие к накопленному</b><div class="mono">queued-delivery.ts</div></td>
+          <td>«Пока уведомления не были подключены, для вас накопилось…»</td>
+          <td>Идёт только если досылать правда есть что; встречи, чей час прошёл, не воскресают</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>Сообщение о встрече</b><div class="mono">client-workflow.ts:493</div></td>
+          <td>«Посмотреть встречу, подтвердить, перенести или отменить — здесь»</td>
+          <td><span class="mono">/bot/client?c=&lt;токен&gt;&amp;s=&lt;встреча&gt;</span> — открывается сразу эта встреча, все три действия на месте</td>
+          <td><a class="chip" href="#k6">К6</a> <a class="chip" href="#k11">К11</a> <a class="chip" href="#k12">К12</a></td>
+        </tr>
+        <tr>
+          <td><b>Кнопки под сообщением</b><div class="mono">session-action-links.ts</div></td>
+          <td>«Подтверждаю» · «Перенести» · «Отменить»</td>
+          <td>Три отдельных подписанных токена, каждый на свою встречу и своё действие. «Перенести» ведёт на перенос этой встречи</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>Сообщение новому клиенту</b><div class="mono">communications.ts:28</div></td>
+          <td>«Управлять записями можно здесь»</td>
+          <td>Страница записи специалиста — встреч ещё нет, обещание точное</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>Инструкция об оплате</b><div class="mono">payment-instruction.ts</div></td>
+          <td>«Перейти к оплате», «QR-код для оплаты» и оговорка, что ПРАКТИКА оплату не принимает</td>
+          <td>Ссылка специалиста. В Telegram — за словом, в MAX — кнопкой. Починено 14.09</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>Документ на подпись</b><div class="mono">client-workflow.ts:194</div></td>
+          <td>«Записываясь на консультацию, вы соглашаетесь с условиями договора»</td>
+          <td><span class="mono">/client/documents/&lt;id&gt;?t=</span> — текст, версия, отдельная галочка согласия</td>
+          <td><a class="chip" href="#k12">К12</a></td>
+        </tr>
+        <tr>
+          <td><b>Напоминание за сутки</b><div class="mono">reminder-text.ts:18</div></td>
+          <td>«Завтра в 11:00 у вас встреча» и «Ссылка для подключения»</td>
+          <td>В Telegram ссылка работает. В MAX её нет вовсе. У кого оба канала — сообщение приходит дважды</td>
+          <td><a class="chip" href="#k3">К3</a> <a class="chip" href="#k2">К2</a> <a class="chip" href="#k19">К19</a></td>
+        </tr>
+        <tr>
+          <td><b>Напоминание за час</b><div class="mono">reminders.ts:152</div></td>
+          <td>«Сессия начнётся через 1 час»</td>
+          <td>То же самое: в MAX без ссылки, при двух каналах — дважды</td>
+          <td><a class="chip" href="#k3">К3</a> <a class="chip" href="#k2">К2</a></td>
+        </tr>
+        <tr>
+          <td><b>Напоминание об оплате</b><div class="mono">payment-reminders.ts:56</div></td>
+          <td>«Напоминаю об оплате встречи 26 сентября в 17:15»</td>
+          <td>Та же инструкция, что при записи. Час без пояса — хотя пояс в этом же запросе уже прочитан</td>
+          <td><a class="chip" href="#k6">К6</a> <a class="chip" href="#k19">К19</a> <a class="chip" href="#k20">К20</a></td>
+        </tr>
+        <tr>
+          <td><b>«Как вы себя чувствуете?»</b><div class="mono">post-session.ts:114</div></td>
+          <td>Пять кнопок от «Отлично» до «Плохо», ответ — «Записано»</td>
+          <td>Записано в базу и не показано никому. При двух каналах вопрос приходит дважды</td>
+          <td><a class="chip" href="#k5">К5</a> <a class="chip" href="#k2">К2</a></td>
+        </tr>
+        <tr>
+          <td><b>Через два часа после встречи</b><div class="mono">post-session-cascade.ts:224</div></td>
+          <td>«Спасибо за встречу. Если захотите продолжить — вот ближайшее время»</td>
+          <td>Страница записи. Не уходит тому, кто уже записан, и не уходит ночью</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>Через неделю</b><div class="mono">post-session-cascade.ts:317</div></td>
+          <td>«Если решите продолжить — записаться можно в любой момент»</td>
+          <td>Страница записи. Второго письма без ответа не бывает</td>
+          <td><span class="chip ok">совпадает</span></td>
+        </tr>
+        <tr>
+          <td><b>«Специалист увидит вашу заявку»</b><div class="mono">BookingPageClient.tsx:1031</div></td>
+          <td>Человек оставил имя, контакт и пожелания по времени</td>
+          <td>Заявка ложится в таблицу, которой нет ни на одном экране и которая не порождает уведомления</td>
+          <td><a class="chip" href="#k4">К4</a></td>
+        </tr>
+        <tr>
+          <td><b>«Освободилось время»</b><div class="mono">waitlist-notify.ts:111</div></td>
+          <td>«У специалиста освободилось время: 26 сентября в 17:15. Записаться»</td>
+          <td>Механика выключена переменной окружения и в бою не работает. Отмена в MAX её и не вызывает — в отличие от отмены по ссылке</td>
+          <td><a class="chip" href="#k4">К4</a> <a class="chip" href="#k21">К21</a></td>
+        </tr>
+        <tr>
+          <td><b>Экран после «Подтверждаю»</b><div class="mono">session-action/route.ts:65</div></td>
+          <td>«Встреча подтверждена. Информация уже появилась у специалиста»</td>
+          <td>Показывается даже по встрече, которую специалист уже отменил, — статус при этом не меняется</td>
+          <td><a class="chip" href="#k10">К10</a></td>
+        </tr>
+        <tr>
+          <td><b>Экран после «Отменить»</b><div class="mono">session-action/route.ts:82</div></td>
+          <td>«Встреча отменена. Специалист увидит изменение»</td>
+          <td>Отмена происходит по самому переходу, без переспроса и без отката. Дальше идти некуда</td>
+          <td><a class="chip" href="#k9">К9</a></td>
+        </tr>
+        <tr>
+          <td><b>Ответ бота на обычное сообщение</b><div class="mono">telegram-bot.ts · max-bot.ts:607</div></td>
+          <td>Telegram не обещает ничего и ничего не отвечает. MAX предлагает команды</td>
+          <td>Текст человека не доходит до специалиста никогда и ни по какому пути</td>
+          <td><a class="chip" href="#k1">К1</a></td>
+        </tr>
+        <tr>
+          <td><b>Приветствие незнакомому</b><div class="mono">telegram-bot.ts:292</div></td>
+          <td>«Добро пожаловать в Compas.ru!»</td>
+          <td>Имени <i>Compas.ru</i> у продукта нет с момента переименования в ПРАКТИКУ. Кнопка ведёт в кабинет специалиста</td>
+          <td><a class="chip" href="#k17">К17</a> <a class="chip" href="#k18">К18</a></td>
+        </tr>
+        <tr>
+          <td><b>Справка /help клиенту в MAX</b><div class="mono">max-bot.ts:410</div></td>
+          <td>«/connect — привязать аккаунт психолога» и кнопка «Открыть ПРАКТИКУ»</td>
+          <td>Кабинет специалиста, куда клиенту входить нечем</td>
+          <td><a class="chip" href="#k18">К18</a></td>
+        </tr>
+        <tr>
+          <td><b>Просроченная личная ссылка</b><div class="mono">bot/client/page.tsx:170</div></td>
+          <td>«Откройте приложение через бота или перейдите по персональной ссылке от психолога»</td>
+          <td>Ровно тот же текст и при опечатке в адресе, и при ссылке, которой исполнилось 30 дней. Причина не названа</td>
+          <td><a class="chip" href="#k22">К22</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="defects">
+  <div class="sechead">
+    <div class="eyebrow">04 · Дефекты</div>
+    <h2>Двадцать четыре расхождения, по порядку тяжести</h2>
+    <p class="lede">Первые пять — те, где человек остаётся без ответа или получает неправду. Каждый проверен по коду; адрес файла назван, чтобы правка не искалась заново.</p>
+  </div>
+
+  <div class="defects">
+
+    <div class="def" id="k1">
+      <div class="def-id">К1</div>
+      <div class="def-b">
+        <div class="t">Клиент пишет боту — его слова не доходит никуда и никогда</div>
+        <div class="why">Человек получает напоминание и отвечает в тот же чат: «заболел», «опоздаю на двадцать минут», «можно перенести?». В Telegram у бота нет обработчика обычного текста вовсе — человек говорит в пустоту и не получает даже признака того, что его не услышали. В MAX ему отвечают списком команд. Ни один из путей не доставляет текст специалисту: ни уведомлением, ни строкой в карточке клиента, ни письмом. Специалист узнаёт о пропуске в час встречи. Это самый тяжёлый дефект пути: всё остальное здесь — про неудобство, а это про доверие.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts</span> — обработчика <span class="mono">message('text')</span> нет; <span class="mono">src/lib/max-bot.ts:607-618</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k2">
+      <div class="def-id">К2</div>
+      <div class="def-b">
+        <div class="t">Напоминания приходят дважды тому, у кого привязаны оба мессенджера</div>
+        <div class="why">Правило «одно событие — одно сообщение, в один канал» написано после живого случая 10.09 и соблюдается в трёх местах из четырёх. Рассылка по расписанию осталась со старой парой <span class="mono">if</span> вместо выбора канала: сначала в Telegram, потом в MAX. Человек с двумя мессенджерами получает и напоминание за сутки, и напоминание за час, и вечерний вопрос — по два раза каждое.</div>
+        <div class="src"><span class="mono">src/lib/cron/reminders.ts:30-43</span> · <span class="mono">src/lib/cron/post-session.ts:17-20</span> · правило: <span class="mono">src/lib/messaging/deliver.ts</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k3">
+      <div class="def-id">К3</div>
+      <div class="def-b">
+        <div class="t">В MAX из напоминания исчезает ссылка на видеовстречу</div>
+        <div class="why">Перед отправкой в MAX разметка срезается выражением <span class="mono">text.replace(/&lt;[^&gt;]+&gt;/g, '')</span>. Вместе с тегом уходит и адрес: от «Ссылка для подключения: <i>Яндекс Телемост</i>» остаётся слово. Отправка в MAX умеет вынести ссылку из якоря в кнопку — но получает текст, из которого адрес уже удалён. За сутки до онлайн-встречи человеку нужен ровно один предмет, и именно его в сообщении нет.</div>
+        <div class="src"><span class="mono">src/lib/cron/reminders.ts:40,42</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k4">
+      <div class="def-id">К4</div>
+      <div class="def-b">
+        <div class="t">«Специалист увидит вашу заявку» — не увидит</div>
+        <div class="why">Человек, которому не подошло предложенное время, оставляет имя, контакт и пожелания и читает: «Заявка отправлена. Специалист увидит ваши пожелания по времени». Запись ложится в <span class="mono">WaitlistEntry</span>. Этой таблицы нет ни на одном экране — ни в веб-кабинете, ни в приложении, ни в админке, — и её появление не порождает ни уведомления, ни отметки в «Требует внимания». Клиент ждёт ответа, которого никто не собирается давать.</div>
+        <div class="src"><span class="mono">src/app/bot/actions.ts:300-311</span> (только запись) · <span class="mono">src/app/bot/book/BookingPageClient.tsx:1031</span> (обещание)</div>
+      </div>
+    </div>
+
+    <div class="def" id="k5">
+      <div class="def-id">К5</div>
+      <div class="def-b">
+        <div class="t">Ответ «Плохо» после встречи не читает никто</div>
+        <div class="why">Вечером после сессии клиент получает вопрос о самочувствии и пять кнопок. Нажатие пишет оценку в <span class="mono">clientMoodRating</span>, и бот отвечает: «Спасибо за обратную связь! Записано: Плохо». Поле не читается ни одним экраном, ни одним маршрутом API, ни одним отчётом — ни в вебе, ни в приложении. Человек сказал самое важное, что он может сказать между встречами, и это ушло в тишину под расписку «записано».</div>
+        <div class="src">записывается: <span class="mono">src/lib/telegram-bot.ts:452</span>, <span class="mono">src/lib/max-bot.ts:553</span> · читается: нигде</div>
+      </div>
+    </div>
+
+    <div class="def" id="k6">
+      <div class="def-id">К6</div>
+      <div class="def-b">
+        <div class="t">Час встречи уходит без часового пояса на главном пути</div>
+        <div class="why">Поле для пояса в сборщике сообщения есть, и заведено оно ровно под этот случай: «клиент из другого региона приходил на час-другой мимо — и виноватым выглядел сервис». Передаётся оно только двумя сообщениями онбординга. Главное сообщение — «Подтверждаю запись… 26 сентября в 17:15» — уходит без пояса, как и оба напоминания, и напоминание об оплате. В напоминании об оплате пояс к этому моменту уже прочитан тем же запросом и использован для тихих часов — и не использован для подписи.</div>
+        <div class="src"><span class="mono">src/lib/practice/session-notice.ts:50-61</span> · <span class="mono">src/lib/cron/reminder-text.ts</span> · <span class="mono">src/lib/cron/payment-reminders.ts:146</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k7">
+      <div class="def-id">К7</div>
+      <div class="def-b">
+        <div class="t">«Мои сессии» в боте не показывают только что созданную запись</div>
+        <div class="why">Список отбирает встречи со статусом «подтверждена». Запись, которую человек только что сделал, до подтверждения имеет статус «ожидает» — и бот отвечает «У вас нет предстоящих записей» через минуту после того, как прислал сообщение об этой самой записи. Так ведут себя обе команды: и в Telegram, и в MAX.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:336</span> · <span class="mono">src/lib/max-bot.ts:389</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k8">
+      <div class="def-id">К8</div>
+      <div class="def-b">
+        <div class="t">«Перенести» в списке бота ведёт на запись с нуля</div>
+        <div class="why">Тот же дефект, который был найден и исправлен в напоминаниях и в сообщении о встрече: кнопка открывает страницу подбора времени, а собственная встреча человека остаётся на месте. В командах бота исправление не применили — там до сих пор собирается свой адрес, а не общий из <span class="mono">session-action-links.ts</span>.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:341-351</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k9">
+      <div class="def-id">К9</div>
+      <div class="def-b">
+        <div class="t">Отмена происходит по переходу по ссылке — без переспроса, без отката, в тупик</div>
+        <div class="why">Кнопка «Отменить» стоит в одном ряду с «Перенести»; переход по её адресу сразу меняет статус встречи. Переспроса нет. Вернуть встречу человек не может ничем: страница переноса отвечает отказом по отменённой встрече. Экран результата говорит «Специалист увидит изменение» и не предлагает ни записаться заново, ни вернуться к своим встречам — тупик ровно там, где нужен следующий шаг. Повторный переход по той же ссылке отменит уже отменённое и второй раз разбудит специалиста уведомлением.</div>
+        <div class="src"><span class="mono">src/app/api/client/session-action/route.ts:82-113</span> · <span class="mono">src/lib/practice/session-action-links.ts</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k10">
+      <div class="def-id">К10</div>
+      <div class="def-b">
+        <div class="t">«Встреча подтверждена» показывается и по отменённой встрече</div>
+        <div class="why">Если специалист отменил встречу, а клиент нажал «Подтверждаю» в старом сообщении, статус справедливо не меняется — но человеку показывают «Встреча подтверждена. Информация уже появилась у специалиста». Он придёт.</div>
+        <div class="src"><span class="mono">src/app/api/client/session-action/route.ts:65-79</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k11">
+      <div class="def-id">К11</div>
+      <div class="def-b">
+        <div class="t">Ссылка «здесь» живёт тридцать дней, а встреча может быть дальше</div>
+        <div class="why">Личная ссылка на «Мои записи» подписывается на 30 дней, а токены трёх действий — до конца встречи плюс двое суток. В одном сообщении две разные жизни: у человека, записанного на шесть недель вперёд, ссылка «посмотреть встречу» умрёт задолго до самой встречи, а кнопки под тем же сообщением останутся рабочими.</div>
+        <div class="src"><span class="mono">src/lib/client-workflow.ts:94</span> (30 дней) против <span class="mono">:22</span> (встреча + 48 часов)</div>
+      </div>
+    </div>
+
+    <div class="def" id="k12">
+      <div class="def-id">К12</div>
+      <div class="def-b">
+        <div class="t">Название документа показывается человеку тремя разными способами</div>
+        <div class="why">В сообщении о встрече — как записано в карточке, то есть иногда именем файла вида <span class="mono">Информированное_согласие_оферта___Илья_Мартынов.pdf</span>. В сообщении новому клиенту — причёсанное одной функцией. На самой странице документа — причёсанное другой. Один документ, один человек, один маршрут — и три разных имени по дороге.</div>
+        <div class="src"><span class="mono">src/lib/client-workflow.ts:556</span> (сырое) · <span class="mono">src/lib/practice/communications.ts:67</span> · <span class="mono">src/lib/documents/display-title.ts</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k13">
+      <div class="def-id">К13</div>
+      <div class="def-b">
+        <div class="t">«Подключение можно отключить в любой момент» — отключить нельзя</div>
+        <div class="why">Строка стоит на странице подключения рядом со значком щита. Отвязать мессенджер может только специалист из своего кабинета. Ни в Telegram, ни в MAX нет ни команды, ни кнопки, ни упоминания о том, как перестать получать сообщения. Обещание приватности, за которым нет механики, — худший вид обещания.</div>
+        <div class="src"><span class="mono">src/app/connect/[token]/ConnectClient.tsx:105</span> · отписки нет ни в одном боте</div>
+      </div>
+    </div>
+
+    <div class="def" id="k14">
+      <div class="def-id">К14</div>
+      <div class="def-b">
+        <div class="t">Страница подключения сама отвечает за человека на свой же вопрос</div>
+        <div class="why">Когда специалист не выбрал мессенджер, заголовок спрашивает «Куда присылать уведомления?» — и через 350 мс на телефоне страница уходит в MAX, не дождавшись ответа. Вопрос, на который нельзя ответить, лучше не задавать: либо выбор, либо честное «открываем MAX, он работает в России без VPN» с кнопкой «выбрать другой».</div>
+        <div class="src"><span class="mono">src/app/connect/[token]/ConnectClient.tsx:27-34</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k15">
+      <div class="def-id">К15</div>
+      <div class="def-b">
+        <div class="t">На странице переноса кнопка снова не говорит, чего ждёт</div>
+        <div class="why">13.09 учредитель нашёл это на странице записи: «клиент пытался нажать на записаться и кнопка была неактивна». Там исправлено — кнопка называет причину. На соседней странице, куда ведёт «Перенести», кнопка «Перенести встречу» по-прежнему просто гаснет. Там же нет ни пояса времени, ни чипов «будни вечером / утро выходных»: один и тот же выбор часа устроен на двух страницах по-разному.</div>
+        <div class="src"><span class="mono">src/app/client/reschedule/[sessionId]/RescheduleClient.tsx:204-210</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k16">
+      <div class="def-id">К16</div>
+      <div class="def-b">
+        <div class="t">Запись из обычного браузера кончается тишиной</div>
+        <div class="why">Человек открыл ссылку <span class="mono">/u/&lt;имя&gt;</span> не в мессенджере, выбрал час, оставил имя и телефон. Мессенджер у него не привязан — значит не будет ни подтверждения, ни напоминания за сутки, ни ссылки на видеовстречу, ни возможности перенести. Экран честно говорит «специалист свяжется по телефону» и не предлагает подключить уведомления, хотя одноразовое приглашение создаётся одной строкой и страница <span class="mono">/connect</span> уже написана. Это не дефект кода, а незакрытый участок пути — и самый дорогой из них.</div>
+        <div class="src"><span class="mono">src/app/bot/book/BookingPageClient.tsx:360-364, 801-805</span> · механика есть: <span class="mono">src/lib/channel-binding.ts:56</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k17">
+      <div class="def-id">К17</div>
+      <div class="def-b">
+        <div class="t">Бот здоровается от имени продукта, которого больше нет</div>
+        <div class="why">Человек, открывший бота без приглашения, читает: «Добро пожаловать в Compas.ru!». Переименование в ПРАКТИКУ прошло по всем экранам, письмам и сборкам; этот текст его пережил.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:293</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k18">
+      <div class="def-id">К18</div>
+      <div class="def-b">
+        <div class="t">Клиенту предлагают открыть кабинет специалиста</div>
+        <div class="why">В ответе незнакомому человеку в Telegram — кнопка «Войти в кабинет». В справке и в заглушке MAX для клиента — «Открыть ПРАКТИКУ» и команда «/connect — привязать аккаунт психолога». Всё это ведёт в <span class="mono">/diary</span>, куда клиенту входить нечем. Человеку, пришедшему к специалисту, предлагают продукт, который продаётся специалисту.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:294</span> · <span class="mono">src/lib/max-bot.ts:410, 617</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k19">
+      <div class="def-id">К19</div>
+      <div class="def-b">
+        <div class="t">Напоминание здоровается полным именем из карточки</div>
+        <div class="why">«Здравствуйте, Мартынова Ирина Петровна!» — потому что в карточке специалиста записано так, а напоминание берёт поле целиком. Сообщение о встрече в том же чате обращается по имени: функция выделения имени есть и работает, просто в рассылку её не позвали. Два письма одному человеку в один день, написанные будто разными людьми.</div>
+        <div class="src"><span class="mono">src/lib/cron/reminder-text.ts:30</span> · <span class="mono">src/lib/cron/payment-reminders.ts:66</span> против <span class="mono">src/lib/client-workflow.ts:534</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k20">
+      <div class="def-id">К20</div>
+      <div class="def-b">
+        <div class="t">Имя клиента не экранируется — и сообщение не уходит вовсе</div>
+        <div class="why">Напоминания отправляются с разметкой Telegram, а имя вставляется в текст как есть. Амперсанд или угловая скобка в имени — например «Иванов &amp; партнёры» у клиента-организации — делают разметку недействительной: Telegram отвечает отказом, отправка возвращает «не удалось», и человек просто не получает напоминание. Сообщение о встрече это имя экранирует; рассылка — нет.</div>
+        <div class="src"><span class="mono">src/lib/cron/reminder-text.ts:30</span> · <span class="mono">src/lib/cron/payment-reminders.ts:66</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k21">
+      <div class="def-id">К21</div>
+      <div class="def-b">
+        <div class="t">Отмена по ссылке и отмена в MAX ведут себя по-разному</div>
+        <div class="why">Отмена по ссылке снимает встречу из календарей и предлагает освободившийся час листу ожидания. Отмена кнопкой внутри MAX делает первое и не делает второго. Механика листа ожидания сегодня выключена переменной окружения, поэтому в бою разница не видна, — но это два разных ответа на одно действие человека, и включение механики сделает разницу живой.</div>
+        <div class="src"><span class="mono">src/lib/max-bot.ts:497-500</span> против <span class="mono">src/app/api/client/session-action/route.ts:103</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k22">
+      <div class="def-id">К22</div>
+      <div class="def-b">
+        <div class="t">Просроченная личная ссылка не называет причину</div>
+        <div class="why">Ссылка на «Мои записи» живёт 30 дней. По истечении срока человек видит то же, что при опечатке в адресе: «Откройте приложение через бота или перейдите по персональной ссылке от психолога». Ровно этот дефект уже разбирали на приглашениях 09.09 — там погашенная ссылка теперь называет причину и даёт следующий шаг. Здесь — нет.</div>
+        <div class="src"><span class="mono">src/app/bot/client/page.tsx:170</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k23">
+      <div class="def-id">К23</div>
+      <div class="def-b">
+        <div class="t">После привязки по приглашению меню не приходит</div>
+        <div class="why">Клавиатура «Записаться / Мои сессии» показывается только тем, кто пришёл по ссылке вида <span class="mono">psy_</span>. Тот, кто подключился по приглашению специалиста — то есть подавляющее большинство, — получает «Ваш аккаунт привязан» и остаётся в чате, где из всех действий доступно только читать.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:228-256</span> · <span class="mono">src/lib/max-bot.ts:269-295</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="k24">
+      <div class="def-id">К24</div>
+      <div class="def-b">
+        <div class="t">Подпись под кнопкой описывает не тот механизм согласия</div>
+        <div class="why">Под кнопкой записи стоит «Нажимая кнопку „Записаться“, вы принимаете условия согласия на обработку персональных данных». На деле согласие требует отдельной галочки в окне, и без неё запись не проходит. Механика строже, чем подпись; расходиться им нельзя — особенно в том единственном тексте на странице, который имеет правовое значение. Заодно: копии того, с чем человек согласился, ему никуда не отправляют.</div>
+        <div class="src"><span class="mono">src/app/bot/book/BookingPageClient.tsx:1189</span> против <span class="mono">:655</span></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="forks">
+  <div class="sechead">
+    <div class="eyebrow">05 · Развилки</div>
+    <h2>Пять решений, которые не мои</h2>
+    <p class="lede">Здесь речь не о том, как чинить, а о том, каким продукт должен быть для клиента. Отмеченный вариант — предложение; решение за учредителем.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div class="q">
+      <div class="qn">Развилка 1 · относится к К1</div>
+      <div class="qt">Что происходит, когда клиент пишет боту?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Бот принимает и передаёт</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Отвечает «передал специалисту», кладёт сообщение в «Требует внимания» рядом с карточкой клиента и будит специалиста уведомлением. Тут же предлагает кнопки по ближайшей встрече: подтвердить, перенести, отменить. Отвечает человеку по-прежнему человек — ПРАКТИКА только доносит.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Бот честно говорит, что не читает</b>
+            <span class="sub">«Этот чат только для уведомлений. Напишите специалисту напрямую» — и кнопки по встрече. Дешевле в работе, но оставляет человека с задачей, которую он думал, что решил.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">В Telegram — молчание, в MAX — список команд.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 2 · относится к К16</div>
+      <div class="qt">Предлагать ли подключить уведомления сразу после записи?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Да, на экране «Вы записаны»</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Две кнопки — MAX и Telegram — ведут в то же одноразовое приглашение, которым пользуется специалист. Третья дверь: «Не нужно, специалист позвонит». Это единственная секунда, когда человек точно смотрит на экран и готов нажать ещё раз; позже его придётся догонять вручную.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить приглашение специалисту</b>
+            <span class="sub">Как сейчас: специалист замечает нового клиента и пересылает ссылку сам. Меньше экрана — больше ручной работы и больше пропусков.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 3 · относится к К9</div>
+      <div class="qt">Отмена встречи клиентом — с переспросом и откатом?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Переспрос и десять минут на возврат</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Ссылка открывает страницу «Отменить встречу 26 сентября в 17:15?» с двумя кнопками. После отмены — «Отменили случайно? Вернуть встречу», пока час не занял кто-то другой, и две двери дальше: «Записаться на другое время» и «Мои записи».</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Только переспрос</b>
+            <span class="sub">Отмену подтверждают, но вернуть нельзя. Проще, и закрывает главное — случайное нажатие.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить мгновенную отмену</b>
+            <span class="sub">Одно нажатие — минус встреча.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 4 · относится к К5</div>
+      <div class="qt">Куда девать ответ о самочувствии после встречи?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>В карточку клиента, тревожное — в «Требует внимания»</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Ответ становится строкой в таймлайне клиента рядом с заметкой по сессии. «Так себе» и «Плохо» поднимаются в «Требует внимания» — без диагнозов и без тревоги, просто «человек ответил так». Приватность не нарушается: это ответ клиента о себе, а не гипотеза специалиста.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Убрать вопрос, пока его некому читать</b>
+            <span class="sub">Честнее, чем спрашивать в пустоту. Настройка у специалиста остаётся, но выключенной по умолчанию.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">Спрашиваем, отвечаем «записано», не показываем никому.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 5 · относится к К4</div>
+      <div class="qt">Что такое лист ожидания в ПРАКТИКЕ?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Видимая очередь у специалиста, без автоматической рассылки</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Заявки показываются в кабинете и в приложении списком: имя, контакт, пожелание по времени, дата. При освободившемся часе специалист видит подсказку «этому человеку подходит» и решает сам. Обещание клиенту остаётся прежним и становится правдой.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Видимая очередь плюс автоматическое сообщение</b>
+            <span class="sub">Механика написана и выключена переменной окружения. Включение требует изменить текст на странице: человеку придётся сказать, что ему могут написать.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Убрать обещание</b>
+            <span class="sub">Оставить форму как способ оставить контакт и написать честно: «специалист увидит заявку, когда будет смотреть список» — или убрать форму вовсе.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sechead">
+    <div class="eyebrow">06 · Порядок работ</div>
+    <h2>В каком порядке чинить</h2>
+    <p class="lede">Порядок задан тяжестью для человека, а не удобством правки. Первые три шага не требуют решений учредителя и могут идти сразу после утверждения разбора; шаги 4, 6 и 7 зависят от развилок.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="b"><div class="t">Слово клиента доходит до специалиста</div><div class="d">К1, К23. Обработчик обычного текста в обоих ботах, доставка в «Требует внимания», ответ человеку о том, что произошло, и меню после привязки по приглашению. Зависит от развилки 1.</div></div></div>
+    <div class="step"><div class="n">02</div><div class="b"><div class="t">Одно сообщение, в один канал, со ссылкой и по имени</div><div class="d">К2, К3, К19, К20. Рассылка переводится на общую отправку — ту же, что знают остальные три пути: она сама выбирает канал и сама вынимает ссылку в кнопку для MAX. Имя — через выделение имени и с экранированием.</div></div></div>
+    <div class="step"><div class="n">03</div><div class="b"><div class="t">Час всегда с поясом</div><div class="d">К6. Пояс передаётся во все четыре сообщения, называющие время: запись, два напоминания, напоминание об оплате. Тест на то, что ни одно из них не собирается без пояса.</div></div></div>
+    <div class="step"><div class="n">04</div><div class="b"><div class="t">Отмена и подтверждение отвечают правду</div><div class="d">К9, К10, К21. Переспрос перед отменой, честный ответ по отменённой встрече, одинаковые последствия у отмены в вебе и в MAX, следующий шаг вместо тупика. Зависит от развилки 3.</div></div></div>
+    <div class="step"><div class="n">05</div><div class="b"><div class="t">Списки и кнопки бота — из общего источника</div><div class="d">К7, К8. Команды показывают всё предстоящее и называют состояние словом; адреса трёх действий берутся оттуда же, откуда их берут сообщения.</div></div></div>
+    <div class="step"><div class="n">06</div><div class="b"><div class="t">Лист ожидания перестаёт быть обещанием</div><div class="d">К4. Экран заявок в кабинете и в приложении; подсказка при освободившемся часе. Зависит от развилки 5.</div></div></div>
+    <div class="step"><div class="n">07</div><div class="b"><div class="t">Ответ о самочувствии становится виден</div><div class="d">К5. Строка в таймлайне клиента, тревожный ответ — в «Требует внимания». Зависит от развилки 4.</div></div></div>
+    <div class="step"><div class="n">08</div><div class="b"><div class="t">Запись из браузера не кончается тишиной</div><div class="d">К16, К13, К14. Предложение подключить уведомления на экране «Вы записаны», настоящая отписка в обоих ботах, страница подключения перестаёт отвечать за человека. Зависит от развилки 2.</div></div></div>
+    <div class="step"><div class="n">09</div><div class="b"><div class="t">Тексты, сроки и пороги</div><div class="d">К11, К12, К15, К17, К18, К22, К24. Один срок жизни у ссылки и кнопок в одном сообщении; одно правило для названия документа; кнопка переноса называет, чего ждёт; имя продукта; клиенту — клиентские двери; просроченная ссылка называет причину; подпись под согласием описывает то, что происходит.</div></div></div>
+  </div>
+
+  <div class="ask" style="margin-top:32px">
+    <b>Как это будет проверено.</b> Каждый шаг закрывается тестом на то правило, которое он вводит, а не на конкретный экран: одно сообщение на событие, ссылка в MAX кнопкой, час с поясом, одинаковый ответ на отмену в обоих каналах. Правило, проверенное тестом, переживает следующую правку; проверенный экран — нет. Живой проход по всему пути — от приглашения до вечера после встречи — идёт последним, на стенде, с двумя привязанными мессенджерами у одного человека: именно эта пара вскрывает большинство расхождений этого разбора.
+  </div>
+</section>
+
+<footer>
+  Разбор собран 14.09.2026 по коду ветки <code>claude/new-session-pgnybh</code>. Каждый узел карты и каждая строка таблицы проверены по файлам, названным в разделе 04. Правки по этому разбору не вносились: он написан до них и ждёт решения учредителя по пяти развилкам раздела 05.
+</footer>
+
+</div>
