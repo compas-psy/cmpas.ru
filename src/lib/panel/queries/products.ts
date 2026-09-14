@@ -276,17 +276,64 @@ export async function qPracticeReschedule(): Promise<PanelBlock<PracticeReschedu
     return ok('q_practice_reschedule', { rate: (cancelled / total) * 100, cancelled, total });
 }
 
+export interface PracticeBookingAuthor {
+    /** Доля записей, которые клиент завёл сам, % от известных. */
+    selfRate: number;
+    self: number;
+    manual: number;
+    /** Записи, у которых происхождение не 'manual' и не 'self_booking' (импорт). */
+    imported: number;
+    total: number;
+}
+
 /**
  * `q_practice_booking_author` — кто завёл запись: клиент сам или специалист
- * руками. Признака автора записи в `DiarySession` нет, а восстанавливать его
- * догадкой (например «раз есть telegramChatId, значит записался сам») —
- * ровно то выдумывание данных, которое ТЗ §5 запрещает.
+ * руками.
+ *
+ * ПРИЧИНА, ПО КОТОРОЙ ЗДЕСЬ БЫЛО `no_data`, УСТАРЕЛА. Она гласила: «нужно
+ * добавить поле `createdBy` в модель `DiarySession` — сейчас признак автора
+ * негде хранить». Признак появился: `DiarySession.origin` (Задача 9, разбор
+ * учредителя 03.09.2026) заполняется ядром записи значениями `manual` и
+ * `self_booking`, а импорт — `calendar_import` и `spreadsheet_import`
+ * (src/lib/practice/session-origin.ts). То есть блок молчал не потому, что
+ * данных нет, а потому, что их перестали спрашивать.
+ *
+ * Догадкой по-прежнему ничего не восстанавливаем: считаем ровно по `origin`,
+ * а записи из импорта выносим отдельным числом — они не говорят ни о клиенте,
+ * ни о специалисте, и смешивать их с долей самозаписи значит портить её.
  */
-export async function qPracticeBookingAuthor(): Promise<PanelBlock<never>> {
-    return noData(
-        'q_practice_booking_author',
-        'нужно добавить поле `createdBy` в модель `DiarySession` (prisma/schema.prisma) и заполнять его в коде создания записи — сейчас признак автора негде хранить',
-    );
+export async function qPracticeBookingAuthor(): Promise<PanelBlock<PracticeBookingAuthor>> {
+    const since = new Date(Date.now() - 28 * DAY_MS);
+    const rows = await db.diarySession.groupBy({
+        by: ['origin'],
+        where: { date: { gte: since } },
+        _count: { _all: true },
+    });
+
+    const total = rows.reduce((acc, r) => acc + r._count._all, 0);
+    if (total === 0) {
+        return noData('q_practice_booking_author', 'записей за 28 дней не было — считать автора не по чему');
+    }
+
+    const countOf = (origin: string) => rows.find((r) => r.origin === origin)?._count._all ?? 0;
+    const self = countOf('self_booking');
+    const manual = countOf('manual');
+    const imported = total - self - manual;
+    const known = self + manual;
+
+    // Знаменатель — только те записи, у которых автор известен. Импорт в долю
+    // самозаписи не входит: он не про то, кто записал, а про то, откуда строка.
+    if (known === 0) {
+        return noData('q_practice_booking_author', 'все записи за 28 дней пришли импортом — автора среди них нет');
+    }
+
+    return ok('q_practice_booking_author', {
+        selfRate: (self / known) * 100,
+        self,
+        manual,
+        imported,
+        total,
+    });
 }
 
 export interface PracticeReminders {

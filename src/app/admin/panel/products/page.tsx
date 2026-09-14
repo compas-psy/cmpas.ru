@@ -15,6 +15,8 @@ import {
     type MomentyInstalls,
     type MomentyRetention,
     type PracticeMobile,
+    type PracticeBookingAuthor,
+    type PracticeReminders,
 } from '@/lib/panel/queries/products';
 import { ScreenBody, ScreenHeader, Grid } from '@/components/panel/chrome';
 import { BlockFrame, Card } from '@/components/panel/block';
@@ -90,8 +92,8 @@ function Practice({ blocks }: { blocks: Blocks }) {
     const active = pick<PracticeActive>(blocks, 'active');
     const activation = pick<PracticeActivation>(blocks, 'activation');
     const reschedule = pick<PracticeReschedule>(blocks, 'reschedule');
-    const bookingAuthor = pick<never>(blocks, 'bookingAuthor');
-    const reminders = pick<never>(blocks, 'reminders');
+    const bookingAuthor = pick<PracticeBookingAuthor>(blocks, 'bookingAuthor');
+    const reminders = pick<PracticeReminders>(blocks, 'reminders');
     const mobile = pick<PracticeMobile>(blocks, 'mobile');
 
     return (
@@ -169,13 +171,31 @@ function Practice({ blocks }: { blocks: Blocks }) {
 
             <Grid cols={2} gap={12}>
                 <Card>
+                    {/* Обе карточки рисовали `null` даже с данными: рамка была,
+                        содержимого не было никогда. У «Кто заводит запись» к
+                        тому же молчал и сам запрос — по причине, которая
+                        устарела (см. products.ts). */}
                     <BlockFrame block={bookingAuthor} label="Кто заводит запись" minHeight={120}>
-                        {() => null}
+                        {(d) => (
+                            <StatTile
+                                value={dec(d.selfRate)}
+                                unit="%"
+                                note={`записались сами ${num(d.self)} из ${num(d.self + d.manual)} за 28 дней${d.imported > 0 ? ` · ещё ${num(d.imported)} пришли импортом` : ''}`}
+                            />
+                        )}
                     </BlockFrame>
                 </Card>
                 <Card>
                     <BlockFrame block={reminders} label="Напоминания ушли вовремя" minHeight={120}>
-                        {() => null}
+                        {(d) => (
+                            <StatTile
+                                value={d.sentRate === null ? '—' : dec(d.sentRate)}
+                                unit={d.sentRate === null ? '' : '%'}
+                                note={d.sentRate === null
+                                    ? 'срок ни одного напоминания ещё не наступил'
+                                    : `${num(d.sent)} из ${num(d.due)} по сроку${d.sentTwice > 0 ? ` · ${num(d.sentTwice)} ушло дважды` : ''}`}
+                            />
+                        )}
                     </BlockFrame>
                 </Card>
             </Grid>
