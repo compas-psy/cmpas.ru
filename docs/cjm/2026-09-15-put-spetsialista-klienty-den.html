@@ -1,0 +1,771 @@
+<title>Клиенты, документы, день</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<style>
+.chip.half{background:var(--gold-soft); color:var(--gold-ink); border-color:color-mix(in srgb, var(--gold) 40%, transparent)}
+td.num{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); white-space:nowrap}
+.tnote{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
+.mx td{text-align:center}
+.mx td:nth-child(1),.mx td:nth-child(2){text-align:left}
+.mx .y{color:var(--forest); font-weight:700}
+.mx .n{color:var(--alarm); font-weight:700}
+.mx .d{color:var(--faint)}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">15.09.2026 · на утверждение</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Разбор пути · специалист, книга 1 из 3</div>
+  <h1>Клиенты, документы, день</h1>
+  <p class="lede" style="margin-top:16px">Девятнадцать путей, которыми специалист пользуется каждый рабочий день: как он заводит клиента — шестью разными способами, — как подключает ему уведомления, ведёт карточку, рассылает документы, разбирает «Сегодня», назначает и переносит встречи, отмечает исход и оплату, пишет заметку.</p>
+
+  <div class="ask">
+    <b>Это первая из трёх книг по специалисту.</b> Путей у него 57, отдельный документ на каждый — это квартал работы и половина текста про вещи вроде «вышел из аккаунта». Поэтому книга: внутри разобраны ВСЕ пути своего блока, по тем же шести проверкам, что заданы в <a href="reestr.html">реестре</a>.
+    <br><br>Что нашлось: <b>девять расхождений</b>. Главное из них — на самом частом действии продукта: специалист назначает встречу, ПРАКТИКА пытается сообщить об этом клиенту, не может — и не говорит об этом специалисту ни слова.
+  </div>
+
+  <nav class="toc">
+    <a href="#map"><span>01</span>Карта дня</a>
+    <a href="#matrix"><span>02</span>Девятнадцать путей</a>
+    <a href="#frames"><span>03</span>Каркасы</a>
+    <a href="#defects"><span>04</span>Дефекты</a>
+    <a href="#forks"><span>05</span>Развилки</a>
+    <a href="#plan"><span>06</span>Порядок работ</a>
+  </nav>
+</header>
+
+<section id="map">
+  <div class="sechead">
+    <div class="eyebrow">01 · Карта дня</div>
+    <h2>Где путь специалиста упирается</h2>
+    <p class="lede">Красной рамкой — места, где продукт молчит о том, что человеку важно знать, или делает работу наполовину. Номер ведёт в раздел 04.</p>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">заводит<br>клиента</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Шесть дорог</div>
+        <div class="what">Руками · вставкой · из календаря · таблицей · контактом в бот · самозапись</div>
+        <div class="note">Все шесть работают, у всех общее ядро и общий гейт аттестации оператора ПДн. Пустой экран предлагает четыре способа, заполненный — три кнопки в шапке.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Приложение</div>
+        <div class="what">Импорта нет вовсе</div>
+        <div class="note">Все три пути переноса практики живут только в вебе. При том что перенести практику проще всего именно с телефона: там и календарь, и телефонная книга, и таблица в мессенджере.</div>
+        <div class="tags"><a class="chip" href="#s3">С3</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">назначает<br>встречу</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Кабинет · карточка встречи</div>
+        <div class="what">Час занят, календари синхронизированы</div>
+        <div class="note">Один общий замок на день, честная проверка занятости, повтор слота на N недель — всё на месте и одинаково в вебе и в приложении.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Кабинет · после сохранения</div>
+        <div class="what">«Запись создана»</div>
+        <div class="note">И всё. ПРАКТИКА в этот момент уже попыталась сообщить клиенту о встрече, знает, получилось или нет, и держит наготове готовый текст для ручной отправки. Веб выбрасывает и то и другое.</div>
+        <div class="tags"><a class="chip" href="#s1">С1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Приложение · то же действие</div>
+        <div class="what">Состояние доставки возвращается</div>
+        <div class="note">Мобильный маршрут отдаёт <code>noticeStatus</code>: ушло, в какой канал, или не ушло. Одна и та же работа, два разных ответа.</div>
+        <div class="tags"><a class="chip" href="#s1">С1</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">шлёт<br>документ</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Автоотправка</div>
+        <div class="what">Новому клиенту · перед первой сессией</div>
+        <div class="note">Уходит сама, ссылка ведёт на страницу с версией и отдельной галочкой согласия, журнал пишет «отправлено → открыто → принято» с хешом текста.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Ручная отправка</div>
+        <div class="what">Текст ложится в буфер обмена</div>
+        <div class="note">Дальше специалист сам открывает мессенджер, находит человека и вставляет. При том что канал у клиента известен и отправка в него работает во всех остальных местах продукта.</div>
+        <div class="tags"><a class="chip" href="#s2">С2</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Приложение</div>
+        <div class="what">Документы только читаются</div>
+        <div class="note">Завести документ, включить автоотправку или отключить его с телефона нельзя.</div>
+        <div class="tags"><a class="chip" href="#s4">С4</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">разбирает<br>«Сегодня»</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Дашборд</div>
+        <div class="what">Требует внимания</div>
+        <div class="note">Сессии без заметок, неотмеченная оплата, попытки поздней отмены, истёкшие приглашения — собраны в один список.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Чего в списке нет</div>
+        <div class="what">Клиент ответил «Плохо»</div>
+        <div class="note">Вечерний вопрос о самочувствии приходит клиенту, ответ пишется в базу — и не читается ни этим списком, ни любым другим экраном. Это та же дыра, что К5 в книге клиента, со стороны специалиста.</div>
+        <div class="tags"><a class="chip" href="#s8">С8</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Чего в списке нет</div>
+        <div class="what">Заявка из листа ожидания</div>
+        <div class="note">Человек оставил контакт и пожелания по времени, ему пообещали, что специалист увидит. Специалисту не показывают нигде.</div>
+        <div class="tags"><a class="chip" href="#s9">С9</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">пишет<br>клиенту</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Кабинет</div>
+        <div class="what">Экрана нет</div>
+        <div class="note">Написать клиенту свободный текст или поставить отложенное сообщение из веб-кабинета нельзя. Только через шаблоны уведомлений и документы.</div>
+        <div class="tags"><a class="chip" href="#s6">С6</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Приложение</div>
+        <div class="what">И то и другое есть</div>
+        <div class="note">Свободное сообщение, выбор канала, отложенная отправка с напоминанием себе «пора написать».</div>
+        <div class="tags"><a class="chip" href="#s6">С6</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Уведомления</div>
+        <div class="what">Лента — только в приложении</div>
+        <div class="note">В вебе события приходят ботом в мессенджер. Кто работает за столом и не держит бота — узнаёт о действиях клиентов последним.</div>
+        <div class="tags"><a class="chip" href="#s7">С7</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">вечером</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Экран встречи</div>
+        <div class="what">Была · Не пришли · причина неявки</div>
+        <div class="note">Развилка после отметки, повторная запись «тот же час через неделю» и «занять слот на срок» — всё закрыто разбором 10.09 и работает.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Заметка</div>
+        <div class="what">Умные блоки, приватная часть отдельно</div>
+        <div class="note">То, что видит клиент, и то, что специалист пишет для себя, разведены по разным полям. Это ядро продукта, и оно сделано аккуратно.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Оплата</div>
+        <div class="what">Ручная отметка, без сверки с банком</div>
+        <div class="note">Это ограничение, а не дефект: ПРАКТИКА денег не видит и прямо пишет об этом на экране. Вопрос к продукту — в развилке 3.</div>
+        <div class="tags"><span class="chip ok">честно</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="matrix">
+  <div class="sechead">
+    <div class="eyebrow">02 · Девятнадцать путей</div>
+    <h2>Каждый — через шесть проверок</h2>
+    <p class="lede">Столбцы — те самые шесть вопросов из реестра. <span class="mx"><span class="y">да</span></span> — проверка пройдена, <span class="mx"><span class="n">нет</span></span> — нет, <span class="mx"><span class="d">—</span></span> — к этому пути не относится (например, путь живёт только в одном месте, и сравнивать поверхности не с чем).</p>
+  </div>
+
+  <div class="tablewrap">
+    <table class="mx">
+      <thead><tr>
+        <th style="width:56px">№</th><th style="min-width:230px">Путь</th>
+        <th style="width:78px">Обеща&shy;ние</th><th style="width:70px">Не ту&shy;пик</th><th style="width:82px">Не мол&shy;чит</th>
+        <th style="width:96px">Без мес&shy;сен&shy;джера</th><th style="width:92px">Веб = при&shy;ложе&shy;ние</th><th style="width:88px">Один ис&shy;точник</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="num">C1</td><td>Заводит клиента руками<div class="tnote">Гейт аттестации оператора ПДн стоит до создания</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">C2a</td><td>Переносит практику: вставка списком</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">C2b</td><td>Переносит практику: из календаря</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">C2c</td><td>Переносит практику: таблицей</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">C3</td><td>Пересылает боту контакт клиента<div class="tnote">Карточка создаётся только после подтверждения</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">C4</td><td>Приглашает клиента в мессенджер<div class="tnote">Лестница MAX → Telegram → веб-ссылка</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">C5</td><td>Ведёт карточку клиента</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">C6</td><td>Заводит свои документы, автоотправка</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">C7</td><td>Рассылает документы, журнал согласий</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">D1</td><td>Разбирает «Сегодня»</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D2</td><td>Назначает сессию</td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">D3</td><td>Переносит или отменяет сессию</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D4</td><td>Отмечает исход и причину неявки</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D5</td><td>Отмечает оплату<div class="tnote">Ручная отметка, и это написано на экране</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D6</td><td>Настраивает, как клиент платит ему</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D7</td><td>Пишет заметку после сессии</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D8</td><td>Смотрит календарь</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">D9</td><td>Пишет клиенту, ставит отложенное</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">D10</td><td>Получает уведомления</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ask" style="margin-top:24px">
+    <b>Что видно из таблицы.</b> Проверка «обещание» падает один раз — и именно там, где действие самое частое: при назначении встречи. Проверка «не молчит» падает четырежды. А «веб = приложение» — семь раз из девятнадцати: это не отдельные недоделки, а <b>одна общая черта</b>, и она разобрана развилкой 2.
+  </div>
+</section>
+
+<section id="frames">
+  <div class="sechead">
+    <div class="eyebrow">03 · Каркасы</div>
+    <h2>Как сейчас и как предлагается</h2>
+    <p class="lede">Три места, где разница видна глазом. Каркас показывает состав и порядок, а не оформление: палитра и типографика не меняются.</p>
+  </div>
+
+  <div class="stack g48">
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 1 · Встреча назначена <a class="chip" href="#s1" style="vertical-align:middle">С1</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Специалист назначил встречу клиенту, у которого мессенджер не привязан. ПРАКТИКА это уже знает.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>Кабинет · карточка встречи</span><span></span></div>
+            <div class="wf-row"><div class="wf-pill">Запись создана</div></div>
+            <div class="wf-note">Всё. Ни слова о том, что клиенту ничего не ушло.</div>
+            <div class="wf-note">Готовый текст сообщения, который ПРАКТИКА собрала и вернула специально для ручной отправки, отброшен вместе с ответом.</div>
+            <div class="wf-note">Специалист узнаёт об этом, когда человек не приходит.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>Кабинет · карточка встречи</span><span></span></div>
+            <div class="wf-row"><div class="wf-pill">Запись создана</div></div>
+            <div class="wf-card">
+              <div class="wf-t b">Клиенту не отправили: мессенджер не подключён</div>
+              <div class="wf-meta">Текст готов — скопируйте и отправьте, как вам удобно.</div>
+              <div class="wf-msg"><div class="l">Ирина, здравствуйте!<br>Подтверждаю запись на консультацию…</div></div>
+              <div class="wf-row rw"><div class="wf-btn pri">Скопировать текст</div><div class="wf-btn">Пригласить в мессенджер</div></div>
+            </div>
+            <div class="wf-note">Когда канал есть, вместо карточки — одна строка: «Сообщение ушло в MAX».</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 2 · «Требует внимания» <a class="chip" href="#s8" style="vertical-align:middle">С8</a> <a class="chip" href="#s9" style="vertical-align:middle">С9</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Список собирает то, что ждёт решения специалиста. Двух вещей в нём нет, а они самые человеческие из всех.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>Сегодня · Требует внимания</span><span></span></div>
+            <div class="wf-card"><div class="wf-t">Сессия без заметки · вчера, 15:00</div></div>
+            <div class="wf-card"><div class="wf-t">Оплата не отмечена · 2 встречи</div></div>
+            <div class="wf-card"><div class="wf-t">Приглашение истекло · Артём</div></div>
+            <div class="wf-note">Ответ клиента «Плохо» на вечерний вопрос сюда не попадает — и никуда больше тоже.</div>
+            <div class="wf-note">Заявка из листа ожидания — тоже нет, хотя человеку обещали, что её увидят.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>Сегодня · Требует внимания</span><span></span></div>
+            <div class="wf-card" style="border-color:var(--alarm)"><div class="wf-t b">Ирина ответила «Плохо» после встречи</div><div class="wf-meta">вчера, 20:30 · открыть карточку</div></div>
+            <div class="wf-card"><div class="wf-t">Новая заявка на время · «будни после 18»</div><div class="wf-meta">Ольга, +7 ··· · 2 дня назад</div></div>
+            <div class="wf-card"><div class="wf-t">Сессия без заметки · вчера, 15:00</div></div>
+            <div class="wf-note">Без тревоги и без диагнозов: «человек ответил так» — и всё. Решает специалист.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 3 · Документ клиенту вручную <a class="chip" href="#s2" style="vertical-align:middle">С2</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Автоотправка работает сама. Ручная — наполовину.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>Карточка клиента · Документы</span><span></span></div>
+            <div class="wf-card"><div class="wf-t b">Согласие на обработку данных</div><div class="wf-meta">версия 3 · не отправлялось</div></div>
+            <div class="wf-row"><div class="wf-btn pri">Скопировать текст</div></div>
+            <div class="wf-note">Дальше специалист открывает мессенджер, ищет человека и вставляет. У клиента при этом подключён MAX, и ПРАКТИКА умеет писать в него сама.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>Карточка клиента · Документы</span><span></span></div>
+            <div class="wf-card"><div class="wf-t b">Согласие на обработку данных</div><div class="wf-meta">версия 3 · не отправлялось</div></div>
+            <div class="wf-row rw"><div class="wf-btn pri">Отправить в MAX</div><div class="wf-btn">Скопировать текст</div></div>
+            <div class="wf-note">Канал подписан прямо на кнопке — тем же правилом, что выбирает канал во всём остальном продукте.</div>
+            <div class="wf-note">«Скопировать» остаётся: у части клиентов канала нет, и ручная дорога обязана работать.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="defects">
+  <div class="sechead">
+    <div class="eyebrow">04 · Дефекты</div>
+    <h2>Девять расхождений</h2>
+    <p class="lede">По порядку тяжести для работы специалиста. Каждое проверено по коду.</p>
+  </div>
+
+  <div class="defects">
+
+    <div class="def" id="s1">
+      <div class="def-id">С1</div>
+      <div class="def-b">
+        <div class="t">Специалист не узнаёт, что клиент не получил сообщение о встрече</div>
+        <div class="why">Когда специалист назначает встречу, ПРАКТИКА собирает клиенту сообщение, выбирает канал и пытается отправить. Результат она знает: ушло, куда именно, или отправлять было некуда. Вместе с результатом возвращается и готовый текст — он собран специально для того, чтобы его можно было послать рукой. Веб-кабинет выбрасывает и то и другое: показывает «Запись создана» и закрывает окно. Специалист узнаёт, что человек не предупреждён, когда тот не приходит. Мобильный маршрут при этом состояние доставки возвращает — то есть в приложении эта информация есть, а за столом её нет.</div>
+        <div class="src"><span class="mono">src/app/diary/actions/sessions.ts:107</span> (результат собирается) → <span class="mono">src/app/diary/components/SessionModal.tsx:181</span> (выбрасывается) · для сравнения <span class="mono">src/app/api/mobile/sessions/route.ts:151-163</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="s8">
+      <div class="def-id">С8</div>
+      <div class="def-b">
+        <div class="t">Ответ клиента о самочувствии не доходит до специалиста</div>
+        <div class="why">Вечером после встречи клиент получает вопрос и пять кнопок от «Отлично» до «Плохо». Ответ пишется в базу, бот отвечает «Записано». Ни «Требует внимания», ни карточка клиента, ни таймлайн, ни один отчёт этого поля не читают. Между встречами это единственное, что клиент говорит о себе сам, — и оно не доходит до того, ради кого спрашивалось. В книге клиента это дефект К5; здесь он назван со стороны специалиста, потому что чинить его надо на его экране.</div>
+        <div class="src">пишется: <span class="mono">src/lib/telegram-bot.ts:452</span>, <span class="mono">src/lib/max-bot.ts:553</span> · читается: нигде</div>
+      </div>
+    </div>
+
+    <div class="def" id="s9">
+      <div class="def-id">С9</div>
+      <div class="def-b">
+        <div class="t">Заявка из листа ожидания не показывается специалисту нигде</div>
+        <div class="why">Клиент, которому не подошло предложенное время, оставляет имя, контакт и пожелания и читает: «Специалист увидит ваши пожелания по времени». Заявка ложится в таблицу, которой нет ни на одном экране — ни в кабинете, ни в приложении, ни в админке, — и её появление не порождает ни уведомления, ни строки в «Требует внимания». Обещание дано клиенту, а сдержать его должен специалист, которому ничего не сказали. Это К4 книги клиента, с той же стороны монеты.</div>
+        <div class="src"><span class="mono">src/app/bot/actions.ts:300-311</span> (только запись) · экрана нет</div>
+      </div>
+    </div>
+
+    <div class="def" id="s2">
+      <div class="def-id">С2</div>
+      <div class="def-b">
+        <div class="t">Ручная рассылка документов требует, чтобы специалист сам вставил текст в мессенджер</div>
+        <div class="why">Автоотправка документов работает сама: новому клиенту и перед первой сессией. Ручная кнопка в карточке клиента только кладёт готовый текст в буфер обмена — дальше специалист открывает мессенджер, находит человека и вставляет. При этом канал клиента известен, отправка в него работает во всех остальных местах продукта, и именно ручная дорога нужна там, где документ досылают по конкретному поводу — то есть чаще всего в спешке.</div>
+        <div class="src"><span class="mono">src/app/diary/clients/[clientId]/documents/ClientDocumentsManualPanel.tsx:90</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="s6">
+      <div class="def-id">С6</div>
+      <div class="def-b">
+        <div class="t">Написать клиенту из веб-кабинета нельзя</div>
+        <div class="why">Свободное сообщение и отложенная отправка («написать в понедельник утром») есть только в приложении. В веб-кабинете такого экрана нет вовсе: специалист за столом может отправить клиенту только документ или шаблонное уведомление. Написать «перенесём на час позже?» он идёт в мессенджер руками — и это сообщение не попадает ни в историю клиента, ни в журнал.</div>
+        <div class="src">есть: <span class="mono">src/app/api/mobile/clients/[id]/message/route.ts</span>, <span class="mono">.../scheduled-messages</span> · в вебе экрана нет</div>
+      </div>
+    </div>
+
+    <div class="def" id="s7">
+      <div class="def-id">С7</div>
+      <div class="def-b">
+        <div class="t">Лента уведомлений — только в приложении</div>
+        <div class="why">Клиент подтвердил, перенёс, отменил, попытался отменить поздно — всё это пишется в ленту, которую можно открыть только на телефоне. В вебе события приходят ботом в мессенджер. Специалист, который работает за столом и бота себе не привязал, узнаёт о действиях своих клиентов последним и только из расписания.</div>
+        <div class="src"><span class="mono">src/lib/notifications.ts</span> пишет, <span class="mono">src/app/api/mobile/notifications</span> читает; в вебе читателя нет</div>
+      </div>
+    </div>
+
+    <div class="def" id="s3">
+      <div class="def-id">С3</div>
+      <div class="def-b">
+        <div class="t">Перенести практику с телефона нельзя ни одним из трёх способов</div>
+        <div class="why">Вставка списком, импорт из календаря и таблица CSV/XLSX живут только в вебе. При этом перенос практики — ровно та работа, которую удобнее делать с телефона: там телефонная книга, там календарь, там таблица, присланная в мессенджере. Новый специалист, поставивший приложение первым, упирается в необходимость сесть за компьютер на самом первом шаге.</div>
+        <div class="src"><span class="mono">src/app/diary/clients/import*</span> — три страницы, мобильных маршрутов нет</div>
+      </div>
+    </div>
+
+    <div class="def" id="s4">
+      <div class="def-id">С4</div>
+      <div class="def-b">
+        <div class="t">Документы для клиентов в приложении только читаются</div>
+        <div class="why">Экран показывает загруженные документы, но завести новый, включить автоотправку или отключить устаревший с телефона нельзя. Между тем именно документы чаще всего правят в последний момент — перед первой встречей с новым человеком.</div>
+        <div class="src"><span class="mono">src/app/api/mobile/documents/route.ts</span> — только чтение</div>
+      </div>
+    </div>
+
+    <div class="def" id="s5">
+      <div class="def-id">С5</div>
+      <div class="def-b">
+        <div class="t">Анкеты клиента в приложении нет</div>
+        <div class="why">В вебе карточка клиента состоит из четырёх вкладок: Анкета, Сессии, Таймлайн, Документы. В приложении анкеты нет — то есть данные, которые специалист собирает на первой встрече, с телефона не открыть и не дописать.</div>
+        <div class="src">веб: <span class="mono">src/app/diary/clients/page.tsx:301</span> · мобильной части нет</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="ask" style="margin-top:28px">
+    <b>Что проверено и оказалось в порядке.</b> Шесть дорог заведения клиента и общий гейт аттестации оператора ПДн; приглашение в мессенджер с лестницей MAX → Telegram → веб-ссылка; занятость часа под общим замком; повтор слота на срок; развилка после «Была / Не пришли» и причина неявки; заметка с разделением приватной части и сводки для клиента; журнал согласий с версией и хешом текста. Отдельно: ручная отметка оплаты — это ограничение, а не дефект, и продукт честно пишет о нём на самом экране.
+  </div>
+</section>
+
+<section id="forks">
+  <div class="sechead">
+    <div class="eyebrow">05 · Развилки</div>
+    <h2>Три решения, которые не мои</h2>
+    <p class="lede">Отмеченный вариант — предложение; решение за учредителем.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div class="q">
+      <div class="qn">Развилка 1 · относится к С1</div>
+      <div class="qt">Что показывать, когда клиенту некуда написать?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Сказать и дать готовый текст</b><span class="rec-tag">предлагается</span>
+            <span class="sub">После сохранения — короткая карточка: «клиенту не отправили, мессенджер не подключён», готовый текст сообщения, кнопка «Скопировать» и кнопка «Пригласить в мессенджер». Когда канал есть — одна строка «Сообщение ушло в MAX». Ничего нового строить не нужно: текст и состояние доставки ПРАКТИКА уже возвращает, их просто выбрасывают.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Только отметка в «Требует внимания»</b>
+            <span class="sub">Не отвлекать в момент записи, а собрать все неотправленные в утренний список. Спокойнее, но человек узнаёт на день позже.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">«Запись создана» и тишина.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 2 · относится к С3, С4, С5, С6, С7</div>
+      <div class="qt">Веб и приложение разошлись. Сводить или закрепить роли?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Закрепить роли и написать их прямо</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Веб — рабочее место: перенос практики, документы, анкета, настройка. Телефон — день на ходу: расписание, отметки, заметка, быстрое сообщение. Тогда семь расхождений перестают быть недоделками и становятся решением, а в продукте появляются честные подсказки «это удобнее сделать за компьютером» вместо пустого места. Закрыть при этом стоит только два: уведомления в вебе (С7) и сообщение клиенту в вебе (С6) — они про связь с человеком, а не про удобство ввода.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Выровнять всё</b>
+            <span class="sub">Довести приложение до веба: импорт, документы, анкета. Это большая работа и она не про Горизонт 1.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как сложилось</b>
+            <span class="sub">Специалист выясняет границы сам, на живом проходе.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 3 · относится к С2</div>
+      <div class="qt">Ручная рассылка документов — доводить или оставить ручной?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Кнопка «Отправить в MAX» рядом с «Скопировать»</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Канал подписан прямо на кнопке, тем же правилом, что везде. «Скопировать» остаётся: у части клиентов канала нет, и ручная дорога обязана работать. Отправка уже умеет всё нужное — это соединение двух готовых концов.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить ручной намеренно</b>
+            <span class="sub">Документ — юридически значимая бумага, и решение «послать именно сейчас» остаётся у человека целиком. Тогда стоит хотя бы написать на экране, почему так.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sechead">
+    <div class="eyebrow">06 · Порядок работ</div>
+    <h2>В каком порядке чинить</h2>
+    <p class="lede">Первые два шага не требуют решений и делаются на готовом. Остальные зависят от развилок.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="b"><div class="t">Специалист узнаёт, дошло ли сообщение</div><div class="d">С1. Состояние доставки и готовый текст уже возвращаются — их надо перестать выбрасывать. Зависит от развилки 1.</div></div></div>
+    <div class="step"><div class="n">02</div><div class="b"><div class="t">Ответ о самочувствии и заявка на время попадают в «Требует внимания»</div><div class="d">С8, С9. Данные лежат, список существует, читателя нет. Самый заметный для человека результат на самую малую работу.</div></div></div>
+    <div class="step"><div class="n">03</div><div class="b"><div class="t">Документ уходит кнопкой, а не через буфер</div><div class="d">С2. Зависит от развилки 3.</div></div></div>
+    <div class="step"><div class="n">04</div><div class="b"><div class="t">Уведомления и сообщение клиенту появляются в вебе</div><div class="d">С6, С7 — те два расхождения, которые про связь с человеком, а не про удобство ввода. Зависит от развилки 2.</div></div></div>
+    <div class="step"><div class="n">05</div><div class="b"><div class="t">Роли веба и приложения названы вслух</div><div class="d">С3, С4, С5. Либо подсказки «это удобнее за компьютером», либо работа по выравниванию. Зависит от развилки 2.</div></div></div>
+  </div>
+
+  <div class="ask" style="margin-top:30px">
+    <b>Как это будет проверено.</b> Каждый шаг закрывается тестом на правило, а не на экран: результат доставки не теряется по дороге от действия к человеку; всё, что клиент сказал или оставил, имеет читателя. Правило, проверенное тестом, переживает следующую правку; проверенный экран — нет.
+  </div>
+</section>
+
+<footer>
+  Книга 1 из 3 по пути специалиста, собрана 15.09.2026 по коду ветки <code>claude/new-session-pgnybh</code>. Разбирает блоки C и D <a href="reestr.html">реестра путей</a> — девятнадцать путей из пятидесяти семи. Следующие книги: «вход, документы, деньги» (рамка вокруг всего) и «подключения, тишина, бот, справка». Правки по этому разбору не вносились: он написан до них и ждёт решения учредителя по трём развилкам раздела 05.
+</footer>
+
+</div>
