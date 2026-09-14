@@ -201,12 +201,25 @@ export function RescheduleClient({ sessionId, token, initial }: Props) {
                     <div className="mb-4 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div>
                 )}
 
+                {/* КНОПКА НАЗЫВАЕТ, ЧЕГО ЖДЁТ.
+                    13.09.2026 учредитель нашёл это на странице записи:
+                    «клиент пытался нажать на записаться и кнопка была
+                    неактивна». Там исправлено, а на соседней странице — той,
+                    куда ведёт кнопка «Перенести», — кнопка по-прежнему просто
+                    гасла. Отключённая кнопка без причины неотличима от
+                    сломанной. */}
                 <button
                     onClick={handleSave}
                     disabled={saving || !selectedOption}
                     className="w-full py-3 rounded-[var(--booking-radius-card)] text-sm font-semibold text-white bg-[var(--booking-accent)] hover:opacity-90 transition-colors disabled:opacity-50"
                 >
-                    {saving ? 'Переносим…' : 'Перенести встречу'}
+                    {saving
+                        ? 'Переносим…'
+                        : !selectedDate
+                            ? 'Сначала выберите день'
+                            : !selectedOption
+                                ? 'Сначала выберите время'
+                                : 'Перенести встречу'}
                 </button>
             </div>
         </main>
