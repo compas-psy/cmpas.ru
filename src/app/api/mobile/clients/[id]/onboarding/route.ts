@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         let plainText: string;
         if (session) {
             const onlineLink = session.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
-            const paymentText = await getPaymentInstruction(auth.userId, session.id, clientId);
+            const payment = await getPaymentInstruction(auth.userId, session.id, clientId);
             const base = {
                 clientName: client.name,
                 psychologistName: psyName,
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 format: session.format,
                 onlineLink,
                 documentLinks,
-                paymentText,
+                payment,
                 bookingLink,
                 timezoneLabel: timezoneLabel(psych?.psychologistSettings?.timezone),
             };
@@ -126,8 +126,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         } else {
             // Оплата уходит и тому, у кого записи ещё нет: раньше про неё
             // такой человек узнавал отдельным сообщением, написанным руками.
-            const paymentText = await getPaymentInstruction(auth.userId, null, null);
-            const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink, paymentText };
+            const payment = await getPaymentInstruction(auth.userId, null, null);
+            const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink, payment };
             htmlText = buildClientOnboardingMessage({ ...base, mode: 'html' });
             plainText = buildClientOnboardingMessage({ ...base, mode: 'plain' });
         }

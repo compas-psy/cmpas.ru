@@ -46,7 +46,7 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
     // ни перенести, ни отменить, а строка ниже обещает именно это.
     const manageLink = clientSessionLink(psychologistId, full.clientId, full.id);
     const onlineLink = full.format === 'online' ? full.psychologist.psychologistSettings?.onlineSessionLink : null;
-    const paymentText = await getPaymentInstruction(psychologistId, full.id, full.clientId);
+    const payment = await getPaymentInstruction(psychologistId, full.id, full.clientId);
     const text = buildSessionClientMessage({
         clientName: full.client.name,
         psychologistName: psyName,
@@ -55,7 +55,7 @@ export async function notifyClientAboutSession(psychologistId: string, sessionId
         format: full.format,
         onlineLink,
         documentLinks: deliveries.map(d => ({ title: d.title, link: d.link })),
-        paymentText,
+        payment,
         bookingLink,
         manageLink,
     });

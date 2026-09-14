@@ -115,7 +115,7 @@ export async function sendClientOnboarding(
     let plainText: string;
     if (session) {
         const onlineLink = session.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
-        const paymentText = await getPaymentInstruction(psychologistId, session.id, clientId);
+        const payment = await getPaymentInstruction(psychologistId, session.id, clientId);
         const base = {
             clientName: client.name,
             psychologistName: psyName,
@@ -124,7 +124,7 @@ export async function sendClientOnboarding(
             format: session.format,
             onlineLink,
             documentLinks,
-            paymentText,
+            payment,
             bookingLink,
             // Чьи это одиннадцать часов: без пояса клиент из другого региона
             // приходит мимо, и виноватым выглядит сервис.
@@ -133,8 +133,8 @@ export async function sendClientOnboarding(
         htmlText = buildSessionClientMessage({ ...base, mode: 'html' });
         plainText = buildSessionClientMessage({ ...base, mode: 'plain' });
     } else {
-        const paymentText = await getPaymentInstruction(psychologistId, null, null);
-        const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink, paymentText };
+        const payment = await getPaymentInstruction(psychologistId, null, null);
+        const base = { clientName: client.name, psychologistName: psyName, documentLinks, bookingLink, payment };
         htmlText = buildClientOnboardingMessage({ ...base, mode: 'html' });
         plainText = buildClientOnboardingMessage({ ...base, mode: 'plain' });
     }

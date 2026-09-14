@@ -153,8 +153,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                     const bookingLink = clientBookingLink(auth.userId, client.id);
                     const manageLink = clientSessionLink(auth.userId, client.id, updated.id);
                     const onlineLink = updated.format === 'online' ? psych?.psychologistSettings?.onlineSessionLink : null;
-                    const paymentText = await getPaymentInstruction(auth.userId, id, client.id);
-                    const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: updated.date, time: updated.time, format: updated.format, onlineLink, documentLinks: [], paymentText, bookingLink, manageLink });
+                    const payment = await getPaymentInstruction(auth.userId, id, client.id);
+                    const text = buildSessionClientMessage({ clientName: client.name, psychologistName, date: updated.date, time: updated.time, format: updated.format, onlineLink, documentLinks: [], payment, bookingLink, manageLink });
                     const prefix = 'Встреча перенесена. Пожалуйста, подтвердите новое время.\n\n';
                     // Перенесённую встречу надо подтвердить заново — кнопка
                     // «Подтверждаю» здесь и нужна, поэтому includeConfirm

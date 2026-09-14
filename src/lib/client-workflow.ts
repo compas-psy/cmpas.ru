@@ -4,7 +4,7 @@ import { messageLink } from '@/lib/messaging/format';
 import { paymentQrSource, paymentQrPng } from '@/lib/messaging/payment-qr';
 import { extractFirstName } from '@/lib/person-name';
 import { appSecret, safeEqualHex } from '@/lib/app-secret';
-import { paymentInstructionText, type PaymentSettingsForMessage } from '@/lib/messaging/payment-instruction';
+import { paymentInstructionText, paymentInstructionVariants, type PaymentInstructionVariants, type PaymentSettingsForMessage } from '@/lib/messaging/payment-instruction';
 
 export function publicBaseUrl() {
     return process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'https://cmpas.ru';
@@ -362,7 +362,7 @@ export async function getPaymentInstruction(psychologistId: string, sessionId?: 
         `;
     }
 
-    return paymentInstructionText(settings);
+    return paymentInstructionVariants(settings);
 }
 
 export async function getDocumentDelivery(deliveryId: string, token?: string | null) {
@@ -505,7 +505,17 @@ export function buildSessionClientMessage(params: {
      * появления встречи (онбординг).
      */
     manageLink?: string | null;
-    paymentText?: string | null;
+    /**
+     * Инструкция об оплате — ОБА вида сразу, а не готовая строка.
+     *
+     * 14.09.2026 клиент увидел в Telegram `<a href="…">Перейти к оплате</a>`
+     * разметкой. Сюда приходил заранее собранный HTML, а сообщение строится
+     * дважды: в плоский вид разметка попадала буквой, в HTML-виде её
+     * экранировал `esc` ниже — ссылка была сломана в обоих видах.
+     *
+     * Теперь вид выбирает тот, кто знает режим, то есть этот сборщик.
+     */
+    payment?: PaymentInstructionVariants | null;
     /**
      * Чьи это одиннадцать часов: «Москва (GMT+3)».
      *
@@ -547,10 +557,14 @@ export function buildSessionClientMessage(params: {
         }
     }
 
-    if (params.paymentText) {
-        // Оплата — отдельным блоком и после документов: в сообщении она
-        // читается как последний шаг подготовки, а не как главное в нём.
-        lines.push('', esc(params.paymentText));
+    // Оплата — отдельным блоком и после документов: в сообщении она
+    // читается как последний шаг подготовки, а не как главное в нём.
+    //
+    // Без esc: текст уже собран в нужном виде, а слова специалиста внутри
+    // него экранированы там же, где собирались.
+    const payment = params.payment && (html ? params.payment.html : params.payment.plain);
+    if (payment) {
+        lines.push('', payment);
     }
 
     // Строка обещает ровно то, что человек найдёт по ссылке. Раньше она
