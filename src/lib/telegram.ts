@@ -116,7 +116,13 @@ export async function sendTelegramPhoto(
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
-        if (caption) form.append('caption', caption);
+        if (caption) {
+            form.append('caption', caption);
+            // Подпись собирается в той же разметке, что и все сообщения
+            // продукта: в ней ссылка на оплату стоит за словом. Без этой
+            // строки человек увидел бы под кодом сам тег.
+            form.append('parse_mode', 'HTML');
+        }
         form.append('photo', new Blob([new Uint8Array(photo)], { type: 'image/png' }), 'qr.png');
 
         const url = `${TELEGRAM_API_URL}/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;

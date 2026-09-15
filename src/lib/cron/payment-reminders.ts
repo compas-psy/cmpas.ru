@@ -7,7 +7,7 @@ import { isQuietHour } from '@/lib/messaging/quiet-hours';
 import { escapeHtml } from '@/lib/messaging/format';
 import { extractFirstName } from '@/lib/person-name';
 import { timezoneLabel } from '@/lib/practice/timezones';
-import { paymentQrSource, paymentQrPng, PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
+import { paymentQrSource, paymentQrPng, paymentQrCaption } from '@/lib/messaging/payment-qr';
 import { paymentInstructionText } from '@/lib/messaging/payment-instruction';
 import { clampReminderHours } from '@/lib/messaging/payment-reminder-interval';
 import { track } from '@/lib/analytics/track';
@@ -172,10 +172,13 @@ export async function processPaymentReminders(now: Date = new Date()) {
                 // заведении клиента. Не нарисовался или не дошёл — ссылка
                 // ушла текстом выше, и это не повод считать напоминание
                 // несостоявшимся.
+                //
+                // Ссылка едет и ПОД КОДОМ тоже: для человека это два разных
+                // сообщения, и в том, где код, выбора иначе нет.
                 const source = paymentQrSource(setting);
                 if (source) {
                     const png = await paymentQrPng(source).catch(() => null);
-                    if (png) await deliverPhoto(client, png, PAYMENT_QR_CAPTION);
+                    if (png) await deliverPhoto(client, png, paymentQrCaption(source));
                 }
 
                 // Без ПД: только факт и выбранный интервал. Ни имени, ни

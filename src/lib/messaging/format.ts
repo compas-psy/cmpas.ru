@@ -31,6 +31,20 @@ export function escapeHtml(value: string): string {
 }
 
 /**
+ * Обратное к escapeHtml — ровно те же три подстановки, в обратную сторону.
+ *
+ * Нужно там, где значение вынимают ИЗ разметки обратно в обычную строку:
+ * адрес из якоря в кнопку мессенджера. Порядок важен: `&amp;` разворачивается
+ * последним, иначе `&amp;lt;` превратился бы в `<`.
+ */
+export function unescapeHtml(value: string): string {
+    return value
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+}
+
+/**
  * Ссылка за словом.
  *
  * В HTML — обычный якорь. В голом тексте адрес спрятать некуда, поэтому он
@@ -100,9 +114,19 @@ export type ExtractedLink = { label: string; url: string };
 export function extractLinksForButtons(text: string): { text: string; links: ExtractedLink[] } {
     const links: ExtractedLink[] = [];
 
-    let out = text.replace(/<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/gi, (_all, url: string, label: string) => {
+    let out = text.replace(/<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/gi, (_all, href: string, label: string) => {
         const clean = label.trim();
-        const shown = clean && clean !== url ? clean : 'Открыть';
+        const shown = clean && clean !== href ? clean : 'Открыть';
+        // АДРЕС ИЗ ЯКОРЯ — ЭКРАНИРОВАННЫЙ, А В КНОПКУ НУЖЕН НАСТОЯЩИЙ.
+        //
+        // messageLink пропускает адрес через escapeHtml: внутри разметки
+        // иначе нельзя. В кнопку MAX он до сих пор уезжал как есть — и
+        // ссылка оплаты СБП вида `?type=01&bank=…&sum=…` превращалась в
+        // `&amp;bank=…`: банк такой адрес не понимает, человек нажимает
+        // кнопку и попадает в ошибку. В плоском тексте этого не было —
+        // htmlToPlain развернёт подстановки, — то есть ломался ровно тот
+        // способ, который мы и считаем лучшим.
+        const url = unescapeHtml(href);
         // Один и тот же адрес не должен дать две одинаковые кнопки.
         if (!links.some(l => l.url === url)) links.push({ label: shown, url });
         return shown;

@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { db } from '@/lib/db';
 import { authenticateMobileRequest, unauthorizedResponse } from '@/lib/mobile-auth';
 import { deliverMessage, deliverPhoto } from '@/lib/messaging/deliver';
-import { PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
+import { paymentQrCaption } from '@/lib/messaging/payment-qr';
 import { buildSessionClientMessage, clientBookingLink, getPaymentInstruction, createClientDocumentDelivery, paymentQrForClient } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { timezoneLabel } from '@/lib/practice/timezones';
@@ -165,8 +165,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                     channel === 'telegram'
                         ? { telegramChatId: chatId, preferredChannel: 'telegram' }
                         : { maxChatId: chatId, preferredChannel: 'max' },
-                    qr,
-                    PAYMENT_QR_CAPTION,
+                    qr.png,
+                    paymentQrCaption(qr.link),
                 );
             }
 

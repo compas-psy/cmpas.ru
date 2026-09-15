@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { paymentQrSource, paymentQrPng, PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
+import { paymentQrSource, paymentQrPng, paymentQrCaption } from '@/lib/messaging/payment-qr';
+import { extractLinksForButtons } from '@/lib/messaging/format';
 
 /**
  * Код оплаты рисуется ИЗ ССЫЛКИ, которую дал специалист.
@@ -13,6 +14,10 @@ import { paymentQrSource, paymentQrPng, PAYMENT_QR_CAPTION } from '@/lib/messagi
  */
 
 const SBP_LINK = 'https://qr.nspk.ru/AD10006L5QFVJJQO8P2C9T7A3RDAQF11?type=01&bank=100000000111&sum=500000&cur=RUB';
+
+/** Часть проверок смотрит на сам исходник: воспроизводить диалог с двумя
+ *  мессенджерами дороже, чем стеречь правило в коде отправки. */
+const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf-8');
 
 describe('откуда берётся код', () => {
     it('из ссылки оплаты, если готовой картинки нет', () => {
@@ -48,8 +53,6 @@ describe('сам код', () => {
 });
 
 describe('куда он уходит', () => {
-    const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf-8');
-
     it('картинка отправляется телом запроса, а не публичным адресом', () => {
         // Публичный адрес пришлось бы открыть наружу, чтобы его достал
         // Telegram, — то есть выложить ссылку оплаты конкретного
@@ -66,12 +69,68 @@ describe('куда он уходит', () => {
         ]) {
             const source = read(path);
             expect(source, `${path} не шлёт код`).toContain('paymentQrForClient');
-            expect(source).toContain('PAYMENT_QR_CAPTION');
+            expect(source).toContain('paymentQrCaption');
         }
     });
 
     it('подпись под кодом ничего не обещает от имени сервиса', () => {
         // ПРАКТИКА оплату не принимает и её поступление не подтверждает.
-        expect(PAYMENT_QR_CAPTION).not.toMatch(/оплачен|подтвер|гарант/i);
+        expect(paymentQrCaption(SBP_LINK)).not.toMatch(/оплачен|подтвер|гарант/i);
+        expect(paymentQrCaption(null)).not.toMatch(/оплачен|подтвер|гарант/i);
+    });
+
+    it('Telegram отправляет подпись с разметкой, иначе якорь приедет тегом', () => {
+        const telegram = read('src/lib/telegram.ts');
+        expect(telegram).toMatch(/form\.append\('parse_mode', 'HTML'\)/);
+    });
+});
+
+/**
+ * ВЫБОР ПОД КОДОМ.
+ *
+ * Учредитель 15.09.2026: «нужно чтобы у человека был выбор — или
+ * отсканировать QR, или перейти по ссылке». Под картинкой выбора не было:
+ * камера или ничего.
+ */
+describe('подпись даёт второй способ заплатить', () => {
+    it('ссылка стоит за словом, а не голым адресом', () => {
+        const caption = paymentQrCaption(SBP_LINK);
+        expect(caption).toContain('Перейти к оплате');
+        // Адрес есть только внутри якоря: голым в тексте он не стоит.
+        expect(caption.replace(/<a href="[^"]*">/g, '')).not.toContain('qr.nspk.ru');
+    });
+
+    it('это ТА ЖЕ ссылка, которая зашита в самом коде', () => {
+        // Иначе камера и палец ведут в разные места — и одно из них неверное.
+        const source = paymentQrSource({ paymentLink: SBP_LINK, paymentQrUrl: null });
+        expect(paymentQrCaption(source)).toContain(SBP_LINK.replace(/&/g, '&amp;'));
+    });
+
+    it('в MAX превращается в кнопку под картинкой', () => {
+        // У MAX нет разметки, но есть кнопки со ссылкой; отправка картинки
+        // обязана вынимать якорь так же, как это делает отправка текста.
+        const { text, links } = extractLinksForButtons(paymentQrCaption(SBP_LINK));
+        expect(links).toEqual([{ label: 'Перейти к оплате', url: SBP_LINK }]);
+        expect(text).toContain('наведите камеру телефона');
+        expect(text).not.toContain('<a');
+
+        const maxBot = read('src/lib/max-bot.ts');
+        const sendPhoto = maxBot.slice(maxBot.indexOf('export async function sendMaxPhoto'));
+        expect(sendPhoto).toContain('extractLinksForButtons');
+        expect(sendPhoto).toContain('inline_keyboard');
+    });
+
+    it('ссылки нет — подпись остаётся прежней и код всё равно уходит', () => {
+        expect(paymentQrCaption(null)).toBe('Код для оплаты — наведите камеру телефона');
+        expect(paymentQrCaption('   ')).toBe('Код для оплаты — наведите камеру телефона');
+    });
+
+    it('код важнее кнопки: не принял MAX картинку с кнопкой — уходит без неё', () => {
+        // Сообщение «картинка + клавиатура» на живом ответе MAX не
+        // проверялось. Если он его не примет, человек не должен остаться
+        // вовсе без кода.
+        const maxBot = read('src/lib/max-bot.ts');
+        const sendPhoto = maxBot.slice(maxBot.indexOf('export async function sendMaxPhoto'));
+        expect(sendPhoto).toContain('attempt([image])');
     });
 });
