@@ -2,7 +2,7 @@
 
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
-import { PAYMENT_QR_CAPTION } from '@/lib/messaging/payment-qr';
+import { paymentQrCaption } from '@/lib/messaging/payment-qr';
 import { clientBookingLink, buildSessionClientMessage, getPaymentInstruction, createClientDocumentDelivery, paymentQrForClient } from '@/lib/client-workflow';
 import { buildClientOnboardingMessage } from '@/lib/practice/communications';
 import { timezoneLabel } from '@/lib/practice/timezones';
@@ -177,8 +177,8 @@ export async function sendClientOnboarding(
                 opts.channel === 'telegram'
                     ? { telegramChatId: chatId, preferredChannel: 'telegram' }
                     : { maxChatId: chatId, preferredChannel: 'max' },
-                qr,
-                PAYMENT_QR_CAPTION,
+                qr.png,
+                paymentQrCaption(qr.link),
             );
         }
         return { status: 'sent' as const, channel: opts.channel };

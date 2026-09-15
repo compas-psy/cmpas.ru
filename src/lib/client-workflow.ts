@@ -299,13 +299,17 @@ let lastPaymentSettings: { paymentLink: string | null; paymentQrUrl: string | nu
  * null означает «кода не будет»: оплата не настроена, ссылки нет или банк
  * уже дал готовую картинку — она ушла ссылкой в тексте.
  */
-export async function paymentQrForClient(psychologistId: string): Promise<Buffer | null> {
+export async function paymentQrForClient(psychologistId: string): Promise<{ png: Buffer; link: string } | null> {
     const settings = lastPaymentSettings ?? await readPaymentSettings(psychologistId);
     if (!settings) return null;
     const source = paymentQrSource(settings);
     if (!source) return null;
     try {
-        return await paymentQrPng(source);
+        // Ссылка возвращается вместе с картинкой, а не остаётся внутри:
+        // под кодом она нужна подписью — чтобы у человека был выбор,
+        // навести камеру или нажать. Это ТА ЖЕ ссылка, которая в коде и
+        // зашита, так что оба способа ведут в одно место.
+        return { png: await paymentQrPng(source), link: source };
     } catch (error) {
         // Не нарисовался — не беда: ссылка ушла текстом рядом.
         console.error('[paymentQrForClient] не удалось нарисовать код:', error);

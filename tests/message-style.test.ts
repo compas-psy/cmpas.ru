@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
-import { htmlToPlain, extractLinksForButtons } from '@/lib/messaging/format';
+import { htmlToPlain, extractLinksForButtons, messageLink } from '@/lib/messaging/format';
 import path from 'path';
 
 /** Файлы, которые сочиняют текст, уходящий человеку. */
@@ -189,6 +189,19 @@ describe('ссылки для МАКСа уезжают кнопками', () =>
         expect(links).toEqual([{ label: 'Выбрать время', url: 'https://cmpas.ru/u/anna?c=tok' }]);
         // Ни адреса, ни осиротевшей подписи-дубля.
         expect(text).toBe('Спасибо за встречу.');
+    });
+
+    it('адрес в кнопке — настоящий, а не экранированный', () => {
+        // ЖИВОЙ СЛУЧАЙ 15.09.2026. messageLink пропускает адрес через
+        // escapeHtml — внутри разметки иначе нельзя, — и в кнопку МАКСа он
+        // уезжал прямо оттуда, вместе с подстановками. Ссылка оплаты СБП
+        // `?type=01&bank=…&sum=…` превращалась в `&amp;bank=…`: банк такой
+        // адрес не понимает. В плоском тексте этого не было, то есть
+        // ломался ровно тот способ, который мы считаем лучшим.
+        const url = 'https://qr.nspk.ru/AD1?type=01&bank=100000000111&sum=500000';
+        const { links } = extractLinksForButtons(messageLink(url, 'Перейти к оплате'));
+        expect(links).toEqual([{ label: 'Перейти к оплате', url }]);
+        expect(links[0].url).not.toContain('&amp;');
     });
 
     it('ссылка посреди фразы оставляет подпись на месте — иначе фраза разъедется', () => {

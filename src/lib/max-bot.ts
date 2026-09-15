@@ -216,18 +216,49 @@ export async function sendMaxPhoto(
             return false;
         }
 
+        // ПОДПИСЬ ПОД КОДОМ ЖИВЁТ ПО ТОМУ ЖЕ ПРАВИЛУ, ЧТО И ВСЕ СООБЩЕНИЯ.
+        //
+        // У MAX нет разметки, но есть кнопки со ссылкой, и sendMaxMessage
+        // этим уже пользуется. Картинка шла мимо: подпись уходила как есть,
+        // и якорь в ней приехал бы клиенту тегом. Теперь ссылка вынимается
+        // в кнопку под кодом — человек выбирает, навести камеру или нажать.
+        const extracted = extractLinksForButtons(caption || '');
+        const text = htmlToPlain(extracted.text);
+        const keyboard = extracted.links.length
+            ? {
+                type: 'inline_keyboard',
+                payload: {
+                    buttons: extracted.links.map(l => [{ type: 'link', text: l.label, url: l.url }]),
+                },
+            }
+            : null;
+
         // Вложение появляется у MAX не мгновенно: сразу после загрузки
         // отправка отвечает «attachment.not.ready». Официальный SDK на этот
         // случай повторяет попытку, и мы тоже — три раза по полторы секунды.
         // Без этого код оплаты терялся бы ровно в самом частом случае.
-        for (let attempt = 0; attempt < 3; attempt++) {
-            const result = await maxApi('/messages', {
-                text: caption || '',
-                attachments: [{ type: 'image', payload }],
-            }, { user_id: uid });
-            if (result && (result as { success?: boolean }).success !== false) return true;
-            await new Promise(resolve => setTimeout(resolve, 1500));
+        const attempt = async (attachments: unknown[]) => {
+            for (let i = 0; i < 3; i++) {
+                const result = await maxApi('/messages', { text, attachments }, { user_id: uid });
+                if (result && (result as { success?: boolean }).success !== false) return true;
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            return false;
+        };
+
+        const image = { type: 'image', payload };
+        if (await attempt(keyboard ? [image, keyboard] : [image])) return true;
+
+        // КОД ВАЖНЕЕ КНОПКИ. Картинка с кнопкой в одном сообщении — то, чего
+        // мы у MAX не проверяли на живом ответе; если такое сообщение он не
+        // принимает, человек не должен остаться вовсе без кода. Тогда код
+        // уходит один, а ссылка — отдельным сообщением следом: выбор у
+        // человека всё равно есть, просто в двух сообщениях вместо одного.
+        if (keyboard && await attempt([image])) {
+            await sendMaxMessage(uid, caption || '').catch(() => undefined);
+            return true;
         }
+
         console.error('[MAX] Картинка не ушла: вложение так и не стало готовым');
         return false;
     } catch (error) {
