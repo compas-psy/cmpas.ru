@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Админка и управленческая панель</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<style>
+.chip.half{background:var(--gold-soft); color:var(--gold-ink); border-color:color-mix(in srgb, var(--gold) 40%, transparent)}
+td.num{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); white-space:nowrap}
+.tnote{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
+.mx td{text-align:center}
+.mx td:nth-child(1),.mx td:nth-child(2){text-align:left}
+.mx .y{color:var(--forest); font-weight:700}
+.mx .n{color:var(--alarm); font-weight:700}
+.mx .d{color:var(--faint)}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">15.09.2026 · на утверждение</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Разбор пути · учредитель</div>
+  <h1>Админка и управленческая панель</h1>
+  <p class="lede" style="margin-top:16px">Двадцать два пути того единственного человека, у которого нет над собой никого. Тринадцать в старой админке — где он смотрит на людей и действует на них, — и девять в управленческой панели, где он смотрит на продукт. Разбора у этой части не было ни одного: её писали для себя, а на себе проверяют реже всего.</p>
+
+  <div class="ask">
+    <b>Здесь другая цена ошибки.</b> На пути клиента и специалиста ошибка портит чей-то день. Здесь — одним нажатием уходит письмо тысяче человек или исчезает практика вместе с клиентскими данными, и остановить это некому: над учредителем нет ни второго подтверждения от коллеги, ни поддержки, которая переспросит.
+    <br><br>Десять расхождений. Тяжелее всего одно: <b>массовая рассылка не спрашивает согласия на рекламу</b>. Продукт собирает это согласие как положено — с версией документа, отметкой отзыва и доказательством, — и рассылка не смотрит на него ни разу.
+  </div>
+
+  <nav class="toc">
+    <a href="#map"><span>01</span>Карта кабинета</a>
+    <a href="#matrix"><span>02</span>Двадцать два пути</a>
+    <a href="#frames"><span>03</span>Каркасы</a>
+    <a href="#defects"><span>04</span>Дефекты</a>
+    <a href="#forks"><span>05</span>Развилки</a>
+    <a href="#plan"><span>06</span>Порядок работ</a>
+  </nav>
+</header>
+
+<section id="map">
+  <div class="sechead">
+    <div class="eyebrow">01 · Карта кабинета</div>
+    <h2>Где учредитель смотрит и где действует</h2>
+    <p class="lede">Красной рамкой — места, где действие уходит без нужного вопроса или его след потом не найти. Номер ведёт в раздел 04.</p>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Учредитель</div><div class="when">утром</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Дашборд админки</div>
+        <div class="what">Пользователи, визиты, триалы, подписки</div>
+        <div class="note">Числа считаются прямым счётом по таблицам, без порогов и без оговорок о качестве данных.</div>
+        <div class="tags"><a class="chip" href="#u7">У7</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Панель · «Утро»</div>
+        <div class="what">То же самое, но по контракту</div>
+        <div class="note">Свои запросы, свои пороги, честные «нет данных». Пересекается с дашбордом и считает иначе.</div>
+        <div class="tags"><a class="chip" href="#u7">У7</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Какая из двух главная</div>
+        <div class="what">Не сказано нигде</div>
+        <div class="note">Два утра, два набора чисел, ни одного слова о том, какому верить. Человек открывает то, что помнит.</div>
+        <div class="tags"><a class="chip" href="#u7">У7</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Панель · «Качество данных»</div>
+        <div class="what">Чему из показанного можно верить</div>
+        <div class="note">Считает честные дыры на лету и называет каждую причиной. Экран, которого в админке нет и не предполагалось.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Учредитель</div><div class="when">пишет людям</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Выбор сегмента</div>
+        <div class="what">Все, триал, подписка, тег, канал</div>
+        <div class="note">Четыре шага мастера, числа по каждому каналу заранее, превью текста с подстановками.</div>
+        <div class="tags"><span class="chip half">частично</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Чьё согласие</div>
+        <div class="what">Не спрашивается</div>
+        <div class="note">Ни ConsentEvent, ни isBlocked в отборе не участвуют. Снявший галочку получит письмо; заблокированный — тоже.</div>
+        <div class="tags"><a class="chip" href="#u1">У1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Отправка</div>
+        <div class="what">Прямой запрос в Telegram</div>
+        <div class="note">Мимо общей отправки, мимо прокси, мимо выбора канала. Имя в разметку без экранирования, без пауз между сообщениями.</div>
+        <div class="tags"><a class="chip" href="#u3">У3</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Итог</div>
+        <div class="what">«Отправлено 40, не доставлено 12»</div>
+        <div class="note">Кому именно не дошло и почему — не сохраняется: причина проглатывается пустым catch.</div>
+        <div class="tags"><a class="chip" href="#u6">У6</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Учредитель</div><div class="when">действует на человека</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Досье пользователя</div>
+        <div class="what">Платежи, клиенты, сессии, теги, заметки</div>
+        <div class="note">Девять действий в одном месте, у каждого — своё подтверждение, и все пишутся в журнал.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Тестовый сброс</div>
+        <div class="what">Два подтверждения подряд</div>
+        <div class="note">Стирает клиентов, сессии, расписание, календари. Охраняется правильно.</div>
+        <div class="tags"><a class="chip" href="#u4">У4</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Удаление аккаунта</div>
+        <div class="what">Одно подтверждение</div>
+        <div class="note">Действие тяжелее — а вопрос один, и он не называет ни человека, ни того, сколько за ним стоит.</div>
+        <div class="tags"><a class="chip" href="#u4">У4</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">След в журнале</div>
+        <div class="what">«delete», и всё</div>
+        <div class="note">Ни числа клиентов, ни встреч. А прочитать эту запись можно только в досье — которого больше нет.</div>
+        <div class="tags"><a class="chip" href="#u5">У5</a> <a class="chip" href="#u2">У2</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Учредитель</div><div class="when">проверяет себя</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Экран «Безопасность»</div>
+        <div class="what">Обещает «аудит действий»</div>
+        <div class="note">Показывает входы, выходы и коды из писем. Собственных действий учредителя на нём нет ни одного.</div>
+        <div class="tags"><a class="chip" href="#u2">У2</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Где они на самом деле</div>
+        <div class="what">В досье конкретного человека</div>
+        <div class="note">По одному пользователю за раз. Общей ленты «что я делал на этой неделе» нет.</div>
+        <div class="tags"><a class="chip" href="#u2">У2</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Массовая рассылка</div>
+        <div class="what">Пишется без адресата</div>
+        <div class="note">У записи нет targetUserId, а читают журнал только по нему. Значит её не показывает ни один экран продукта.</div>
+        <div class="tags"><a class="chip" href="#u2">У2</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Вход в кабинет</div>
+        <div class="what">Одна проверка роли на весь /admin</div>
+        <div class="note">Включая панель: второго механизма авторизации нет намеренно, и панель наследует этот.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Учредитель</div><div class="when">ведёт хозяйство</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Заказы ежедневника</div>
+        <div class="what">Копятся и не меняются</div>
+        <div class="note">Статусы показаны и фильтруются, сменить их негде. Заказавший человек не узнаёт ничего.</div>
+        <div class="tags"><a class="chip" href="#u8">У8</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Здоровье сервера</div>
+        <div class="what">В двух местах</div>
+        <div class="note">Экран админки и экран «Техника» в панели. Второй честнее: он называет, чего не знает.</div>
+        <div class="tags"><a class="chip" href="#u9">У9</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Кто просил функцию</div>
+        <div class="what">Только из приложения</div>
+        <div class="note">С веба сигнала нет вовсе, и экран не говорит, что видит лишь половину людей.</div>
+        <div class="tags"><a class="chip" href="#u10">У10</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Юридические документы</div>
+        <div class="what">Публикация новой редакции</div>
+        <div class="note">Версия, дата, адрес. Два документа ждут текста, и продукт нигде не делает вид, что они есть.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="matrix">
+  <div class="sechead">
+    <div class="eyebrow">02 · Двадцать два пути</div>
+    <h2>Каждый — через шесть проверок</h2>
+    <p class="lede">Те же шесть вопросов, что в реестре. <span class="mx"><span class="y">да</span></span> — пройдено, <span class="mx"><span class="n">нет</span></span> — нет, <span class="mx"><span class="d">—</span></span> — к этому пути не относится.</p>
+  </div>
+
+  <div class="ask" style="margin-bottom:22px">
+    <b>Две проверки из шести здесь почти всегда «не относится», и это не поблажка.</b> Кабинет учредителя живёт только в вебе: приложения для него нет и не планируется, мессенджер в его работе не участвует. Значит «без мессенджера» и «веб = приложение» тут нечего спрашивать — и весь вес ложится на четыре оставшихся. Так и вышло: <b>«молчание» падает семь раз</b>, и каждый раз это молчание о собственном действии учредителя.
+  </div>
+
+  <div class="tablewrap">
+    <table class="mx">
+      <thead><tr>
+        <th style="width:56px">№</th><th style="min-width:230px">Путь</th>
+        <th style="width:78px">Обеща&shy;ние</th><th style="width:70px">Не ту&shy;пик</th><th style="width:82px">Не мол&shy;чит</th>
+        <th style="width:96px">Без мес&shy;сен&shy;джера</th><th style="width:92px">Веб = при&shy;ложе&shy;ние</th><th style="width:88px">Один ис&shy;точник</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="num">A1</td><td>Утренний взгляд на цифры — дашборд админки<div class="tnote">Пересекается с «Утром» панели; какая главная — не сказано</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="n">нет</td></tr>
+        <tr><td class="num">A2</td><td>Разбирается, откуда приходят люди<div class="tnote">Только смотреть, выгрузки нет</div></td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A3</td><td>Смотрит досье и действует<div class="tnote">Девять действий, все пишутся в журнал; подтверждения не называют человека</div></td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A4</td><td><b>Рассылает письмо сегменту</b><div class="tnote">Согласие на рекламу не спрашивается; отправка мимо всех правил; причина отказа не сохраняется</div></td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="n">нет</td></tr>
+        <tr><td class="num">A5</td><td>Смотрит журнал безопасности<div class="tnote">Обещает «аудит действий», показывает только входы</div></td><td class="n">нет</td><td class="n">нет</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="n">нет</td></tr>
+        <tr><td class="num">A6</td><td>Включает функции, проверяет ботов</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A7</td><td>Публикует редакцию юридического документа<div class="tnote">Версия, дата, адрес; ненаписанные документы нигде не выдаются за готовые</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A8</td><td>Смотрит здоровье сервера<div class="tnote">Дублируется «Техникой» панели, там честнее</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="n">нет</td></tr>
+        <tr><td class="num">A9</td><td>Смотрит сводку по базе</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A10</td><td>Смотрит, кто просил какую функцию<div class="tnote">Сигнал только из приложения, и экран об этом не говорит</div></td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A11</td><td>Разбирает заказы бумажного ежедневника<div class="tnote">Статус сменить негде; заказавший не узнаёт ничего</div></td><td class="n">нет</td><td class="n">нет</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A12</td><td>Смотрит, кто заходил на сайт<div class="tnote">Устройства и источники без адресов и отпечатков — приватность соблюдена</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A13</td><td>Дёргает служебные ручки без экрана<div class="tnote">Пять ручек под ролью или секретом крона; списка их нигде нет</div></td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B1</td><td>Утро: что требует меня сегодня<div class="tnote">Контракт состояний, пороги подтверждены владельцем</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="n">нет</td></tr>
+        <tr><td class="num">B2</td><td>Деньги<div class="tnote">Одно поле на запись — стоимость инфраструктуры, не заполнено</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B3</td><td>Продукты: ПРАКТИКА, ЗАПИСКИ, МОМЕНТЫ<div class="tnote">У соседей своих серверов нет — и так и написано</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B4</td><td>Путь и активация<div class="tnote">Воронка и источники — честное «нет данных» с причиной</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B5</td><td>Удержание<div class="tnote">Причины оттока — «нет данных»: опроса при отмене нет</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B6</td><td>Техника<div class="tnote">Второе поле на запись — дата учебного восстановления копии</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B7</td><td>Качество данных<div class="tnote">Считает честные дыры на лету, а не хранит число</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B8</td><td>Библиотека компонентов<div class="tnote">Служебный экран на синтетических числах</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B9</td><td>Обновляет экран руками<div class="tnote">Сброс кеша только этого экрана</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="y">да</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ask" style="margin-top:26px">
+    <b>Что видно из матрицы.</b> Девять путей панели проходят почти всё — и это не самооценка, а следствие того, как её строили: контракт состояний, подтверждённые пороги, честное «нет данных» с причиной у каждой дыры. Старая админка писалась иначе и раньше, и весь список расхождений — из неё.
+    <br><br>Один путь собрал на себе четыре «нет» из четырёх применимых — <b>A4, массовая рассылка</b>. Это же и самое опасное, что учредитель может сделать одним нажатием.
+  </div>
+</section>
+
+<section id="frames">
+  <div class="sechead">
+    <div class="eyebrow">03 · Каркасы</div>
+    <h2>Как сейчас и как предлагается</h2>
+    <p class="lede">Три места, где вопрос на экране и есть защита.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div>
+      <div class="eyebrow" style="margin-bottom:10px">Рассылка · последний шаг</div>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/admin/communications</span><span>шаг 3 из 4</span></div>
+            <div class="wf-h">Текст сообщения</div>
+            <div class="wf-card"><div class="wf-meta">Здравствуйте, {name}! У вас осталось {trialDaysLeft} дней пробного периода…</div></div>
+            <div class="wf-line s">Превью (для «Иван»)</div>
+            <div class="wf-row rw"><div class="wf-t">← Назад</div><div class="wf-btn pri">Отправить 412 сообщений</div></div>
+            <div class="wf-note">412 — это все, у кого есть канал. Сколько из них согласия на рекламу не давали или отозвали его — экран не знает и не спрашивает.</div>
+            <div class="wf-note">Одно нажатие, отмены нет.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/admin/communications</span><span>шаг 3 из 4</span></div>
+            <div class="wf-h">Кому уйдёт</div>
+            <div class="wf-card"><div class="wf-meta"><b>318</b> — дали согласие на рекламные сообщения<br>78 — согласия не давали<br>14 — отозвали согласие<br>2 — заблокированы</div></div>
+            <div class="wf-line s">Уйдёт только первым 318. Остальные исключены автоматически.</div>
+            <div class="wf-row"><div class="wf-btn">Отправить пробное себе</div></div>
+            <div class="wf-row rw"><div class="wf-t">← Назад</div><div class="wf-btn pri">Отправить 318 сообщений</div></div>
+            <div class="wf-note">Число на кнопке — то же, что в первой строке. Исключённые названы не для того, чтобы их можно было вернуть, а чтобы разница между 412 и 318 не выглядела ошибкой.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="eyebrow" style="margin-bottom:10px">Удаление аккаунта</div>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/admin/users/…</span><span></span></div>
+            <div class="wf-h">Опасная зона</div>
+            <div class="wf-row"><div class="wf-btn danger">Удалить аккаунт</div></div>
+            <div class="wf-line m">↓ нажатие</div>
+            <div class="wf-msg">УДАЛИТЬ АККАУНТ НАВСЕГДА? Это необратимо!</div>
+            <div class="wf-row"><div class="wf-btn">Отмена</div><div class="wf-btn pri">OK</div></div>
+            <div class="wf-note">Вопрос не называет ни человека, ни того, что за ним стоит. Тестовый сброс — действие мягче — спрашивает дважды, удаление аккаунта один раз.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/admin/users/…</span><span></span></div>
+            <div class="wf-h">Удалить аккаунт Ирины Мартыновой?</div>
+            <div class="wf-sub">Вместе с ним исчезнут 32 клиента, 184 встречи и 96 заметок. Это данные её клиентов, и восстановить их нельзя.</div>
+            <div class="wf-card"><div class="wf-meta">Чтобы подтвердить, введите почту аккаунта:<br><span class="mono">irina@example.com</span></div></div>
+            <div class="wf-row"><div class="wf-btn off">Отмена</div><div class="wf-btn danger">Удалить навсегда</div></div>
+            <div class="wf-note">Числа берутся тем же запросом, что уже считает досье. Ввод почты — не бюрократия: он разрывает привычку нажимать «OK» не читая.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="eyebrow" style="margin-bottom:10px">Экран «Безопасность»</div>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/admin/audit</span><span></span></div>
+            <div class="wf-h">Безопасность</div>
+            <div class="wf-sub">Журнал безопасности и аудит действий</div>
+            <div class="wf-line">Всего событий · 14 208</div>
+            <div class="wf-card"><div class="wf-meta">Вход · 12:04<br>Код отправлен · 12:03<br>Выход · 11:40<br>Вход · 11:12</div></div>
+            <div class="wf-note">Только входы, выходы и коды из писем. Ни одного собственного действия учредителя: блокировок, удалений, смен роли, рассылок здесь нет.</div>
+            <div class="wf-note">Они записаны — но прочитать их можно только в досье конкретного человека. У удалённого досье уже нет.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/admin/audit</span><span></span></div>
+            <div class="wf-h">Безопасность</div>
+            <div class="wf-row"><div class="wf-pill gold">Мои действия</div><div class="wf-pill">Входы</div></div>
+            <div class="wf-card"><div class="wf-meta">Рассылка · сегмент «триал», 318 писем · 12:40<br>Удалён аккаунт irina@example.com (32 клиента) · вчера<br>Роль изменена: USER → ADMIN · вчера<br>Тестовый сброс · 12.09</div></div>
+            <div class="wf-line s">Записи об удалённых аккаунтах остаются: журнал хранит почту и числа, а не ссылку на строку, которой больше нет.</div>
+            <div class="wf-note">Новый экран не заводится — добавляется вторая вкладка на тот, что уже обещает «аудит действий».</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="defects">
+  <div class="sechead">
+    <div class="eyebrow">04 · Дефекты</div>
+    <h2>Десять расхождений</h2>
+    <p class="lede">По порядку тяжести. Первые шесть — в одном экране и в одном действии.</p>
+  </div>
+
+  <div class="defects">
+
+    <div class="def" id="u1">
+      <div class="def-id">У1</div>
+      <div class="def-b">
+        <div class="t">Массовая рассылка не спрашивает согласия на рекламу</div>
+        <div class="why">Согласие на рекламные сообщения продукт собирает как положено и с запасом: отдельной галочкой в настройках, записью с версией документа, временем, источником события и отдельной отметкой при отзыве. Это делалось намеренно — чтобы согласие было доказательством, а не состоянием. В настройках человеку обещано: «Необязательно, отзывается в любой момент».<br><br>Отбор получателей смотрит на пробный период, подписку, тег и наличие канала. Ни записи о согласии, ни признака блокировки в нём нет вовсе. Значит человек, снявший галочку — то есть совершивший ровно то действие, которое ему обещали, — получит следующее письмо наравне со всеми. Заблокированный получит тоже.<br><br>Это единственный дефект во всех четырёх книгах, где нарушено не удобство и не ясность, а данное человеку слово, подкреплённое отдельно собранным доказательством. И нарушает его самое массовое действие в продукте.</div>
+        <div class="src"><span class="mono">src/app/admin/actions/crm.ts:353</span> (<span class="mono">sendMassCommunication</span>) и <span class="mono">:297</span> (<span class="mono">getSegmentCount</span>) — ни <span class="mono">ConsentEvent</span>, ни <span class="mono">isBlocked</span> не участвуют · против <span class="mono">src/app/legal/actions.ts:102</span>, где согласие пишется и отзывается</div>
+      </div>
+    </div>
+
+    <div class="def" id="u2">
+      <div class="def-id">У2</div>
+      <div class="def-b">
+        <div class="t">Журнал собственных действий написан так, что его нельзя прочитать</div>
+        <div class="why">Экран называется «Безопасность» и подписан «Журнал безопасности и аудит действий». Читает он одну таблицу — входы, выходы и коды из писем. Собственных действий учредителя на нём нет ни одного.<br><br>Они пишутся в другую таблицу, и пишутся исправно: блокировка, смена роли, продление пробного периода, тестовый сброс, удаление, рассылка. Но читают её ровно в одном месте — в досье конкретного пользователя, по его идентификатору. Отсюда два следствия, и оба неприятные.<br><br><b>Массовую рассылку не показывает ни один экран.</b> У её записи нет адресата — она про сегмент, а не про человека, — а другого способа добраться до журнала в продукте нет. Самое опасное действие оставляет след, который некому прочесть.<br><br><b>Запись об удалении становится недостижимой в тот же миг, когда удаление удалось.</b> Добраться до неё можно только через досье, а досье вместе с пользователем и исчезло.</div>
+        <div class="src"><span class="mono">src/app/admin/(chrome)/audit/page.tsx:25</span> (читает только <span class="mono">auditLog</span>) · <span class="mono">src/app/admin/actions/crm.ts:189</span> (<span class="mono">getAdminActionLog</span> — только по <span class="mono">targetUserId</span>) · <span class="mono">crm.ts:441-445</span> (запись рассылки без адресата)</div>
+      </div>
+    </div>
+
+    <div class="def" id="u3">
+      <div class="def-id">У3</div>
+      <div class="def-b">
+        <div class="t">Рассылка отправляет в обход всех правил, которые продукт для себя написал</div>
+        <div class="why">Сообщения уходят прямым запросом в <span class="mono">api.telegram.org</span> — мимо общей отправки продукта. Отсюда сразу четыре последствия.<br><br><b>Мимо прокси.</b> Общая отправка умеет уходить через туннель, когда прямой путь до Telegram закрыт; эта — не умеет, и в такой день рассылка просто не уйдёт.<br><br><b>Мимо выбора канала.</b> Канал выбирает учредитель на экране, а не правило «основной канал человека». Тот, кто живёт в MAX, получит письмо в Telegram или не получит вовсе.<br><br><b>Без экранирования.</b> Подстановка <span class="mono">{name}</span> кладёт имя прямо в разметку. Амперсанд в имени — и Telegram отвечает отказом. Это тот же дефект, что закрыли 15.09 в четырёх местах рассылки специалисту; здесь он остался.<br><br><b>Без пауз.</b> Цикл шлёт подряд, сколько есть. У Telegram предел около тридцати сообщений в секунду, и на сегменте в несколько сотен часть отвалится по ограничению — а само действие живёт в обработчике веб-запроса и до конца может не дождаться.</div>
+        <div class="src"><span class="mono">src/app/admin/actions/crm.ts:412-419</span> (рассылка) и <span class="mono">:133</span> (личное сообщение — та же прямая отправка) — против <span class="mono">src/lib/messaging/deliver.ts</span> и <span class="mono">src/lib/telegram.ts</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="u6">
+      <div class="def-id">У6</div>
+      <div class="def-b">
+        <div class="t">У недоставленного письма нет причины</div>
+        <div class="why">Итог рассылки — два числа: отправлено и не доставлено. Почему не доставлено и кому именно — не сохраняется нигде: ошибка проглатывается пустым <span class="mono">catch</span>, счётчик увеличивается, цикл идёт дальше.<br><br>Учредитель видит «40 и 12» и не может ни повторить попытку для этих двенадцати, ни понять, дело в их стороне или в нашей. А поскольку запись самой рассылки не показывает ни один экран (У2), назавтра нет и этих двух чисел.</div>
+        <div class="src"><span class="mono">src/app/admin/actions/crm.ts:435</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="u4">
+      <div class="def-id">У4</div>
+      <div class="def-b">
+        <div class="t">Удаление аккаунта охраняется слабее, чем тестовый сброс</div>
+        <div class="why">Тестовый сброс стирает клиентов, сессии, расписание и календари — и спрашивает дважды подряд, вторым вопросом прямо называя, что будет удалено безвозвратно. Это сделано правильно.<br><br>Удаление аккаунта уносит всё то же самое плюс самого человека, его платежи и историю согласий — и спрашивает один раз: «УДАЛИТЬ АККАУНТ НАВСЕГДА? Это необратимо!». Более тяжёлое действие защищено меньше лёгкого.<br><br>Ни один из вопросов не называет, о ком речь. Человек, разбирающий десяток обращений подряд, видит одинаковые окна без имён — и рано или поздно подтверждает не то. Заглавные буквы от этого не защищают; защищает названное имя и число того, что исчезнет.</div>
+        <div class="src"><span class="mono">src/app/admin/(chrome)/users/user-actions.tsx:214</span> (одно подтверждение) против <span class="mono">:191-192</span> (два)</div>
+      </div>
+    </div>
+
+    <div class="def" id="u5">
+      <div class="def-id">У5</div>
+      <div class="def-b">
+        <div class="t">Запись об удалении не помнит, что было удалено</div>
+        <div class="why">В журнал уходит действие, кто его совершил и чей это был идентификатор. Ни почты, ни имени, ни числа клиентов и встреч. После удаления идентификатор ни на что не указывает: строки больше нет.<br><br>Для продукта, который держит данные чужих клиентов, вопрос «что именно исчезло» не любопытство — это первое, что спросят, если человек вернётся и скажет, что удаления не просил. Сейчас ответить нечем: даже сказать, чей это был аккаунт, продукт не сможет.<br><br>Снимок делается тем же запросом, который досье уже считает для показа, — и записывается в ту же строку журнала.</div>
+        <div class="src"><span class="mono">src/app/admin/actions/users.ts:141</span> (<span class="mono">logAction(adminId, 'delete', userId)</span>)</div>
+      </div>
+    </div>
+
+    <div class="def" id="u7">
+      <div class="def-id">У7</div>
+      <div class="def-b">
+        <div class="t">Два утра с пересекающимися числами, и ни одно не названо главным</div>
+        <div class="why">Дашборд админки показывает пользователей, визиты за неделю, активные пробные периоды и подписки — прямым счётом по таблицам. «Утро» управленческой панели показывает своё и считает по-своему: с порогами, подтверждёнными владельцем, с контрактом состояний и честным «нет данных» там, где данных правда нет.<br><br>Числа пересекаются, способ счёта разный, и нигде не сказано, какому экрану верить. Это не вопрос вкуса: два ответа на один вопрос — та самая болезнь, которую в этих книгах чинят раз за разом, только здесь она про самого учредителя.<br><br>Панель при этом честнее по устройству: она умеет сказать «не знаю» и объяснить почему, а дашборд такого языка не знает вовсе — он показывает число всегда.</div>
+        <div class="src"><span class="mono">src/app/admin/(chrome)/page.tsx:87-140</span> против <span class="mono">src/app/admin/panel/morning</span> и <span class="mono">docs/panel/README.md</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="u8">
+      <div class="def-id">У8</div>
+      <div class="def-b">
+        <div class="t">Заказы бумажного ежедневника только копятся</div>
+        <div class="why">Список умеет всё, кроме главного: показывает заказы, считает их по состояниям, фильтрует. Сменить состояние нельзя — ни кнопки, ни формы. Значит «Новый» остаётся новым навсегда, счётчики теряют смысл на второй неделе, а человек, заказавший ежедневник, не получает ни подтверждения, ни отказа.<br><br>Две кнопки без обработчиков с этого экрана уже убраны 15.09 — они делали вид, что работа возможна. Сама работа так и не появилась.</div>
+        <div class="src"><span class="mono">src/app/admin/(chrome)/orders/page.tsx</span> — состояния только читаются</div>
+      </div>
+    </div>
+
+    <div class="def" id="u9">
+      <div class="def-id">У9</div>
+      <div class="def-b">
+        <div class="t">Здоровье сервера живёт в двух местах, и они расходятся</div>
+        <div class="why">Экран админки и экран «Техника» в панели отвечают на один вопрос по-разному. «Техника» честнее: она называет, чего не знает, и подписывает пороги. Экран админки показывает то, что смог посчитать, и молчит об остальном.<br><br>Само по себе дублирование терпимо, пока кто-то помнит, какой экран точнее. Беда в том, что это знание нигде не записано.</div>
+        <div class="src"><span class="mono">src/app/api/admin/health</span> против экрана «Техника» панели</div>
+      </div>
+    </div>
+
+    <div class="def" id="u10">
+      <div class="def-id">У10</div>
+      <div class="def-b">
+        <div class="t">«Кто просил функцию» видит только половину людей и не говорит об этом</div>
+        <div class="why">Отметку интереса к будущей функции ставят только из приложения: в вебе такой кнопки нет. Экран показывает собранное как есть, без оговорки, что источник один.<br><br>Решение о том, что строить дальше, принимается по числу голосов. Если половина людей физически не может проголосовать, число говорит не о спросе, а о том, у кого стоит приложение, — и выглядит при этом совершенно так же.</div>
+        <div class="src"><span class="mono">src/app/admin/(chrome)/feature-interest</span> · <span class="mono">src/app/api/mobile/feature-interest</span> — веб-точки нет</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="ask" style="margin-top:28px">
+    <b>Мелкое, что нашлось попутно.</b> Кнопка рассылки склоняет по короткому правилу и обещает «Отправить 21 сообщений»: общий <span class="mono">src/lib/ru-plural.ts</span> появился 15.09, до этого экрана не дошёл. Пять служебных ручек (расчёт сессий, истечение приглашений, тестовый сброс и другие) живут без единого экрана и без списка — узнать об их существовании можно только из кода. Личное сообщение пользователю из досье уходит только в Telegram: у кого привязан MAX, того учредитель из админки не достанет.
+    <br><br><b>Что проверено и оказалось в порядке.</b> Вход: одна проверка роли на весь кабинет, включая панель, и второго механизма нет намеренно — панель наследует общий. Девять действий над пользователем собраны в одном месте, у каждого своё подтверждение, и каждое пишется в журнал — сама запись ведётся честно, беда только с чтением. Публикация юридических документов: версия, дата, адрес; два ненаписанных документа нигде не выдаются за готовые, а реестр прямо запрещает придумывать им текст. Экран посетителей показывает устройства и источники без адресов и отпечатков. Вся управленческая панель: контракт состояний, пороги с отметкой владельца у каждого числа, честные «нет данных» с названной причиной, счётчик дыр, считающийся на лету, и правило «закрылась дыра — вычеркни строку тем же коммитом».
+  </div>
+</section>
+
+<section id="forks">
+  <div class="sechead">
+    <div class="eyebrow">05 · Развилки</div>
+    <h2>Четыре решения, которые не мои</h2>
+    <p class="lede">Отмеченный вариант — предложение; решение за учредителем.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div class="q">
+      <div class="qn">Развилка 1 · относится к У1</div>
+      <div class="qt">Кому вообще можно слать массовые письма?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Только тем, кто дал согласие</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Отбор смотрит на последнюю запись о согласии и на блокировку. Число на кнопке становится меньше и становится правдой; исключённые показаны по причинам, чтобы разница не выглядела ошибкой. Это то, что человеку обещано в настройках, и то, за чем в спор придёт проверяющий.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Разделить письма на служебные и рекламные</b>
+            <span class="sub">Служебное («ваш пробный период кончается послезавтра») уходит всем — это про его же деньги и доступ. Рекламное («новая функция, подборка статей») — только давшим согласие. Честнее и полезнее, но требует, чтобы в мастере появился этот выбор и чтобы кто-то отвечал за отнесение каждого письма к одному из двух видов.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">Галочка в настройках продолжает ничего не значить. Дешевле всего сегодня и дороже всего в тот день, когда отозвавший согласие человек получит письмо и покажет скриншот.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 2 · относится к У7</div>
+      <div class="qt">Какой экран для вас главный утром — дашборд админки или панель?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Панель — главная, админка сводится к действиям</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Числа живут в одном месте — там, где есть пороги, честные «нет данных» и экран «Качество данных». Админка остаётся тем, чем она сильна: людьми, действиями, заказами, документами. С её дашборда числа уходят, а вместо них — ссылка в «Утро». Ничего не строится, кое-что убирается.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить оба, но назвать главный</b>
+            <span class="sub">Строка на дашборде: «полные цифры с оговорками — в панели». Дешевле всего, и расхождение остаётся, просто перестаёт быть тайной.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Свести всё в админку</b>
+            <span class="sub">Обратный ход: перенести блоки панели на дашборд. Не предлагаю — потеряется то, ради чего панель и делалась: состояния, пороги и право сказать «не знаю».</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 3 · относится к У2</div>
+      <div class="qt">Где смотреть собственные действия?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Вторая вкладка на экране «Безопасность»</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Экран уже обещает «аудит действий» — вкладка делает обещание правдой. Новых экранов нет, в меню ничего не прибавляется. Записи об удалённых аккаунтах остаются читаемыми, потому что журнал хранит почту и числа, а не ссылку на исчезнувшую строку.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Отдельный экран «Мои действия»</b>
+            <span class="sub">Заметнее и просторнее: фильтры по виду действия, по дню. Но это новый пункт меню ради того, что помещается вкладкой.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Выгрузка по запросу, без экрана</b>
+            <span class="sub">Достаточно для разбора постфактум и бесполезно для того, чтобы заметить неладное вовремя.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 4 · относится к У8</div>
+      <div class="qt">Заказы бумажного ежедневника — доводить или закрыть приём?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Довести до конца: смена состояния и письмо заказавшему</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Три состояния уже есть и уже показываются — не хватает возможности их менять и одного письма при смене. Человек, оставивший заказ, узнаёт, что его увидели. Это полдня работы и единственный способ сделать счётчики на экране осмысленными.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Закрыть приём заказов</b>
+            <span class="sub">Если бумажный ежедневник сейчас не выпускается — честнее убрать форму, чем собирать заявки, на которые никто не ответит. Уже собранные заказы при этом надо закрыть письмами вручную.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">Список растёт, состояния не меняются, люди не получают ответа. Худший из трёх, потому что форма продолжает обещать.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sechead">
+    <div class="eyebrow">06 · Порядок работ</div>
+    <h2>В каком порядке чинить</h2>
+    <p class="lede">Первые четыре шага не требуют решений и делаются на готовом.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="b"><div class="t">Рассылка перестаёт отправлять в обход правил продукта</div><div class="d">У3, У6. Отправка через общий канал: прокси, выбор основного мессенджера, экранирование имени, паузы между сообщениями, причина отказа в записи. Это ровно те правила, что уже написаны и применяются во всех остальных рассылках.</div></div></div>
+    <div class="step"><div class="n">02</div><div class="b"><div class="t">Удаление аккаунта называет человека и то, что исчезнет</div><div class="d">У4, У5. Подтверждение с именем и числами, снимок в журнал тем же запросом, которым досье уже считает эти числа. Самая дешёвая правка с самой высокой ценой ошибки.</div></div></div>
+    <div class="step"><div class="n">03</div><div class="b"><div class="t">Экран «Кто просил функцию» говорит, что видит только приложение</div><div class="d">У10. Одна строка оговорки. Веб-точку голосования заводить необязательно — обязательно не выдавать половину за целое.</div></div></div>
+    <div class="step"><div class="n">04</div><div class="b"><div class="t">Мелочи: склонение на кнопке, личное сообщение в оба мессенджера, список служебных ручек</div><div class="d">Общий модуль склонения уже есть; личное сообщение переводится на тот же выбор канала, что и всё остальное; ручки перечисляются в docs.</div></div></div>
+    <div class="step"><div class="n">05</div><div class="b"><div class="t">Рассылка спрашивает согласие</div><div class="d">У1. Зависит от развилки 1. Работа небольшая — отбор и числа исключённых, — но решать, служебное письмо или рекламное, должен человек, а не код.</div></div></div>
+    <div class="step"><div class="n">06</div><div class="b"><div class="t">Собственные действия становятся видимыми</div><div class="d">У2. Зависит от развилки 3. Вместе с этим — хранить в журнале почту и числа, а не только идентификатор, иначе вкладка не покажет удалённых.</div></div></div>
+    <div class="step"><div class="n">07</div><div class="b"><div class="t">Одно утро вместо двух</div><div class="d">У7, У9. Зависит от развилки 2. Здоровье сервера уезжает туда же, куда и числа.</div></div></div>
+    <div class="step"><div class="n">08</div><div class="b"><div class="t">Заказы ежедневника доводятся или закрываются</div><div class="d">У8. Зависит от развилки 4.</div></div></div>
+  </div>
+
+  <div class="ask" style="margin-top:30px">
+    <b>Как это будет проверено.</b> Шаги 1, 2 и 5 закрываются тестами на правило: рассылка обязана уходить общим путём и не касаться тех, кто согласия не давал или отозвал его; запись об удалении обязана пережить самого пользователя и содержать числа; имя с амперсандом обязано доходить целым. Это те же сторожа, что уже стоят на пути специалиста, — здесь они просто нужнее: у учредителя нет второго человека, который заметит ошибку.
+  </div>
+</section>
+
+<footer>
+  Книга по пути учредителя, собрана 15.09.2026 по коду ветки <code>claude/new-session-pgnybh</code>. Разбирает раздел «04 · Учредитель» <a href="reestr.html">реестра путей</a> — двадцать два пути: тринадцать в старой админке и девять в управленческой панели. Книги по специалисту: <a href="2026-09-15-put-spetsialista-klienty-den.html">«Клиенты, документы, день»</a>, <a href="2026-09-15-put-spetsialista-vhod-dengi.html">«Вход, документы, деньги»</a>, <a href="2026-09-15-put-spetsialista-podklyucheniya.html">«Подключения, тишина, бот, справка»</a>. Путь клиента: <a href="2026-09-14-put-klienta.html">«Путь клиента»</a>. Правки по этому разбору не вносились: он написан до них и ждёт решения учредителя по четырём развилкам раздела 05.
+</footer>
+
+</div>
+</html>
