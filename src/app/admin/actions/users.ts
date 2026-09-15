@@ -135,10 +135,41 @@ export async function setUserTrialForever(userId: string) {
     return { success: true }
 }
 
+/**
+ * Что исчезнет вместе с аккаунтом.
+ *
+ * Считается ДО удаления и теми же запросами, которыми досье уже показывает
+ * эти числа. Нужно в двух местах: в вопросе перед удалением и в записи
+ * журнала после него.
+ */
+export async function deleteUserImpact(userId: string) {
+    await ensureAdmin()
+    // Клиенты и встречи, и только они. Заметки отдельной таблицей не живут —
+    // они поля внутри встречи, — поэтому считать их отдельным числом значило
+    // бы выдумать сущность ради красивой строки. Встречи их и уносят.
+    const [user, clients, sessions] = await Promise.all([
+        db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } }),
+        db.diaryClient.count({ where: { psychologistId: userId } }).catch(() => 0),
+        db.diarySession.count({ where: { psychologistId: userId } }).catch(() => 0),
+    ])
+    if (!user) return null
+    return { email: user.email, name: user.name, clients, sessions }
+}
+
 export async function deleteUserAccount(userId: string) {
     const adminId = await ensureAdmin()
 
-    await logAction(adminId, 'delete', userId)
+    // ЗАПИСЬ ОБЯЗАНА ПЕРЕЖИТЬ САМОГО ПОЛЬЗОВАТЕЛЯ.
+    //
+    // Раньше в журнал уходило только слово «delete» и идентификатор. После
+    // удаления идентификатор ни на что не указывает — строки больше нет, — и
+    // сказать, чей это был аккаунт, продукт уже не мог. Для сервиса, который
+    // держит данные чужих клиентов, «что именно исчезло» спросят первым.
+    //
+    // Снимок делается ДО удаления и теми же запросами, которыми досье эти
+    // числа уже считает: новых сущностей не заводится.
+    const impact = await deleteUserImpact(userId)
+    await logAction(adminId, 'delete', userId, impact ?? { note: 'пользователь не найден' })
 
     // Thanks to Prisma's onDelete: Cascade, deleting the User model
     // automatically handles related Accounts, Sessions, DiarySessions, etc.
@@ -151,46 +182,44 @@ export async function deleteUserAccount(userId: string) {
 }
 
 /**
- * Send a message to a user via Telegram Bot API.
- * Requires the user to have a telegramChatId set.
+ * Написать человеку из досье — в ЕГО мессенджер.
+ *
+ * Раньше это была третья по счёту прямая отправка в api.telegram.org в
+ * админке, и телеграм-только: у кого привязан один MAX, того учредитель из
+ * досье не доставал вовсе — получал «не привязан Telegram» и всё.
+ *
+ * Теперь канал выбирает общее правило продукта (pickChannel: основной, иначе
+ * тот, что есть), а отправка идёт общим путём — с прокси и таймаутом.
+ * Имя функции оставлено прежним: его знают вызывающие места, а менять имя
+ * заодно с поведением значит прятать правку.
  */
 export async function sendTelegramMessage(userId: string, message: string) {
     await ensureAdmin()
 
     const user = await db.user.findUnique({
         where: { id: userId },
-        select: { telegramChatId: true, name: true }
+        select: { telegramChatId: true, maxChatId: true, name: true }
     })
 
-    if (!user?.telegramChatId) {
-        return { success: false, error: 'У пользователя не привязан Telegram' }
+    if (!user?.telegramChatId && !user?.maxChatId) {
+        return { success: false, error: 'У пользователя не привязан ни один мессенджер' }
     }
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN
-    if (!botToken) {
-        return { success: false, error: 'TELEGRAM_BOT_TOKEN не настроен' }
-    }
+    const { deliverMessage } = await import('@/lib/messaging/deliver')
+    const delivery = await deliverMessage(
+        { telegramChatId: user.telegramChatId, maxChatId: user.maxChatId, preferredChannel: null },
+        message,
+    )
 
-    try {
-        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: user.telegramChatId,
-                text: message,
-                parse_mode: 'HTML',
-            }),
-        })
-
-        const data = await res.json()
-        if (!data.ok) {
-            return { success: false, error: data.description || 'Ошибка Telegram API' }
+    if (!delivery.sent) {
+        return {
+            success: false,
+            error: delivery.channel
+                ? `Не удалось отправить в ${delivery.channel === 'max' ? 'MAX' : 'Telegram'}`
+                : 'Писать некуда',
         }
-
-        return { success: true }
-    } catch (error: any) {
-        return { success: false, error: error.message || 'Не удалось отправить сообщение' }
     }
+    return { success: true }
 }
 
 /**

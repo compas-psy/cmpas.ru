@@ -5,6 +5,9 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { sendEmail } from "@/lib/email"
 import { sendMaxMessage } from "@/lib/max-bot"
+import { sendTelegramMessage } from "@/lib/telegram"
+import { escapeHtml } from "@/lib/messaging/format"
+import { plural } from "@/lib/ru-plural"
 
 async function getAdminId(): Promise<string> {
     const session = await auth()
@@ -113,6 +116,48 @@ export async function removeUserTag(userId: string, tag: string) {
 
 // ── Messages ──
 
+/**
+ * ОТПРАВКА ОДНОМУ ЧЕЛОВЕКУ — ОДНА НА ЛИЧНОЕ СООБЩЕНИЕ И НА РАССЫЛКУ.
+ *
+ * Дефект У3 книги учредителя. Оба пути ходили в `api.telegram.org` прямым
+ * запросом, каждый своей копией. Последствия одинаковые в обоих:
+ *
+ *   * МИМО ПРОКСИ. Общая отправка умеет уходить через туннель, когда прямой
+ *     путь до Telegram закрыт (src/lib/telegram-proxy.ts). Прямой запрос не
+ *     умеет — и в такой день рассылка просто не уйдёт.
+ *   * МИМО ТАЙМАУТА. У общей отправки он есть; здесь запрос мог висеть,
+ *     пока не оборвётся сам, — а это внутри обработчика веб-запроса.
+ *
+ * Канал остаётся ЯВНЫМ ВЫБОРОМ учредителя, а не подбирается по человеку:
+ * экран так устроен намеренно — «написать всем, у кого есть Telegram» это
+ * осмысленное действие. Отбор по каналу делает запрос к базе выше.
+ */
+async function deliverToUser(
+    channel: 'telegram' | 'max' | 'email',
+    user: { telegramChatId: string | null; maxChatId: string | null; email: string | null },
+    text: string,
+    subject?: string,
+): Promise<{ ok: boolean; error: string | null }> {
+    try {
+        if (channel === 'telegram') {
+            if (!user.telegramChatId) return { ok: false, error: 'Telegram не привязан' }
+            const sent = await sendTelegramMessage(user.telegramChatId, text)
+            return sent ? { ok: true, error: null } : { ok: false, error: 'Telegram не принял сообщение' }
+        }
+        if (channel === 'max') {
+            if (!user.maxChatId) return { ok: false, error: 'MAX не привязан' }
+            await sendMaxMessage(user.maxChatId, text)
+            return { ok: true, error: null }
+        }
+        if (!user.email) return { ok: false, error: 'Нет почты' }
+        await sendEmail(user.email, subject || 'Сообщение от ПРАКТИКИ', text)
+        return { ok: true, error: null }
+    } catch (err: unknown) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Неизвестная ошибка' }
+    }
+}
+
+
 export async function sendAdminMessage(toUserId: string, channel: 'telegram' | 'max' | 'email', content: string, subject?: string) {
     const adminId = await getAdminId()
 
@@ -122,33 +167,9 @@ export async function sendAdminMessage(toUserId: string, channel: 'telegram' | '
     })
     if (!user) throw new Error("User not found")
 
-    let status = 'sent'
-    let errorMsg: string | null = null
-
-    try {
-        if (channel === 'telegram') {
-            if (!user.telegramChatId) throw new Error('У пользователя не привязан Telegram')
-            const botToken = process.env.TELEGRAM_BOT_TOKEN
-            if (!botToken) throw new Error('TELEGRAM_BOT_TOKEN не настроен')
-            const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: user.telegramChatId, text: content, parse_mode: 'HTML' }),
-            })
-            const data = await res.json()
-            if (!data.ok) throw new Error(data.description || 'Telegram API error')
-        } else if (channel === 'max') {
-            if (!user.maxChatId) throw new Error('У пользователя не привязан MAX')
-            await sendMaxMessage(user.maxChatId, content)
-        } else if (channel === 'email') {
-            if (!user.email) throw new Error('У пользователя нет email')
-            await sendEmail(user.email, subject || 'Сообщение от ПРАКТИКИ', content)
-        }
-        status = 'delivered'
-    } catch (err: any) {
-        status = 'failed'
-        errorMsg = err.message || 'Unknown error'
-    }
+    const outcome = await deliverToUser(channel, user, content, subject)
+    const status = outcome.ok ? 'delivered' : 'failed'
+    const errorMsg = outcome.error
 
     const message = await db.adminMessage.create({
         data: {
@@ -393,59 +414,81 @@ export async function sendMassCommunication(
     })
 
     let sent = 0, failed = 0
+    // Причины отказов — сводкой, без имён и адресов: их и так видно в
+    // AdminMessage по каждому получателю, а в журнале действий персональным
+    // данным делать нечего.
+    const reasons = new Map<string, number>()
 
     for (const user of users) {
-        try {
-            // Replace variables
-            const trialDaysLeft = user.trialEndsAt ?
-                Math.max(0, Math.ceil((user.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0
-            let personalizedContent = content
-                .replace(/\{name\}/g, user.name || 'Пользователь')
-                .replace(/\{email\}/g, user.email || '')
-                .replace(/\{trialDaysLeft\}/g, String(trialDaysLeft))
+        const trialDaysLeft = user.trialEndsAt
+            ? Math.max(0, Math.ceil((user.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            : 0
 
-            let personalizedSubject = subject?.replace(/\{name\}/g, user.name || 'Пользователь') || ''
+        // ПОДСТАНОВКИ ЭКРАНИРУЮТСЯ. Сообщение уходит с разметкой Telegram, и
+        // амперсанд в имени («Иванов & партнёры») делает её недействительной:
+        // Telegram отвечает отказом, и человек не получает письмо вовсе. Тот
+        // же дефект 15.09 закрыт в четырёх местах рассылки специалисту; здесь
+        // он оставался. Сам текст письма пишет учредитель — его разметку не
+        // трогаем, иначе нельзя будет выделить слово или дать ссылку.
+        const personalizedContent = content
+            .replace(/\{name\}/g, escapeHtml(user.name || 'Пользователь'))
+            .replace(/\{email\}/g, escapeHtml(user.email || ''))
+            .replace(/\{trialDaysLeft\}/g, String(trialDaysLeft))
 
-            if (channel === 'telegram') {
-                const botToken = process.env.TELEGRAM_BOT_TOKEN
-                if (!botToken || !user.telegramChatId) { failed++; continue }
-                const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: user.telegramChatId, text: personalizedContent, parse_mode: 'HTML' }),
-                })
-                const data = await res.json()
-                if (!data.ok) { failed++; continue }
-            } else if (channel === 'max') {
-                if (!user.maxChatId) { failed++; continue }
-                await sendMaxMessage(user.maxChatId, personalizedContent)
-            } else if (channel === 'email') {
-                if (!user.email) { failed++; continue }
-                await sendEmail(user.email, personalizedSubject || 'Сообщение от ПРАКТИКИ', personalizedContent)
-            }
+        const personalizedSubject = subject?.replace(/\{name\}/g, user.name || 'Пользователь') || ''
 
-            // Record message
-            await db.adminMessage.create({
-                data: {
-                    fromAdminId: adminId, toUserId: user.id, channel, subject: personalizedSubject || null,
-                    content: personalizedContent, status: 'delivered',
-                }
-            })
+        const outcome = await deliverToUser(channel, user, personalizedContent, personalizedSubject)
+
+        // СТРОКА ПИШЕТСЯ И НА НЕУДАЧУ. Раньше она создавалась только после
+        // успеха и всегда со статусом «доставлено» — то есть у недоставленного
+        // письма не оставалось ни следа, ни причины, и повторить попытку
+        // было не для кого. Поля status и errorMsg в таблице для этого и
+        // заведены; личное сообщение рядом ими уже пользуется.
+        await db.adminMessage.create({
+            data: {
+                fromAdminId: adminId,
+                toUserId: user.id,
+                channel,
+                subject: personalizedSubject || null,
+                content: personalizedContent,
+                status: outcome.ok ? 'delivered' : 'failed',
+                errorMsg: outcome.error,
+            },
+        }).catch(() => undefined)
+
+        if (outcome.ok) {
             sent++
-        } catch {
+        } else {
             failed++
+            const reason = outcome.error || 'Неизвестная ошибка'
+            reasons.set(reason, (reasons.get(reason) ?? 0) + 1)
         }
+
+        // ПАУЗА МЕЖДУ СООБЩЕНИЯМИ. У Telegram предел около тридцати в
+        // секунду; цикл без пауз упирался в него на первой же сотне, и часть
+        // писем отваливалась не по вине человека и не по нашей. Сорок
+        // миллисекунд дают двадцать пять в секунду — с запасом.
+        if (channel !== 'email') await new Promise(resolve => setTimeout(resolve, 40))
     }
 
     await db.adminActionLog.create({
         data: {
             adminId,
             action: 'mass_communication',
-            payload: JSON.stringify({ segment, channel, sent, failed, total: users.length }),
+            payload: JSON.stringify({
+                segment,
+                channel,
+                sent,
+                failed,
+                total: users.length,
+                // Причины отказов — то, из-за чего рассылку вообще стоит
+                // перечитывать назавтра. Без них «40 и 12» ничего не говорят.
+                reasons: Object.fromEntries(reasons),
+            }),
         }
     })
 
-    return { sent, failed }
+    return { sent, failed, reasons: Object.fromEntries(reasons) }
 }
 
 // ── All Tags (for filters) ──

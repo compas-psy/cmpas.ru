@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSegmentCount, sendMassCommunication, getAllTags } from '@/app/admin/actions/crm';
+import { plural } from '@/lib/ru-plural';
 
 const SEGMENTS = [
     { key: 'all', label: 'Все пользователи', icon: Users, desc: 'Все зарегистрированные' },
@@ -249,7 +250,7 @@ export default function CommunicationsPage() {
                             className="px-6 py-2.5 bg-[#0f1729] text-white text-sm font-medium rounded-xl hover:bg-[#1a2744] transition-colors disabled:opacity-50 flex items-center gap-2"
                         >
                             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                            Отправить {channelCount} сообщени{channelCount === 1 ? 'е' : channelCount < 5 ? 'я' : 'й'}
+                            Отправить {channelCount} {plural(channelCount, 'сообщение', 'сообщения', 'сообщений')}
                         </button>
                     </div>
                 </div>
