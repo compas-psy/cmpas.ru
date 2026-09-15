@@ -24,6 +24,8 @@ import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 import { htmlToPlain, extractLinksForButtons } from '@/lib/messaging/format';
+import { notifySpecialistAboutClientAction } from '@/lib/messaging/specialist-notice';
+import { SESSIONS_IN_BOT, sessionsHeading } from '@/lib/messaging/bot-session-list';
 
 const MAX_API = 'https://platform-api2.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -403,15 +405,25 @@ async function handleSessions(userId: number) {
     const mid = maxId(userId);
     const psy = await db.user.findFirst({ where: { maxChatId: mid } });
     if (psy) {
+        // Тот же фильтр и та же правка, что в Telegram: показываем всё
+        // предстоящее, а не только подтверждённое. Расходиться этим двум
+        // веткам нельзя — это один и тот же вопрос человека.
         const sessions = await db.diarySession.findMany({
-            where: { psychologistId: psy.id, status: 'confirmed', date: { gte: new Date() } },
+            where: {
+                psychologistId: psy.id,
+                status: { in: ['pending', 'confirmed'] },
+                date: { gte: new Date() },
+            },
             orderBy: [{ date: 'asc' }, { time: 'asc' }],
-            take: 5,
+            take: SESSIONS_IN_BOT,
             include: { client: true }
         });
-        if (!sessions.length) return sendMaxMessage(userId, 'У вас нет предстоящих подтвержденных сессий.');
-        let msg = 'Ваши ближайшие сессии:\n\n';
-        sessions.forEach(s => { msg += `${s.client.name}\n${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`; });
+        if (!sessions.length) return sendMaxMessage(userId, 'У вас нет предстоящих встреч.');
+        let msg = `${sessionsHeading(sessions.length)}\n\n`;
+        sessions.forEach(s => {
+            const state = s.status === 'confirmed' ? 'Подтверждена' : 'Ждёт подтверждения';
+            msg += `${s.client.name}\n${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n${state}\n\n`;
+        });
         return sendMaxMessage(userId, msg);
     }
 
@@ -559,8 +571,14 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
             .catch(console.error);
         await sendMaxMessage(userId, `Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
-        const psyMaxId = (session.psychologist as any)?.maxChatId;
-        if (psyMaxId) await sendMaxMessage(psyMaxId, `Клиент ${session.client.name} отменил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`);
+        // Канал берётся из каналов СПЕЦИАЛИСТА, а не из того, что клиент
+        // нажал кнопку в MAX: у специалиста может быть привязан один Telegram.
+        await notifySpecialistAboutClientAction(session.psychologistId, {
+            clientName: session.client.name,
+            date: session.date,
+            time: session.time,
+            action: 'cancelled',
+        });
         await createNotification({
             psychologistId: session.psychologistId,
             type: 'session_cancelled',
@@ -581,8 +599,12 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
         if (session.status !== 'cancelled') await db.diarySession.update({ where: { id: session.id }, data: { status: 'confirmed' } });
         const formatText = session.format === 'offline' ? 'Очно' : 'Онлайн';
         await sendMaxMessage(userId, `Отлично, ждём вас!\n\n${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n${formatText}`);
-        const psyMaxId = (session.psychologist as any)?.maxChatId;
-        if (psyMaxId) await sendMaxMessage(psyMaxId, `Клиент ${session.client.name} подтвердил сессию ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`);
+        await notifySpecialistAboutClientAction(session.psychologistId, {
+            clientName: session.client.name,
+            date: session.date,
+            time: session.time,
+            action: 'confirmed',
+        });
         await createNotification({
             psychologistId: session.psychologistId,
             type: 'session_confirmed',

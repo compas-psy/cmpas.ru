@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { queuedMessageSkipReason } from '@/lib/messaging/queued-delivery';
+import { escapeHtml } from '@/lib/messaging/format';
 import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 
@@ -97,7 +98,13 @@ export async function processScheduledMessages() {
                 });
 
                 if (psych?.telegramChatId || psych?.maxChatId) {
-                    const reminder = `Пора отправить сообщение клиенту ${client?.name || ''}${client?.phone ? ` (${client.phone})` : ''}:\n\n${msg.text}`;
+                    // Экранируется ВСЁ, что пришло из базы: и имя, и телефон,
+                    // и сам текст сообщения. Сообщение уходит с разметкой, а
+                    // текст здесь — свободный, написанный специалистом: одна
+                    // угловая скобка в нём отменяет напоминание целиком.
+                    const who = escapeHtml(client?.name || '');
+                    const phone = client?.phone ? ` (${escapeHtml(client.phone)})` : '';
+                    const reminder = `Пора отправить сообщение клиенту ${who}${phone}:\n\n${escapeHtml(msg.text)}`;
                     if (psych.telegramChatId) {
                         await sendTelegramMessage(psych.telegramChatId, reminder);
                     } else if (psych.maxChatId) {

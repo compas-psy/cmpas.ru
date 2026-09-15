@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { sendTelegramMessage } from '@/lib/telegram';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { verifySessionActionToken } from '@/lib/client-workflow';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { createNotification } from '@/lib/notifications';
+import { notifySpecialistAboutClientAction } from '@/lib/messaging/specialist-notice';
 
 export async function POST(req: Request) {
     try {
@@ -66,18 +66,16 @@ export async function POST(req: Request) {
             clientId: cancelled.clientId,
         });
 
-        if (cancelled.psychologist?.telegramChatId) {
-            try {
-                const dateStr = format(new Date(cancelled.date), 'd MMMM', { locale: ru });
-                await sendTelegramMessage(
-                    cancelled.psychologist.telegramChatId,
-                    `<b>Отмена сессии</b>\n\nКлиент ${clientName || cancelled.client?.name || 'по ссылке'} отменил запись:\nДата: ${dateStr}\nВремя: ${cancelled.time}\n\nСлот снова доступен для записи.`,
-                    { parse_mode: 'HTML' }
-                );
-            } catch (e) {
-                console.error('Failed to notify psychologist about cancellation', e);
-            }
-        }
+        // Отмена по ссылке — то же событие, что отмена кнопкой в боте, и
+        // сообщать о ней надо так же: в канал СПЕЦИАЛИСТА и одним текстом.
+        // Здесь стояла прямая отправка в Telegram со своей, третьей по счёту
+        // редакцией текста.
+        await notifySpecialistAboutClientAction(cancelled.psychologistId, {
+            clientName: clientName || cancelled.client?.name || 'по ссылке',
+            date: new Date(cancelled.date),
+            time: cancelled.time,
+            action: 'cancelled',
+        });
 
         return NextResponse.json({ success: true });
     } catch (e: any) {

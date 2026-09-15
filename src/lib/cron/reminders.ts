@@ -4,6 +4,7 @@ import { sendTelegramMessage } from '../telegram';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 import { build24hReminderText } from './reminder-text';
 import { onlineLinkLine, escapeHtml } from '@/lib/messaging/format';
+import { isQuietHour } from '@/lib/messaging/quiet-hours';
 import { timezoneLabel } from '@/lib/practice/timezones';
 import { pickChannel, clientChannelBearer } from '@/lib/messaging/channel-rule';
 
@@ -266,6 +267,25 @@ export async function processReminders() {
             const client = session.client;
             if (!client) continue;
 
+            // ТИШИНА СИЛЬНЕЕ СУТОЧНОГО СРОКА.
+            //
+            // Правило «с 21:00 до 09:00 по поясу практики не пишем» написано
+            // отдельным модулем и его спрашивают три задания из четырёх.
+            // Это, самое частое в продукте, не спрашивало: встреча,
+            // назначенная на 22:30, давала клиенту напоминание в 22:15
+            // накануне — ровно то, ради чего правило и писали.
+            //
+            // Пропуск стоит ДО обеих отправок — и клиенту, и специалисту, — и
+            // это не забывчивость: notified24h выставляется по общему итогу
+            // (`!anyAttempted || anySucceeded`). Пропусти мы только клиента,
+            // удачная отправка специалисту пометила бы сессию обработанной, и
+            // напоминание клиенту пропало бы НАВСЕГДА, а не отложилось.
+            //
+            // Ничего не теряется: отметка не ставится, и первый же дневной
+            // проход отправит. Напоминание за ЧАС тишиной не глушится — оно
+            // про встречу, до которой час, и молчание там хуже звонка.
+            if (isQuietHour(session.psychologist?.psychologistSettings?.timezone, now)) continue;
+
             const { telegram: telegramTarget, max: maxId, preferred } = clientTargets(client);
             // O-260829 §4.4: раньше notified24h выставлялся в true безусловно
             // после цикла — сессия, у которой отправка провалилась на всех
@@ -328,7 +348,10 @@ export async function processReminders() {
             const psychologistMaxId = session.psychologist?.maxChatId;
             if (psychologistTelegramId || psychologistMaxId) {
                 const statusText = session.status === 'confirmed' ? 'подтверждена' : 'ожидает подтверждения';
-                const message = `Завтра в ${session.time} сессия с клиентом ${client.name}. Статус: ${statusText}.`;
+                // Имя — экранированным: сообщение уходит с разметкой, и
+                // амперсанд в имени отменил бы его целиком. То же правило,
+                // что и в тексте клиенту, — просто оно сюда не доходило.
+                const message = `Завтра в ${session.time} сессия с клиентом ${escapeHtml(client.name)}. Статус: ${statusText}.`;
                 const outcome = await sendNotification(psychologistTelegramId, psychologistMaxId, message, {
                     reply_markup: {
                         inline_keyboard: [[{ text: 'Профиль клиента', url: `https://cmpas.ru/diary/clients?clientId=${client.id}` }]],
