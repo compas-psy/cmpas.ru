@@ -144,6 +144,16 @@ export default async function OrdersPage({
                                                             {order.name}
                                                         </p>
                                                         <p className="text-sm text-foreground/60">{order.phone}</p>
+                                                        {/* Слова человека из формы (Ф3). Раньше они
+                                                            исчезали в момент нажатия кнопки, и
+                                                            отвечающий перезванивал с вопросом,
+                                                            который человек уже задал. Хранить их и
+                                                            не показывать — тот же дефект. */}
+                                                        {order.message && (
+                                                            <p className="text-sm text-foreground/80 mt-1.5 whitespace-pre-line">
+                                                                {order.message}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-foreground/70">
