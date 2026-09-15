@@ -6,6 +6,7 @@
 import { db } from '@/lib/db';
 import { hourInTimezone, weekdayInTimezone } from '@/lib/messaging/quiet-hours';
 import { deliverMessage } from '@/lib/messaging/deliver';
+import { escapeHtml } from '@/lib/messaging/format';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -97,7 +98,12 @@ export async function processMorningDigest() {
                 '',
                 `Сегодня ${count} ${word}:`,
                 '',
-                ...sessions.map(s => `${s.time} — ${s.client.name}, ${s.format === 'online' ? 'онлайн' : 'в кабинете'}`),
+                // ИМЯ ЭКРАНИРУЕТСЯ. Сводка уходит с разметкой Telegram, и
+                // амперсанд в имени («Иванов & партнёры» у клиента-организации)
+                // делает её недействительной: Telegram отвечает отказом, и
+                // специалист не получает список ВСЕГО дня — из-за одного
+                // клиента и без единого объяснения.
+                ...sessions.map(s => `${s.time} — ${escapeHtml(s.client.name)}, ${s.format === 'online' ? 'онлайн' : 'в кабинете'}`),
             ];
 
             await notify(psy.telegramChatId, psy.maxChatId, lines.join('\n'));

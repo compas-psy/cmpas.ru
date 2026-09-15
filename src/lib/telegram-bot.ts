@@ -12,6 +12,8 @@ import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancel
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
 import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { escapeHtml } from '@/lib/messaging/format';
+import { notifySpecialistAboutClientAction } from '@/lib/messaging/specialist-notice';
+import { SESSIONS_IN_BOT, sessionsHeading } from '@/lib/messaging/bot-session-list';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 
@@ -326,16 +328,32 @@ export function setupBot() {
 
         const psy = await db.user.findUnique({ where: { telegramChatId: tgId } });
         if (psy) {
+            // ВСЁ ПРЕДСТОЯЩЕЕ, А НЕ ТОЛЬКО ПОДТВЕРЖДЁННОЕ.
+            //
+            // Здесь стоял фильтр `status: 'confirmed'` — ровно тот, который у
+            // КЛИЕНТА нашли и убрали в обоих ботах (ветка ниже). У специалиста
+            // он тяжелее: у клиента одна встреча, у специалиста день. Клиенты
+            // жмут «Подтверждаю» далеко не всегда, и человек с пятью приёмами
+            // сегодня слышал от бота, что сессий у него нет.
             const sessions = await db.diarySession.findMany({
-                where: { psychologistId: psy.id, status: 'confirmed', date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+                where: {
+                    psychologistId: psy.id,
+                    status: { in: ['pending', 'confirmed'] },
+                    date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+                },
                 orderBy: [{ date: 'asc' }, { time: 'asc' }],
-                take: 5,
+                take: SESSIONS_IN_BOT,
                 include: { client: true }
             });
-            if (sessions.length === 0) return ctx.reply('У вас нет предстоящих подтвержденных сессий.');
-            let msg = '<b>Ваши ближайшие сессии:</b>\n\n';
+            if (sessions.length === 0) return ctx.reply('У вас нет предстоящих встреч.');
+            // Список молча обрезан пятью — об этом сказано вслух, а не
+            // оставлено человеку гадать, все ли встречи он видит.
+            let msg = `<b>${sessionsHeading(sessions.length)}</b>\n\n`;
             sessions.forEach(s => {
-                msg += `<b>${s.client.name}</b>\n${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`;
+                // Состояние названо словом: «ждёт подтверждения» — это то, из-за
+                // чего встреча раньше вовсе не показывалась.
+                const state = s.status === 'confirmed' ? 'Подтверждена' : 'Ждёт подтверждения';
+                msg += `<b>${escapeHtml(s.client.name)}</b>\n${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n${state}\n\n`;
             });
             return ctx.reply(msg, { parse_mode: 'HTML' });
         }
@@ -416,11 +434,15 @@ export function setupBot() {
         await ack(ctx, 'Вы успешно отменили запись');
         await editOrReply(ctx, `Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
-        if (session.psychologist.telegramChatId) {
-            try {
-                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `<b>Отмена записи</b>\n\nКлиент ${session.client.name} отменил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
-            } catch (e) { }
-        }
+        // КАНАЛ ВЫБИРАЕТ СПЕЦИАЛИСТ, А НЕ КЛИЕНТ. Здесь стояла прямая
+        // отправка в Telegram — потому что клиент нажал кнопку в Telegram.
+        // Специалист, у которого привязан только MAX, об отмене не узнавал.
+        await notifySpecialistAboutClientAction(session.psychologistId, {
+            clientName: session.client.name,
+            date: session.date,
+            time: session.time,
+            action: 'cancelled',
+        });
         await createNotification({
             psychologistId: session.psychologistId,
             type: 'session_cancelled',
@@ -443,11 +465,12 @@ export function setupBot() {
         await ack(ctx, 'Спасибо за подтверждение!');
         await editOrReply(ctx, `Отлично, ждём вас!\n\n${format(session.date, 'dd.MM.yyyy')} в ${session.time}\n${session.format === 'offline' ? 'Очно' : 'Онлайн'}`);
 
-        if (session.psychologist.telegramChatId) {
-            try {
-                await ctx.telegram.sendMessage(session.psychologist.telegramChatId, `Клиент ${session.client.name} подтвердил сессию на ${format(session.date, 'dd.MM.yyyy')} в ${session.time}.`, { parse_mode: 'HTML' });
-            } catch (e) { }
-        }
+        await notifySpecialistAboutClientAction(session.psychologistId, {
+            clientName: session.client.name,
+            date: session.date,
+            time: session.time,
+            action: 'confirmed',
+        });
         await createNotification({
             psychologistId: session.psychologistId,
             type: 'session_confirmed',
