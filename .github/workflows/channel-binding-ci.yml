@@ -60,6 +60,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - uses: android-actions/setup-android@v3
+        # packages: '' — НЕ УКРАШЕНИЕ.
+        #
+        # По умолчанию это действие ставит пакет `tools`, а Google убрал его
+        # из своего репозитория. 15.09.2026 сборка начала падать на ровном
+        # месте: «Warning: Failed to find package 'tools'» и выход с кодом 1
+        # ещё до того, как дело дошло до нашего кода. Ни одна правка в
+        # репозитории к этому отношения не имеет.
+        #
+        # Всё, что сборке правда нужно, ставится следующим шагом явно
+        # (platforms;android-35 и build-tools;35.0.0), поэтому пустой список
+        # здесь — не потеря, а отказ от лишнего.
+        with:
+          packages: ''
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'

@@ -1,10 +1,11 @@
 import { db } from '@/lib/db';
 import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { sendTelegramMessage } from '../telegram';
-import { sendMaxMessage as sendMaxText } from '../max';
 import { sendMaxMessage as sendMaxFull } from '../max-bot';
 import { build24hReminderText } from './reminder-text';
-import { onlineLinkLine } from '@/lib/messaging/format';
+import { onlineLinkLine, escapeHtml } from '@/lib/messaging/format';
+import { timezoneLabel } from '@/lib/practice/timezones';
+import { pickChannel, clientChannelBearer } from '@/lib/messaging/channel-rule';
 
 /** MAX-функции возвращают либо null (нет токена / HTTP не ok / исключение — см. maxApi в max-bot.ts),
  *  либо разобранный JSON-ответ, который может нести success:false при формально успешном HTTP-ответе. */
@@ -18,32 +19,55 @@ function maxSendOk(result: unknown): boolean {
  * ReminderOutbox (O-260817-16): раньше отправка была "выстрелил и забыл", и
  * узнать, дошло ли сообщение, можно было только по консольным логам.
  */
+/**
+ * ОДНО СОБЫТИЕ — ОДНО СООБЩЕНИЕ, В ОДИН КАНАЛ. ЗДЕСЬ ТОЖЕ.
+ *
+ * Здесь стояли два `if` подряд: есть телеграм — шлём в телеграм, есть MAX —
+ * шлём и в MAX. У кого привязаны оба, тот получал КАЖДОЕ напоминание дважды —
+ * и за сутки, и за час. Правило «один канал» написано после живого случая
+ * 10.09.2026 и соблюдалось в трёх местах из четырёх; рассылка по расписанию
+ * осталась со старой парой.
+ *
+ * Канал выбирает то же самое правило, что и весь остальной продукт —
+ * `pickChannel` (src/lib/messaging/channel-rule.ts): основной, то есть тот,
+ * через который человек пришёл последним.
+ *
+ * ВТОРАЯ ПОЧИНКА, ТОЙ ЖЕ СТРОКОЙ. В MAX текст уходил через
+ * `text.replace(/<[^>]+>/g, '')`. Вместе с тегом уходил и адрес: от
+ * «Ссылка для подключения: <a href="…">Яндекс Телемост</a>» оставалось слово.
+ * За сутки до онлайн-встречи человеку нужен ровно один предмет, и именно его
+ * в сообщении не было. `sendMaxFull` умеет вынуть ссылку из якоря в кнопку —
+ * ему и отдаём разметку целиком, как это делает `deliverMessage`.
+ *
+ * Возвращаемая пара не меняется: канал, который не был задействован, по-
+ * прежнему `null`, и `recordOutcome` пишет в журнал ровно одну строку —
+ * на тот канал, в который правда отправляли.
+ */
 async function sendNotification(
     tgChatId: string | null | undefined,
     maxChatId: string | null | undefined,
     text: string,
-    options?: Parameters<typeof sendTelegramMessage>[2]
+    options?: Parameters<typeof sendTelegramMessage>[2],
+    preferredChannel?: string | null,
 ): Promise<{ telegram: boolean | null; max: boolean | null }> {
-    let telegramOk: boolean | null = null;
-    let maxOk: boolean | null = null;
+    const target = pickChannel({ telegramChatId: tgChatId, maxChatId, preferredChannel });
+    if (!target) return { telegram: null, max: null };
 
-    if (tgChatId) telegramOk = await sendTelegramMessage(tgChatId, text, options);
-    if (maxChatId) {
-        const telegramKeyboard = (options as any)?.reply_markup?.inline_keyboard;
-        if (telegramKeyboard) {
-            const maxButtons = telegramKeyboard.map((row: any[]) =>
-                row.map((button: any) => button.url
-                    ? { text: button.text, url: button.url }
-                    : { text: button.text, payload: button.callback_data || button.payload || '' }
-                )
-            );
-            maxOk = maxSendOk(await sendMaxFull(maxChatId, text.replace(/<[^>]+>/g, ''), maxButtons));
-        } else {
-            maxOk = maxSendOk(await sendMaxText(maxChatId, text.replace(/<[^>]+>/g, '')));
-        }
+    if (target.channel === 'telegram') {
+        return { telegram: await sendTelegramMessage(target.chatId, text, options), max: null };
     }
 
-    return { telegram: telegramOk, max: maxOk };
+    const telegramKeyboard = (options as any)?.reply_markup?.inline_keyboard;
+    if (telegramKeyboard) {
+        const maxButtons = telegramKeyboard.map((row: any[]) =>
+            row.map((button: any) => button.url
+                ? { text: button.text, url: button.url }
+                : { text: button.text, payload: button.callback_data || button.payload || '' }
+            )
+        );
+        return { telegram: null, max: maxSendOk(await sendMaxFull(target.chatId, text, maxButtons)) };
+    }
+    return { telegram: null, max: maxSendOk(await sendMaxFull(target.chatId, text)) };
 }
 
 /**
@@ -113,15 +137,17 @@ async function recordOutcome(
  * так же: разойдись эти две выборки — повтор ушёл бы не туда, куда ушёл
  * оригинал, и ReminderOutbox писал бы про разных получателей под одним ключом.
  */
-function clientTargets(client: any): { telegram: string | null; max: string | null } {
-    const telegramId = client?.telegramClient?.telegramUserId || client?.telegramChatId || null;
-    const maxId = client?.telegramClient?.telegramUserId?.startsWith('max_')
-        ? client.telegramClient.telegramUserId
-        : (client?.maxChatId || null);
-    // Один и тот же id в обоих полях означает MAX-пользователя: слать ему ещё и
-    // «в телеграм» по тому же id — это второе сообщение тому же человеку.
-    const telegramTarget = maxId && telegramId === maxId ? null : telegramId;
-    return { telegram: telegramTarget, max: maxId };
+function clientTargets(client: any): { telegram: string | null; max: string | null; preferred: string | null } {
+    // Правило чтения каналов клиента — общее (channel-rule.ts), а не местное:
+    // тут была единственная в продукте поправка на старое хранилище привязки
+    // (TelegramClient.telegramUserId), и любой другой путь, читавший только
+    // telegramChatId, таким клиентам не писал вовсе.
+    const bearer = clientChannelBearer(client);
+    return {
+        telegram: bearer?.telegramChatId ?? null,
+        max: bearer?.maxChatId ?? null,
+        preferred: bearer?.preferredChannel ?? null,
+    };
 }
 
 export type ClientReminderKind = 'session_24h_client' | 'session_1h_client';
@@ -138,6 +164,7 @@ function buildClientReminderText(session: any, kind: ClientReminderKind): string
         return build24hReminderText({
             clientName: client.name,
             time: session.time,
+            timezoneLabel: timezoneLabel(session.psychologist?.psychologistSettings?.timezone),
             format: session.format,
             addressName: session.address?.name,
             onlineLink,
@@ -149,7 +176,9 @@ function buildClientReminderText(session: any, kind: ClientReminderKind): string
     const line = session.format === 'online' ? onlineLinkLine(onlineLink) : '';
     const linkText = line ? `\n${line}` : '';
     const confirmationText = session.status === 'pending' ? '\nПодтвердите, пожалуйста, встречу.' : '';
-    return `Сессия начнётся через 1 час, в ${session.time}.${linkText}${confirmationText}`;
+    const zone = timezoneLabel(session.psychologist?.psychologistSettings?.timezone);
+    const at = zone ? `${session.time} (${escapeHtml(zone)})` : session.time;
+    return `Сессия начнётся через 1 час, в ${at}.${linkText}${confirmationText}`;
 }
 
 /** Момент, к которому напоминание привязано (для ReminderOutbox.dueAt). */
@@ -237,7 +266,7 @@ export async function processReminders() {
             const client = session.client;
             if (!client) continue;
 
-            const { telegram: telegramTarget, max: maxId } = clientTargets(client);
+            const { telegram: telegramTarget, max: maxId, preferred } = clientTargets(client);
             // O-260829 §4.4: раньше notified24h выставлялся в true безусловно
             // после цикла — сессия, у которой отправка провалилась на всех
             // задействованных каналах, помечалась "уведомлена" точно так же,
@@ -282,6 +311,7 @@ export async function processReminders() {
                     maxId,
                     buildClientReminderText(session, 'session_24h_client'),
                     sessionActions(session, session.status === 'pending'),
+                    preferred,
                 );
                 noteOutcome(outcome);
                 await recordOutcome(
@@ -359,7 +389,7 @@ export async function processReminders() {
             const client = session.client;
             if (!client) continue;
 
-            const { telegram: telegramTarget, max: maxId } = clientTargets(client);
+            const { telegram: telegramTarget, max: maxId, preferred } = clientTargets(client);
 
             let anyAttempted = false;
             let anySucceeded = false;
@@ -370,6 +400,7 @@ export async function processReminders() {
                     maxId,
                     buildClientReminderText(session, 'session_1h_client'),
                     sessionActions(session, session.status === 'pending'),
+                    preferred,
                 );
                 if (outcome.telegram !== null) { anyAttempted = true; if (outcome.telegram) anySucceeded = true; }
                 if (outcome.max !== null) { anyAttempted = true; if (outcome.max) anySucceeded = true; }
@@ -431,7 +462,7 @@ export async function resendSessionReminder(params: {
     const session = rawSession as any;
     if (!session.client) return { ok: false, reason: 'not_found' };
 
-    const { telegram, max } = clientTargets(session.client);
+    const { telegram, max, preferred } = clientTargets(session.client);
     if (!telegram && !max) return { ok: false, reason: 'no_channel' };
 
     const outcome = await sendNotification(
@@ -439,6 +470,7 @@ export async function resendSessionReminder(params: {
         max,
         buildClientReminderText(session, kind),
         sessionActions(session, session.status === 'pending'),
+        preferred,
     );
     await recordOutcome(
         outcome,

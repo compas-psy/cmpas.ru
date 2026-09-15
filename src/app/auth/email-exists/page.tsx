@@ -1,18 +1,19 @@
-"use client"
-
 import Link from "next/link"
 import Image from "next/image"
-import { signIn } from "next-auth/react"
 
+/**
+ * «Эта почта уже занята» — и здесь человека уводили мимо единого входа.
+ *
+ * Страница звала `signIn("yandex")` напрямую: во-первых, мимо СИМПАСа, через
+ * который теперь идут все двери; во-вторых, наугад — аккаунт мог быть заведён
+ * и через ВК, и через сам СИМПАС, и тогда кнопка «Войти через Яндекс» просто
+ * не та дверь. Человек, которому сказали «вы уже зарегистрированы», упирался
+ * в предложение войти способом, которым он, возможно, никогда не входил.
+ *
+ * Теперь отсюда один путь — обратно на `/auth`, где дверь выбирает сервер,
+ * а не эта страница. Заодно ушли остатки прежнего имени продукта.
+ */
 export default function EmailExistsPage() {
-    const handleYandexAuth = async () => {
-        try {
-            await signIn("yandex", { callbackUrl: "/" })
-        } catch (error) {
-            console.error("Yandex sign-in error:", error)
-        }
-    }
-
     return (
         <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center p-4 lg:p-8">
             <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
@@ -26,13 +27,13 @@ export default function EmailExistsPage() {
                     >
                         <Image
                             src="/logo-tree.png"
-                            alt="Compas Logo"
+                            alt="ПРАКТИКА"
                             width={40}
                             height={40}
                             className="object-contain"
                         />
                         <span className="text-2xl font-semibold text-[#1a4d3a] tracking-wide">
-                            ЕЖЕДНЕВНИК ПСИХОЛОГА
+                            ПРАКТИКА
                         </span>
                     </Link>
 
@@ -48,32 +49,23 @@ export default function EmailExistsPage() {
                         </h1>
 
                         <p className="text-white/80 text-base mb-8 leading-relaxed">
-                            Этот email уже связан с вашим аккаунтом.<br />
-                            Войдите через Яндекс для продолжения.
+                            Эта почта уже связана с аккаунтом.<br />
+                            Войдите тем же способом, каким заводили его.
                         </p>
 
-                        {/* Кнопка Яндекс */}
-                        <button
-                            onClick={handleYandexAuth}
+                        <Link
+                            href="/auth"
                             className="w-full bg-white hover:bg-gray-50 rounded-2xl px-6 py-4 flex items-center justify-center gap-3 transition-colors mb-4"
                         >
-                            <Image
-                                src="/yandex-logo.png"
-                                alt="Яндекс"
-                                width={28}
-                                height={28}
-                                className="object-contain"
-                            />
                             <span className="text-[#1a1a1a] font-medium">
-                                Войти через Яндекс
+                                Перейти ко входу
                             </span>
-                        </button>
+                        </Link>
 
-                        {/* Подсказка */}
                         <div className="bg-[#c9a961] rounded-2xl px-6 py-4">
                             <p className="text-sm text-[#1a4d3a] font-medium">
-                                💡 Быстрый и безопасный вход<br />
-                                без необходимости помнить пароль
+                                На экране входа будут все ваши двери:<br />
+                                Яндекс, ВК и почта. Пароль помнить не нужно.
                             </p>
                         </div>
                     </div>
@@ -92,7 +84,7 @@ export default function EmailExistsPage() {
                     <div className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-2xl">
                         <Image
                             src="/images/auth-side.jpg"
-                            alt="Ежедневник психолога"
+                            alt="ПРАКТИКА"
                             fill
                             className="object-cover"
                             sizes="600px"

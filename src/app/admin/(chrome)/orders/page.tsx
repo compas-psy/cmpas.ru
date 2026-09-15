@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ShoppingCart, Clock, CheckCircle2, Package, XCircle, Filter, Download, Eye, Search } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, Package, XCircle, Filter, Search } from 'lucide-react';
 import Link from 'next/link';
 import { detectGenderFromName, getGenderEmoji } from '@/lib/gender';
 
@@ -89,10 +89,13 @@ export default async function OrdersPage({
                                         <Filter className="w-4 h-4" />
                                         <span>Все статусы</span>
                                     </Link>
-                                    <button className="flex items-center gap-2 px-4 h-10 rounded-lg border border-border bg-white text-sm hover:bg-accent/50 transition">
-                                        <Download className="w-4 h-4" />
-                                        <span>Экспорт</span>
-                                    </button>
+                                    {/* Кнопка «Экспорт» стояла здесь без обработчика:
+                                        нажималась, подсвечивалась и не делала ничего.
+                                        Кнопка, которая ничего не делает, хуже её
+                                        отсутствия — человек считает, что выгрузка есть,
+                                        и ищет причину в себе. Выгрузка заказов —
+                                        отдельная работа, она в «Отложено» реестра
+                                        путей (docs/cjm/reestr.html, О7). */}
                                 </div>
                             </div>
                         </CardContent>
@@ -159,11 +162,9 @@ export default async function OrdersPage({
                                                         {config.label}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-right">
-                                                    <button className="p-2 rounded-lg hover:bg-accent/50 transition">
-                                                        <Eye className="w-4 h-4 text-foreground/60" />
-                                                    </button>
-                                                </TableCell>
+                                                {/* Здесь был «глазок» просмотра — тоже без
+                                                    обработчика. Карточка заказа и смена его
+                                                    статуса не написаны: см. О7 в реестре. */}
                                             </TableRow>
                                         );
                                     })

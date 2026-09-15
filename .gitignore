@@ -76,3 +76,7 @@ android/keystore/
 # Сами снимки лежат в artifacts/praktika-mvp/task27 и коммитятся.
 /test-results/
 /playwright-report/
+
+# Черновик планирования (/ultraplan): рабочее состояние одного захода.
+# Итог уезжает в docs/cjm/ как нормальный документ, черновик — нет.
+/.ultraplan/

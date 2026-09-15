@@ -1,0 +1,560 @@
+<title>Реестр путей</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<style>
+.chip.half{background:var(--gold-soft); color:var(--gold-ink); border-color:color-mix(in srgb, var(--gold) 40%, transparent)}
+td.num{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); white-space:nowrap}
+td.surf{font-size:12px; color:var(--muted); white-space:nowrap}
+.tnote{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
+table td b{font-weight:600}
+.checks{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px}
+.check{border:1px solid var(--line); border-radius:11px; background:var(--card); padding:14px 16px; box-shadow:var(--shadow)}
+.check .cn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink); margin-bottom:6px}
+.check .ct{font-weight:600; font-size:14.5px; margin-bottom:4px}
+.check .cd{font-size:13px; color:var(--muted); line-height:1.5}
+.tally{display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:11px; overflow:hidden; margin-top:22px}
+.tally div{background:var(--card); padding:14px 16px}
+.tally .n{font-family:"PT Serif",Georgia,serif; font-size:27px; line-height:1}
+.tally .l{font-size:12px; color:var(--muted); margin-top:5px}
+.later{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.later .it{display:grid; grid-template-columns:34px 1fr; gap:14px; padding-block:15px; border-bottom:1px solid var(--line)}
+.later .it .n{font-family:"JetBrains Mono",monospace; font-size:12.5px; color:var(--gold-ink); padding-top:2px}
+.later .it .t{font-weight:600; font-size:15px; line-height:1.35}
+.later .it .d{font-size:13.5px; color:var(--muted); margin-top:4px; line-height:1.5}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">15.09.2026 · живой документ</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Реестр путей · все роли</div>
+  <h1>Реестр путей ПРАКТИКИ</h1>
+  <p class="lede" style="margin-top:16px">Все 125 путей продукта одним списком: кто идёт, куда, через что, работает ли целиком и где это живёт в коде. Не отчёт и не план — карта, по которой видно, что вообще есть, и от которой отталкиваются подробные разборы.</p>
+
+  <div class="ask">
+    <b>Зачем он понадобился.</b> Разборы пишутся по одному пути и находят в нём десятки расхождений — но пока нет списка всех путей, неизвестно, сколько таких разборов впереди и чего в карте не хватает. Клиентский путь, например, до 14.09.2026 не был описан вовсе: он жил кусками внутри чужих документов, и сообщение клиенту никто не проверял как целый маршрут.
+    <br><br>Теперь путей 125, и каждый назван. Подробные разборы идут книгами по ролям; какая книга покрывает путь, видно в этом же списке.
+  </div>
+
+  <div class="tally">
+    <div><div class="n">15</div><div class="l">клиент</div></div>
+    <div><div class="n">57</div><div class="l">специалист</div></div>
+    <div><div class="n">22</div><div class="l">учредитель</div></div>
+    <div><div class="n">5</div><div class="l">посетитель</div></div>
+    <div><div class="n">26</div><div class="l">интеграции и фон</div></div>
+  </div>
+
+  <nav class="toc">
+    <a href="#how"><span>01</span>Как читать</a>
+    <a href="#client"><span>02</span>Клиент</a>
+    <a href="#spec"><span>03</span>Специалист</a>
+    <a href="#founder"><span>04</span>Учредитель</a>
+    <a href="#visitor"><span>05</span>Посетитель</a>
+    <a href="#integr"><span>06</span>Интеграции и фон</a>
+    <a href="#dead"><span>07</span>Построено, но не существует</a>
+    <a href="#later"><span>08</span>Отложено</a>
+  </nav>
+</header>
+
+<section id="how">
+  <div class="sechead">
+    <div class="eyebrow">01 · Как читать</div>
+    <h2>Шесть проверок, через которые проходит каждый путь</h2>
+    <p class="lede">Без такого списка слово «разобрано» ничего не значит. Эти шесть вопросов задаются каждому пути без исключения — и именно они находят дефекты, которые на глаз не видно.</p>
+  </div>
+
+  <div class="checks">
+    <div class="check"><div class="cn">Проверка 1</div><div class="ct">Обещание</div><div class="cd">Совпадает ли то, что написано на экране или в сообщении, с тем, что человек получит, нажав. Самый частый дефект продукта — не поломка, а расхождение между словом и делом.</div></div>
+    <div class="check"><div class="cn">Проверка 2</div><div class="ct">Тупик</div><div class="cd">Есть ли следующий шаг там, где путь заканчивается. «Готово» без двери дальше — это место, где человек уходит.</div></div>
+    <div class="check"><div class="cn">Проверка 3</div><div class="ct">Молчание</div><div class="cd">Если человек ответил, написал, нажал — узнает ли об этом кто-нибудь. Ответ, который пишется в базу и не читается никем, хуже отсутствия вопроса.</div></div>
+    <div class="check"><div class="cn">Проверка 4</div><div class="ct">Без мессенджера</div><div class="cd">Работает ли путь у того, у кого нет ни MAX, ни Telegram. Правило лестницы деградации: MAX → Telegram → обычная ссылка в браузере. Любой шаг обязан иметь третью ступень.</div></div>
+    <div class="check"><div class="cn">Проверка 5</div><div class="ct">Одна поверхность или две</div><div class="cd">Если путь есть и в вебе, и в приложении — устроен ли он одинаково. Одна и та же работа, сделанная в двух местах по-разному, расходится дальше сама.</div></div>
+    <div class="check"><div class="cn">Проверка 6</div><div class="ct">Один источник</div><div class="cd">Собирается ли правило в одном месте или скопировано. Правило в шести копиях — это шесть мест, где его однажды поправят по-разному.</div></div>
+  </div>
+
+  <div class="ask" style="margin-top:26px">
+    <b>Состояния в таблицах.</b> <span class="chip ok">целиком</span> — путь проходится от начала до конца. <span class="chip half">наполовину</span> — проходится, но с обрывом, перекосом между поверхностями или неправдой в тексте. <span class="chip half">заявлено</span> — экран или кнопка есть, действия за ними нет. <span class="chip">пути нет</span> — человек этого сделать не может вовсе.
+  </div>
+</section>
+
+<section id="client">
+  <div class="sechead">
+    <div class="eyebrow">02 · Клиент</div>
+    <h2>15 путей</h2>
+    <p class="lede">Разобран целиком: <a href="2026-09-14-put-klienta.html">«Путь клиента»</a>, 14.09.2026 — карта, шесть каркасов, таблица из 23 сообщений и экранов, 24 дефекта, 5 развилок.</p>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">К1</td><td><b>Записывается сам по ссылке специалиста, первый раз</b><div class="tnote">Порядок «сначала вопрос, потом ответ» исправлен 13.09</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">src/app/u/[slug] · BookingPageClient.tsx</span></td></tr>
+<tr><td class="num">К2</td><td><b>Возвращается и записывается снова</b><div class="tnote">Устройство помнит имя, телефон и предпочтение; есть «не запоминать меня»</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">BookingPageClient.tsx:921</span></td></tr>
+<tr><td class="num">К3</td><td><b>Подключает уведомления в мессенджере</b><div class="tnote">Страница сама уходит в MAX через 350 мс, не дождавшись ответа</div></td><td class="surf">веб→TG/MAX</td><td><span class="chip half">наполовину</span></td><td><span class="mono">connect/[token] · channel-binding.ts:56</span></td></tr>
+<tr><td class="num">К4</td><td><b>Подтверждает встречу</b><div class="tnote">Говорит «подтверждена» даже по отменённой встрече</div></td><td class="surf">TG/MAX/веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/client/session-action:65</span></td></tr>
+<tr><td class="num">К5</td><td><b>Переносит встречу</b><div class="tnote">Кнопка не говорит, чего ждёт; нет пояса и чипов, в отличие от записи</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">client/reschedule/[sessionId]</span></td></tr>
+<tr><td class="num">К6</td><td><b>Отменяет встречу</b><div class="tnote">Отмена по переходу по ссылке, без переспроса, без отката, в тупик</div></td><td class="surf">TG/MAX/веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/client/session-action:82</span></td></tr>
+<tr><td class="num">К7</td><td><b>Читает и подписывает документ</b><div class="tnote">Открытие отделено от согласия, версия и дата видны</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">client/documents/[deliveryId]</span></td></tr>
+<tr><td class="num">К8</td><td><b>Платит по инструкции специалиста</b><div class="tnote">Вид сообщения выбирает сборщик — починено 14.09</div></td><td class="surf">TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">messaging/payment-instruction.ts</span></td></tr>
+<tr><td class="num">К9</td><td><b>Смотрит свои встречи</b><div class="tnote">Работает и в мессенджере, и в обычном браузере</div></td><td class="surf">веб/TG</td><td><span class="chip ok">целиком</span></td><td><span class="mono">bot/client/page.tsx</span></td></tr>
+<tr><td class="num">К10</td><td><b>Получает напоминания за сутки и за час</b><div class="tnote">Дважды при двух каналах; в MAX пропадает ссылка на видеовстречу</div></td><td class="surf">TG/MAX</td><td><span class="chip half">наполовину</span></td><td><span class="mono">cron/reminders.ts</span></td></tr>
+<tr><td class="num">К11</td><td><b>Отвечает о самочувствии после встречи</b><div class="tnote">Ответ пишется в базу и не читается ничем и никем</div></td><td class="surf">TG/MAX</td><td><span class="chip half">наполовину</span></td><td><span class="mono">cron/post-session.ts:114</span></td></tr>
+<tr><td class="num">К12</td><td><b>Пишет специалисту</b><div class="tnote">Telegram молчит, MAX отвечает списком команд. До специалиста не доходит</div></td><td class="surf">TG/MAX</td><td><span class="chip">пути нет</span></td><td><span class="mono">telegram-bot.ts · max-bot.ts:607</span></td></tr>
+<tr><td class="num">К13</td><td><b>Оставляет заявку, когда нет подходящего времени</b><div class="tnote">«Специалист увидит заявку» — экрана нет ни одного</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">bot/actions.ts:300</span></td></tr>
+<tr><td class="num">К14</td><td><b>Отключает уведомления</b><div class="tnote">Страница подключения обещает «отключить в любой момент»</div></td><td class="surf">—</td><td><span class="chip">пути нет</span></td><td><span class="mono">отписки нет ни в одном боте</span></td></tr>
+<tr><td class="num">К15</td><td><b>Личный кабинет: задания, история, прогресс</b><div class="tnote">Не построено</div></td><td class="surf">—</td><td><span class="chip">пути нет</span></td><td><span class="mono">Горизонт 2</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="spec">
+  <div class="sechead">
+    <div class="eyebrow">03 · Специалист</div>
+    <h2>57 путей</h2>
+    <p class="lede">Разобран отрезок «встреча прошла → клиент записан снова»: <a href="2026-09-10-put-praktiki.html">«Карта пути ПРАКТИКИ»</a>, 10.09.2026, все 12 её дефектов закрыты. Остальное разбирается книгами.</p>
+  </div>
+
+  <h3 style="margin:26px 0 12px">Рамка: вход, документы, деньги</h3>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">С-A1</td><td><b>Впервые входит в ПРАКТИКУ</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">auth/page.tsx · lib/auth/simpasid.ts</span></td></tr>
+<tr><td class="num">С-A2</td><td><b>Входит с телефона</b><div class="tnote">Шире веба: код из письма, ссылка, нативный Яндекс</div></td><td class="surf">Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/mobile/auth/*</span></td></tr>
+<tr><td class="num">С-A3</td><td><b>Не может войти, доступ закрыт</b><div class="tnote">«Почта занята» ведёт мимо СИМПАСа; заблокированному некуда написать</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">auth/error · blocked · email-exists</span></td></tr>
+<tr><td class="num">С-A4</td><td><b>Принимает обязательные юридические документы</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">legal-acceptance/page.tsx</span></td></tr>
+<tr><td class="num">С-A5</td><td><b>Даёт или не даёт согласие на рекламу</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">components/legal/AdsConsentModal.tsx</span></td></tr>
+<tr><td class="num">С-A6</td><td><b>Подтверждает, что он оператор персональных данных</b><div class="tnote">Гейт стоит на всех путях заведения клиента</div></td><td class="surf">веб/Android/TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/practice/attestation.ts:16</span></td></tr>
+<tr><td class="num">С-A7</td><td><b>Упирается в конец триала и оплачивает подписку</b><div class="tnote">С Android уводит в браузер</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">billing/page.tsx · api/payments/*</span></td></tr>
+<tr><td class="num">С-A8</td><td><b>Выходит из аккаунта</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/layout.tsx:94</span></td></tr>
+<tr><td class="num">С-A9</td><td><b>Выгружает свои данные или удаляет аккаунт</b><div class="tnote">Разделы были и убраны как пустые. Удаление — только у администратора</div></td><td class="surf">—</td><td><span class="chip">пути нет</span></td><td><span class="mono">diary/settings/page.tsx:262</span></td></tr>
+</tbody></table></div>
+  <h3 style="margin:34px 0 12px">Настройка практики</h3>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">С-B1</td><td><b>Проходит мастер настройки практики</b><div class="tnote">Выбрасывает из мастера на шагах «Мессенджер» и «Первый клиент»</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">onboarding/page.tsx:262,273</span></td></tr>
+<tr><td class="num">С-B2</td><td><b>Доходит настройку по чек-листу на дашборде</b></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/onboarding.ts</span></td></tr>
+<tr><td class="num">С-B3</td><td><b>Правит свой профиль</b><div class="tnote">На Android только ФИО</div></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/profile/page.tsx</span></td></tr>
+<tr><td class="num">С-B4</td><td><b>Настраивает параметры приёма</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/settings/page.tsx</span></td></tr>
+<tr><td class="num">С-B5</td><td><b>Заводит офлайн-кабинеты</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/settings.ts:64</span></td></tr>
+<tr><td class="num">С-B6</td><td><b>Строит расписание правилами</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/availability/page.tsx</span></td></tr>
+<tr><td class="num">С-B7</td><td><b>Переключает режим самозаписи</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/availability/page.tsx:666</span></td></tr>
+<tr><td class="num">С-B8</td><td><b>Берёт свою ссылку и рассылает клиентам</b><div class="tnote">Единственный путь, живой на всех четырёх поверхностях</div></td><td class="surf">веб/Android/TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/booking-link.ts:11</span></td></tr>
+</tbody></table></div>
+  <h3 style="margin:34px 0 12px">Клиенты и документы</h3>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">С-C1</td><td><b>Заводит первого клиента руками</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/clients.ts:67 · lib/clients/create.ts</span></td></tr>
+<tr><td class="num">С-C2a</td><td><b>Переносит практику: вставка списком</b><div class="tnote">На Android нет</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/clients/import</span></td></tr>
+<tr><td class="num">С-C2b</td><td><b>Переносит практику: импорт из календаря</b><div class="tnote">На Android нет</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/clients/import-calendar</span></td></tr>
+<tr><td class="num">С-C2c</td><td><b>Переносит практику: таблица CSV или XLSX</b><div class="tnote">На Android нет</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/clients/import-spreadsheet</span></td></tr>
+<tr><td class="num">С-C3</td><td><b>Пересылает боту контакт из телефонной книги</b><div class="tnote">Симметрично в обоих ботах; карточка только после подтверждения</div></td><td class="surf">TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/clients/contact-intake.ts</span></td></tr>
+<tr><td class="num">С-C4</td><td><b>Приглашает клиента в мессенджер</b><div class="tnote">Лестница MAX → Telegram → веб</div></td><td class="surf">веб/Android/TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/client-onboarding.ts:78</span></td></tr>
+<tr><td class="num">С-C5</td><td><b>Ведёт карточку клиента: анкета, таймлайн, архив, удаление</b><div class="tnote">Анкеты на Android нет</div></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/clients/page.tsx</span></td></tr>
+<tr><td class="num">С-C6</td><td><b>Заводит свои документы и настраивает автоотправку</b><div class="tnote">На Android только просмотр</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">diary/documents/page.tsx:236</span></td></tr>
+<tr><td class="num">С-C7</td><td><b>Рассылает документы и следит за журналом согласий</b><div class="tnote">Ручная рассылка требует вставить текст в мессенджер самому</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">diary/actions/client-documents.ts:104</span></td></tr>
+</tbody></table></div>
+  <h3 style="margin:34px 0 12px">Ежедневная работа</h3>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">С-D1</td><td><b>Открывает день и разбирает «Сегодня»</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/page.tsx:883 · actions/attention.ts</span></td></tr>
+<tr><td class="num">С-D2</td><td><b>Назначает сессию</b><div class="tnote">Есть повтор слота на N недель</div></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/sessions.ts:56,128</span></td></tr>
+<tr><td class="num">С-D3</td><td><b>Переносит или отменяет сессию</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/sessions.ts:226</span></td></tr>
+<tr><td class="num">С-D4</td><td><b>Отмечает исход встречи и причину неявки</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/actions/sessions.ts:272,328</span></td></tr>
+<tr><td class="num">С-D5</td><td><b>Отмечает оплату встречи</b><div class="tnote">Только ручная отметка, банковской сверки нет — и это написано на экране</div></td><td class="surf">веб/Android/бот</td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/diary/sessions/[id]/payment</span></td></tr>
+<tr><td class="num">С-D6</td><td><b>Настраивает, как клиент платит ему</b><div class="tnote">Выключено по умолчанию</div></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/payment/page.tsx</span></td></tr>
+<tr><td class="num">С-D7</td><td><b>Пишет заметку после сессии</b><div class="tnote">Приватная часть отделена от сводки для клиента</div></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/session/[id]/notes</span></td></tr>
+<tr><td class="num">С-D8</td><td><b>Смотрит календарь и правит вид</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/calendar/page.tsx</span></td></tr>
+<tr><td class="num">С-D9</td><td><b>Пишет клиенту сообщение или ставит отложенное</b><div class="tnote">В веб-кабинете такого экрана нет</div></td><td class="surf">Android</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/mobile/clients/[id]/message</span></td></tr>
+<tr><td class="num">С-D10</td><td><b>Получает уведомления и разбирает ленту</b><div class="tnote">Лента — только на Android; в вебе уведомления приходят ботом</div></td><td class="surf">веб/Android/TG/MAX</td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/notifications.ts</span></td></tr>
+</tbody></table></div>
+  <h3 style="margin:34px 0 12px">Подключения, тишина, бот, справка</h3>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">С-E1</td><td><b>Подключает Google Календарь</b><div class="tnote">На Android нет</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/google/*</span></td></tr>
+<tr><td class="num">С-E2</td><td><b>Подключает Яндекс Календарь паролем приложения</b><div class="tnote">OAuth нет, пароль хранится у нас</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/yandex/connect</span></td></tr>
+<tr><td class="num">С-E3</td><td><b>Синхронизирует и отключает календарь</b><div class="tnote">Отключение не убирает уже выгруженные события</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/calendar/sync</span></td></tr>
+<tr><td class="num">С-E4</td><td><b>Привязывает свой Telegram к кабинету</b></td><td class="surf">TG/веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">telegram-bot.ts:145 · diary/bot/page.tsx</span></td></tr>
+<tr><td class="num">С-E5</td><td><b>Привязывает свой MAX к кабинету</b></td><td class="surf">MAX/веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">max-bot.ts:354 · diary/max-connect</span></td></tr>
+<tr><td class="num">С-E6</td><td><b>Подключает собственного бота или другой мессенджер</b><div class="tnote">Пути нет</div></td><td class="surf">—</td><td><span class="chip">пути нет</span></td><td><span class="mono">токен один на всех из окружения</span></td></tr>
+<tr><td class="num">С-E7</td><td><b>Смотрит витрину видеосервисов</b><div class="tnote">Честно помечено «Скоро» — это заявка, а не обман</div></td><td class="surf">веб</td><td><span class="chip half">заявлено</span></td><td><span class="mono">diary/integrations/page.tsx:469</span></td></tr>
+<tr><td class="num">С-F1</td><td><b>Настраивает уведомления себе</b><div class="tnote">Есть кнопка «Отправить тест»</div></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/notifications/page.tsx:159</span></td></tr>
+<tr><td class="num">С-F2</td><td><b>Включает утренний дайджест и недельную сводку</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/digest.ts</span></td></tr>
+<tr><td class="num">С-F3</td><td><b>Настраивает уведомления клиентам</b></td><td class="surf">веб/Android</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/notifications/page.tsx:224</span></td></tr>
+<tr><td class="num">С-F4</td><td><b>Меняет тихие часы</b><div class="tnote">21:00–09:00 зашиты константой, экрана нет</div></td><td class="surf">—</td><td><span class="chip">пути нет</span></td><td><span class="mono">lib/messaging/quiet-hours.ts:28</span></td></tr>
+<tr><td class="num">С-G1</td><td><b>Смотрит ближайшие сессии в боте</b></td><td class="surf">TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">telegram-bot.ts:313 · max-bot.ts:370</span></td></tr>
+<tr><td class="num">С-G2</td><td><b>Открывает кабинет из бота</b></td><td class="surf">TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">telegram-bot.ts:298 · max-bot.ts:256</span></td></tr>
+<tr><td class="num">С-G3</td><td><b>Получает справку в боте</b><div class="tnote">В Telegram справки нет</div></td><td class="surf">MAX</td><td><span class="chip half">наполовину</span></td><td><span class="mono">max-bot.ts:401</span></td></tr>
+<tr><td class="num">С-G4</td><td><b>Узнаёт от бота о действиях клиента</b></td><td class="surf">TG/MAX</td><td><span class="chip ok">целиком</span></td><td><span class="mono">telegram-bot.ts:360-448 · max-bot.ts:465</span></td></tr>
+<tr><td class="num">С-H1</td><td><b>Читает встроенную справку</b><div class="tnote">На Android заглушка с номером сборки</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">diary/help/content.ts</span></td></tr>
+<tr><td class="num">С-H2</td><td><b>Читает журнал изменений</b><div class="tnote">Сторож: версия поднялась — запись обязана появиться</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/changelog/page.tsx</span></td></tr>
+<tr><td class="num">С-H3</td><td><b>Читает юридические документы из кабинета</b></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">diary/legal/*</span></td></tr>
+<tr><td class="num">С-H4</td><td><b>Решает, помогать ли разработке (аналитика)</b><div class="tnote">В веб-кабинете тумблера нет</div></td><td class="surf">Android</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/mobile/analytics/consent</span></td></tr>
+<tr><td class="num">С-H5</td><td><b>Отмечает интерес к будущей функции</b><div class="tnote">С веба сигнал не собирается</div></td><td class="surf">Android</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/mobile/feature-interest</span></td></tr>
+<tr><td class="num">С-H6</td><td><b>Обновляет приложение</b><div class="tnote">Магазина нет, APK по постоянной ссылке</div></td><td class="surf">—</td><td><span class="chip ok">целиком</span></td><td><span class="mono">app/updates/latest/[file]</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="founder">
+  <div class="sechead">
+    <div class="eyebrow">04 · Учредитель</div>
+    <h2>22 путей</h2>
+    <p class="lede">Тринадцать в старой админке и девять в управленческой панели. Разбора нет ни одного.</p>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">У-A1</td><td><b>Утренний взгляд на цифры — дашборд админки</b><div class="tnote">Только смотреть</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/(chrome)/page.tsx</span></td></tr>
+<tr><td class="num">У-A2</td><td><b>Разбирается, откуда приходят люди</b><div class="tnote">Только смотреть, выгрузки нет</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/(chrome)/analytics</span></td></tr>
+<tr><td class="num">У-A3</td><td><b>Смотрит досье на пользователя и действует</b><div class="tnote">Девять действий, всё пишется в журнал администратора</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/actions/users.ts</span></td></tr>
+<tr><td class="num">У-A4</td><td><b>Рассылает письмо сегменту</b><div class="tnote">Самое опасное действие в админке</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/actions/crm.ts:353</span></td></tr>
+<tr><td class="num">У-A5</td><td><b>Смотрит журнал безопасности</b><div class="tnote">Ни фильтра, ни выгрузки</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/(chrome)/audit</span></td></tr>
+<tr><td class="num">У-A6</td><td><b>Включает и выключает функции, проверяет ботов</b></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/actions/features.ts:109</span></td></tr>
+<tr><td class="num">У-A7</td><td><b>Публикует новую редакцию юридического документа</b></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/(chrome)/legal/actions.ts</span></td></tr>
+<tr><td class="num">У-A8</td><td><b>Смотрит здоровье сервера</b><div class="tnote">Дублируется экраном «Техника» панели, там честнее</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/admin/health</span></td></tr>
+<tr><td class="num">У-A9</td><td><b>Смотрит сводку по базе</b><div class="tnote">Только смотреть</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/(chrome)/system</span></td></tr>
+<tr><td class="num">У-A10</td><td><b>Смотрит, кто просил какую функцию</b><div class="tnote">Источник только приложение; с веба сигнала нет</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">admin/(chrome)/feature-interest</span></td></tr>
+<tr><td class="num">У-A11</td><td><b>Разбирает заказы бумажного ежедневника</b><div class="tnote">Статус сменить негде; две кнопки без обработчиков</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">admin/(chrome)/orders/page.tsx:92,163</span></td></tr>
+<tr><td class="num">У-A12</td><td><b>Смотрит, кто заходил на сайт</b><div class="tnote">Только смотреть</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/(chrome)/visitors</span></td></tr>
+<tr><td class="num">У-A13</td><td><b>Дёргает служебные ручки без экрана</b><div class="tnote">Пять ручек под ADMIN или cron-секрет</div></td><td class="surf">—</td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/admin/{sessions/settle,channel-invites/expire,…}</span></td></tr>
+<tr><td class="num">У-B1</td><td><b>Утро: что требует меня сегодня</b></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/panel/morning</span></td></tr>
+<tr><td class="num">У-B2</td><td><b>Деньги</b><div class="tnote">Одно поле на запись — стоимость инфраструктуры</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">admin/panel/money</span></td></tr>
+<tr><td class="num">У-B3</td><td><b>Продукты: ПРАКТИКА, ЗАПИСКИ, МОМЕНТЫ</b><div class="tnote">ЗАПИСКИ и МОМЕНТЫ — честно «нет данных»: своих серверов нет</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">admin/panel/products</span></td></tr>
+<tr><td class="num">У-B4</td><td><b>Путь и активация</b><div class="tnote">Воронка записи и источники привлечения — «нет данных»</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">admin/panel/funnel</span></td></tr>
+<tr><td class="num">У-B5</td><td><b>Удержание</b><div class="tnote">Причины оттока — «нет данных»: опроса при отмене нет</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">admin/panel/retention</span></td></tr>
+<tr><td class="num">У-B6</td><td><b>Техника</b><div class="tnote">Второе поле на запись — дата учебного восстановления копии</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/panel/tech</span></td></tr>
+<tr><td class="num">У-B7</td><td><b>Качество данных</b><div class="tnote">Чему из показанного можно верить</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/panel/quality</span></td></tr>
+<tr><td class="num">У-B8</td><td><b>Библиотека компонентов</b><div class="tnote">Служебный: контракт состояний на синтетических числах</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">admin/panel/components</span></td></tr>
+<tr><td class="num">У-B9</td><td><b>Обновляет экран руками</b><div class="tnote">Сброс кеша только этого экрана</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/admin/panel/handler.ts</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="visitor">
+  <div class="sechead">
+    <div class="eyebrow">05 · Посетитель</div>
+    <h2>5 путей</h2>
+    <p class="lede">Только свои: вход, документы и регистрация посетителя — это те же пути специалиста, они не дублируются. Разбора нет.</p>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">П1</td><td><b>Читает лендинг и решается</b><div class="tnote">Шесть кнопок, все ведут на вход специалиста. Двери «я клиент» нет</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">app/page.tsx</span></td></tr>
+<tr><td class="num">П2</td><td><b>Попадает в молчаливую перепись посетителей</b><div class="tnote">Отпечаток устройства, кука на 400 дней</div></td><td class="surf">веб</td><td><span class="chip ok">целиком</span></td><td><span class="mono">components/AnalyticsProvider.tsx</span></td></tr>
+<tr><td class="num">П3</td><td><b>Читает блог</b><div class="tnote">Из статьи нет перехода в продукт; шапка от бумажного ежедневника</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">app/blog · lib/blog-data.ts</span></td></tr>
+<tr><td class="num">П4</td><td><b>Заказывает бумажный ежедневник</b><div class="tnote">Подтверждения не получает, отследить заказ не может</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">app/paperdiary · app/actions.ts:26</span></td></tr>
+<tr><td class="num">П5</td><td><b>Читает юридические документы до регистрации</b><div class="tnote">«Условия практики» и «Профессиональное соглашение» — пустые заглушки</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">app/legal/*</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="integr">
+  <div class="sechead">
+    <div class="eyebrow">06 · Интеграции и фон</div>
+    <h2>26 путей, где вторая сторона не человек</h2>
+    <p class="lede">Календари, банк, единый вход, приёмник событий и тринадцать фоновых процессов. Ломается редко, но тихо: у этих путей нет человека, который пожалуется.</p>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:300px">Путь</th><th style="width:118px">Состояние</th><th style="min-width:200px">Адрес в коде</th></tr></thead><tbody>
+<tr><td class="num">И1</td><td><b>Подключение Google Календаря</b><div class="tnote">Отказные ветки разведены честно</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/google/connect</span></td></tr>
+<tr><td class="num">И2</td><td><b>Подключение Яндекс-календаря по CalDAV</b><div class="tnote">Пароль приложения хранится у нас</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/yandex/connect</span></td></tr>
+<tr><td class="num">И3</td><td><b>Выгрузка сессий в чужой календарь</b><div class="tnote">Срабатывает на создание, перенос и отмену</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/calendar/auto-sync.ts:72</span></td></tr>
+<tr><td class="num">И4</td><td><b>Чтение чужих событий, чтобы не назначить поверх</b><div class="tnote">Вебхуков нет — опрос по требованию</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/calendar/normalized-event.ts</span></td></tr>
+<tr><td class="num">И5</td><td><b>Отключение календаря</b><div class="tnote">Выгруженные события остаются в чужом календаре</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">diary/actions/settings.ts:210</span></td></tr>
+<tr><td class="num">И6</td><td><b>Отладка: что реально отдаёт провайдер</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/debug</span></td></tr>
+<tr><td class="num">И7</td><td><b>Оплата подписки</b><div class="tnote">Два терминала: сайт и приложение</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/payments/create</span></td></tr>
+<tr><td class="num">И8</td><td><b>Банк сообщает результат — колбэк</b><div class="tnote">Подпись проверяется, переходы идемпотентны</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/payments/callback</span></td></tr>
+<tr><td class="num">И9</td><td><b>Возвраты</b><div class="tnote">Статус принимаем, инициировать возврат из кода нельзя</div></td><td><span class="chip half">заявлено</span></td><td><span class="mono">lib/tinkoff.ts</span></td></tr>
+<tr><td class="num">И10</td><td><b>Состояние подписки</b><div class="tnote">Одно правило на веб и приложение</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/billing/status.ts</span></td></tr>
+<tr><td class="num">И11</td><td><b>Сверка с выпиской банка</b><div class="tnote">Код написан, не вызывается ниоткуда</div></td><td><span class="chip">пути нет</span></td><td><span class="mono">lib/analytics/reconciliation.ts:37</span></td></tr>
+<tr><td class="num">И12</td><td><b>Единый вход СИМПАС</b><div class="tnote">Включается ключом; по умолчанию дверь не переключена</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/auth/simpasid.ts</span></td></tr>
+<tr><td class="num">И13</td><td><b>Приёмник событий чужих продуктов</b><div class="tnote">Выключен флагом по умолчанию</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/ingest</span></td></tr>
+<tr><td class="num">И14</td><td><b>Сторож вебхука Telegram, каждые 5 минут</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">instrumentation.ts:25</span></td></tr>
+<tr><td class="num">И15</td><td><b>Напоминания о встрече, каждые 15 минут</b><div class="tnote">Дважды при двух каналах; в MAX без ссылки</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/cron/reminders.ts</span></td></tr>
+<tr><td class="num">И16</td><td><b>Утренний дайджест специалисту</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/digest.ts</span></td></tr>
+<tr><td class="num">И17</td><td><b>Еженедельная сводка специалисту</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/digest.ts</span></td></tr>
+<tr><td class="num">И18</td><td><b>Вопрос о самочувствии после встречи</b><div class="tnote">Выключен по умолчанию; ответ никто не читает</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/cron/post-session.ts</span></td></tr>
+<tr><td class="num">И19</td><td><b>Через 2 часа: спасибо за встречу и ближайшее время</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/post-session-cascade.ts</span></td></tr>
+<tr><td class="num">И20</td><td><b>Через неделю без новой записи</b><div class="tnote">Одноразовое, второго письма нет</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/post-session-cascade.ts</span></td></tr>
+<tr><td class="num">И21</td><td><b>Напоминание об оплате перед встречей</b><div class="tnote">Система не знает, оплачено ли</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/cron/payment-reminders.ts</span></td></tr>
+<tr><td class="num">И22</td><td><b>Отложенные сообщения клиентам</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/scheduled-messages.ts</span></td></tr>
+<tr><td class="num">И23</td><td><b>Снимок времени ответа приложения</b><div class="tnote">Кормит экран «Техника»</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/response-time.ts</span></td></tr>
+<tr><td class="num">И24</td><td><b>Срок хранения аналитики: 180 дней</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/analytics-retention.ts</span></td></tr>
+<tr><td class="num">И25</td><td><b>Регистрация вебхука MAX при старте</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">instrumentation.ts:141</span></td></tr>
+<tr><td class="num">И26</td><td><b>Закрытие прошедших сессий и истечение приглашений</b><div class="tnote">Ручки под внешний планировщик, расписания в коде нет</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/admin/sessions/settle</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="dead">
+  <div class="sechead">
+    <div class="eyebrow">07 · Построено, но не существует</div>
+    <h2>Шесть таблиц в базе, которых для человека нет</h2>
+    <p class="lede">Заготовки Горизонта 2 поставили в схему заранее. К ним не обращается ни один экран и почти ни одна строка кода. Это не дефект — это незаконченное решение, и оно должно быть видно, а не забыто.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:180px">Таблица</th><th style="min-width:200px">Что должна была делать</th><th style="width:150px">Обращений в коде</th></tr></thead>
+      <tbody>
+        <tr><td><span class="mono">TherapyGoal</span></td><td>Цели терапии по клиенту</td><td><span class="chip">ни одного</span></td></tr>
+        <tr><td><span class="mono">ClientRisk</span></td><td>Отметки риска по клиенту</td><td><span class="chip">ни одного</span></td></tr>
+        <tr><td><span class="mono">ClientAssessment</span></td><td>Диагностика и её динамика</td><td><span class="chip">ни одного</span></td></tr>
+        <tr><td><span class="mono">ClientCheckIn</span></td><td>Чекины клиента между встречами</td><td><span class="chip">ни одного</span></td></tr>
+        <tr><td><span class="mono">Homework</span></td><td>Домашние задания клиенту</td><td><span class="chip half">только чтение</span><div class="tnote">Читается в <span class="mono">diary/actions/sessions.ts:380</span>, не записывается нигде</div></td></tr>
+        <tr><td><span class="mono">DiaryQuestionnaire</span></td><td>Анкета клиента</td><td><span class="chip half">одно место</span><div class="tnote"><span class="mono">diary/actions/clients.ts:130</span></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ask" style="margin-top:24px">
+    <b>Тот же класс, что и лист ожидания.</b> Заявка клиента, которому не подошло время, тоже ложится в таблицу — и тоже не показана ни на одном экране. Разница одна: клиенту при этом обещают, что специалист её увидит. Мёртвая таблица без обещания — просто незаконченная работа; мёртвая таблица с обещанием — уже неправда.
+  </div>
+</section>
+
+<section id="later">
+  <div class="sechead">
+    <div class="eyebrow">08 · Отложено</div>
+    <h2>Что не вошло и почему — чтобы не потерялось</h2>
+    <p class="lede">Каждый пункт здесь требует нового экрана, новой настройки или продуктового решения, поэтому он не попадает в правки «между делом». Список не закрывается сам собой: он живёт здесь, пока по нему не принято решение.</p>
+  </div>
+
+  <div class="later">
+    <div class="it"><div class="n">О1</div><div><div class="t">Специалист не может выгрузить свою практику и удалить аккаунт</div><div class="d">Разделы «Безопасность» и «Экспорт данных» были в настройках и убраны как пустые. Удаление аккаунта сегодня умеет только администратор. Продукт зовёт «перенесите практику к нам» и не даёт её забрать.</div></div></div>
+    <div class="it"><div class="n">О2</div><div><div class="t">Тихие часы зашиты в коде</div><div class="d">С 21:00 до 09:00 по поясу практики, константой. Специалист их не видит и не двигает: работающий до двадцати двух не может предупредить клиента в четверть десятого.</div></div></div>
+    <div class="it"><div class="n">О3</div><div><div class="t">Лист ожидания: обещание без экрана</div><div class="d">«Заявка отправлена. Специалист увидит ваши пожелания по времени» — а экрана заявок нет нигде: ни в кабинете, ни в приложении, ни в админке.</div></div></div>
+    <div class="it"><div class="n">О4</div><div><div class="t">Слово клиента, написанное боту, не доходит никуда</div><div class="d">В Telegram обработчика обычного текста нет вовсе, в MAX человеку отвечают списком команд. «Заболел, не смогу завтра» не увидит никто.</div></div></div>
+    <div class="it"><div class="n">О5</div><div><div class="t">Отмена встречи без переспроса и без отката</div><div class="d">Переход по ссылке сразу снимает встречу. Кнопка стоит рядом с «Перенести». Вернуть нельзя ничем.</div></div></div>
+    <div class="it"><div class="n">О6</div><div><div class="t">Клиент не может отключить уведомления сам</div><div class="d">Страница подключения обещает «отключить в любой момент». Отвязать канал может только специалист из своего кабинета.</div></div></div>
+    <div class="it"><div class="n">О7</div><div><div class="t">Заказы бумажного ежедневника обрываются с двух сторон</div><div class="d">Посетитель не получает подтверждения и не может отследить заказ. Учредитель видит заявку и не может сменить ей статус — статусы в базе есть, экрана для них нет.</div></div></div>
+    <div class="it"><div class="n">О8</div><div><div class="t">Заблокированному человеку некуда написать</div><div class="d">Экран «доступ закрыт» без формы обращения и без контакта поддержки.</div></div></div>
+    <div class="it"><div class="n">О9</div><div><div class="t">Два юридических документа на сайте — пустые заглушки</div><div class="d">«Условия практики» и «Профессиональное соглашение»: «документ готовится и будет опубликован здесь». Это то, что увидит первый же проверяющий.</div></div></div>
+    <div class="it"><div class="n">О10</div><div><div class="t">Онбординг выбрасывает из мастера</div><div class="d">Шаг «Мессенджер» уводит в интеграции, шаг «Первый клиент» — в импорт, и возврата в мастер нет ни оттуда, ни оттуда.</div></div></div>
+    <div class="it"><div class="n">О11</div><div><div class="t">Сверка платежей с выпиской банка написана и не вызывается</div><div class="d">Код есть, пути пользователя нет: ни экрана, ни маршрута, ни задачи по расписанию.</div></div></div>
+    <div class="it"><div class="n">О12</div><div><div class="t">Истечение подписки без продления не отслеживает никто</div><div class="d">Отток виден только по возврату денег. Человек, который просто не продлил, в цифрах не появляется.</div></div></div>
+    <div class="it"><div class="n">О13</div><div><div class="t">Отключение календаря не убирает выгруженные события</div><div class="d">Удаление привязано к отмене конкретной встречи, а не к разрыву интеграции. После отключения чужой календарь остаётся заполненным.</div></div></div>
+    <div class="it"><div class="n">О14</div><div><div class="t">Шесть таблиц Горизонта 2 стоят в базе мёртвыми</div><div class="d">Раздел 07. Решить: доводить, убирать из схемы или оставить с честной пометкой.</div></div></div>
+    <div class="it"><div class="n">О15</div><div><div class="t">Веб и приложение разошлись</div><div class="d">Импорт практики и календари — только в вебе. Свободное сообщение клиенту, отложенные сообщения, лента уведомлений и согласие на аналитику — только в приложении. Оплата подписки с телефона уводит в браузер. Документы для клиентов на телефоне только читаются.</div></div></div>
+    <div class="it"><div class="n">О16</div><div><div class="t">С сайта нет двери «я клиент»</div><div class="d">Шесть кнопок лендинга ведут на вход специалиста. Клиент попадает в продукт только по ссылке психолога. Блог при этом не ведёт в продукт вовсе — у него шапка и подвал от бумажного ежедневника.</div></div></div>
+  </div>
+</section>
+
+<footer>
+  Реестр собран 15.09.2026 по коду ветки <code>claude/new-session-pgnybh</code>. Живой документ: путь, который появился или закрылся, правится здесь же. Подробные разборы лежат рядом — <a href="2026-09-10-put-praktiki.html">карта пути ПРАКТИКИ</a> и <a href="2026-09-14-put-klienta.html">путь клиента</a>. Старый чек-лист <code>docs/beta-mvp-cjm-checklist.md</code> оставлен как история беты и этим реестром заменён.
+</footer>
+
+</div>

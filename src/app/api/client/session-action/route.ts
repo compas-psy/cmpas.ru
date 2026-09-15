@@ -58,12 +58,24 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'confirm') {
-        if (session.status !== 'cancelled') {
-            await db.diarySession.update({
-                where: { id: session.id },
-                data: { status: 'confirmed' },
-            });
+        // ОТМЕНЁННУЮ ВСТРЕЧУ НЕЛЬЗЯ ПОДТВЕРДИТЬ — И НЕЛЬЗЯ СКАЗАТЬ, ЧТО МОЖНО.
+        //
+        // Статус здесь справедливо не менялся, но человеку всё равно
+        // показывали «Встреча подтверждена. Информация уже появилась у
+        // специалиста». Клиент, нажавший «Подтверждаю» в старом сообщении
+        // после того, как специалист отменил встречу, уходил с экрана
+        // уверенным, что его ждут, — и приходил.
+        if (session.status === 'cancelled') {
+            return resultPage(
+                'Встреча отменена',
+                'Эту встречу отменили, подтверждать нечего. Свяжитесь со специалистом, чтобы записаться заново.',
+                'danger',
+            );
         }
+        await db.diarySession.update({
+            where: { id: session.id },
+            data: { status: 'confirmed' },
+        });
         const date = session.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
         await createNotification({
             psychologistId: session.psychologistId,

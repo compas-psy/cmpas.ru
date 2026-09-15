@@ -20,6 +20,7 @@ import { autoDeleteSessionFromCalendars } from '@/lib/calendar/auto-sync';
 import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancellation';
 import { consumeClientChannelInvite, channelInviteFailureMessage } from '@/lib/channel-binding';
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
+import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
 import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-messages';
 import { htmlToPlain, extractLinksForButtons } from '@/lib/messaging/format';
@@ -385,14 +386,28 @@ async function handleSessions(userId: number) {
 
     const client = await db.diaryClient.findFirst({ where: { maxChatId: mid } });
     if (client) {
+        // Всё предстоящее, а не только подтверждённое: только что созданная
+        // запись ждёт подтверждения, и человек, спросивший про свои встречи
+        // через минуту после записи, слышал «у вас нет предстоящих записей».
         const sessions = await db.diarySession.findMany({
-            where: { clientId: client.id, status: 'confirmed', date: { gte: new Date() } },
+            where: { clientId: client.id, status: { in: ['pending', 'confirmed'] }, date: { gte: new Date() } },
             orderBy: [{ date: 'asc' }, { time: 'asc' }]
         });
         if (!sessions.length) return sendMaxMessage(userId, 'У вас нет предстоящих записей.');
-        let msg = 'Ваши записи:\n\n';
-        sessions.forEach(s => { msg += `${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\n\n`; });
-        return sendMaxMessage(userId, msg);
+
+        // Каждая встреча отдельным сообщением со своими тремя действиями:
+        // адреса берутся оттуда же, откуда их берут напоминания и сообщение
+        // о записи, — иначе они однажды разойдутся.
+        for (const s of sessions) {
+            const state = s.status === 'confirmed' ? 'Подтверждена' : 'Ожидает подтверждения';
+            const text = `${format(s.date, 'dd.MM.yyyy')} в ${s.time}\n${s.format === 'offline' ? 'Очно' : 'Онлайн'}\nСостояние: ${state}`;
+            const rows = sessionActionButtons(
+                { psychologistId: s.psychologistId, clientId: s.clientId, sessionId: s.id, date: s.date },
+                { includeConfirm: s.status !== 'confirmed' },
+            );
+            await sendMaxMessage(userId, text, rows);
+        }
+        return;
     }
 
     return sendMaxMessage(userId, 'Аккаунт не найден. Перейдите по ссылке от вашего психолога.');
@@ -407,7 +422,11 @@ async function handleHelp(userId: number) {
             [[{ text: 'Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: 'Календарь', url: `${APP_URL}/diary/calendar` }]]
         );
     }
-    return sendMaxMessage(userId, 'Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n/connect — привязать аккаунт психолога', [[{ text: 'Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
+    // Это ветка для КЛИЕНТА. Здесь предлагали «Открыть ПРАКТИКУ» и команду
+    // «/connect — привязать аккаунт психолога»: и то и другое ведёт в кабинет
+    // специалиста, куда клиенту входить нечем. Человеку, пришедшему к своему
+    // психологу, показывали продукт, который продаётся психологу.
+    return sendMaxMessage(userId, 'Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n\nЗаписаться и перенести встречу можно по ссылке, которую присылает ваш специалист.');
 }
 
 async function handleShareLink(userId: number) {
@@ -497,6 +516,16 @@ async function handleCallback(callbackId: string, userId: number, payload: strin
 
         await db.diarySession.update({ where: { id: sessionId }, data: { status: 'cancelled' } });
         autoDeleteSessionFromCalendars(session.psychologistId, session.id).catch(console.error);
+        // Отмена по ссылке предлагает освободившийся час листу ожидания, а
+        // отмена этой же встречи кнопкой в MAX — нет. Одно действие человека
+        // имело два разных последствия в зависимости от того, куда он нажал.
+        // Импорт динамический не для красоты: waitlist-notify тянет за собой
+        // publicBaseUrl, а тот — next-auth, и статический импорт роняет тесты
+        // бота с «Cannot find module next/server». Тем же приёмом это решено
+        // в src/lib/telegram/process-update.ts.
+        import('@/lib/waitlist-notify')
+            .then((m) => m.notifyWaitlistOnFreedSlot(session.psychologistId, session.date, session.time))
+            .catch(console.error);
         await sendMaxMessage(userId, `Сессия отменена.\n\nДата: ${format(session.date, 'dd.MM.yyyy')} в ${session.time}`);
 
         const psyMaxId = (session.psychologist as any)?.maxChatId;
@@ -614,7 +643,7 @@ export async function handleMaxUpdate(update: MaxUpdate) {
                         [{ text: 'Мои сессии', payload: '/sessions' }],
                     ]);
                 } else {
-                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои сессии\n/help — помощь', [[{ text: 'Открыть ПРАКТИКУ', url: `${APP_URL}/diary` }]]);
+                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои записи\n/help — помощь');
                 }
             }
         }

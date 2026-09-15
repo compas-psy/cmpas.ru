@@ -33,6 +33,8 @@ function ClientCalendar() {
         | null
     >(null);
     const [contextLoading, setContextLoading] = useState(true);
+    /** Ссылка `?c=` была и не сработала: срок вышел либо адрес побит. */
+    const [linkExpired, setLinkExpired] = useState(false);
     const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
     const [pastSessions, setPastSessions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -88,8 +90,14 @@ function ClientCalendar() {
                         }
                         return;
                     }
+                    // Ссылка была, и она не сработала: срок вышел либо адрес
+                    // побит. Для человека это один и тот же вывод — нужна
+                    // новая ссылка, — и сказать это честнее, чем показывать
+                    // тот же текст, что при опечатке в адресе.
+                    if (!cancelled) setLinkExpired(true);
                 } catch (e) {
                     console.error('Failed to resolve client link token', e);
+                    if (!cancelled) setLinkExpired(true);
                 }
             }
         }
@@ -167,7 +175,18 @@ function ClientCalendar() {
     if (!clientContext) {
         return (
             <div className="practice-booking-theme flex flex-col items-center justify-center min-h-screen p-4 bg-[var(--booking-paper)]">
-                <p className="text-[var(--booking-muted)] text-center">Пожалуйста, откройте приложение через бота или перейдите по персональной ссылке от психолога.</p>
+                {/* ПРИЧИНА, А НЕ ОДИН ТЕКСТ НА ВСЕ СЛУЧАИ.
+                    Ссылка на «Мои записи» живёт 30 дней. По истечении срока
+                    человек видел ровно то же, что при опечатке в адресе, —
+                    и не мог понять, сломалось у него что-то или просто
+                    прошло время. Тот же дефект разбирали 09.09 на
+                    приглашениях: там погашенная ссылка теперь называет
+                    причину и даёт следующий шаг. */}
+                <p className="text-[var(--booking-muted)] text-center">
+                    {linkExpired
+                        ? 'Ссылка больше не действует — она живёт 30 дней. Попросите специалиста прислать новую: все ваши записи останутся на месте.'
+                        : 'Пожалуйста, откройте приложение через бота или перейдите по персональной ссылке от психолога.'}
+                </p>
             </div>
         );
     }

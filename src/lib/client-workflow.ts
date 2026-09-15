@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { messageLink } from '@/lib/messaging/format';
 import { paymentQrSource, paymentQrPng } from '@/lib/messaging/payment-qr';
 import { extractFirstName } from '@/lib/person-name';
+import { documentDisplayTitle } from '@/lib/documents/display-title';
 import { appSecret, safeEqualHex } from '@/lib/app-secret';
 import { paymentInstructionText, paymentInstructionVariants, type PaymentInstructionVariants, type PaymentSettingsForMessage } from '@/lib/messaging/payment-instruction';
 
@@ -553,7 +554,15 @@ export function buildSessionClientMessage(params: {
     if (params.documentLinks?.length) {
         lines.push('', 'Записываясь на консультацию, вы соглашаетесь с условиями договора:');
         for (const d of params.documentLinks) {
-            lines.push(link(d.link, d.title));
+            // ОДНО НАЗВАНИЕ ДОКУМЕНТА НА ВЕСЬ ПУТЬ.
+            //
+            // Здесь стояло `d.title` как есть — то есть иногда имя файла
+            // вида «Информированное_согласие_оферта___Илья_Мартынов.pdf».
+            // Сообщение новому клиенту причёсывало название одной функцией,
+            // страница документа — другой, а это сообщение не причёсывало
+            // вовсе: один документ, один человек, один маршрут и три разных
+            // имени по дороге.
+            lines.push(link(d.link, documentDisplayTitle(d.title)));
         }
     }
 
