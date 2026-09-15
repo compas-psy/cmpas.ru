@@ -16,7 +16,7 @@ export default function BlogPage() {
         url: 'https://cmpas.ru/blog',
         publisher: {
             '@type': 'Organization',
-            name: 'Compas',
+            name: 'ПРАКТИКА',
             url: 'https://cmpas.ru',
         },
     };

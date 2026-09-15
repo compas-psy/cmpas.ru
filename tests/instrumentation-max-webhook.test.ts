@@ -5,7 +5,15 @@
 // secret, even after a deploy or the admin route had set one correctly —
 // quietly undoing the fail-closed protection in
 // src/app/api/max/webhook/route.ts. Also verifies the domain migration to
-// platform-api2.max.ru and the DELETE ?url= requirement.
+// platform-api2.max.ru.
+//
+// 15.09.2026 (Ф14, Ф15 книги «Витрина и машинное отделение»): постановка
+// подписки переехала в src/lib/max/webhook.ts и стала идемпотентной. Раньше
+// при каждом запуске сначала шёл DELETE, потом POST — и между ними было
+// мгновение, в котором подписки не существовало; события этого мгновения
+// терялись. Проверка на DELETE?url= заменена проверкой нового правила:
+// существующую подписку не трогают, отсутствующую ставят. Требование
+// «POST несёт secret» осталось нетронутым — оно и было смыслом этого файла.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -28,6 +36,10 @@ vi.mock('./lib/cron/response-time', () => ({ flushResponseTimeWindow: vi.fn() })
 vi.mock('./lib/cron/analytics-retention', () => ({ pruneOldAnalyticsEvents: vi.fn() }));
 
 const ORIGINAL_ENV = { ...process.env };
+
+/** Методы запросов по порядку. Отдельной функцией — её зовут три проверки. */
+const callMethods = (mock: { mock: { calls: unknown[][] } }): Array<string | undefined> =>
+    mock.mock.calls.map((call) => (call[1] as { method?: string } | undefined)?.method);
 
 describe('instrumentation.ts — регистрация MAX webhook на старте', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
@@ -63,7 +75,9 @@ describe('instrumentation.ts — регистрация MAX webhook на ста�
         await register();
         await vi.advanceTimersByTimeAsync(10000);
 
-        const postCall = fetchMock.mock.calls.find(([, opts]: any) => opts?.method === 'POST');
+        const postCall = fetchMock.mock.calls.find(
+            (call) => (call[1] as { method?: string } | undefined)?.method === 'POST',
+        ) as [string, { body: string }] | undefined;
         expect(postCall).toBeDefined();
         const [url, opts] = postCall!;
         expect(url).toBe('https://platform-api2.max.ru/subscriptions');
@@ -71,16 +85,36 @@ describe('instrumentation.ts — регистрация MAX webhook на ста�
         expect(body.secret).toBe('webhook-secret-value');
     });
 
-    it('DELETE на старте передаёт ?url= удаляемой подписки, на platform-api2.max.ru', async () => {
+    it('подписка сначала проверяется, а не снимается — в окне между DELETE и POST терялись события', async () => {
         const { register } = await import('../src/instrumentation');
         await register();
         await vi.advanceTimersByTimeAsync(10000);
 
-        const deleteCall = fetchMock.mock.calls.find(([, opts]: any) => opts?.method === 'DELETE');
-        expect(deleteCall).toBeDefined();
-        const [url] = deleteCall!;
-        expect(url.startsWith('https://platform-api2.max.ru/subscriptions?')).toBe(true);
-        expect(new URL(url).searchParams.get('url')).toBe('https://cmpas.ru/api/max/webhook');
+        const methods = callMethods(fetchMock);
+        expect(methods, 'снятие подписки вернулось').not.toContain('DELETE');
+        expect(methods[0], 'постановка идёт до проверки').toBe('GET');
+    });
+
+    it('существующую подписку не переставляют', async () => {
+        // Иначе каждый запуск и каждый тик сторожа — лишняя запись у
+        // провайдера и лишний шанс остаться без подписки на ровном месте.
+        fetchMock.mockImplementation(async (_url: string, opts?: { method?: string }) => {
+            if (!opts || opts.method === 'GET') {
+                return {
+                    ok: true,
+                    json: async () => ({ subscriptions: [{ url: 'https://cmpas.ru/api/max/webhook' }] }),
+                };
+            }
+            return { ok: true, json: async () => ({ success: true }) };
+        });
+
+        const { register } = await import('../src/instrumentation');
+        await register();
+        await vi.advanceTimersByTimeAsync(10000);
+
+        const methods = callMethods(fetchMock);
+        expect(methods).toContain('GET');
+        expect(methods).not.toContain('POST');
     });
 
     it('ни один вызов не идёт на устаревший botapi.max.ru', async () => {
@@ -88,7 +122,7 @@ describe('instrumentation.ts — регистрация MAX webhook на ста�
         await register();
         await vi.advanceTimersByTimeAsync(10000);
 
-        const urls = fetchMock.mock.calls.map(([url]: any) => url as string);
+        const urls = fetchMock.mock.calls.map((call) => String(call[0]));
         expect(urls.length).toBeGreaterThan(0);
         expect(urls.every((u) => !u.includes('botapi.max.ru'))).toBe(true);
     });
