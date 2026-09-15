@@ -207,12 +207,35 @@ export async function toggleIntegrationSyncFrom(id: string, syncFrom: boolean) {
     return integration;
 }
 
+/**
+ * ОТКЛЮЧИТЬ КАЛЕНДАРЬ. Раньше это не работало ни у кого, кто календарём
+ * пользовался.
+ *
+ * Дефект Ф9 книги «Витрина и машинное отделение». Здесь удалялась только
+ * строка подключения — а на неё жёстко ссылаются строки связи «наша встреча
+ * — событие в чужом календаре» (CalendarSessionLink.integration,
+ * onDelete: Restrict). Связь появляется при первой же выгруженной или
+ * прочитанной встрече, поэтому у всех, кто календарём пользовался, база
+ * отказывала, экран показывал одно слово «Ошибка», и подключение оставалось
+ * на месте навсегда.
+ *
+ * Порядок теперь обратный и в одной транзакции: сначала связи, потом
+ * подключение. Запрет из схемы не снимается намеренно — он и значит «сначала
+ * реши, что делать со связями», а решение принимается здесь.
+ *
+ * ЧЕГО ЭТО НЕ ДЕЛАЕТ. Уже выгруженные события из чужого календаря не
+ * убирает: это развилка 3 той же книги (и П7 книги 3), и ответа учредителя
+ * на неё пока нет. Сегодняшнее поведение — оставить их — сохранено без
+ * изменений; когда ответ будет, выбор встанет ровно сюда, потому что после
+ * удаления связей спрашивать будет уже не о чем.
+ */
 export async function disconnectIntegration(id: string) {
     const psychologistId = await getPsychologistId();
     await requireOwnedCalendarIntegration(psychologistId, id);
-    await db.calendarIntegration.delete({
-        where: { id },
-    });
+    await db.$transaction([
+        db.calendarSessionLink.deleteMany({ where: { integrationId: id } }),
+        db.calendarIntegration.delete({ where: { id } }),
+    ]);
     revalidatePath('/diary/integrations');
 }
 

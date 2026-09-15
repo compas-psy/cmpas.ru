@@ -10,6 +10,10 @@ export async function register() {
         const { flushResponseTimeWindow } = await import('./lib/cron/response-time');
         const { pruneOldAnalyticsEvents } = await import('./lib/cron/analytics-retention');
         const { rescueUndeliveredTelegramUpdates } = await import('./lib/telegram/webhook-watchdog');
+        const { settlePastSessionsForAllPsychologists } = await import('./lib/session-maintenance');
+        const { expireClientChannelInvites } = await import('./lib/channel-binding');
+        const { expireContactIntakeDrafts } = await import('./lib/clients/contact-intake');
+        const { runDailyPaymentReconciliation } = await import('./lib/cron/payment-reconciliation');
         const { runExclusive } = await import('./lib/cron/run-exclusive');
 
         // Подстраховка доставки Telegram — каждые 5 минут.
@@ -133,6 +137,92 @@ export async function register() {
                 await pruneOldAnalyticsEvents();
             } catch (error) {
                 console.error('[CRON] Ошибка удаления устаревших аналитических событий:', error);
+            }
+        }));
+
+        // ЗАКРЫТИЕ ПРОШЕДШИХ ВСТРЕЧ — каждые 15 минут.
+        //
+        // Дефект Ф12 книги «Витрина и машинное отделение». Встреча
+        // становится «прошла» через 15 минут после конца — но только когда
+        // об этом попросят, а просило ровно приложение: два мобильных
+        // запроса и никто больше. У специалиста, работающего в браузере,
+        // встречи не закрывались никогда.
+        //
+        // Последствие было дальше по цепочке: письмо «прошла неделя, а
+        // новой записи нет» ищет встречи со статусом «прошла» — и для
+        // веб-специалиста не уходило вовсе. Выглядело это не как поломка, а
+        // как будто клиенты не возвращаются.
+        //
+        // Пятнадцать минут — тот же период, что у напоминаний, и ровно
+        // столько же длится отсрочка перед закрытием: задержка получается
+        // не больше получаса. Мобильные запросы свой вызов сохраняют: он
+        // дешёвый и делает список в приложении точным сразу, а не через
+        // четверть часа.
+        cron.schedule('*/15 * * * *', runExclusive('settle-past-sessions', async () => {
+            try {
+                // Окно напоминаний — двое суток. Закрываем встречу любой
+                // давности, а напоминаем только про недавние: у того, кто
+                // работает в вебе, к этому дню накопились месяцы незакрытых
+                // встреч, и первый же проход прислал бы столько же
+                // напоминаний «самое время для заметки» про встречи
+                // трёхмесячной давности. Приложение зовёт ту же функцию без
+                // окна — его поведение не меняется.
+                const result = await settlePastSessionsForAllPsychologists(new Date(), { nudgeWindowDays: 2 });
+                if (result.completed || result.noteNudges || result.unpaidNudges) {
+                    console.log(
+                        `[CRON] Закрыто прошедших встреч: ${result.completed}; ` +
+                        `напоминаний о заметке: ${result.noteNudges}; об оплате: ${result.unpaidNudges}`,
+                    );
+                }
+            } catch (error) {
+                console.error('[CRON] Ошибка закрытия прошедших встреч:', error);
+            }
+        }));
+
+        // ПОГАШЕНИЕ ИСТЁКШИХ ПРИГЛАШЕНИЙ И ЧЕРНОВИКОВ — раз в час.
+        //
+        // Дефект Ф13 той же книги. Черновик, который возникает, когда
+        // специалист пересылает боту контакт клиента, держит имя и телефон
+        // живого человека — час, до нажатия кнопки «Завести». Час это
+        // обещание, и держалось оно на чистке, которую не звал никто:
+        // служебная ручка была, вызова к ней не было ни в коде, ни в
+        // выкладке. Значит имя и телефон лежали не час, а всегда.
+        //
+        // Тем же проходом гасятся истёкшие приглашения клиентов в
+        // мессенджер — они жили там же и не гасились по той же причине.
+        cron.schedule('0 * * * *', runExclusive('expire-invites-and-drafts', async () => {
+            try {
+                const invites = await expireClientChannelInvites();
+                const drafts = await expireContactIntakeDrafts();
+                if (invites.expired || drafts) {
+                    console.log(`[CRON] Погашено приглашений: ${invites.expired}; удалено черновиков контактов: ${drafts}`);
+                }
+            } catch (error) {
+                console.error('[CRON] Ошибка погашения истёкших приглашений и черновиков:', error);
+            }
+        }));
+
+        // СВЕРКА С ВЫПИСКОЙ БАНКА — раз в сутки, в 09:10 МСК (06:10 UTC).
+        //
+        // Дефект Ф11 той же книги. Сверка была написана и не вызывалась
+        // ниоткуда. Она по-прежнему ничего не исправляет — только
+        // сравнивает и докладывает человеку (см. подробное объяснение в
+        // src/lib/cron/payment-reconciliation.ts); автоматизирован лишь сам
+        // факт, что сверку сегодня сделали.
+        //
+        // Утро, а не ночь: доклад о расхождении должен попасть человеку в
+        // начало рабочего дня, а не лежать до него непрочитанным. Минута не
+        // нулевая, чтобы не совпадать с остальными суточными задачами.
+        cron.schedule('10 6 * * *', runExclusive('payment-reconciliation', async () => {
+            try {
+                const result = await runDailyPaymentReconciliation();
+                console.log(
+                    `[CRON] Сверка с банком: проверено терминалов ${result.checked}, ` +
+                    `доложено о расхождениях ${result.reported}` +
+                    (result.skipped.length ? `, пропущено: ${result.skipped.join(', ')}` : ''),
+                );
+            } catch (error) {
+                console.error('[CRON] Ошибка сверки с выпиской банка:', error);
             }
         }));
 
