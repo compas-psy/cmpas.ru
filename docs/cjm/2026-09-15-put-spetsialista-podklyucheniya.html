@@ -1,0 +1,840 @@
+<title>Подключения, тишина, бот, справка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<style>
+.chip.half{background:var(--gold-soft); color:var(--gold-ink); border-color:color-mix(in srgb, var(--gold) 40%, transparent)}
+td.num{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); white-space:nowrap}
+.tnote{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
+.mx td{text-align:center}
+.mx td:nth-child(1),.mx td:nth-child(2){text-align:left}
+.mx .y{color:var(--forest); font-weight:700}
+.mx .n{color:var(--alarm); font-weight:700}
+.mx .d{color:var(--faint)}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">15.09.2026 · на утверждение</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Разбор пути · специалист, книга 3 из 3</div>
+  <h1>Подключения, тишина, бот, справка</h1>
+  <p class="lede" style="margin-top:16px">Двадцать один путь вокруг того, как ПРАКТИКА разговаривает. Календари и мессенджеры, которые специалист к себе подключает; настройки, которыми он решает, что и когда будет уходить ему и его клиентам; бот, в котором он смотрит день, не открывая кабинет; справка, где он ищет ответ, когда что-то непонятно.</p>
+
+  <div class="ask">
+    <b>Две первые книги были про работу. Эта — про то, как работа доносится.</b> Ошибка здесь не мешает записать клиента — она тихо решает, узнает ли о чём-то человек. Поэтому проверка «молчание» в этой книге главная, а «один источник» падает чаще всего: правила разговора написаны и объяснены в отдельных местах, но зовут их не все.
+    <br><br>Десять расхождений. Тяжелее всего одно: <b>на экране уведомлений пять тумблеров ничего не выключают и пять шаблонов никуда не уходят — а кнопка «Отправить тест» присылает как раз шаблон</b> и тем убеждает человека, что всё работает.
+  </div>
+
+  <nav class="toc">
+    <a href="#map"><span>01</span>Карта разговора</a>
+    <a href="#matrix"><span>02</span>Двадцать один путь</a>
+    <a href="#frames"><span>03</span>Каркасы</a>
+    <a href="#defects"><span>04</span>Дефекты</a>
+    <a href="#forks"><span>05</span>Развилки</a>
+    <a href="#plan"><span>06</span>Порядок работ</a>
+  </nav>
+</header>
+
+<section id="map">
+  <div class="sechead">
+    <div class="eyebrow">01 · Карта разговора</div>
+    <h2>Кто, кому и через что говорит</h2>
+    <p class="lede">Красной рамкой — места, где человек остаётся без ответа, без выхода или с настройкой, которая ничего не меняет. Номер ведёт в раздел 04.</p>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">подключает</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Интеграции</div>
+        <div class="what">Google — по кнопке, Яндекс — паролем приложения</div>
+        <div class="note">Оба подключаются, проверяют связь до сохранения и честно называют, что Яндекс требует не обычный пароль, а пароль приложения.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Где лежит доступ</div>
+        <div class="what">Пароль и токены — как есть</div>
+        <div class="note">В схеме три колонки помечены словом «encrypted». Шифрования в продукте нет ни одного.</div>
+        <div class="tags"><a class="chip" href="#p8">П8</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Отключает календарь</div>
+        <div class="what">Строка удаляется, события остаются</div>
+        <div class="note">Ни переспроса, ни уборки: встречи практики остаются в чужом календаре навсегда, и убрать их оттуда продукт уже не сможет — связи больше нет.</div>
+        <div class="tags"><a class="chip" href="#p7">П7</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Мессенджер себе</div>
+        <div class="what">Telegram и MAX, оба отвязываются</div>
+        <div class="note">Привязка идёт через бота и подтверждается в кабинете; отвязка чистит поле. Основной канал после отвязки выбирается заново — это правило написано в одном месте и работает.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">настраивает</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Уведомления</div>
+        <div class="what">10 тумблеров, 5 шаблонов, «Отправить тест»</div>
+        <div class="note">Из десяти тумблеров работают пять: весь верхний раздел «Уведомления психологу» мёртв целиком. Пять шаблонов читает только кнопка теста.</div>
+        <div class="tags"><a class="chip" href="#p1">П1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Тест</div>
+        <div class="what">Приходит ровно то, что человек написал</div>
+        <div class="note">И это худшая часть: тест подтверждает, что шаблон работает. Клиенту уйдёт совсем другой текст, собранный в коде.</div>
+        <div class="tags"><a class="chip" href="#p1">П1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Дайджест</div>
+        <div class="what">Утром список дня, в понедельник итоги</div>
+        <div class="note">Час считается по поясу практики, а не по Москве: во Владивостоке список приходит утром, а не к вечеру. Если встреч нет — молчит.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Тихие часы</div>
+        <div class="what">21:00–09:00, экрана нет</div>
+        <div class="note">Правило есть и объяснено, три задания из четырёх его спрашивают. Самое частое сообщение продукта — напоминание за сутки — не спрашивает.</div>
+        <div class="tags"><a class="chip" href="#p4">П4</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Клиент</div><div class="when">нажал кнопку</div></div>
+    <div class="lane-body">
+      <div class="node msg">
+        <div class="where">Клиент отменил в Telegram</div>
+        <div class="what">Специалисту пишут в Telegram</div>
+        <div class="note">Даже если у специалиста Telegram не привязан, а привязан MAX.</div>
+        <div class="tags"><a class="chip" href="#p3">П3</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node msg">
+        <div class="where">Клиент отменил в MAX</div>
+        <div class="what">Специалисту пишут в MAX</div>
+        <div class="note">Даже если у специалиста MAX не привязан, а привязан Telegram.</div>
+        <div class="tags"><a class="chip" href="#p3">П3</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Что решает канал</div>
+        <div class="what">Не специалист, а клиент</div>
+        <div class="note">Правило «писать туда, откуда человек пришёл последним» написано и применяется везде. Здесь канал берётся из того, в каком мессенджере нажал КЛИЕНТ.</div>
+        <div class="tags"><a class="chip" href="#p3">П3</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Колокольчик в кабинете</div>
+        <div class="what">Получает всё и всегда</div>
+        <div class="note">Это и спасает: полной тишины нет. Но человек смотрит в мессенджер, а не в кабинет, — иначе бы он мессенджер не привязывал.</div>
+        <div class="tags"><span class="chip half">частично</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">спрашивает бота</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">«Мои сессии»</div>
+        <div class="what">Только подтверждённые, и только пять</div>
+        <div class="note">Тот же фильтр, который у клиента нашли и убрали в обоих ботах. В ветке специалиста он остался в обоих же.</div>
+        <div class="tags"><a class="chip" href="#p2">П2</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Имя клиента в сообщении</div>
+        <div class="what">Без экранирования</div>
+        <div class="note">Амперсанд в названии организации-клиента — и Telegram отказывает целиком. Специалист не получает ни дайджеста, ни уведомления и не узнаёт, почему.</div>
+        <div class="tags"><a class="chip" href="#p5">П5</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Справка в боте</div>
+        <div class="what">В MAX есть, в Telegram нет</div>
+        <div class="note">В MAX — команда и две кнопки. В Telegram нет ни <span class="mono">/help</span>, ни кнопки: человек узнаёт о возможностях, только если угадает слово.</div>
+        <div class="tags"><a class="chip" href="#p10">П10</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Ссылка на запись</div>
+        <div class="what">Одной кнопкой из обоих ботов</div>
+        <div class="note">Адрес собирается из общего места, адрес в тексте не повторяется — он уже есть в кнопке.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">не понимает</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Справка в вебе</div>
+        <div class="what">Восемь тем, живой язык</div>
+        <div class="note">Первые шаги, клиенты, расписание, заметки, календари, боты, подписка, частые вопросы. Написана хорошо и по делу.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Справка обещает автопродление</div>
+        <div class="what">«Сохраняем карту, продлеваем каждый месяц»</div>
+        <div class="note">Карта действительно привязывается, её идентификатор сохраняется — и не используется никогда. Ни одного списания продукт не делает.</div>
+        <div class="tags"><a class="chip" href="#p9">П9</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Справка на телефоне</div>
+        <div class="what">Версия и отпечаток подписи</div>
+        <div class="note">«Опишите вопрос в поддержке» — и ни адреса, ни кнопки. Восьми тем справки в приложении нет вовсе.</div>
+        <div class="tags"><a class="chip" href="#p10">П10</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">«Обратитесь в поддержку»</div>
+        <div class="what">Поддержки в продукте нет</div>
+        <div class="note">Фраза встречается в четырёх местах веба, в приложении и на экране блокировки. Адреса нет ни в одном.</div>
+        <div class="tags"><a class="chip" href="#p6">П6</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="matrix">
+  <div class="sechead">
+    <div class="eyebrow">02 · Двадцать один путь</div>
+    <h2>Каждый — через шесть проверок</h2>
+    <p class="lede">Те же шесть вопросов, что в реестре. <span class="mx"><span class="y">да</span></span> — пройдено, <span class="mx"><span class="n">нет</span></span> — нет, <span class="mx"><span class="d">—</span></span> — к этому пути не относится.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table class="mx">
+      <thead><tr>
+        <th style="width:56px">№</th><th style="min-width:230px">Путь</th>
+        <th style="width:78px">Обеща&shy;ние</th><th style="width:70px">Не ту&shy;пик</th><th style="width:82px">Не мол&shy;чит</th>
+        <th style="width:96px">Без мес&shy;сен&shy;джера</th><th style="width:92px">Веб = при&shy;ложе&shy;ние</th><th style="width:88px">Один ис&shy;точник</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="num">E1</td><td>Подключает Google Календарь<div class="tnote">Связь проверяется до сохранения</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">E2</td><td>Подключает Яндекс паролем приложения<div class="tnote">В схеме доступ помечен «encrypted», шифрования нет</div></td><td class="n">нет</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">E3</td><td>Синхронизирует и отключает календарь<div class="tnote">Отключение не убирает уже выгруженные события и ни о чём не предупреждает</div></td><td class="n">нет</td><td class="n">нет</td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">E4</td><td>Привязывает свой Telegram<div class="tnote">В приложении честно сказано, что подключение — в вебе</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">E5</td><td>Привязывает свой MAX</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">E6</td><td>Подключает своего бота или другой мессенджер<div class="tnote">Пути нет: токен один на всех, из окружения</div></td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="d">—</td><td class="d">—</td></tr>
+        <tr><td class="num">E7</td><td>Смотрит витрину видеосервисов<div class="tnote">Помечено «Скоро» — это заявка, а не обман</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">F1</td><td>Настраивает уведомления себе<div class="tnote">Весь раздел «Уведомления психологу» мёртв: четыре тумблера и «за сколько напомнить» не читает никто; тест шлёт шаблон, рассылка — нет</div></td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="n">нет</td></tr>
+        <tr><td class="num">F2</td><td>Включает утренний дайджест и недельную сводку<div class="tnote">Час — по поясу практики; имя клиента уходит без экранирования</div></td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="n">нет</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">F3</td><td>Настраивает уведомления клиентам<div class="tnote">Три тумблера из четырёх настоящие, «Отмена психологом» — нет; все три шаблона мёртвые</div></td><td class="n">нет</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="n">нет</td></tr>
+        <tr><td class="num">F4</td><td>Меняет тихие часы<div class="tnote">21:00–09:00 зашиты; и напоминание за сутки их не спрашивает</div></td><td class="d">—</td><td class="n">нет</td><td class="d">—</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td></tr>
+        <tr><td class="num">G1</td><td>Смотрит ближайшие сессии в боте<div class="tnote">Только подтверждённые и только первые пять</div></td><td class="n">нет</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="n">нет</td></tr>
+        <tr><td class="num">G2</td><td>Открывает кабинет из бота</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">G3</td><td>Получает справку в боте<div class="tnote">В Telegram справки нет вовсе</div></td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="n">нет</td><td class="n">нет</td></tr>
+        <tr><td class="num">G4</td><td>Узнаёт от бота о действиях клиента<div class="tnote">Канал выбирает клиент, а не специалист; имя — без экранирования</div></td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="d">—</td><td class="y">да</td><td class="n">нет</td></tr>
+        <tr><td class="num">H1</td><td>Читает встроенную справку<div class="tnote">В приложении — версия и подпись сборки, восьми тем нет</div></td><td class="n">нет</td><td class="n">нет</td><td class="d">—</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">H2</td><td>Читает журнал изменений<div class="tnote">Сторож: поднялась версия — запись обязана появиться</div></td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">H3</td><td>Читает юридические документы из кабинета<div class="tnote">Два документа из пяти — пустые заглушки (В9)</div></td><td class="n">нет</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">H4</td><td>Решает, помогать ли разработке<div class="tnote">Тумблер есть только в приложении</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">H5</td><td>Отмечает интерес к будущей функции<div class="tnote">С веба сигнал не собирается</div></td><td class="y">да</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">H6</td><td>Обновляет приложение<div class="tnote">Постоянная ссылка есть; о новой версии никто не сообщает</div></td><td class="y">да</td><td class="n">нет</td><td class="n">нет</td><td class="y">да</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">—</td><td><b>Справка обещает автопродление подписки</b><div class="tnote">Относится ко всем путям блока H: карта привязывается, списаний нет</div></td><td class="n">нет</td><td class="n">нет</td><td class="n">нет</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ask" style="margin-top:26px">
+    <b>Что видно из матрицы.</b> «Веб = приложение» падает двенадцать раз из двадцати одного — больше, чем в обеих прошлых книгах вместе. Но это не двенадцать недоделок: подключения и справка сознательно оставлены в вебе, и приложение об этом честно говорит («подключить можно в веб-кабинете»). Настоящая асимметрия здесь одна и обратная привычной: <b>по уведомлениям приложение честнее веба</b> — оно показывает только те пять тумблеров, за которыми стоит настоящая рассылка, и прямо объясняет почему.
+    <br><br>«Один источник» падает шесть раз, и каждый раз одинаково: правило написано, объяснено, покрыто тестами — и рядом живёт место, которое его не спрашивает. Тихие часы, выбор канала, фильтр списка встреч, экранирование имени. Это не разные болезни, а одна.
+  </div>
+</section>
+
+<section id="frames">
+  <div class="sechead">
+    <div class="eyebrow">03 · Каркасы</div>
+    <h2>Как сейчас и как предлагается</h2>
+    <p class="lede">Три места, где изменение текста и есть изменение продукта.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div>
+      <div class="eyebrow" style="margin-bottom:10px">Уведомления · «Напоминание клиенту за 25 часов»</div>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/diary/notifications</span><span></span></div>
+            <div class="wf-h">Напоминание за 25 часов</div>
+            <div class="wf-sub">За день до сессии</div>
+            <div class="wf-row rw"><div class="wf-t">Шаблон сообщения</div><div class="wf-pill">включено</div></div>
+            <div class="wf-card"><div class="wf-meta">Здравствуйте, {clientName}! Напоминаю о встрече {date} в {time}.</div></div>
+            <div class="wf-line s">Переменные: {clientName}, {date}, {time}, {format}, {psyName}, {cancelLink}</div>
+            <div class="wf-row"><div class="wf-btn">Отправить тест</div></div>
+            <div class="wf-note">Тест приходит ровно этим текстом. Клиенту уходит другой — собранный в коде, с кнопками, часовым поясом и обращением по имени.</div>
+            <div class="wf-note">Человек правит шаблон, проверяет тестом, видит свой текст — и уходит уверенным.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/diary/notifications</span><span></span></div>
+            <div class="wf-h">Напоминание за 25 часов</div>
+            <div class="wf-sub">За день до сессии</div>
+            <div class="wf-row rw"><div class="wf-t">Так его увидит клиент</div><div class="wf-pill gold">включено</div></div>
+            <div class="wf-card"><div class="wf-meta">Напоминание о встрече<br><br>Здравствуйте, Ирина! Завтра в 14:00 (Москва, GMT+3) у вас встреча.<br>Формат: онлайн.<br>Ссылка для подключения: Яндекс Телемост<br><br>Пожалуйста, подтвердите встречу кнопкой ниже.</div></div>
+            <div class="wf-row"><div class="wf-btn">Подтверждаю</div><div class="wf-btn">Перенести</div><div class="wf-btn">Отменить</div></div>
+            <div class="wf-row"><div class="wf-btn">Отправить тест себе</div></div>
+            <div class="wf-note">Ровно то, что уйдёт. Ни поля для правки, ни обещания править — пока правка не доходит до рассылки, поле честнее убрать.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="eyebrow" style="margin-bottom:10px">Интеграции · отключение календаря</div>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/diary/integrations</span><span></span></div>
+            <div class="wf-h">Google Календарь</div>
+            <div class="wf-sub">anna@gmail.com · синхронизирован 5 минут назад</div>
+            <div class="wf-row"><div class="wf-btn danger">Отключить</div></div>
+            <div class="wf-line m">↓ нажатие</div>
+            <div class="wf-msg">Google Календарь отключён</div>
+            <div class="wf-note">И всё. Ни вопроса, ни выбора: 64 встречи практики остаются в личном календаре человека — с именами клиентов.</div>
+            <div class="wf-note">Убрать их продукт уже не сможет: доступа больше нет.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/diary/integrations</span><span></span></div>
+            <div class="wf-h">Отключить Google Календарь?</div>
+            <div class="wf-sub">В календаре останется 64 встречи, выгруженные ПРАКТИКОЙ. В них — имена клиентов.</div>
+            <div class="wf-row"><div class="wf-btn pri">Отключить и убрать встречи</div></div>
+            <div class="wf-row"><div class="wf-btn">Отключить, встречи оставить</div></div>
+            <div class="wf-row"><div class="wf-btn off">Отмена</div></div>
+            <div class="wf-note">Выбор делает человек, и делает его ЗНАЯ. Уборка идёт тем же способом, каким продукт уже удаляет событие при отмене встречи, — новое здесь только предложение выбрать.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="eyebrow" style="margin-bottom:10px">Справка в приложении</div>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>ПРАКТИКА · Настройки</span><span></span></div>
+            <div class="wf-h">Помощь и поддержка</div>
+            <div class="wf-sub">ПРАКТИКА Android 1.3.2</div>
+            <div class="wf-card"><div class="wf-meta">Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.<br><br>Подпись этой копии приложения:<br>SHA-1: 3A:F9:…<br>SHA-256: 91:0C:…</div></div>
+            <div class="wf-row"><div class="wf-btn pri">Готово</div></div>
+            <div class="wf-note">Где поддержка — не сказано. «Приложится автоматически» — к чему приложится, если писать некуда?</div>
+            <div class="wf-note">Восьми тем справки, которые есть в вебе, здесь нет.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>ПРАКТИКА · Настройки</span><span></span></div>
+            <div class="wf-h">Помощь и поддержка</div>
+            <div class="wf-sub">ПРАКТИКА Android 1.3.2</div>
+            <div class="wf-row"><div class="wf-btn pri">Написать в поддержку</div></div>
+            <div class="wf-line s">Версия и подпись сборки подставятся в письмо сами</div>
+            <div class="wf-row"><div class="wf-btn">Справка: первые шаги, клиенты, расписание…</div></div>
+            <div class="wf-line m">↓ открывает тот же текст, что в вебе</div>
+            <div class="wf-note">Ни одной новой страницы: восемь тем уже написаны, их достаточно открыть. Кнопка поддержки ведёт туда же, куда ведёт «обратитесь в поддержку» во всём остальном продукте, — в одно место, которое надо назвать один раз.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="defects">
+  <div class="sechead">
+    <div class="eyebrow">04 · Дефекты</div>
+    <h2>Десять расхождений</h2>
+    <p class="lede">По порядку тяжести. Первое — про настройку, которая ничего не настраивает, и про кнопку, которая это скрывает.</p>
+  </div>
+
+  <div class="defects">
+
+    <div class="def" id="p1">
+      <div class="def-id">П1</div>
+      <div class="def-b">
+        <div class="t">Пять тумблеров ничего не выключают, пять шаблонов никуда не уходят — а кнопка «Отправить тест» присылает шаблон</div>
+        <div class="why">На экране уведомлений три раздела и десять переключателей. Работают пять. Целиком мёртв верхний раздел — «Уведомления психологу»: все четыре его тумблера («Новая запись», «Напоминание», «Клиент перенёс», «Клиент отменил») не читает никто, сообщения уходят независимо от их положения. Пятый мёртвый — «Отмена психологом» в разделе про клиента. Полей «Шаблон сообщения» на экране пять, и текст из них читает ровно одна функция во всём продукте — та, что отправляет тест. Настоящие напоминания собираются в коде и о шаблоне не знают. Выпадающий список «За сколько напомнить» (15 минут, 30, час, два часа) не читает тоже никто: своё напоминание специалист получает ровно за сутки, и это не настраивается.<br><br>Само по себе это было бы обычной недоделкой. Кнопка «Отправить тест» делает из неё обман: человек правит текст, жмёт тест, получает в мессенджер ИМЕННО свой текст — и получает доказательство, что всё работает. Проверка подтверждает то, чего нет.<br><br>Приложение эту дыру уже знает и обошло: наружу оно отдаёт ровно пять настроек, за которыми стоит настоящая рассылка, а в коде рядом стоит объяснение — «показать их в приложении значило бы завести пять тумблеров, которые ничего не выключают». Веб их показывает.</div>
+        <div class="src"><span class="mono">src/app/diary/notifications/page.tsx:166-252</span> (экран) · <span class="mono">src/app/diary/actions/notifications.ts:63-95</span> (тест читает шаблон) · <span class="mono">src/app/api/mobile/notification-settings/route.ts:12-23</span> (приложение перечисляет живые настройки и объясняет, почему остальных там нет)</div>
+      </div>
+    </div>
+
+    <div class="def" id="p3">
+      <div class="def-id">П3</div>
+      <div class="def-b">
+        <div class="t">Куда написать специалисту, решает клиент</div>
+        <div class="why">Клиент отменил встречу кнопкой в Telegram — специалисту уходит сообщение в Telegram. Отменил в MAX — уходит в MAX. Отменил по ссылке из письма — уходит в Telegram. Во всех трёх случаях канал берётся не из того, каким мессенджером пользуется САМ специалист, а из того, откуда пришло действие клиента.<br><br>Значит, специалист, у которого привязан только MAX, не узнаёт об отмене, сделанной в Telegram. И наоборот. Правило «писать в тот канал, через который человек пришёл последним» в продукте написано, объяснено и применяется во всех рассылках — здесь его просто не спрашивают.<br><br>Полной тишины при этом нет: колокольчик в кабинете получает запись всегда, и это смягчает последствия. Но мессенджер человек привязывал именно затем, чтобы не открывать кабинет ради каждой новости.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:419,446</span> · <span class="mono">src/lib/max-bot.ts:532,554</span> · <span class="mono">src/app/api/user/diary/bot/client/cancel/route.ts:69</span> — против <span class="mono">src/lib/messaging/channel-rule.ts</span> (<span class="mono">pickChannel</span>)</div>
+      </div>
+    </div>
+
+    <div class="def" id="p5">
+      <div class="def-id">П5</div>
+      <div class="def-b">
+        <div class="t">Имя клиента уходит специалисту без экранирования — и одно имя способно отменить весь дайджест</div>
+        <div class="why">Сообщения специалисту отправляются с разметкой Telegram. Если в имени клиента есть амперсанд — а он бывает у клиента-организации, «Иванов &amp; партнёры», — разметка становится недействительной, Telegram отвечает отказом, и сообщение не приходит вовсе. Не «приходит криво»: не приходит.<br><br>В утреннем дайджесте это значит, что из-за одного клиента специалист не получает список ВСЕГО дня и не узнаёт, почему список перестал приходить. Правило экранирования в продукте есть и применено к сообщениям клиенту — после того, как ровно этот дефект нашли в напоминаниях. К сообщениям специалисту его не применили нигде.</div>
+        <div class="src"><span class="mono">src/lib/cron/digest.ts:100</span> · <span class="mono">src/lib/telegram-bot.ts:338,421,448</span> · <span class="mono">src/app/api/user/diary/bot/client/cancel/route.ts:74</span> — против <span class="mono">escapeHtml</span> в <span class="mono">src/lib/messaging/format.ts</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="p9">
+      <div class="def-id">П9</div>
+      <div class="def-b">
+        <div class="t">Справка обещает автопродление подписки, которого в продукте нет</div>
+        <div class="why">Раздел «Подписка и триал» говорит дословно: «При оформлении мы сохраняем карту, чтобы автоматически продлевать подписку каждый месяц. Отменить можно в любой момент». Первая половина фразы правдива буквально и ложна по смыслу: платёж действительно создаётся с признаком привязки карты, идентификатор для будущих списаний действительно приходит от банка и действительно сохраняется — и не используется никогда. Списания не делает ни одно задание, ни один экран, ни одна строка кода. Вторая половина — «отменить можно в любой момент» — описывает действие, которого в продукте нет вовсе: отменять нечего и негде.<br><br>Последствие не в неточности текста, а в поведении человека: он уверен, что продление произойдёт само, и не следит за датой. Дата проходит, доступ закрывается, и для него это выглядит поломкой сервиса. Это же объясняет, почему тихий отток из книги 2 (В8) не только не считается, но и происходит: человек не отказался платить — он просто поверил, что платить будут за него.<br><br>Отдельно стоит сказать: мандат на регулярные списания у человека при этом СПРОШЕН. Просить его и не пользоваться — хуже, чем не просить.</div>
+        <div class="src"><span class="mono">src/app/diary/help/content.ts:214</span> (обещание) · <span class="mono">src/lib/tinkoff.ts:132</span> (<span class="mono">Recurrent: 'Y'</span>) · <span class="mono">src/app/api/payments/callback/route.ts:71</span> (<span class="mono">rebillId</span> сохраняется) · списания нет нигде</div>
+      </div>
+    </div>
+
+    <div class="def" id="p6">
+      <div class="def-id">П6</div>
+      <div class="def-b">
+        <div class="t">«Обратитесь в поддержку» — а поддержки в продукте нет</div>
+        <div class="why">Фраза встречается на экранах ошибок в вебе, в разделе «Помощь и поддержка» приложения и подразумевается на экране «доступ закрыт». Ни в одном из этих мест не названы ни почта, ни форма, ни бот, ни имя человека. Поддержка существует как слово.<br><br>Каждый раз это одно и то же место пути: человек уже в затруднении — не вошёл, получил ошибку, не понял, — и вместо следующего шага получает существительное. Это самый дешёвый из дефектов книги: нужно назвать один адрес в одном месте и сослаться на него отовсюду.</div>
+        <div class="src"><span class="mono">android/…/SettingsScreen.kt:490-499</span> (текст — <span class="mono">:493</span>) · экраны ошибок в вебе · <span class="mono">src/app/auth/blocked/page.tsx</span> (тот же дефект в книге 2 — В5)</div>
+      </div>
+    </div>
+
+    <div class="def" id="p7">
+      <div class="def-id">П7</div>
+      <div class="def-b">
+        <div class="t">Отключение календаря удаляет связь и оставляет выгруженные встречи в чужом календаре</div>
+        <div class="why">«Отключить» удаляет строку интеграции — и всё. Встречи практики, которые ПРАКТИКА выгрузила в личный Google или Яндекс календарь специалиста, остаются там навсегда, вместе с именами клиентов в заголовках. Убрать их продукт уже не может: доступа, которым он их создавал, больше нет.<br><br>Переспроса тоже нет: одно нажатие, никакого «вы уверены», никакого выбора. Между тем удаление события при отмене встречи продукт делать умеет — механизм есть и работает. Не хватает не умения, а вопроса.</div>
+        <div class="src"><span class="mono">src/app/diary/actions/settings.ts:210-217</span> (<span class="mono">disconnectIntegration</span>) — против <span class="mono">autoDeleteSessionFromCalendars</span>, который уже умеет убирать события</div>
+      </div>
+    </div>
+
+    <div class="def" id="p4">
+      <div class="def-id">П4</div>
+      <div class="def-b">
+        <div class="t">Тихие часы не распространяются на самое частое сообщение продукта</div>
+        <div class="why">Правило «с 21:00 до 09:00 по поясу практики клиенту не пишем» написано отдельным модулем, подробно объяснено и учитывает часовой пояс через системный календарь, а не арифметикой со сдвигом. Его спрашивают три задания: вопрос о самочувствии после встречи, напоминание об оплате и пост-сессионный каскад. Четвёртое — обычные напоминания о встрече — не спрашивает.<br><br>Значит, встреча, назначенная на 22:30, даёт клиенту напоминание в 22:15 накануне. Ровно того, ради чего правило и писали.<br><br>Важная оговорка: напоминание за ЧАС глушить нельзя — оно про встречу, до которой час, и молчание здесь хуже звонка. Тишина относится только к напоминанию за сутки; отложенное не теряется — следующий дневной проход его подхватит, потому что отметка «отправлено» до отправки не ставится.</div>
+        <div class="src"><span class="mono">src/lib/cron/reminders.ts:237</span> (<span class="mono">processReminders</span> — модуль тишины не импортирован) — против <span class="mono">src/lib/messaging/quiet-hours.ts</span> и трёх заданий, которые его зовут</div>
+      </div>
+    </div>
+
+    <div class="def" id="p2">
+      <div class="def-id">П2</div>
+      <div class="def-b">
+        <div class="t">«Мои сессии» в боте показывают специалисту только подтверждённые встречи и только первые пять</div>
+        <div class="why">Это тот же самый фильтр, который недавно нашли и убрали у клиента: человек записывался и через минуту слышал от бота, что записей нет, потому что только что созданная встреча ждёт подтверждения. У клиента правку сделали в обоих ботах. Ветка специалиста в обоих же ботах осталась прежней.<br><br>Для специалиста это тяжелее: у клиента одна встреча, у специалиста — день. Если клиенты не жмут «Подтверждаю» (а большинство не жмёт), бот отвечает «у вас нет предстоящих подтверждённых сессий» человеку, у которого сегодня пять приёмов. Плюс список молча обрезан пятью записями — слова об этом нет.</div>
+        <div class="src"><span class="mono">src/lib/telegram-bot.ts:330</span> · <span class="mono">src/lib/max-bot.ts:376</span> — против исправленных клиентских веток в тех же файлах (<span class="mono">:355</span> и <span class="mono">:393</span>)</div>
+      </div>
+    </div>
+
+    <div class="def" id="p8">
+      <div class="def-id">П8</div>
+      <div class="def-b">
+        <div class="t">В схеме три колонки помечены «encrypted», шифрования в продукте нет ни одного</div>
+        <div class="why">Рядом с колонками, где лежат пароль приложения Яндекса и токены доступа к Google Календарю, в схеме стоит пометка <span class="mono">// encrypted</span>. В репозитории нет ни одного вызова шифрования: значения пишутся и читаются как есть.<br><br>Опасность здесь не в самих данных — пароль приложения Яндекса выдаётся под один сервис и календарём и ограничен, — а в пометке. Она написана для того, кто будет решать, можно ли класть сюда что-то ещё, и отвечает ему «да, тут шифруется». Неверная пометка в схеме переживает любого, кто помнил, как на самом деле.<br><br>Правда при этом должна быть сказана целиком: доступ к базе закрыт, передача идёт по TLS, и справка, обещающая «зашифрованы при передаче», не врёт. Врёт только пометка про хранение.</div>
+        <div class="src"><span class="mono">prisma/schema.prisma:686,687,692</span> · <span class="mono">src/app/api/calendar/yandex/connect/route.ts:42,50</span> · ни одного <span class="mono">createCipheriv</span> в репозитории</div>
+      </div>
+    </div>
+
+    <div class="def" id="p10">
+      <div class="def-id">П10</div>
+      <div class="def-b">
+        <div class="t">Справка есть в трёх видах и в двух из них её нет</div>
+        <div class="why">В вебе — восемь тем, написанных живым языком и по делу. В MAX — команда <span class="mono">/help</span> с двумя кнопками. В Telegram — ни команды, ни кнопки: человек узнаёт о возможностях бота, только если угадает слово в меню. В приложении — лист с номером версии и отпечатком подписи и фразой «Опишите вопрос в поддержке».<br><br>Восемь готовых тем в приложении не показаны ни одной. Это не работа по написанию справки — текст уже есть; это работа по тому, чтобы его открыть.</div>
+        <div class="src"><span class="mono">src/app/diary/help/content.ts</span> (восемь тем) · <span class="mono">src/lib/max-bot.ts:416</span> (есть) · <span class="mono">src/lib/telegram-bot.ts</span> (нет <span class="mono">bot.help</span>) · <span class="mono">android/…/SettingsScreen.kt:490</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="ask" style="margin-top:28px">
+    <b>Мелкое, что нашлось попутно и не тянет на отдельный дефект.</b> Кнопка «Профиль клиента» в напоминании специалисту — единственное место в продукте, где адрес сайта вписан жёстко, без обычной подстановки из окружения: на стенде она уводит в боевой кабинет. Поиск свободных окон в подсказке Telegram считает «есть ли окна» по правилам расписания, а не по разрешённым слотам, то есть по другому источнику, чем страница записи. И справка в разделе «Частые вопросы» предлагает «отправлять напоминания в SMS» — SMS продукт не умеет и не собирался.
+    <br><br><b>Что проверено и оказалось в порядке.</b> Утренний дайджест и недельная сводка: час считается по поясу практики, а не по Москве, — иначе во Владивостоке список дня приходил бы к вечеру; если встреч нет — молчит. Одно сообщение — один канал: и дайджест, и напоминания, и тест идут через общий выбор канала. Отвязка мессенджера: основной канал после неё выбирается заново сам, «повисшего» предпочтения не остаётся. Старое хранилище привязки клиентов учтено в одном месте и одинаково для всех путей. Постоянная ссылка на свежую сборку устроена правильно: один адрес, который не меняется, и сторож в сборке следит за именованием. Журнал изменений сверяется с версией продукта тестом: поднялась версия — запись обязана появиться. Витрина видеосервисов честно помечена «Скоро» — это заявка, а не обещание.
+  </div>
+</section>
+
+<section id="forks">
+  <div class="sechead">
+    <div class="eyebrow">05 · Развилки</div>
+    <h2>Четыре решения, которые не мои</h2>
+    <p class="lede">Отмеченный вариант — предложение; решение за учредителем.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div class="q">
+      <div class="qn">Развилка 1 · относится к П1</div>
+      <div class="qt">Что делать с пятью тумблерами и пятью шаблонами, которые ничего не делают?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Убрать с экрана, оставить показ текста</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Ровно так уже поступило приложение, и в коде рядом написано почему. Вместо поля для правки — то, что человек правда увидит: готовое сообщение с кнопками, как его получит клиент. Настройка остаётся одна и честная — включить или выключить. Это правка на день, и она снимает не неудобство, а обман.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Сделать шаблоны настоящими</b>
+            <span class="sub">Рассылка начинает собирать текст из шаблона специалиста. Звучит как «дать больше», но стоит дорого и тихо ломает то, что уже починено: часовой пояс, экранирование имени, ссылку за словом, три кнопки — всё это живёт в готовом тексте, и произвольный шаблон их теряет. Отдельная работа на несколько дней, и её стоит делать, только если специалисты правда просят свой текст.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">Экран продолжает обещать настройку, а тест продолжает её подтверждать. Самый дешёвый вариант сегодня и самый дорогой в тот день, когда специалист заметит.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 2 · относится к П9</div>
+      <div class="qt">Автопродление подписки: делать или убрать обещание?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Сначала убрать обещание, потом решать про списания</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Сегодня же поправить справку и экран оплаты: подписка продлевается вручную, напомним заранее. Заодно перестать просить у банка привязку карты, раз она не используется, — просить мандат и не пользоваться им хуже, чем не просить. Автосписание — отдельная работа, её стоит начинать, когда платящих станет столько, что ручное продление начнёт терять людей.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Сделать автосписание сейчас</b>
+            <span class="sub">Идентификатор карты уже сохраняется — нужно задание, которое списывает, и экран, где человек может отменить. Несколько дней работы плюс правовая часть: об автосписании надо предупреждать до, а не после. Зато тихий отток из книги 2 (В8) закрывается сам собой.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 3 · относится к П6</div>
+      <div class="qt">Что назвать поддержкой?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Почта, названная во всех местах сразу</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Один адрес, вписанный в одно место кода, и ссылка на него отовсюду: экраны ошибок, «доступ закрыт», справка в приложении, справка в вебе. Почта работает у заблокированного, у не вошедшего и у того, у кого нет мессенджера, — то есть ровно у тех, кому поддержка и нужна.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Тот же бот, что уже привязан</b>
+            <span class="sub">Быстрее для того, у кого мессенджер есть, — и бесполезно для заблокированного и для того, кто не вошёл. То есть не работает там, где нужнее всего.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Форма обращения в кабинете</b>
+            <span class="sub">Красивее и удобнее для тех, кто внутри. Новый экран, новая таблица, и всё так же недоступно тому, кто снаружи.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 4 · относится к П7</div>
+      <div class="qt">Отключая календарь, убирать ли из него выгруженные встречи?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Спросить и сделать то, что человек выберет</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Переспрос с числом: «в календаре останется 64 встречи, в них имена клиентов». Две кнопки — убрать или оставить. Убирает тот же механизм, которым продукт уже удаляет событие при отмене встречи; нового кода почти нет, новое — сам вопрос.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Только предупредить, не убирать</b>
+            <span class="sub">Сказать, что события останутся, и всё. Вдвое меньше работы, и главное сделано: человек знает. Убирать придётся руками в самом календаре.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Убирать всегда, без вопроса</b>
+            <span class="sub">Проще всего описать и хуже всего для того, кто отключал календарь именно затем, чтобы записи в нём остались.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sechead">
+    <div class="eyebrow">06 · Порядок работ</div>
+    <h2>В каком порядке чинить</h2>
+    <p class="lede">Первые четыре шага не требуют решений и делаются на готовом.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="b"><div class="t">Имя клиента экранируется везде, где уходит специалисту</div><div class="d">П5. Пять мест, одна готовая функция. Пока этого нет, один клиент способен отменить специалисту весь дайджест — и объяснения он не получит.</div></div></div>
+    <div class="step"><div class="n">02</div><div class="b"><div class="t">Канал сообщения специалисту выбирает специалист</div><div class="d">П3. Пять мест переводятся на общий выбор канала. Правило написано и применяется везде — здесь его надо просто позвать.</div></div></div>
+    <div class="step"><div class="n">03</div><div class="b"><div class="t">«Мои сессии» показывают всё предстоящее</div><div class="d">П2. Ровно та правка, что уже сделана в клиентских ветках тех же двух файлов: состояние встречи называется словом, «первые пять» сказано вслух.</div></div></div>
+    <div class="step"><div class="n">04</div><div class="b"><div class="t">Тихие часы распространяются на напоминание за сутки</div><div class="d">П4. Один импорт и одно условие; напоминание за час намеренно не глушится. Тест на обе стороны: ночное за сутки не уходит, ночное за час уходит.</div></div></div>
+    <div class="step"><div class="n">05</div><div class="b"><div class="t">Справка перестаёт обещать автопродление, пометка «encrypted» уходит из схемы</div><div class="d">П9, П8. Два текста. Оба описывают то, чего нет, и оба переживут любого, кто помнил, как на самом деле. Зависит от развилки 2.</div></div></div>
+    <div class="step"><div class="n">06</div><div class="b"><div class="t">У поддержки появляется адрес</div><div class="d">П6. Одно место в коде, ссылки отовсюду. Закрывает заодно В5 из книги 2. Зависит от развилки 3.</div></div></div>
+    <div class="step"><div class="n">07</div><div class="b"><div class="t">Экран уведомлений перестаёт обещать настройку, которой нет</div><div class="d">П1. Зависит от развилки 1. Пока не решено — кнопку «Отправить тест» стоит убрать первой: без неё это недоделка, с ней — доказательство обратного.</div></div></div>
+    <div class="step"><div class="n">08</div><div class="b"><div class="t">Отключение календаря спрашивает про выгруженные встречи</div><div class="d">П7. Зависит от развилки 4.</div></div></div>
+    <div class="step"><div class="n">09</div><div class="b"><div class="t">Справка открывается в приложении и в Telegram</div><div class="d">П10. Восемь тем уже написаны; работа — показать их, а не сочинить.</div></div></div>
+  </div>
+
+  <div class="ask" style="margin-top:30px">
+    <b>Как это будет проверено.</b> Шаги 1–4 закрываются тестами на правило, а не на экран: имя с амперсандом обязано доходить целым; сообщение специалисту обязано уходить в канал специалиста, а не клиента; список в боте обязан показывать неподтверждённую встречу; ночное напоминание за сутки обязано не уходить, а ночное за час — уходить. Такие тесты переживают следующую правку. Проверенный руками экран — нет: ровно так и вышло, что фильтр «только подтверждённые» убрали у клиента и оставили у специалиста в том же файле.
+  </div>
+</section>
+
+<footer>
+  Книга 3 из 3 по пути специалиста, собрана 15.09.2026 по коду ветки <code>claude/new-session-pgnybh</code>. Разбирает блоки E, F, G и H <a href="reestr.html">реестра путей</a> — двадцать один путь из пятидесяти семи, и этим путь специалиста разобран целиком. Первая книга: <a href="2026-09-15-put-spetsialista-klienty-den.html">«Клиенты, документы, день»</a>, вторая: <a href="2026-09-15-put-spetsialista-vhod-dengi.html">«Вход, документы, деньги»</a>. Правки по этому разбору не вносились: он написан до них и ждёт решения учредителя по четырём развилкам раздела 05.
+</footer>
+
+</div>
