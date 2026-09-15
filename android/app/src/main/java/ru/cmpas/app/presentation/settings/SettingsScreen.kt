@@ -486,13 +486,26 @@ private fun ProfileInfoSheet(
         // устройстве: не сошлось — отказ приходит до всякой сети и не виден
         // ни в одном журнале. Сверить его с карточкой приложения теперь можно
         // с того же телефона, где приложение и стоит.
+        // СПРАВКА ОТКРЫВАЕТСЯ, А НЕ УПОМИНАЕТСЯ.
+        //
+        // Дефект П10 книги 3: здесь стояло «Опишите вопрос в поддержке» — и
+        // ни адреса, ни кнопки. Где поддержка, не сказано; к чему «приложится
+        // автоматически», если писать некуда, — тоже. А восемь тем справки,
+        // написанных и живущих в кабинете, приложение не показывало ни одной.
+        //
+        // Теперь отсюда есть дверь: кнопка ниже открывает тот же текст, что
+        // читает человек в вебе. Своей копии справки в приложении не
+        // заводится намеренно — две справки об одном расходятся, и это уже
+        // случилось между Telegram и MAX.
         ProfileSheet.HELP -> Triple(
             "Помощь и поддержка",
             "ПРАКТИКА Android ${BuildConfig.VERSION_NAME}",
             buildString {
-                append("Опишите вопрос в поддержке. Техническая информация приложения будет приложена автоматически.")
+                append("Справка ПРАКТИКИ — восемь разделов: первые шаги, клиенты, расписание, ")
+                append("сессии и заметки, календари, Telegram и MAX, подписка, частые вопросы. ")
+                append("Кнопка ниже открывает их в браузере.")
                 signature?.let { sig ->
-                    append("\n\nПодпись этой копии приложения:")
+                    append("\n\nЕсли пишете о проблеме, приложите подпись этой копии приложения:")
                     append("\nSHA-1: ${sig.sha1}")
                     append("\nSHA-256: ${sig.sha256}")
                 }
@@ -501,11 +514,18 @@ private fun ProfileInfoSheet(
         ProfileSheet.PROFILE, ProfileSheet.DOCUMENTS, ProfileSheet.DATA,
         ProfileSheet.BOOKING, ProfileSheet.ONLINE_LINK, ProfileSheet.PAYMENT -> Triple("", "", "")
     }
+    val uriHandler = LocalUriHandler.current
     CompasBottomSheet(onClose = onClose) {
         SheetHead(title, subtitle)
         Spacer(Modifier.height(16.dp))
         GlassCard(Modifier.fillMaxWidth(), padding = 16.dp) { Text(body, style = tBody2, color = CompasMutedFg) }
         Spacer(Modifier.height(16.dp))
+        // Единственная шторка, из которой есть куда пойти: справка живёт в
+        // кабинете, и пересказывать её здесь значило бы завести вторую.
+        if (sheet == ProfileSheet.HELP) {
+            GhostButton("Открыть справку", { uriHandler.openUri(legalUrl("/diary/help")) }, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+        }
         PrimaryButton("Готово", onClose, Modifier.fillMaxWidth(), Icons.Outlined.Check)
     }
 }
