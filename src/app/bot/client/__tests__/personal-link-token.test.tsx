@@ -84,13 +84,22 @@ describe('открытие /bot/client?c=<token> без Telegram и без local
         expect(await screen.findByText(/откройте приложение через бота/)).toBeInTheDocument();
     });
 
-    it('невалидный/просроченный токен без Telegram и localStorage — тоже тупиковое сообщение', async () => {
+    // ССЫЛКА БЫЛА И НЕ СРАБОТАЛА — ЭТО ДРУГОЙ СЛУЧАЙ, ЧЕМ «ССЫЛКИ НЕ БЫЛО».
+    //
+    // Раньше обе ветки показывали один и тот же текст «откройте приложение
+    // через бота», и человек с просроченной ссылкой видел ровно то же, что
+    // при опечатке в адресе: понять, сломалось у него что-то или просто
+    // прошло время, было нельзя. Дефект К22 разбора пути клиента.
+    //
+    // Тест проверяет, что причина названа И что общий текст сюда не вернулся.
+    it('просроченная или побитая ссылка называет причину, а не повторяет общий текст', async () => {
         nav.params = new URLSearchParams({ c: 'st1_expiredortampered' });
         actions.resolveClientLinkParam.mockResolvedValue(null);
 
         render(<ClientPage />);
 
-        expect(await screen.findByText(/откройте приложение через бота/)).toBeInTheDocument();
+        expect(await screen.findByText(/Ссылка больше не действует/)).toBeInTheDocument();
+        expect(screen.queryByText(/откройте приложение через бота/)).not.toBeInTheDocument();
     });
 });
 
