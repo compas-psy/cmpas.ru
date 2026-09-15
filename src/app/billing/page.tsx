@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { PRACTICE_PRICE_LABEL } from '@/lib/billing/pricing';
+import { dayWord } from '@/lib/ru-plural';
 
 const FEATURES = [
     'Неограниченные клиенты и сессии',
@@ -105,7 +106,7 @@ export default function BillingPage() {
                 : isExpired && endsAtLabel ? `Подписка «${planLabel}» закончилась ${endsAtLabel}`
                     : isExpired ? 'Оформите подписку, чтобы продолжить работу'
                         : daysLeft !== null
-                            ? `Пробный период: осталось ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'}`
+                            ? `Пробный период: осталось ${daysLeft} ${dayWord(daysLeft)}`
                             : 'Продолжайте спокойно вести практику';
 
     return (

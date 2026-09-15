@@ -13,6 +13,8 @@ import { checkUserAcceptance } from '@/app/legal/actions';
 import { ACCOUNT_REQUIRED_TYPES } from '@/lib/legal-documents';
 import { AdsConsentWrapper } from '@/components/legal/AdsConsentWrapper';
 import { TrialBanner } from '@/components/psidairy/TrialBanner';
+import { computeBillingStatus } from '@/lib/billing/status';
+import { dayWord } from '@/lib/ru-plural';
 import { BottomTabBar } from './bottom-tab-bar';
 
 export const metadata: Metadata = {
@@ -20,16 +22,36 @@ export const metadata: Metadata = {
     robots: { index: false, follow: false },
 };
 
-function TrialCard({ daysLeft, totalDays }: { daysLeft: number; totalDays: number }) {
+/**
+ * КАРТОЧКА СОСТОЯНИЯ ОПЛАТЫ В БОКОВОМ МЕНЮ.
+ *
+ * Здесь было три неправды сразу, и все три — в одном маленьком блоке.
+ *
+ * 1. Заголовок «Пробный период» показывался и ПЛАТЯЩЕМУ: карточка рисовалась
+ *    по одному лишь числу оставшихся дней, а оно не пустое и у подписки.
+ *    Человек, оплативший месяц, видел «Пробный период» и кнопку «Выбрать
+ *    тариф» — то есть предложение купить то, что он уже купил.
+ *
+ * 2. «Использовано 70% функций» не мерило функций вовсе. Это прошедшие дни,
+ *    переименованные в функции: не открыв ни одного экрана, человек на
+ *    двадцать первый день читал, что израсходовал семьдесят процентов.
+ *
+ * 3. «Осталось 1 дней» — число без согласования.
+ *
+ * Теперь карточка называет то состояние, в котором человек находится, и
+ * полоса показывает то, что считает: прошедшие дни срока.
+ */
+function BillingCard({ daysLeft, totalDays, mode }: { daysLeft: number; totalDays: number; mode: 'trial' | 'subscription' }) {
     const progress = Math.max(0, Math.min(100, ((totalDays - daysLeft) / totalDays) * 100));
+    const trial = mode === 'trial';
     return (
         <div className="mx-4 mb-3 bg-forest-900/60 rounded-2xl p-4 border border-white/5">
             <div className="flex items-center justify-between mb-2">
-                <span className="text-[13px] font-bold text-white/90">Пробный период</span>
+                <span className="text-[13px] font-bold text-white/90">{trial ? 'Пробный период' : 'Подписка'}</span>
                 <Sparkles className="w-4 h-4 text-amber-400" />
             </div>
             <div className="text-[12px] text-white/50 font-medium mb-3">
-                Осталось {daysLeft} дней
+                Осталось {daysLeft} {dayWord(daysLeft)}
             </div>
             <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-2">
                 <div
@@ -38,13 +60,13 @@ function TrialCard({ daysLeft, totalDays }: { daysLeft: number; totalDays: numbe
                 />
             </div>
             <div className="text-[11px] text-white/40 font-medium mb-3">
-                Использовано {Math.round(progress)}% функций
+                {trial ? `Прошло ${totalDays - daysLeft} из ${totalDays} дней` : 'Продлевается вручную'}
             </div>
             <Link
                 href="/billing"
                 className="block w-full py-2.5 bg-accent text-white text-center rounded-xl text-[13px] font-bold hover:bg-accent/90 transition-all active:scale-[0.98]"
             >
-                Выбрать тариф
+                {trial ? 'Выбрать тариф' : 'Продлить'}
             </Link>
         </div>
     );
@@ -54,10 +76,13 @@ function SidebarContent({
     userName,
     userInitials,
     daysLeft,
+    billingMode,
 }: {
     userName: string;
     userInitials: string;
     daysLeft: number | null;
+    /** Что именно кончается. null — ни триала, ни подписки: карточки нет. */
+    billingMode: 'trial' | 'subscription' | null;
 }) {
     return (
         <div className="flex flex-col h-full bg-sidebar">
@@ -73,8 +98,8 @@ function SidebarContent({
             <SidebarNav />
 
             <div className="mt-auto">
-                {daysLeft !== null && daysLeft > 0 && (
-                    <TrialCard daysLeft={daysLeft} totalDays={30} />
+                {billingMode !== null && daysLeft !== null && daysLeft > 0 && (
+                    <BillingCard daysLeft={daysLeft} totalDays={30} mode={billingMode} />
                 )}
 
                 {/* «ВЫЙТИ» ДОЛЖНО ВЫХОДИТЬ.
@@ -166,23 +191,34 @@ export default async function DiaryLayout({
     // Страница /onboarding остаётся доступной сама по себе: на неё ведут
     // письма и старые ссылки, и её проходят по желанию.
 
-    const trialEndsAt = dbUser.trialEndsAt;
-    const now = new Date();
-    const isForever = trialEndsAt && trialEndsAt.getFullYear() >= 2099;
+    // ОДНО ПРАВИЛО НА ВОПРОС «КОНЧИЛСЯ ЛИ ДОСТУП».
+    //
+    // Здесь стояла собственная копия правила — и это была ПРЕЖНЯЯ его
+    // версия, которую однажды признали неверной и переписали в
+    // src/lib/billing/status.ts. Ошибка прежней версии: конец доступа брался
+    // из даты пробного периода всегда, когда подписка не активна. У человека,
+    // который оплатил сразу, не пробуя, даты триала нет вовсе — и конец
+    // доступа получался «неизвестно», то есть доступ не кончался никогда.
+    //
+    // Поймать это сегодня трудно: src/auth.ts проставляет дату триала при
+    // каждом входе, если её нет. Но два ответа на один вопрос существовали, и
+    // правило, охраняющее деньги, жило в двух видах — до первой правки в
+    // одном из них.
+    //
+    // Запроса не добавляется: dbUser уже прочитан целиком, а computeBillingStatus —
+    // чистая функция над теми же тремя полями, и именно её проверяют тесты.
+    const billing = computeBillingStatus(dbUser);
 
-    const subscriptionEndsAt = dbUser.subscriptionEndsAt;
-
-    const hasActiveSub = subscriptionEndsAt && subscriptionEndsAt > now;
-    const effectiveEnd = hasActiveSub ? subscriptionEndsAt : trialEndsAt;
-    const isExpired = !isForever && effectiveEnd && effectiveEnd < now;
-
-    if (isExpired) {
+    if (billing.isExpired) {
         redirect('/billing');
     }
 
-    const daysLeft = (!isForever && effectiveEnd)
-        ? Math.ceil((effectiveEnd.getTime() - now.getTime()) / 86400000)
-        : null;
+    const daysLeft = billing.daysLeft;
+    // Что именно кончается — решает то же правило, а не экран. Раньше экран
+    // звал это «пробным периодом» в обоих случаях.
+    const billingMode = billing.trialActive ? 'trial' as const
+        : billing.subscriptionActive ? 'subscription' as const
+            : null;
 
     const userName = session.user.name || session.user.email?.split('@')[0] || 'Психолог';
     const userInitials = userName.slice(0, 2).toUpperCase();
@@ -190,11 +226,11 @@ export default async function DiaryLayout({
     return (
         <div className="min-h-screen bg-background flex">
             <aside className="hidden md:flex w-[252px] fixed h-full flex-col z-30" style={{ boxShadow: '4px 0 24px rgba(20,32,24,0.06)' }}>
-                <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
+                <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} billingMode={billingMode} />
             </aside>
 
             <MobileSidebar>
-                <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} />
+                <SidebarContent userName={userName} userInitials={userInitials} daysLeft={daysLeft} billingMode={billingMode} />
             </MobileSidebar>
 
             {/*
@@ -207,7 +243,12 @@ export default async function DiaryLayout({
               * этого не спасал: переполнение случалось этажом выше.
               */}
             <main className="flex-1 min-w-0 md:ml-[252px] pt-16 md:pt-0 min-h-screen">
-                {daysLeft !== null && daysLeft <= 7 && <TrialBanner daysLeft={daysLeft} />}
+                {/* Баннер предупреждает о конце ТОГО срока, который идёт. Раньше
+                    он говорил «пробный период заканчивается» и платящему
+                    подписчику в последнюю неделю оплаченного месяца. */}
+                {billingMode !== null && daysLeft !== null && daysLeft <= 7 && (
+                    <TrialBanner daysLeft={daysLeft} mode={billingMode} />
+                )}
                 <div className="p-4 md:p-8 pb-24 md:pb-8 max-w-[1400px] mx-auto overflow-x-hidden">
                     {children}
                 </div>

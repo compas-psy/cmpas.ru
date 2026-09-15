@@ -682,15 +682,32 @@ model CalendarIntegration {
   lastSynced     DateTime?
   conflictsCount Int       @default(0)
 
-  // OAuth tokens (Google Calendar)
-  accessToken  String? // encrypted
-  refreshToken String? // encrypted
+  // ДОСТУП К ЧУЖОМУ КАЛЕНДАРЮ ЛЕЖИТ ЗДЕСЬ КАК ЕСТЬ — БЕЗ ШИФРОВАНИЯ.
+  //
+  // Рядом с этими колонками годами стояла пометка «encrypted». Шифрования в
+  // продукте нет ни одного: значения пишутся и читаются напрямую (см.
+  // api/calendar/yandex/connect и lib/calendar/google). Неверная пометка
+  // хуже отсутствующей — она написана для того, кто будет решать, можно ли
+  // класть сюда что-то ещё, и отвечает ему «да, тут шифруется». Такая
+  // строка переживает любого, кто помнил, как на самом деле.
+  //
+  // Что правда: доступ к базе закрыт сетью докера, передача идёт по TLS.
+  // Шифрование чувствительных полей прикладным ключом значится отдельной
+  // работой в docs/security-audit.md (S6) и не сделано.
+  //
+  // Пароль приложения Яндекса ограничен календарём, токен Google — выданной
+  // областью доступа; это снижает цену утечки, но не делает пометку верной.
+
+  // OAuth-токены Google Календаря. Хранятся как есть.
+  accessToken  String?
+  refreshToken String?
   tokenExpiry  DateTime?
 
-  // CalDAV credentials (Yandex Calendar)
-  caldavLogin    String? // encrypted
-  caldavPassword String? // encrypted (app password)
-  caldavUrl      String? // CalDAV server URL
+  // Доступ к Яндекс Календарю по CalDAV: логин и ПАРОЛЬ ПРИЛОЖЕНИЯ (не
+  // основной пароль от аккаунта). Хранятся как есть.
+  caldavLogin    String?
+  caldavPassword String?
+  caldavUrl      String? // адрес CalDAV-сервера
 
   // Calendar identifiers
   calendarId String? // provider-specific calendar ID or URL
