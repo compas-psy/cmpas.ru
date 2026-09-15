@@ -1,0 +1,741 @@
+<title>Вход, документы, деньги</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#faf8f5; --card:#ffffff; --sunk:#f3efe8;
+  --ink:#17211c; --muted:#6d7d74; --faint:#93a099;
+  --forest:#1a4d3a; --forest-ink:#123528; --forest-soft:#e7efe9;
+  --gold:#c9a961; --gold-ink:#8b6914; --gold-soft:#f7f0de;
+  --alarm:#a63a2c; --alarm-soft:#f8eae7;
+  --line:#e4ded3; --line-strong:#cfc7b8;
+  --shadow:0 1px 2px rgba(23,33,28,.05), 0 8px 24px -16px rgba(23,33,28,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111614; --card:#1a211d; --sunk:#151b18;
+    --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+    --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+    --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+    --alarm:#e08b7b; --alarm-soft:#2c1d19;
+    --line:#2a332e; --line-strong:#3a453e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111614; --card:#1a211d; --sunk:#151b18;
+  --ink:#e8ece9; --muted:#98a69e; --faint:#75837b;
+  --forest:#79b394; --forest-ink:#a6d4bb; --forest-soft:#1d2a24;
+  --gold:#d6bb80; --gold-ink:#e2cb9b; --gold-soft:#272117;
+  --alarm:#e08b7b; --alarm-soft:#2c1d19;
+  --line:#2a332e; --line-strong:#3a453e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Golos Text","Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+
+h1,h2,h3,h4{font-family:"PT Serif",Georgia,serif; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.4vw,46px); line-height:1.1; letter-spacing:-.015em}
+h2{font-size:clamp(22px,3.4vw,29px); line-height:1.2}
+h3{font-size:19px; line-height:1.3}
+h4{font-size:16px; line-height:1.35}
+p{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:.82em; letter-spacing:-.01em}
+code{background:var(--sunk); border:1px solid var(--line); border-radius:4px; padding:.08em .34em; color:var(--muted); word-break:break-word}
+
+.eyebrow{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-ink); font-family:"Golos Text",sans-serif;
+}
+.lede{font-size:17px; color:var(--muted); max-width:62ch}
+.stack{display:flex; flex-direction:column}
+.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}.g32{gap:32px}.g48{gap:48px}
+
+/* --- шапка --- */
+header.top{
+  border-bottom:1px solid var(--line);
+  padding-block:44px 34px; margin-bottom:44px;
+}
+.mark{display:flex; align-items:center; gap:10px; margin-bottom:26px}
+.mark .dot{width:11px;height:11px;border-radius:50%;background:var(--forest);flex:none}
+.mark .name{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--forest)}
+.mark .sep{flex:1;height:1px;background:var(--line)}
+.mark .date{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.ask{
+  margin-top:28px; border-left:3px solid var(--gold);
+  background:var(--gold-soft); padding:16px 18px; border-radius:0 10px 10px 0;
+  max-width:66ch;
+}
+.ask b{font-weight:600}
+
+/* --- секции --- */
+section{padding-block:40px 0; scroll-margin-top:20px}
+.sechead{display:flex; flex-direction:column; gap:8px; margin-bottom:24px}
+
+/* --- оглавление --- */
+nav.toc{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:2px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin-top:34px;
+}
+nav.toc a{
+  background:var(--card); box-shadow:0 0 0 1px var(--line); padding:12px 14px; text-decoration:none; color:var(--ink);
+  font-size:13.5px; display:flex; gap:9px; align-items:baseline;
+}
+nav.toc a:hover{background:var(--forest-soft)}
+nav.toc a span{color:var(--gold-ink); font-weight:600; font-size:11px; font-variant-numeric:tabular-nums}
+
+/* --- карта --- */
+.lane{display:grid; grid-template-columns:104px 1fr; gap:0; border-top:1px solid var(--line)}
+.lane:last-of-type{border-bottom:1px solid var(--line)}
+.lane-label{
+  padding:20px 14px 20px 0; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:4px;
+}
+.lane-label .who{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--forest)}
+.lane-label .when{font-size:12px;color:var(--faint); line-height:1.35}
+.lane-body{padding:20px 0 20px 18px; display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+
+.node{
+  background:var(--card); border:1px solid var(--line); border-radius:9px;
+  padding:10px 12px; min-width:150px; max-width:230px; flex:1 1 150px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px;
+}
+.node.msg{background:var(--forest-soft); border-color:transparent}
+.node.bad{border-color:var(--alarm); background:var(--alarm-soft)}
+.node .where{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.node .what{font-size:13.5px; font-weight:600; line-height:1.3}
+.node .note{font-size:12px; color:var(--muted); line-height:1.4}
+.node .tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:2px}
+
+.arrow{align-self:center; color:var(--line-strong); font-size:17px; flex:none; user-select:none}
+
+.chip{
+  display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; background:var(--alarm-soft); color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 30%, transparent);
+  text-decoration:none; white-space:nowrap;
+}
+.chip.ok{background:var(--forest-soft); color:var(--forest-ink); border-color:color-mix(in srgb, var(--forest) 30%, transparent)}
+:root[data-theme="dark"] .chip.ok, :root:not([data-theme="light"]) .chip.ok{color:var(--forest-ink)}
+
+/* --- каркасы --- */
+.wf-pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; align-items:start}
+.wf-col{display:flex; flex-direction:column; gap:10px}
+.wf-cap{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase}
+.wf-cap.now{color:var(--alarm)}
+.wf-cap.next{color:var(--forest)}
+.wf{
+  border:1px solid var(--line-strong); border-radius:16px; background:var(--card);
+  padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow);
+}
+.wf-status{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; letter-spacing:.03em}
+.wf-h{font-family:"PT Serif",Georgia,serif; font-size:16px; font-weight:700}
+.wf-sub{font-size:11.5px; color:var(--muted); line-height:1.4}
+.wf-card{border:1px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.wf-row{display:flex; gap:6px; align-items:center}
+.wf-row.rw{flex-wrap:wrap}
+.wf-av{width:26px;height:26px;border-radius:50%;background:var(--forest-soft);flex:none;border:1px solid var(--line)}
+.wf-line{height:7px;border-radius:3px;background:var(--line);flex:1}
+.wf-line.s{width:38%;flex:none}
+.wf-line.m{width:60%;flex:none}
+.wf-t{font-size:12px}
+.wf-t.b{font-weight:600}
+.wf-meta{font-size:10.5px;color:var(--faint)}
+.wf-btn{
+  flex:1 1 0; min-width:0; text-align:center; font-size:11.5px; font-weight:600;
+  padding:8px 6px; border-radius:9px; border:1px solid var(--line-strong); color:var(--ink);
+  background:var(--card); white-space:nowrap; overflow:hidden;
+}
+.wf-btn.pri{background:var(--forest); border-color:var(--forest); color:#fff}
+:root[data-theme="dark"] .wf-btn.pri, :root:not([data-theme="light"]) .wf-btn.pri{color:#0f1a15}
+.wf-btn.cut{border-color:var(--alarm); color:var(--alarm); border-style:dashed}
+.wf-btn.off{color:var(--faint); border-color:var(--line); background:var(--sunk)}
+.wf-btn.danger{color:var(--alarm); border-color:color-mix(in srgb, var(--alarm) 40%, transparent)}
+.wf-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--forest-soft);color:var(--forest-ink)}
+.wf-pill.gold{background:var(--gold-soft); color:var(--gold-ink)}
+.wf-note{font-size:11px; color:var(--muted); padding-left:2px; border-left:2px solid var(--line); padding-block:1px; padding-inline-start:8px}
+.wf-msg{background:var(--forest-soft); border-radius:12px 12px 12px 3px; padding:9px 11px; display:flex; flex-direction:column; gap:5px}
+.wf-msg .l{font-size:11.5px; line-height:1.5}
+.wf-msg .url{font-family:"JetBrains Mono",monospace; font-size:9.5px; color:var(--alarm); word-break:break-all}
+.wf-msg .anchor{color:var(--forest-ink); text-decoration:underline; text-underline-offset:2px; font-weight:600}
+
+/* --- дефекты --- */
+.defects{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line)}
+.def{
+  display:grid; grid-template-columns:52px 1fr; gap:16px;
+  padding-block:18px; border-bottom:1px solid var(--line);
+}
+.def-id{
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:500;
+  color:var(--alarm); padding-top:1px;
+}
+.def-id.fixed{color:var(--forest)}
+.def-b{display:flex; flex-direction:column; gap:7px; min-width:0}
+.def-b .t{font-weight:600; font-size:15.5px; line-height:1.35}
+.def-b .why{font-size:13.5px; color:var(--muted)}
+.def-b .src{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px}
+.def-b .src .mono{color:var(--muted)}
+
+/* --- таблица сообщений --- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:13.5px}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700; background:var(--sunk)}
+tr:last-child td{border-bottom:none}
+td .mono{font-size:11.5px; color:var(--muted); word-break:break-word}
+
+/* --- вопросы --- */
+.q{border:1px solid var(--line); border-radius:12px; background:var(--card); padding:18px 20px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow)}
+.q .qn{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink)}
+.q .qt{font-family:"PT Serif",Georgia,serif; font-size:19px; line-height:1.3}
+.opts{display:flex; flex-direction:column; gap:8px}
+.opt{display:grid; grid-template-columns:22px 1fr; gap:10px; font-size:14px; align-items:start}
+.opt .box{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.opt.rec .box{border-color:var(--forest); background:var(--forest)}
+.opt .lbl b{font-weight:600}
+.opt .lbl .rec-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--forest); text-transform:uppercase; margin-left:6px}
+.opt .lbl .sub{display:block; color:var(--muted); font-size:13px; line-height:1.5}
+
+/* --- план --- */
+.steps{display:flex; flex-direction:column}
+.step{display:grid; grid-template-columns:30px 1fr; gap:14px; padding-block:14px; border-bottom:1px solid var(--line)}
+.step:first-child{border-top:1px solid var(--line)}
+.step .n{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); font-weight:500; padding-top:3px}
+.step .b{display:flex; flex-direction:column; gap:4px}
+.step .b .t{font-weight:600}
+.step .b .d{font-size:13.5px; color:var(--muted)}
+
+footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+
+@media (max-width:620px){
+  .lane{grid-template-columns:1fr}
+  .lane-label{border-right:none; border-bottom:1px dashed var(--line); padding:16px 0 10px; flex-direction:row; gap:10px; align-items:baseline}
+  .lane-body{padding:14px 0 20px}
+  .arrow{display:none}
+  .node{max-width:none}
+  .def{grid-template-columns:1fr; gap:6px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:background-color .15s ease}
+}
+</style>
+
+<style>
+.chip.half{background:var(--gold-soft); color:var(--gold-ink); border-color:color-mix(in srgb, var(--gold) 40%, transparent)}
+td.num{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--gold-ink); white-space:nowrap}
+.tnote{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
+.mx td{text-align:center}
+.mx td:nth-child(1),.mx td:nth-child(2){text-align:left}
+.mx .y{color:var(--forest); font-weight:700}
+.mx .n{color:var(--alarm); font-weight:700}
+.mx .d{color:var(--faint)}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="mark">
+    <div class="dot"></div>
+    <div class="name">ПРАКТИКА</div>
+    <div class="sep"></div>
+    <div class="date">15.09.2026 · на утверждение</div>
+  </div>
+  <div class="eyebrow" style="margin-bottom:12px">Разбор пути · специалист, книга 2 из 3</div>
+  <h1>Вход, документы, деньги</h1>
+  <p class="lede" style="margin-top:16px">Семнадцать путей вокруг работы: как человек входит и что делает, если войти не получилось; какие документы подписывает и почему один раз подтверждает, что он оператор персональных данных; как упирается в конец пробного периода и платит; как настраивает практику до того, как в ней появится первый клиент.</p>
+
+  <div class="ask">
+    <b>Это рамка вокруг всего остального.</b> Здесь не ведут приём и не пишут заметок — здесь решают, можно ли вообще работать. Поэтому цена ошибки другая: расхождение в ежедневной работе стоит неудобства, расхождение здесь стоит доступа, денег или доверия.
+    <br><br>Девять расхождений. Тяжелее всего одно: <b>решение «пускать или не пускать» продукт принимает по собственной копии правила, и копия эта — старая версия</b>, которую однажды уже признали неверной и переписали в другом месте.
+  </div>
+
+  <nav class="toc">
+    <a href="#map"><span>01</span>Карта рамки</a>
+    <a href="#matrix"><span>02</span>Семнадцать путей</a>
+    <a href="#frames"><span>03</span>Каркасы</a>
+    <a href="#defects"><span>04</span>Дефекты</a>
+    <a href="#forks"><span>05</span>Развилки</a>
+    <a href="#plan"><span>06</span>Порядок работ</a>
+  </nav>
+</header>
+
+<section id="map">
+  <div class="sechead">
+    <div class="eyebrow">01 · Карта рамки</div>
+    <h2>От «хочу попробовать» до «плачу за это»</h2>
+    <p class="lede">Красной рамкой — места, где человек остаётся без ответа или без выхода. Номер ведёт в раздел 04.</p>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">впервые</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Экран входа</div>
+        <div class="what">Яндекс · ВК · почта — и всё через СИМПАС</div>
+        <div class="note">Дверь выбирает сервер, а не экран. Почта из чужого профиля принимается, только если она подтверждена там. На телефоне дверей даже больше: код из письма, ссылка, нативный Яндекс.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Если войти не вышло</div>
+        <div class="what">«Доступ закрыт»</div>
+        <div class="note">Экран есть, выхода с него нет: ни формы обращения, ни адреса поддержки. Человек заперт и не знает, к кому идти.</div>
+        <div class="tags"><a class="chip" href="#v5">В5</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Тридцать дней</div>
+        <div class="what">Пробный период открывается сам</div>
+        <div class="note">Заводится при первом входе, если ещё не заведён. Отдельного шага «начать пробный период» человек не проходит — и правильно.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">подписывает</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Юридические документы</div>
+        <div class="what">Условия и приватность — отдельными галочками</div>
+        <div class="note">Реклама отдельно и необязательна. Согласие не проставляется молча при входе: только явным действием, с версией, датой и указанием, откуда оно пришло.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Оператор персональных данных</div>
+        <div class="what">Подтверждается один раз, до первого клиента</div>
+        <div class="note">Гейт стоит на всех шести дорогах заведения клиента и в ботах. Отказ ничего не ломает: окно просто закрывается, действие не начинается.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Документы на сайте</div>
+        <div class="what">Два из пяти — пустые заглушки</div>
+        <div class="note">«Условия практики» и «Профессиональное соглашение» отвечают «документ готовится и будет опубликован здесь». На них ссылаются из продукта.</div>
+        <div class="tags"><a class="chip" href="#v9">В9</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">настраивает<br>практику</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Мастер настройки</div>
+        <div class="what">Выбрасывает на двух шагах из шести</div>
+        <div class="note">Шаг «Мессенджер» уводит в интеграции, шаг «Первый клиент» — в импорт. Возврата в мастер нет ни оттуда, ни оттуда: человек оказывается в незнакомом месте, а мастер считает, что его бросили.</div>
+        <div class="tags"><a class="chip" href="#v4">В4</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="where">Всё остальное</div>
+        <div class="what">Профиль, часы приёма, кабинеты, расписание, ссылка</div>
+        <div class="note">Правила расписания с окнами по дням, офлайн-кабинеты с подсказкой адреса, три режима самозаписи, человеческий адрес страницы записи. Работает и в вебе, и на телефоне.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">тридцатый<br>день</div></div>
+    <div class="lane-body">
+      <div class="node bad">
+        <div class="where">Решение «пускать или нет»</div>
+        <div class="what">Считается по собственной копии правила</div>
+        <div class="note">Продукт умеет отвечать на вопрос «кончился ли доступ» одним местом — там это правило написано и проверено тестами. Гейт до него не доходит: у него своя копия, и копия эта — прежняя версия, которую переписали как раз потому, что она давала неверный ответ.</div>
+        <div class="tags"><a class="chip" href="#v1">В1</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Экран оплаты</div>
+        <div class="what">Ни слова о том, что с практикой</div>
+        <div class="note">Человека с двумя десятками клиентов перебрасывает сюда, и экран говорит только про цену и кнопку. Цела ли его работа, ждёт ли она его — не сказано нигде.</div>
+        <div class="tags"><a class="chip" href="#v2">В2</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">С телефона</div>
+        <div class="what">«Оплата откроется на сайте»</div>
+        <div class="note">Приложение показывает состояние подписки и отправляет платить в браузер.</div>
+        <div class="tags"><a class="chip" href="#v6">В6</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Система</div><div class="when">после<br>оплаты</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Банк сообщает результат</div>
+        <div class="what">Подпись проверена, срок продлён</div>
+        <div class="note">Продление считается от текущего конца, а не от «сейчас» — оплативший заранее не теряет остаток. Повторные сообщения банка не удваивают срок.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Возврат денег</div>
+        <div class="what">Только принять, не инициировать</div>
+        <div class="note">Если возврат нужен, его делают руками в кабинете банка. Продукт о нём узнаёт постфактум.</div>
+        <div class="tags"><a class="chip" href="#v7">В7</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Просто не продлил</div>
+        <div class="what">Этого не видит никто</div>
+        <div class="note">Отток считается только по возврату денег. Человек, который тихо не продлил подписку, в цифрах не появляется вовсе.</div>
+        <div class="tags"><a class="chip" href="#v8">В8</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-label"><div class="who">Специалист</div><div class="when">решил<br>уйти</div></div>
+    <div class="lane-body">
+      <div class="node">
+        <div class="where">Выход из аккаунта</div>
+        <div class="what">Работает</div>
+        <div class="note">Закрыто разбором 10.09: кнопка «Выйти» раньше не выходила.</div>
+        <div class="tags"><span class="chip ok">исправно</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Забрать свою практику</div>
+        <div class="what">Некуда нажать</div>
+        <div class="note">Разделы «Безопасность» и «Экспорт данных» были в настройках и убраны как пустые. Единственная выгрузка, доступная специалисту, — журнал согласий в виде таблицы.</div>
+        <div class="tags"><a class="chip" href="#v3">В3</a></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node bad">
+        <div class="where">Удалить аккаунт</div>
+        <div class="what">Умеет только администратор</div>
+        <div class="note">То есть попросить учредителя. Для продукта, который зовёт «перенесите практику к нам», это разговор про доверие, а не про удобство.</div>
+        <div class="tags"><a class="chip" href="#v3">В3</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="matrix">
+  <div class="sechead">
+    <div class="eyebrow">02 · Семнадцать путей</div>
+    <h2>Каждый — через шесть проверок</h2>
+    <p class="lede">Те же шесть вопросов, что в реестре. <span class="mx"><span class="y">да</span></span> — пройдено, <span class="mx"><span class="n">нет</span></span> — нет, <span class="mx"><span class="d">—</span></span> — к этому пути не относится.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table class="mx">
+      <thead><tr>
+        <th style="width:56px">№</th><th style="min-width:230px">Путь</th>
+        <th style="width:78px">Обеща&shy;ние</th><th style="width:70px">Не ту&shy;пик</th><th style="width:82px">Не мол&shy;чит</th>
+        <th style="width:96px">Без мес&shy;сен&shy;джера</th><th style="width:92px">Веб = при&shy;ложе&shy;ние</th><th style="width:88px">Один ис&shy;точник</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="num">A1</td><td>Впервые входит<div class="tnote">Дверь выбирает сервер; почта — только подтверждённая</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">A2</td><td>Входит с телефона<div class="tnote">Код из письма, ссылка, нативный Яндекс — шире веба</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">A3</td><td>Не может войти, доступ закрыт</td><td class="y">да</td><td class="n">нет</td><td class="n">нет</td><td class="y">да</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">A4</td><td>Принимает юридические документы</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">A5</td><td>Даёт или не даёт согласие на рекламу</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">A6</td><td>Подтверждает, что он оператор ПДн</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">A7</td><td>Конец пробного периода, оплата<div class="tnote">Гейт со своей копией правила; экран молчит про практику</div></td><td class="n">нет</td><td class="n">нет</td><td class="n">нет</td><td class="y">да</td><td class="n">нет</td><td class="n">нет</td></tr>
+        <tr><td class="num">A8</td><td>Выходит из аккаунта</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">A9</td><td>Забирает данные или удаляет аккаунт</td><td class="n">нет</td><td class="n">нет</td><td class="n">нет</td><td class="d">—</td><td class="d">—</td><td class="d">—</td></tr>
+        <tr><td class="num">B1</td><td>Проходит мастер настройки</td><td class="y">да</td><td class="n">нет</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B2</td><td>Доходит настройку по чек-листу</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td></tr>
+        <tr><td class="num">B3</td><td>Правит профиль<div class="tnote">На телефоне только ФИО</div></td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="n">нет</td><td class="y">да</td></tr>
+        <tr><td class="num">B4</td><td>Настраивает часы приёма и правила отмены</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">B5</td><td>Заводит офлайн-кабинеты</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">B6</td><td>Строит расписание правилами</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">B7</td><td>Переключает режим самозаписи</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="d">—</td><td class="y">да</td><td class="y">да</td></tr>
+        <tr><td class="num">B8</td><td>Берёт свою ссылку и рассылает</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td><td class="y">да</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ask" style="margin-top:24px">
+    <b>Что видно из таблицы.</b> Настройка практики — весь блок B — почти безупречна: единственная зазубрина в том, что мастер выбрасывает наружу. Зато две строки красные насквозь: <b>конец пробного периода</b> и <b>уход из продукта</b>. Это два момента, когда человек думает про деньги и про доверие, — и ровно в них продукт отвечает хуже всего.
+  </div>
+</section>
+
+<section id="frames">
+  <div class="sechead">
+    <div class="eyebrow">03 · Каркасы</div>
+    <h2>Как сейчас и как предлагается</h2>
+    <p class="lede">Два места, где разница решает, останется человек или уйдёт.</p>
+  </div>
+
+  <div class="stack g48">
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 1 · Кончился пробный период <a class="chip" href="#v2" style="vertical-align:middle">В2</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Тридцать первый день. У человека в ПРАКТИКЕ двадцать клиентов, расписание и полгода заметок. Он открывает кабинет и попадает сюда.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/billing</span><span></span></div>
+            <div class="wf-h">Подписка закончилась</div>
+            <div class="wf-sub">Оформите подписку, чтобы продолжить работу</div>
+            <div class="wf-card"><div class="wf-t b">1 490 ₽ / месяц</div><div class="wf-meta">Неограниченные клиенты и сессии · заметки · боты · календари</div></div>
+            <div class="wf-row"><div class="wf-btn pri">Оплатить</div></div>
+            <div class="wf-note">Про его практику — ни слова. Цела ли она, ждёт ли, сколько будет ждать, можно ли забрать, если платить он не собирается.</div>
+            <div class="wf-note">Человек в этот момент решает не «дорого или нет», а «не потерял ли я полгода работы».</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>cmpas.ru/billing</span><span></span></div>
+            <div class="wf-h">Пробный период закончился</div>
+            <div class="wf-sub">Ваша практика на месте: 20 клиентов, 64 заметки, расписание. Ничего не удаляется.</div>
+            <div class="wf-card"><div class="wf-t b">1 490 ₽ / месяц</div><div class="wf-meta">Неограниченные клиенты и сессии · заметки · боты · календари</div></div>
+            <div class="wf-row"><div class="wf-btn pri">Оплатить и продолжить</div></div>
+            <div class="wf-row"><div class="wf-btn">Забрать свои данные</div></div>
+            <div class="wf-note">Первая строка отвечает на вопрос, который человек задаёт себе раньше вопроса о цене.</div>
+            <div class="wf-note">Вторая кнопка — то, чего сегодня нет вовсе (В3). Продукт, который даёт уйти с вещами, продаётся лучше, чем тот, который держит.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:6px">Каркас 2 · Мастер настройки <a class="chip" href="#v4" style="vertical-align:middle">В4</a></h3>
+      <p class="lede" style="font-size:15px;margin-bottom:16px">Шесть шагов, и на двух из них человека выносит из мастера в незнакомое место без дороги назад.</p>
+      <div class="wf-pair">
+        <div class="wf-col">
+          <div class="wf-cap now">● как сейчас</div>
+          <div class="wf">
+            <div class="wf-status"><span>Шаг 4 из 6 · Мессенджер</span><span></span></div>
+            <div class="wf-sub">Подключите Telegram или MAX, чтобы клиенты получали напоминания</div>
+            <div class="wf-row"><div class="wf-btn pri">Настроить</div></div>
+            <div class="wf-note">Нажатие уводит на страницу интеграций. Мастер закрывается.</div>
+            <div class="wf-note">Оттуда назад в мастер не ведёт ничего: ни кнопки, ни хлебной крошки. Человек настраивает бота и остаётся в кабинете, не дойдя до шагов 5 и 6.</div>
+            <div class="wf-note">То же самое на шаге «Первый клиент» — уводит в импорт.</div>
+          </div>
+        </div>
+        <div class="wf-col">
+          <div class="wf-cap next">● предлагается</div>
+          <div class="wf">
+            <div class="wf-status"><span>Шаг 4 из 6 · Мессенджер</span><span></span></div>
+            <div class="wf-sub">Подключите Telegram или MAX, чтобы клиенты получали напоминания</div>
+            <div class="wf-row rw"><div class="wf-btn pri">Настроить</div><div class="wf-btn">Пропустить пока</div></div>
+            <div class="wf-note">«Настроить» открывает то же самое, но с возвратом: закончил — вернулся на шаг 5.</div>
+            <div class="wf-note">«Пропустить пока» — честная дверь: настройка мессенджера не обязана стоять между человеком и первым клиентом.</div>
+            <div class="wf-note">Пропущенное не теряется — оно остаётся в чек-листе на «Сегодня», который для этого и сделан.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="defects">
+  <div class="sechead">
+    <div class="eyebrow">04 · Дефекты</div>
+    <h2>Девять расхождений</h2>
+    <p class="lede">По порядку тяжести. Первое — про правило, по которому продукт решает, пускать человека или нет.</p>
+  </div>
+
+  <div class="defects">
+
+    <div class="def" id="v1">
+      <div class="def-id">В1</div>
+      <div class="def-b">
+        <div class="t">Решение «пускать или нет» принимается по собственной копии правила — и копия старая</div>
+        <div class="why">Продукт умеет отвечать на вопрос «кончился ли доступ» одним местом: там это правило написано, объяснено и проверено тестами. Оно появилось после разбора, в котором нашли ошибку: прежняя версия брала дату пробного периода всегда, когда подписка не активна, — и у человека, который оплатил сразу, не пробуя, конец доступа получался «неизвестно», то есть доступ не кончался никогда.<br><br>Гейт в кабинете до этого правила не доходит. У него своя копия — и это ровно прежняя, признанная неверной версия. Сегодня расхождение трудно поймать: дата пробного периода проставляется при каждом входе, если её нет, и случай «оплатил, не пробуя» почти не встречается. Но два ответа на один вопрос уже существуют, и правило, охраняющее деньги, живёт в двух видах.</div>
+        <div class="src"><span class="mono">src/app/diary/layout.tsx:169-181</span> (своя копия) против <span class="mono">src/lib/billing/status.ts:63</span> (<span class="mono">computeBillingStatus</span> — источник, с тестами)</div>
+      </div>
+    </div>
+
+    <div class="def" id="v3">
+      <div class="def-id">В3</div>
+      <div class="def-b">
+        <div class="t">Специалист не может ни забрать свою практику, ни удалить аккаунт</div>
+        <div class="why">Разделы «Безопасность» и «Экспорт данных» в настройках были и убраны как пустые — в коде об этом стоит прямая пометка. Удаление аккаунта умеет только администратор, то есть попросить приходится учредителя. Единственная выгрузка, доступная специалисту, — журнал согласий таблицей; клиенты, сессии и заметки не выгружаются ничем.<br><br>Для продукта, который зовёт «перенесите практику к нам», это не вопрос удобства, а вопрос доверия: дверь внутрь широкая — шесть способов завести клиента, три способа перенести практику, — а двери наружу нет вовсе. И это ещё до разговора о правах человека на свои персональные данные.</div>
+        <div class="src"><span class="mono">src/app/diary/settings/page.tsx:262</span> (разделы убраны) · <span class="mono">src/app/admin/(chrome)/users/user-actions.tsx:221</span> (удаление — только у администратора)</div>
+      </div>
+    </div>
+
+    <div class="def" id="v2">
+      <div class="def-id">В2</div>
+      <div class="def-b">
+        <div class="t">Экран оплаты молчит о том, что стало с практикой</div>
+        <div class="why">Человека с двумя десятками клиентов и полугодом заметок перебрасывает сюда на тридцать первый день. Экран говорит про цену, про состав тарифа и показывает кнопку. Слова «данные», «сохранены», «останутся» на нём не встречаются ни разу.<br><br>А думает он в этот момент не про цену. Он думает, цела ли работа и сколько она будет ждать. Молчание в этом месте читается хуже любого ответа — и человек идёт проверять, а не платить.</div>
+        <div class="src"><span class="mono">src/app/billing/page.tsx:94-109</span> — все заголовки и подписи экрана</div>
+      </div>
+    </div>
+
+    <div class="def" id="v4">
+      <div class="def-id">В4</div>
+      <div class="def-b">
+        <div class="t">Мастер настройки выбрасывает наружу на двух шагах из шести</div>
+        <div class="why">Шаг «Мессенджер» уводит на страницу интеграций, шаг «Первый клиент» — в импорт. Ни оттуда, ни оттуда назад в мастер не ведёт ничего: ни кнопки, ни подсказки. Человек делает то, за чем его послали, и остаётся в кабинете, не дойдя до оставшихся шагов. Мастер при этом считает, что его бросили на середине.<br><br>Мастер перестал быть барьером (и правильно: настройка — помощь, а не пропуск), но пока он существует, он обязан либо возвращать, либо честно предлагать пропустить.</div>
+        <div class="src"><span class="mono">src/app/onboarding/page.tsx:262</span> и <span class="mono">:273</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="v5">
+      <div class="def-id">В5</div>
+      <div class="def-b">
+        <div class="t">Заблокированному человеку некуда написать</div>
+        <div class="why">Экран «доступ закрыт» сообщает факт и на этом заканчивается: ни формы обращения, ни адреса поддержки, ни объяснения, что делать. Блокировка бывает и ошибочной, а человек за ней — платящим. Единственный способ разобраться — найти контакт где-то вне продукта.</div>
+        <div class="src"><span class="mono">src/app/auth/blocked/page.tsx</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="v8">
+      <div class="def-id">В8</div>
+      <div class="def-b">
+        <div class="t">Человек, который просто не продлил подписку, не виден в цифрах</div>
+        <div class="why">Отток считается по возврату денег: банк сообщил о возврате — записали. Естественный уход, когда срок вышел и человек не заплатил снова, не порождает никакого события. В коде это прямо отмечено как известный пробел. Для управленческой панели это значит, что «Удержание» показывает не весь отток, а только его громкую часть.</div>
+        <div class="src"><span class="mono">src/app/api/payments/callback/route.ts:153-159</span> — пометка в самом коде</div>
+      </div>
+    </div>
+
+    <div class="def" id="v9">
+      <div class="def-id">В9</div>
+      <div class="def-b">
+        <div class="t">Два юридических документа, на которые ссылается продукт, — пустые заглушки</div>
+        <div class="why">«Условия практики» и «Профессиональное соглашение» отвечают одинаково: «документ готовится и будет опубликован здесь». Три остальных документа — условия, приватность и согласие на рассылку — написаны и содержательны. Пустая страница в этом ряду читается не как «ещё не успели», а как «здесь ничего и не будет».</div>
+        <div class="src"><span class="mono">src/app/legal/practice/page.tsx:18</span> · <span class="mono">src/app/legal/pro/page.tsx:18</span></div>
+      </div>
+    </div>
+
+    <div class="def" id="v6">
+      <div class="def-id">В6</div>
+      <div class="def-b">
+        <div class="t">Оплатить с телефона нельзя — уводит в браузер</div>
+        <div class="why">Приложение показывает состояние подписки и дату окончания, но платёж не проводит: «Оплата откроется на сайте». Человек, у которого ПРАКТИКА живёт в телефоне, на тридцать первый день должен сесть за компьютер.</div>
+        <div class="src"><span class="mono">android/.../SettingsScreen.kt:553-559</span> · мобильный маршрут <span class="mono">api/mobile/billing</span> только читает</div>
+      </div>
+    </div>
+
+    <div class="def" id="v7">
+      <div class="def-id">В7</div>
+      <div class="def-b">
+        <div class="t">Возврат денег можно только принять, но не сделать</div>
+        <div class="why">Продукт понимает сообщения банка о возврате и правильно закрывает подписку. Инициировать возврат изнутри нельзя: в работе с банком есть только создание платежа и проверка подписи. Возврат делается руками в кабинете банка, и продукт узнаёт о нём постфактум. Пока платящих десятки — это рабочее решение; на сотнях каждая такая операция становится ручной и незаписанной.</div>
+        <div class="src"><span class="mono">src/lib/tinkoff.ts</span> — наружу отдаются только <span class="mono">initPayment</span> и проверка подписи</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="ask" style="margin-top:28px">
+    <b>Что проверено и оказалось в порядке.</b> Единый вход: все три двери ведут через СИМПАС, а почта из чужого профиля принимается только подтверждённой. Юридические согласия: отдельными галочками, с версией, датой и источником, и никогда молча при входе. Аттестация оператора персональных данных: один раз, до первого клиента, на всех шести дорогах и в обоих ботах, а отказ ничего не ломает. Продление подписки считается от текущего конца, а не от «сейчас», и повторное сообщение банка не удваивает срок. Вся настройка практики — профиль, часы, кабинеты, правила расписания, режимы самозаписи, человеческий адрес страницы записи — работает и в вебе, и на телефоне.
+  </div>
+</section>
+
+<section id="forks">
+  <div class="sechead">
+    <div class="eyebrow">05 · Развилки</div>
+    <h2>Три решения, которые не мои</h2>
+    <p class="lede">Отмеченный вариант — предложение; решение за учредителем.</p>
+  </div>
+
+  <div class="stack g24">
+
+    <div class="q">
+      <div class="qn">Развилка 1 · относится к В3</div>
+      <div class="qt">Давать ли человеку забрать свою практику и удалить аккаунт?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Да, и сказать об этом на экране оплаты</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Выгрузка одним файлом: клиенты, сессии, заметки, документы. Удаление аккаунта — по запросу из настроек, с подтверждением и сроком на передумать. И ссылка на выгрузку прямо там, где человек решает, платить ли дальше. Продукт, который даёт уйти с вещами, продаётся лучше того, который держит, — а для «перенесите практику к нам» это ещё и вопрос слова.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Только выгрузка, удаление по письму</b>
+            <span class="sub">Забрать данные может сам, удалить аккаунт — через обращение. Вдвое меньше работы, и главное обещание сдержано.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Оставить как есть</b>
+            <span class="sub">Ни выгрузки, ни удаления. Каждый такой запрос — ручная работа учредителя.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 2 · относится к В2</div>
+      <div class="qt">Что первым читает человек на экране «пробный период закончился»?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Что его практика цела, и сколько её</b><span class="rec-tag">предлагается</span>
+            <span class="sub">«Ваша практика на месте: 20 клиентов, 64 заметки, расписание. Ничего не удаляется.» Числа берутся из базы, обещание — правда: ПРАКТИКА данные и не удаляет. Цена идёт второй строкой, потому что второй же и вопрос.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Одна общая фраза без чисел</b>
+            <span class="sub">«Все данные сохранены». Проще, но слабее: числа — это доказательство, а фраза — просто фраза.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="qn">Развилка 3 · относится к В4</div>
+      <div class="qt">Мастер настройки — чинить или признать набором ссылок?</div>
+      <div class="opts">
+        <div class="opt rec">
+          <div class="box"></div>
+          <div class="lbl"><b>Возвращать в мастер и дать «пропустить»</b><span class="rec-tag">предлагается</span>
+            <span class="sub">Шаг открывает нужную страницу и возвращает обратно; рядом честная кнопка «пропустить пока». Пропущенное не теряется — оно остаётся в чек-листе на «Сегодня», который для этого и сделан.</span>
+          </div>
+        </div>
+        <div class="opt">
+          <div class="box"></div>
+          <div class="lbl"><b>Убрать мастер, оставить чек-лист</b>
+            <span class="sub">Мастер барьером быть перестал, а чек-лист на дашборде делает ту же работу мягче. Тогда шесть шагов превращаются в шесть строк, и выбрасывать неоткуда.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sechead">
+    <div class="eyebrow">06 · Порядок работ</div>
+    <h2>В каком порядке чинить</h2>
+    <p class="lede">Первый шаг не требует решений и делается на готовом.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="b"><div class="t">Гейт доступа спрашивает общее правило</div><div class="d">В1. Правило написано и покрыто тестами; гейту остаётся перестать считать самому. Плюс тест на случай «оплатил, не пробуя» — тот самый, из-за которого правило и переписывали.</div></div></div>
+    <div class="step"><div class="n">02</div><div class="b"><div class="t">Экран оплаты говорит про практику раньше, чем про цену</div><div class="d">В2. Зависит от развилки 2.</div></div></div>
+    <div class="step"><div class="n">03</div><div class="b"><div class="t">Выгрузка практики и удаление аккаунта</div><div class="d">В3. Самая большая работа этой книги и самая тяжёлая по смыслу. Зависит от развилки 1.</div></div></div>
+    <div class="step"><div class="n">04</div><div class="b"><div class="t">Мастер возвращает и умеет пропускать</div><div class="d">В4. Зависит от развилки 3.</div></div></div>
+    <div class="step"><div class="n">05</div><div class="b"><div class="t">Заблокированному есть куда написать, документы перестают быть пустыми</div><div class="d">В5, В9. Две небольшие правки, обе про то, что человек не остаётся один на один с закрытой дверью.</div></div></div>
+    <div class="step"><div class="n">06</div><div class="b"><div class="t">Тихий отток становится виден</div><div class="d">В8. Событие на истечение подписки без продления — и «Удержание» в панели начинает показывать весь отток, а не только возвраты.</div></div></div>
+    <div class="step"><div class="n">07</div><div class="b"><div class="t">Оплата с телефона и возврат из продукта</div><div class="d">В6, В7. Обе задачи — про рост: пока платящих десятки, обе терпят.</div></div></div>
+  </div>
+
+  <div class="ask" style="margin-top:30px">
+    <b>Как это будет проверено.</b> Первый шаг закрывается тестом на само правило: гейт и общее вычисление обязаны давать один ответ на одних и тех же датах, включая случай «подписка была, пробного периода не было». Такой тест переживает следующую правку; проверенный экран — нет.
+  </div>
+</section>
+
+<footer>
+  Книга 2 из 3 по пути специалиста, собрана 15.09.2026 по коду ветки <code>claude/new-session-pgnybh</code>. Разбирает блоки A и B <a href="reestr.html">реестра путей</a> — семнадцать путей из пятидесяти семи. Первая книга: <a href="2026-09-15-put-spetsialista-klienty-den.html">«Клиенты, документы, день»</a>. Следующая — «подключения, тишина, бот, справка». Правки по этому разбору не вносились: он написан до них и ждёт решения учредителя по трём развилкам раздела 05.
+</footer>
+
+</div>
