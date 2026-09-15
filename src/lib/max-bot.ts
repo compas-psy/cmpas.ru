@@ -26,6 +26,7 @@ import { previewMessage, commitMessage } from '@/lib/clients/contact-intake-mess
 import { htmlToPlain, extractLinksForButtons } from '@/lib/messaging/format';
 import { notifySpecialistAboutClientAction } from '@/lib/messaging/specialist-notice';
 import { SESSIONS_IN_BOT, sessionsHeading } from '@/lib/messaging/bot-session-list';
+import { botHelpText } from '@/lib/messaging/bot-help';
 
 const MAX_API = 'https://platform-api2.max.ru';
 const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
@@ -456,20 +457,20 @@ async function handleSessions(userId: number) {
     return sendMaxMessage(userId, 'Аккаунт не найден. Перейдите по ссылке от вашего психолога.');
 }
 
+/**
+ * Справка. Текст берётся из общего модуля — тот же, что в Telegram.
+ *
+ * Своя редакция здесь и была половиной дефекта П10: в MAX справка жила и
+ * успела обзавестись собственным списком команд, в Telegram её не было
+ * вовсе. Ветка КЛИЕНТА остаётся без кабинета и без календаря: войти туда
+ * клиенту нечем, а запись работает по ссылке от его специалиста.
+ */
 async function handleHelp(userId: number) {
     const mid = maxId(userId);
     const psy = await db.user.findFirst({ where: { maxChatId: mid } });
-    if (psy) {
-        return sendMaxMessage(userId,
-            'Доступные команды:\n\n/sessions — ваши ближайшие сессии\n/link — ссылка для записи клиентов\n/help — эта справка\n\nТакже вы можете открыть кабинет по кнопке ниже.',
-            [[{ text: 'Открыть кабинет', url: `${APP_URL}/diary` }], [{ text: 'Календарь', url: `${APP_URL}/diary/calendar` }]]
-        );
-    }
-    // Это ветка для КЛИЕНТА. Здесь предлагали «Открыть ПРАКТИКУ» и команду
-    // «/connect — привязать аккаунт психолога»: и то и другое ведёт в кабинет
-    // специалиста, куда клиенту входить нечем. Человеку, пришедшему к своему
-    // психологу, показывали продукт, который продаётся психологу.
-    return sendMaxMessage(userId, 'Доступные команды:\n\n/sessions — ваши ближайшие записи\n/help — эта справка\n\nЗаписаться и перенести встречу можно по ссылке, которую присылает ваш специалист.');
+    const help = botHelpText(!!psy);
+    const buttons = help.links.map((l) => [{ text: l.label, url: `${APP_URL}${l.path}` }]);
+    return sendMaxMessage(userId, help.text, buttons.length ? buttons : undefined);
 }
 
 async function handleShareLink(userId: number) {
@@ -696,7 +697,12 @@ export async function handleMaxUpdate(update: MaxUpdate) {
                         [{ text: 'Мои сессии', payload: '/sessions' }],
                     ]);
                 } else {
-                    await sendMaxMessage(userId, 'Используйте команды:\n/start — начало\n/sessions — мои записи\n/help — помощь');
+                    // Третья копия списка команд жила здесь — и уже разошлась
+                    // с двумя другими: обещала «/start — начало», которого в
+                    // справке нет. Незнакомый текст от клиента — ровно тот
+                    // случай, когда человеку нужна справка, а не свой её
+                    // пересказ.
+                    await handleHelp(userId);
                 }
             }
         }

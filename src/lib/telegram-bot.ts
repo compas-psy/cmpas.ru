@@ -12,6 +12,7 @@ import { canClientCancel, clientCancelBlockedMessage } from '@/lib/client-cancel
 import { sessionActionToken, sessionActionTokenExpiry, personalClientToken } from '@/lib/client-workflow';
 import { sessionActionButtons } from '@/lib/practice/session-action-links';
 import { escapeHtml } from '@/lib/messaging/format';
+import { botHelpText } from '@/lib/messaging/bot-help';
 import { notifySpecialistAboutClientAction } from '@/lib/messaging/specialist-notice';
 import { SESSIONS_IN_BOT, sessionsHeading } from '@/lib/messaging/bot-session-list';
 import { previewContactIntake, commitContactIntake } from '@/lib/clients/contact-intake';
@@ -108,7 +109,7 @@ async function showPsyMenu(ctx: Context, psy: any) {
         // бот иначе замолчал бы.
         Markup.keyboard([
             ['Мой кабинет', 'Мои сессии'],
-            ['Отправить ссылку на запись']
+            ['Отправить ссылку на запись', 'Справка']
         ]).resize()
     );
 }
@@ -311,6 +312,40 @@ export function setupBot() {
         await ctx.reply('Нажмите на кнопку ниже, чтобы перейти в свой кабинет:',
             Markup.inlineKeyboard([[Markup.button.webApp('Открыть кабинет', `${TELEGRAM_APP_URL}/diary?v=${Date.now()}`)]])
         );
+    });
+
+    /**
+     * СПРАВКА В TELEGRAM. Её здесь не было вовсе.
+     *
+     * Дефект П10 книги 3: восемь тем справки написаны и живут в вебе, в MAX
+     * есть команда /help с двумя кнопками, а в Telegram не было ни команды,
+     * ни кнопки — человек узнавал о возможностях бота, только если угадает
+     * слово в меню.
+     *
+     * Текст один на оба мессенджера (lib/messaging/bot-help.ts): именно так
+     * и расходятся справки — когда каждая написана по месту.
+     */
+    const replyHelp = async (ctx: Context, forSpecialist: boolean) => {
+        const help = botHelpText(forSpecialist);
+        if (!forSpecialist) return ctx.reply(help.text);
+        return ctx.reply(help.text, Markup.inlineKeyboard(
+            help.links.map((l) => [Markup.button.url(l.label, `${TELEGRAM_APP_URL}${l.path}`)]),
+        ));
+    };
+
+    // command('help'), а не help(): в Telegraf это одно и то же, но команда
+    // регистрируется тем же способом, что и /connect выше, — одним приёмом на
+    // весь файл.
+    bot.command('help', async (ctx) => {
+        const tgId = ctx.from?.id.toString();
+        const psy = tgId ? await db.user.findUnique({ where: { telegramChatId: tgId } }) : null;
+        return replyHelp(ctx, !!psy);
+    });
+
+    bot.hears(['Справка'], async (ctx) => {
+        const tgId = ctx.from?.id.toString();
+        const psy = tgId ? await db.user.findUnique({ where: { telegramChatId: tgId } }) : null;
+        return replyHelp(ctx, !!psy);
     });
 
     bot.hears(['Отправить ссылку на запись', '🔗 Отправить ссылку на запись'], async (ctx) => {
