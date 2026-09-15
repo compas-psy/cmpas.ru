@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import AddressAutocomplete from '@/components/ui/address-autocomplete';
 import { CabinetCard } from './CabinetCard';
 import { PRACTICE_TIMEZONES as timezones } from '@/lib/practice/timezones';
+import { dayWord } from '@/lib/ru-plural';
 
 type Settings = {
     timezone: string;
@@ -62,8 +63,7 @@ function billingSubtitle(billing: BillingState | null): string {
     }
     if (billing.trialActive && billing.daysLeft !== null) {
         const d = billing.daysLeft;
-        const word = d % 100 >= 11 && d % 100 <= 14 ? 'дней' : d % 10 === 1 ? 'день' : d % 10 >= 2 && d % 10 <= 4 ? 'дня' : 'дней';
-        return `Осталось ${d} ${word}`;
+        return `Осталось ${d} ${dayWord(d)}`;
     }
     if (billing.isExpired) return 'Оформите подписку, чтобы продолжить работу';
     return 'Состояние оплаты';
