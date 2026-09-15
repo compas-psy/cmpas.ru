@@ -171,6 +171,22 @@ export async function deleteUserAccount(userId: string) {
     const impact = await deleteUserImpact(userId)
     await logAction(adminId, 'delete', userId, impact ?? { note: 'пользователь не найден' })
 
+    // КАЛЕНДАРНЫЕ СВЯЗИ УДАЛЯЮТСЯ ЯВНО И ПЕРВЫМИ.
+    //
+    // Всё остальное уносит каскад, но в этом графе есть одно жёсткое
+    // исключение: CalendarSessionLink ссылается на CalendarIntegration с
+    // onDelete: Restrict. Запрет проверяется немедленно, и порядок, в
+    // котором Postgres обходит каскад, мы не выбираем: если подключение
+    // удалится раньше связи, удаление аккаунта упадёт ошибкой базы — у
+    // того самого специалиста, который календарём пользовался.
+    //
+    // Полагаться на удачный порядок здесь нельзя: цена ошибки — админ
+    // видит отказ и не понимает, почему аккаунт не удаляется. Две строки
+    // выше каскада снимают этот вопрос целиком. Это та же правка, что в
+    // «Отключить календарь» (Ф9), и по той же причине.
+    await db.calendarSessionLink.deleteMany({ where: { psychologistId: userId } })
+    await db.calendarIntegration.deleteMany({ where: { psychologistId: userId } })
+
     // Thanks to Prisma's onDelete: Cascade, deleting the User model
     // automatically handles related Accounts, Sessions, DiarySessions, etc.
     await db.user.delete({

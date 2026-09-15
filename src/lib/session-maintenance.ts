@@ -28,6 +28,26 @@ function sessionIsReadyToSettle(session: { date: Date; time?: string | null; end
     return sessionEndAt(session) < cutoff;
 }
 
+/**
+ * НАПОМИНАТЬ ЛИ ПРО ЗАКРЫТУЮ ВСТРЕЧУ.
+ *
+ * Появилось вместе с расписанием для закрытия встреч (Ф12). Раньше закрытие
+ * случалось только по открытию приложения, и у специалиста, работающего в
+ * браузере, копились месяцы незакрытых встреч. В первый же проход по
+ * расписанию все они закрылись бы разом — и вместе с ними пришло бы столько
+ * же напоминаний «самое время для заметки» про встречи трёхмесячной
+ * давности. Заметку к ним никто уже не напишет, а список уведомлений стал бы
+ * нечитаемым в тот день, когда мы это выложили.
+ *
+ * Поэтому у напоминания есть окно: встречу закрываем всегда, а напоминаем
+ * только про недавние. `windowDays === null` — напоминать про любые: так
+ * зовёт приложение, и его поведение этой правкой не меняется.
+ */
+export function shouldNudgeForSettledSession(sessionEnd: Date, now: Date, windowDays: number | null): boolean {
+    if (windowDays === null) return true;
+    return now.getTime() - sessionEnd.getTime() <= windowDays * 24 * 60 * 60 * 1000;
+}
+
 function isBlankStructuredNotes(value: unknown) {
     if (!Array.isArray(value) || value.length === 0) return true;
     return value.every((block: any) => {
@@ -82,7 +102,12 @@ async function maybeNotifyUnpaidSession(session: any) {
     return true;
 }
 
-export async function settlePastSessionsForPsychologist(psychologistId: string, now = new Date()) {
+export async function settlePastSessionsForPsychologist(
+    psychologistId: string,
+    now = new Date(),
+    options: { nudgeWindowDays?: number | null } = {},
+) {
+    const nudgeWindowDays = options.nudgeWindowDays ?? null;
     const dayEnd = new Date(now);
     dayEnd.setHours(23, 59, 59, 999);
 
@@ -100,6 +125,7 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
     for (const session of ended) {
         await db.diarySession.update({ where: { id: session.id }, data: { status: 'completed', postSessionNudged: true } });
         completed += 1;
+        if (!shouldNudgeForSettledSession(sessionEndAt(session), now, nudgeWindowDays)) continue;
         if (await maybeNotifySessionNeedsNote(session)) noteNudges += 1;
         if (await maybeNotifyUnpaidSession(session)) unpaidNudges += 1;
     }
@@ -112,6 +138,7 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
 
     for (const session of completedWithoutNudge.filter((item) => sessionIsReadyToSettle(item, now))) {
         await db.diarySession.update({ where: { id: session.id }, data: { postSessionNudged: true } });
+        if (!shouldNudgeForSettledSession(sessionEndAt(session), now, nudgeWindowDays)) continue;
         if (await maybeNotifySessionNeedsNote(session)) noteNudges += 1;
         if (await maybeNotifyUnpaidSession(session)) unpaidNudges += 1;
     }
@@ -119,7 +146,10 @@ export async function settlePastSessionsForPsychologist(psychologistId: string, 
     return { completed, noteNudges, unpaidNudges };
 }
 
-export async function settlePastSessionsForAllPsychologists(now = new Date()) {
+export async function settlePastSessionsForAllPsychologists(
+    now = new Date(),
+    options: { nudgeWindowDays?: number | null } = {},
+) {
     const users = await db.diarySession.findMany({
         where: { status: { in: ['confirmed', 'completed'] }, date: { lte: now } },
         select: { psychologistId: true },
@@ -131,7 +161,7 @@ export async function settlePastSessionsForAllPsychologists(now = new Date()) {
     let noteNudges = 0;
     let unpaidNudges = 0;
     for (const user of users) {
-        const result = await settlePastSessionsForPsychologist(user.psychologistId, now);
+        const result = await settlePastSessionsForPsychologist(user.psychologistId, now, options);
         completed += result.completed;
         noteNudges += result.noteNudges;
         unpaidNudges += result.unpaidNudges;

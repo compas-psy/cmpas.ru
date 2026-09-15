@@ -55,6 +55,15 @@ function terminals(): TerminalConfig[] {
     return list;
 }
 
+/**
+ * Все настроенные терминалы. Нужен ежедневной сверке с выпиской
+ * (src/lib/cron/payment-reconciliation.ts): сверять надо каждый терминал,
+ * через который продукт принимает деньги, а знает их только этот модуль.
+ */
+export function paymentTerminals(): TerminalConfig[] {
+    return terminals();
+}
+
 /** Resolve which terminal a given TerminalKey belongs to, if any. */
 export function resolveTerminal(terminalKey: string | undefined): TerminalConfig | null {
     if (!terminalKey) return null;
