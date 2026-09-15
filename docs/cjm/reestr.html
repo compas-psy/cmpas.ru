@@ -462,7 +462,7 @@ table td b{font-weight:600}
   <div class="sechead">
     <div class="eyebrow">05 · Посетитель</div>
     <h2>5 путей</h2>
-    <p class="lede">Только свои: вход, документы и регистрация посетителя — это те же пути специалиста, они не дублируются. Разбора нет.</p>
+    <p class="lede">Только свои: вход, документы и регистрация посетителя — это те же пути специалиста, они не дублируются. Разобрано вместе с интеграциями: <a href="2026-09-15-put-posetitelya-i-integraciy.html">«Витрина и машинное отделение»</a>, 15.09.2026.</p>
   </div>
   <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:280px">Путь</th><th style="width:120px">Где</th><th style="width:118px">Состояние</th><th style="min-width:180px">Адрес в коде</th></tr></thead><tbody>
 <tr><td class="num">П1</td><td><b>Читает лендинг и решается</b><div class="tnote">Шесть кнопок, все ведут на вход специалиста. Двери «я клиент» нет</div></td><td class="surf">веб</td><td><span class="chip half">наполовину</span></td><td><span class="mono">app/page.tsx</span></td></tr>
@@ -477,14 +477,14 @@ table td b{font-weight:600}
   <div class="sechead">
     <div class="eyebrow">06 · Интеграции и фон</div>
     <h2>26 путей, где вторая сторона не человек</h2>
-    <p class="lede">Календари, банк, единый вход, приёмник событий и тринадцать фоновых процессов. Ломается редко, но тихо: у этих путей нет человека, который пожалуется.</p>
+    <p class="lede">Календари, банк, единый вход, приёмник событий и тринадцать фоновых процессов. Ломается редко, но тихо: у этих путей нет человека, который пожалуется. Разобрано целиком: <a href="2026-09-15-put-posetitelya-i-integraciy.html">«Витрина и машинное отделение»</a>, 15.09.2026.</p>
   </div>
   <div class="tablewrap"><table><thead><tr><th style="width:62px">№</th><th style="min-width:300px">Путь</th><th style="width:118px">Состояние</th><th style="min-width:200px">Адрес в коде</th></tr></thead><tbody>
 <tr><td class="num">И1</td><td><b>Подключение Google Календаря</b><div class="tnote">Отказные ветки разведены честно</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/google/connect</span></td></tr>
 <tr><td class="num">И2</td><td><b>Подключение Яндекс-календаря по CalDAV</b><div class="tnote">Пароль приложения хранится у нас</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/yandex/connect</span></td></tr>
 <tr><td class="num">И3</td><td><b>Выгрузка сессий в чужой календарь</b><div class="tnote">Срабатывает на создание, перенос и отмену</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/calendar/auto-sync.ts:72</span></td></tr>
 <tr><td class="num">И4</td><td><b>Чтение чужих событий, чтобы не назначить поверх</b><div class="tnote">Вебхуков нет — опрос по требованию</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/calendar/normalized-event.ts</span></td></tr>
-<tr><td class="num">И5</td><td><b>Отключение календаря</b><div class="tnote">Выгруженные события остаются в чужом календаре</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">diary/actions/settings.ts:210</span></td></tr>
+<tr><td class="num">И5</td><td><b>Отключение календаря</b><div class="tnote">Кнопка падает с ошибкой базы у всех, кто синхронизировал хоть одну встречу; выгруженные события остаются в чужом календаре</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">diary/actions/settings.ts:210</span></td></tr>
 <tr><td class="num">И6</td><td><b>Отладка: что реально отдаёт провайдер</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/calendar/debug</span></td></tr>
 <tr><td class="num">И7</td><td><b>Оплата подписки</b><div class="tnote">Два терминала: сайт и приложение</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/payments/create</span></td></tr>
 <tr><td class="num">И8</td><td><b>Банк сообщает результат — колбэк</b><div class="tnote">Подпись проверяется, переходы идемпотентны</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">api/payments/callback</span></td></tr>
@@ -494,7 +494,7 @@ table td b{font-weight:600}
 <tr><td class="num">И12</td><td><b>Единый вход СИМПАС</b><div class="tnote">Включается ключом; по умолчанию дверь не переключена</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/auth/simpasid.ts</span></td></tr>
 <tr><td class="num">И13</td><td><b>Приёмник событий чужих продуктов</b><div class="tnote">Выключен флагом по умолчанию</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">api/ingest</span></td></tr>
 <tr><td class="num">И14</td><td><b>Сторож вебхука Telegram, каждые 5 минут</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">instrumentation.ts:25</span></td></tr>
-<tr><td class="num">И15</td><td><b>Напоминания о встрече, каждые 15 минут</b><div class="tnote">Дважды при двух каналах; в MAX без ссылки</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/cron/reminders.ts</span></td></tr>
+<tr><td class="num">И15</td><td><b>Напоминания о встрече, каждые 15 минут</b><div class="tnote">Канал теперь один на человека, тихие часы соблюдаются; у прохода за час тихих часов нет намеренно</div></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/reminders.ts</span></td></tr>
 <tr><td class="num">И16</td><td><b>Утренний дайджест специалисту</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/digest.ts</span></td></tr>
 <tr><td class="num">И17</td><td><b>Еженедельная сводка специалисту</b></td><td><span class="chip ok">целиком</span></td><td><span class="mono">lib/cron/digest.ts</span></td></tr>
 <tr><td class="num">И18</td><td><b>Вопрос о самочувствии после встречи</b><div class="tnote">Выключен по умолчанию; ответ никто не читает</div></td><td><span class="chip half">наполовину</span></td><td><span class="mono">lib/cron/post-session.ts</span></td></tr>
