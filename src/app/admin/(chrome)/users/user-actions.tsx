@@ -9,6 +9,8 @@ import {
     toggleUserBlock, changeUserRole, resetUserSettings, deleteUserAccount,
     extendUserTrial, resetUserTrialFromNow, setUserTrialForever,
 } from "@/app/admin/actions/users"
+import { deleteUserImpact } from "@/app/admin/actions/users"
+import { plural } from "@/lib/ru-plural"
 import { useRouter } from "next/navigation"
 
 export function UserActions({
@@ -210,10 +212,32 @@ export function UserActions({
                             </button>
 
                             <button
-                                onClick={() => {
-                                    if (confirm("УДАЛИТЬ АККАУНТ НАВСЕГДА? Это необратимо!")) {
-                                        handleAction(() => deleteUserAccount(user.id))
+                                onClick={async () => {
+                                    // ВОПРОС НАЗЫВАЕТ, КОГО И СКОЛЬКО.
+                                    //
+                                    // Здесь стояло «УДАЛИТЬ АККАУНТ НАВСЕГДА? Это
+                                    // необратимо!» — заглавными буквами и без единого
+                                    // имени. Человек, разбирающий десяток обращений
+                                    // подряд, видит одинаковые окна и рано или поздно
+                                    // подтверждает не то. Заглавные буквы от этого не
+                                    // защищают; защищает названное имя и число того,
+                                    // что исчезнет.
+                                    //
+                                    // И ещё: тестовый сброс — действие МЯГЧЕ — спрашивал
+                                    // дважды, а удаление один раз. Теперь наоборот, как
+                                    // и должно быть: второй вопрос требует ввести почту.
+                                    const impact = await deleteUserImpact(user.id)
+                                    if (!impact) { alert("Пользователь не найден — возможно, уже удалён."); return }
+                                    const who = impact.name ? `${impact.name} (${impact.email})` : impact.email
+                                    const what = `${impact.clients} ${plural(impact.clients, 'клиент', 'клиента', 'клиентов')}`
+                                        + ` и ${impact.sessions} ${plural(impact.sessions, 'встреча', 'встречи', 'встреч')}`
+                                    if (!confirm(`Удалить аккаунт ${who}?\n\nВместе с ним исчезнут ${what}. Это данные его клиентов, восстановить их нельзя.`)) return
+                                    const typed = prompt(`Чтобы подтвердить, введите почту аккаунта:\n${impact.email}`)
+                                    if (typed?.trim().toLowerCase() !== impact.email.trim().toLowerCase()) {
+                                        if (typed !== null) alert("Почта не совпала — удаление отменено.")
+                                        return
                                     }
+                                    handleAction(() => deleteUserAccount(user.id))
                                 }}
                                 className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-red-50 transition-colors text-left text-red-600"
                             >
