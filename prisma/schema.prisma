@@ -359,6 +359,9 @@ model Order {
   phone         String
   contactMethod String // telegram, whatsapp, max
   status        String  @default("NEW") // NEW, CONTACTED, PROCESSING, COMPLETED, CANCELLED
+  /// Слова человека из формы заказа: сколько экземпляров, вопрос по доставке.
+  /// Отдельно от notes — там пометки того, кто заказ обрабатывает.
+  message       String?
   notes         String?
   // Tracking
   visitorId     String? // Link to VisitorAnalytics

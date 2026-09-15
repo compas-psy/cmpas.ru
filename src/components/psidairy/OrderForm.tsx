@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 import { submitOrder } from '@/app/actions';
+import { VISITOR_ID_COOKIE } from '@/lib/analytics/visitor-cookie';
 
 export default function OrderForm() {
     const [formData, setFormData] = useState({
@@ -70,7 +71,16 @@ export default function OrderForm() {
             return;
         }
 
-        const result = await submitOrder(formData);
+        // Метка посетителя (Ф3): приём заказа умел её принимать, форма не
+        // передавала — поле в базе есть и всегда было пустым. По ней видно,
+        // откуда человек пришёл, и это единственное, что связывает заявку с
+        // его приходом на сайт.
+        const visitorId = document.cookie
+            .split('; ')
+            .find((part) => part.startsWith(`${VISITOR_ID_COOKIE}=`))
+            ?.split('=')[1];
+
+        const result = await submitOrder({ ...formData, visitorId });
 
         if (result.success) {
             alert('Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.');
@@ -184,7 +194,21 @@ export default function OrderForm() {
                             Отправить заявку
                         </button>
 
-                        <p className="text-[10px] text-gray-400 text-center mt-4">
+                        {/*
+                          * Дефект Ф4: форма собирала имя, телефон, адрес выхода
+                          * в сеть и город, не сказав об этом ни слова. Ссылка на
+                          * политику была только в подвале, ниже формы.
+                          */}
+                        <p className="text-[11px] text-foreground/50 text-center mt-4 leading-relaxed">
+                            Нажимая «Отправить заявку», вы соглашаетесь на обработку имени и телефона для связи по
+                            заказу — на условиях{' '}
+                            <a href="/legal/privacy" className="underline hover:text-primary transition">
+                                политики конфиденциальности
+                            </a>
+                            .
+                        </p>
+
+                        <p className="text-[10px] text-gray-400 text-center mt-3">
                             * Поля отмеченные звёздочкой обязательны для заполнения
                         </p>
                     </form>
