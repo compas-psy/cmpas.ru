@@ -174,8 +174,28 @@ export async function updateSettings(data: {
 export async function getIntegrations() {
     try {
         const psychologistId = await getPsychologistId();
+        // ЯВНЫЙ СПИСОК ПОЛЕЙ, А НЕ СТРОКА ЦЕЛИКОМ.
+        //
+        // Раньше отсюда уходила вся строка — вместе с accessToken,
+        // refreshToken и паролем приложения Яндекса. Это данные самого
+        // специалиста, и всё же им нечего делать в браузере: экран их не
+        // показывает и не использует, а любая дыра на странице превращает
+        // их в доступ к чужому календарю. Заодно это тот список, который
+        // экран действительно читает, — включая состояние подключения
+        // (Ф10).
         const integrations = await db.calendarIntegration.findMany({
             where: { psychologistId },
+            select: {
+                id: true,
+                provider: true,
+                accountEmail: true,
+                isActive: true,
+                lastSynced: true,
+                conflictsCount: true,
+                syncFrom: true,
+                lastErrorAt: true,
+                lastErrorCode: true,
+            },
         });
         return { success: true, data: integrations };
     } catch (e: any) {

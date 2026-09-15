@@ -3,6 +3,7 @@
 import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import { logSafeFailure, providerErrorCode } from '@/lib/observability/log';
+import { markCalendarBroken, markCalendarHealthy, looksLikeAccessRevoked, type CalendarErrorCode } from '@/lib/calendar/health';
 
 // Task 12 (PRAKTIKA MVP, founder correction round 3): the sync adapter is
 // now link-aware, closing the gap the Task 8 comment tracked here for two
@@ -49,6 +50,32 @@ import { logSafeFailure, providerErrorCode } from '@/lib/observability/log';
 /** Только известные провайдеры: строка из базы в лог как есть не идёт. */
 function providerName(value: string): 'google' | 'yandex' | 'other' {
     return value === 'google' || value === 'yandex' ? value : 'other';
+}
+
+/**
+ * Записать отказ провайдера в состояние подключения (Ф10).
+ *
+ * Отдельная ветка нужна именно здесь: `createGoogleCalendarEvent` и
+ * `pushSessionToYandex` не бросают, а возвращают `{ success: false }` — и
+ * раньше этот случай не давал даже строки в журнале. Отзыв доступа,
+ * приходящий как ответ, а не как исключение, был невидим полностью.
+ *
+ * Текст ответа провайдера используется ровно для одного: отличить «доступа
+ * больше нет» от «сеть моргнула». Дальше него он никуда не идёт — ни в
+ * журнал, ни в базу, ни на экран.
+ */
+async function noteFailure(
+    integration: { id: string; psychologistId: string; provider: string },
+    providerMessage?: string | null,
+    fallback: CalendarErrorCode = 'PROVIDER_ERROR',
+) {
+    const code: CalendarErrorCode = looksLikeAccessRevoked(null, providerMessage) ? 'PROVIDER_AUTH' : fallback;
+    await markCalendarBroken({
+        integrationId: integration.id,
+        psychologistId: integration.psychologistId,
+        provider: integration.provider,
+        code,
+    });
 }
 
 type SyncableSession = {
@@ -102,6 +129,7 @@ export async function autoSyncSessionToCalendars(
                         const { updateYandexCalendarEvent } = await import('@/lib/calendar/yandex');
                         await updateYandexCalendarEvent(integration.id, link.externalEventId, session);
                     }
+                    await markCalendarHealthy(integration.id);
                     continue;
                 }
 
@@ -110,13 +138,16 @@ export async function autoSyncSessionToCalendars(
                     const { createGoogleCalendarEvent } = await import('@/lib/calendar/google');
                     const result = await createGoogleCalendarEvent(integration.id, session);
                     if (result.success) eventId = result.eventId;
+                    else await noteFailure(integration, result.error);
                 } else if (integration.provider === 'yandex' && integration.caldavLogin) {
                     const { pushSessionToYandex } = await import('@/lib/calendar/yandex');
                     const result = await pushSessionToYandex(integration.id, session);
                     if (result.success) eventId = result.eventId;
+                    else await noteFailure(integration, result.error);
                 }
 
                 if (eventId) {
+                    await markCalendarHealthy(integration.id);
                     try {
                         await db.calendarSessionLink.create({
                             data: {
@@ -143,6 +174,7 @@ export async function autoSyncSessionToCalendars(
                     correlation_id: correlationId,
                     source: 'session_sync',
                 });
+                await noteFailure(integration, e instanceof Error ? e.message : null, providerErrorCode(e));
             }
         }
     } catch {

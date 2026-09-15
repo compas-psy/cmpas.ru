@@ -83,7 +83,20 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     });
 
     if (!response.ok) {
-        throw new Error('Failed to refresh token');
+        // ПОЧЕМУ ИМЕННО ЭТО СЛОВО ВАЖНО СОХРАНИТЬ.
+        //
+        // Отозванный доступ приходит сюда как invalid_grant — и это самый
+        // частый способ, которым ломается подключение календаря: человек
+        // сменил пароль или отозвал разрешение в своём аккаунте Google.
+        // Прежнее сообщение «Failed to refresh token» было одинаковым и для
+        // отзыва, и для упавшей сети, поэтому отличить одно от другого было
+        // нельзя, и отзыв не доходил до экрана (Ф10).
+        //
+        // Тело ответа токенного эндпоинта — это {"error":"invalid_grant"}:
+        // ни имён, ни событий, ни самих токенов в нём нет.
+        const reason = await response.text().catch(() => '');
+        const code = /invalid_grant|invalid_client|unauthorized_client/.exec(reason)?.[0];
+        throw new Error(code ? `Failed to refresh token: ${code}` : 'Failed to refresh token');
     }
 
     return response.json();

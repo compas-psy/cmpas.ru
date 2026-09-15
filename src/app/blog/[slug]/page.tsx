@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             title: post.title,
             description: post.excerpt,
             url: `https://cmpas.ru/blog/${slug}`,
-            siteName: 'Compas',
+            siteName: 'ПРАКТИКА',
             type: 'article',
             locale: 'ru_RU',
         },
@@ -59,15 +59,19 @@ export default async function ArticlePage({ params }: Props) {
         '@type': 'Article',
         headline: post.title,
         description: post.excerpt,
-        datePublished: post.date,
+        // Машинная дата: строку «1 февраля 2026 г.» поисковик не разбирает,
+        // и статья оставалась без даты (Ф7).
+        datePublished: post.isoDate,
+        // Имя продукта нынешнее: «Compas» осталось здесь от прежнего
+        // названия и показывалось в карточках поиска и пересылках (Ф7).
         author: {
             '@type': 'Organization',
-            name: 'Compas',
+            name: 'ПРАКТИКА',
             url: 'https://cmpas.ru',
         },
         publisher: {
             '@type': 'Organization',
-            name: 'Compas',
+            name: 'ПРАКТИКА',
             url: 'https://cmpas.ru',
         },
         mainEntityOfPage: {

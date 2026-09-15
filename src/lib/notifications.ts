@@ -14,7 +14,9 @@ export type NotificationType =
     | 'client_cancel_attempt'
     | 'invite_expired'
     | 'session_unpaid'
-    | 'calendar_imported';
+    | 'calendar_imported'
+    /** Провайдер отозвал доступ: встречи перестали уходить в календарь (Ф10). */
+    | 'calendar_broken';
 
 /** Writes a notification at the moment an event happens, so the psychologist's
  * bell/center has real history and read-state instead of a 7-day rolling

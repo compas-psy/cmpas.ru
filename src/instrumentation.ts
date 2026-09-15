@@ -228,48 +228,32 @@ export async function register() {
 
         console.log('[CRON] Инструментация: cron-задачи зарегистрированы');
 
-        // Register MAX webhook after startup (10s delay for server to be ready).
-        // MAX migrated its API domain to platform-api2.max.ru (19.07.2026).
-        const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
-        if (MAX_TOKEN) {
-            const APP_URL = process.env.AUTH_URL || 'https://cmpas.ru';
-            const webhookUrl = `${APP_URL}/api/max/webhook`;
+        // ПОДПИСКА MAX: постановка при запуске и сторож каждые 5 минут.
+        //
+        // Дефекты Ф14 и Ф15. Раньше здесь при каждом запуске сначала
+        // снималась подписка, потом ставилась заново — с окном, в котором
+        // её не существовало, — а ответ MAX печатался в журнал целиком,
+        // вместе с тем, что мы в нём не выбирали. И больше подписка не
+        // проверялась никогда, хотя ровно из-за такого отвала у Telegram
+        // появился сторож.
+        //
+        // Оба правила теперь живут в src/lib/max/webhook.ts, рядом с
+        // объяснением, и постановка идемпотентна: существующую подписку
+        // никто не трогает.
+        const { ensureMaxWebhook, watchMaxWebhook } = await import('./lib/max/webhook');
+        if (process.env.MAX_BOT_TOKEN) {
             setTimeout(async () => {
-                try {
-                    // Delete old subscription first — DELETE requires ?url=
-                    // to identify which subscription to remove.
-                    const deleteQs = new URLSearchParams({ url: webhookUrl }).toString();
-                    await fetch(`https://platform-api2.max.ru/subscriptions?${deleteQs}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': MAX_TOKEN },
-                    }).catch(() => {});
-
-                    // Register webhook. This runs on every startup, so it's
-                    // the path that must carry MAX_WEBHOOK_SECRET — omitting
-                    // it here would silently re-register the subscription
-                    // without a secret on every restart, even after a
-                    // deploy/admin-route registration set one correctly
-                    // (src/app/api/max/webhook/route.ts verifies it and now
-                    // fails closed without it).
-                    const res = await fetch('https://platform-api2.max.ru/subscriptions', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': MAX_TOKEN,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            url: webhookUrl,
-                            // Correct MAX API names: 'message_callback' not 'callback_button_pressed'
-                            update_types: ['bot_started', 'message_created', 'message_callback'],
-                            ...(process.env.MAX_WEBHOOK_SECRET ? { secret: process.env.MAX_WEBHOOK_SECRET } : {}),
-                        }),
-                    });
-                    const result = await res.json();
-                    console.log('[MAX] Webhook registration on startup:', JSON.stringify(result));
-                } catch (e) {
-                    console.error('[MAX] Webhook registration failed on startup:', e);
-                }
+                const outcome = await ensureMaxWebhook();
+                console.log('[MAX] Подписка при запуске:', outcome);
             }, 10000);
+
+            cron.schedule('*/5 * * * *', runExclusive('max-webhook-watchdog', async () => {
+                try {
+                    await watchMaxWebhook();
+                } catch (error) {
+                    console.error('[CRON] Ошибка сторожа подписки MAX:', error);
+                }
+            }));
         }
     }
 }

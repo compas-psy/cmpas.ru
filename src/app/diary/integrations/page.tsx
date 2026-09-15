@@ -13,7 +13,18 @@ type Integration = {
     lastSynced: string | null;
     conflictsCount: number;
     syncFrom: boolean;
+    /** Когда провайдер отказал в доступе. Пусто — подключение живо (Ф10). */
+    lastErrorAt: string | null;
+    lastErrorCode: string | null;
 };
+
+/**
+ * Сломано ли подключение с точки зрения человека.
+ *
+ * Только отзыв доступа: таймаут и недоступная сеть проходят сами, и
+ * пугать ими человека — значит научить его не верить этой отметке.
+ */
+const isBroken = (i: Integration) => Boolean(i.lastErrorAt) && i.lastErrorCode === 'PROVIDER_AUTH';
 
 const providerInfo: Record<string, { name: string; color: string; image?: string; icon: string; description: string }> = {
     google: {
@@ -59,7 +70,9 @@ export default function IntegrationsPage() {
             if (integrationsRes.success && integrationsRes.data) {
                 setIntegrations(integrationsRes.data.map((d: any) => ({
                     ...d,
-                    lastSynced: d.lastSynced ? new Date(d.lastSynced).toISOString() : null
+                    lastSynced: d.lastSynced ? new Date(d.lastSynced).toISOString() : null,
+                    lastErrorAt: d.lastErrorAt ? new Date(d.lastErrorAt).toISOString() : null,
+                    lastErrorCode: d.lastErrorCode ?? null,
                 })));
             } else if (!integrationsRes.success) {
                 toast.error(integrationsRes.error || 'Ошибка при загрузке интеграций');
@@ -364,13 +377,34 @@ export default function IntegrationsPage() {
                                         <div className="flex-1">
                                             <div className="font-bold text-base text-foreground flex items-center gap-2">
                                                 {info.name}
-                                                {i.isActive && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                                                {i.isActive && !isBroken(i) && <CheckCircle2 className="w-5 h-5 text-green-500" />}
                                             </div>
                                             {i.accountEmail && <div className="text-sm font-medium text-muted-foreground mt-0.5">{i.accountEmail}</div>}
                                             <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-semibold text-muted-foreground">
                                                 {i.lastSynced && <span><RefreshCw className="w-3.5 h-3.5 inline mr-1.5" />Синхр. {new Date(i.lastSynced).toLocaleDateString('ru-RU')}</span>}
                                                 {i.conflictsCount > 0 && <span className="text-destructive bg-destructive/10 px-2 py-1 rounded-md">{i.conflictsCount} конфликтов</span>}
                                             </div>
+                                            {/*
+                                              * Ф10: раньше здесь горело «Подключён» и тогда, когда
+                                              * провайдер давно отозвал доступ и встречи никуда не
+                                              * уходили. Сказано человеческими словами, названа дата
+                                              * и дана дверь — переподключить может только человек.
+                                              */}
+                                            {isBroken(i) && (
+                                                <div className="mt-3 rounded-xl bg-destructive/10 border border-destructive/20 p-3">
+                                                    <div className="text-sm font-bold text-destructive">Доступ отозван — встречи не уходят в календарь</div>
+                                                    <div className="text-xs font-medium text-destructive/80 mt-1">
+                                                        {info.name} перестал нас пускать {new Date(i.lastErrorAt as string).toLocaleDateString('ru-RU')}.
+                                                        Так бывает после смены пароля или отзыва доступа в аккаунте.
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleConnect(i.provider)}
+                                                        className="mt-2.5 px-4 py-2 text-sm font-semibold bg-destructive text-white rounded-xl hover:bg-destructive/90 transition-colors"
+                                                    >
+                                                        Подключить заново
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex items-center justify-between sm:justify-end gap-3 mt-4 sm:mt-0 w-full sm:w-auto">
                                             <button
